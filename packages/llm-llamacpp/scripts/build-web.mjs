@@ -79,6 +79,41 @@ async function extract(name, source) {
   return dir
 }
 
+// Fetches one directory from a pinned monorepo commit without downloading the
+// repository's unrelated package history or release assets.
+function extractGitDirectory(name, source) {
+  const dir = join(scratch, 'src', `${name}-${source.tree}`, name)
+  if (existsSync(dir)) return dir
+
+  const repository = join(scratch, 'git', `${name}-${source.commit}`)
+  rmSync(repository, { recursive: true, force: true })
+  mkdirSync(repository, { recursive: true })
+  run('git', ['init', '--quiet'], { cwd: repository })
+  run('git', ['fetch', '--quiet', '--depth=1', '--filter=blob:none', source.url, source.commit], {
+    cwd: repository
+  })
+  const tree = execFileSync('git', ['rev-parse', `FETCH_HEAD:${source.subdir}`], {
+    cwd: repository,
+    encoding: 'utf8'
+  }).trim()
+  if (tree !== source.tree) {
+    throw new Error(`Git tree mismatch for ${source.subdir}: ${tree} != ${source.tree}`)
+  }
+
+  const archive = join(scratch, 'downloads', `${name}-${source.tree}.tar`)
+  mkdirSync(dirname(archive), { recursive: true })
+  run('git', ['archive', '--format=tar', `--output=${archive}`, 'FETCH_HEAD', source.subdir], {
+    cwd: repository
+  })
+  const staging = `${dir}.staging`
+  rmSync(staging, { recursive: true, force: true })
+  mkdirSync(staging, { recursive: true })
+  run('tar', ['-xf', archive, '--strip-components=3', '-C', staging])
+  renameSync(staging, dir)
+  rmSync(repository, { recursive: true, force: true })
+  return dir
+}
+
 function compilerVersion(command, env = process.env) {
   try {
     return execFileSync(command, ['--version'], { encoding: 'utf8', env }).split('\n')[0]
@@ -132,6 +167,7 @@ async function emscripten() {
 
 const compiler = await emscripten()
 const fabric = await extract('fabric', lock.fabric)
+const inferenceAddonCpp = extractGitDirectory('inference-addon-cpp', lock.inferenceAddonCpp)
 const picojson = await extract('picojson', lock.picojson)
 const concurrentqueue = await extract('concurrentqueue', lock.concurrentqueue)
 const dawnArchive = await download(lock.dawn, `dawn-${lock.dawn.sha256}.zip`)
@@ -168,7 +204,7 @@ for (const variant of VARIANTS) {
       `-DEMDAWNWEBGPU_DIR=${join(dawn, 'emdawnwebgpu_pkg')}`,
       `-DPICOJSON_DIR=${picojson}`,
       `-DCONCURRENTQUEUE_DIR=${concurrentqueue}`,
-      `-DINFERENCE_ADDON_CPP_DIR=${resolve(root, '../inference-addon-cpp/src')}`,
+      `-DINFERENCE_ADDON_CPP_DIR=${inferenceAddonCpp}`,
       `-DOUTPUT_DIR=${output}`
     ],
     { env: compiler.env }

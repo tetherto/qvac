@@ -105,3 +105,24 @@ test('LlamaInterface.unload() waits for asynchronous binding cleanup', async (t)
     t.ok(settled, `cleanup finished before unload resolved, iteration ${iteration + 1}`)
   }
 })
+
+test('unload rejection still permits a fresh load', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const model = createMultiJobModel()
+    model.state.configLoaded = true
+    model.addon.unload.callsFake(() => Promise.reject(new Error('cleanup failed')))
+
+    await t.exception.all(() => model.unload(), /cleanup failed/)
+    t.is(model.addon, null, `addon reset, iteration ${iteration + 1}`)
+    t.absent(model.state.configLoaded, `load state reset, iteration ${iteration + 1}`)
+
+    const activate = createStub(() => Promise.resolve())
+    const fresh = { activate }
+    model._createAddon = createStub(() => fresh)
+    await model.load()
+
+    t.is(model.addon, fresh, `fresh addon created, iteration ${iteration + 1}`)
+    t.is(activate.callCount, 1, `fresh addon activated, iteration ${iteration + 1}`)
+    t.ok(model.state.configLoaded, `fresh load completed, iteration ${iteration + 1}`)
+  }
+})

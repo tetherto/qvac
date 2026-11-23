@@ -1051,13 +1051,15 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
         // Native cleanup is unconditional: whatever settlement does, the
         // addon must be released and the instance left cleanly unloaded.
         this._jobSinks.clear();
-        if (this.addon) {
-          await this.addon.unload();
-          // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-          // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
+        try {
+          if (this.addon) await this.addon.unload();
+        } finally {
+          // Reset JavaScript state even when native cleanup reports an error.
+          // A later load must create a new addon instead of reusing a disposed
+          // or partially destroyed handle.
           this.addon = null;
+          this.state.configLoaded = false;
         }
-        this.state.configLoaded = false;
       }
     });
   }

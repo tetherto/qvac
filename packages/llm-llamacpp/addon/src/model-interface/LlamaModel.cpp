@@ -1339,12 +1339,16 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()
             ? state_->llmContext_->evalMessage(
-                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
+                  resolved.chatMsgs,
+                  resolved.isCacheLoaded,
+                  prompt.prefill,
+                  prompt.cancelRequested)
             : state_->llmContext_->evalMessageWithTools(
                   resolved.chatMsgs,
                   resolved.tools,
                   resolved.isCacheLoaded,
-                  prompt.prefill);
+                  prompt.prefill,
+                  prompt.cancelRequested);
     // Eval owns the media from here: `tokenizeChat` has drained it, or has
     // thrown past this line and left the guard to.
     mediaGuard.dismiss();
