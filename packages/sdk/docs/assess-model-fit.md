@@ -76,13 +76,15 @@ memory pools it was judged on: `host` for the host's memory, and one pool per
 GPU with its own memory, keyed by the GPU's `id`. Each carries what the set takes
 from it and the lowest free and total figures reported for it.
 
-`models` holds one entry per model, in input order: the engine addon's own
+`models` holds one entry per model, in input order: the engine addon's
 `assessFit` result. `status` is that model's verdict alone, `devices` has one row
 per device its load uses with the host last. For a llama.cpp model with a
 verdict, `stats` holds the context size and GPU layers the load resolves to: the
 ones the fitter settled on when it fits, the ones the load asked for when it does
 not. It is empty for every other model. A model the SDK cannot size has
-`status: 'unknown'`, no rows and empty `stats`.
+`status: 'unknown'`, no rows, empty `stats` and a `reason` saying why. A model
+that does not fit because devices sharing one pool overflow it also carries a
+`reason`, naming the pool and what it needs of its free memory.
 
 `unknown` means the SDK cannot say. Show it as "can't say", never as "no". It is
 the answer for a load that would start but cannot be sized: an engine with no
@@ -90,9 +92,12 @@ fitter, a load the fitter cannot project, a model with no registry description
 that is not on disk, or a device that reported no free memory.
 
 A load that `loadModel` would refuse makes `assessModelFit` throw the same
-error: no plugin for the model type, a config the plugin's schema or
-`resolveConfig` refuses, or the engine fitter rejecting the load, such as a
-model it cannot read.
+error: no plugin for the model type, or a config the plugin's schema or
+`resolveConfig` refuses. An engine fitter that cannot assess the load, such as a
+model it cannot read or an engine that fails to run it, throws
+`MODEL_FIT_REJECTED` with the underlying message. A companion file, such as a
+projector, VAE or codec, does not load on its own and fails this way; assess the
+model that loads it, with the companion in its `modelConfig`.
 
 ## How the verdict is reached
 
@@ -111,12 +116,18 @@ The SDK groups the rows of every model into pools. Every unified row joins the
 host pool; any other row joins the pool of its `id`. A pool's use is the sum of
 its rows' `usedBytes`. Its free memory is the lowest figure reported for it.
 
-For a single model, `verdict` is that model's `status`: the fitter applies the
-engine's own margin to its devices. For several models:
+A model's `status` is its verdict alone. The fitter applies the engine's own
+margin to each device apart, so a model whose rows share one pool, such as a
+Metal GPU and the CPU drawing on the host's memory, can fit every device and
+still overflow the pool. Its `status` is `does-not-fit` when its rows in one pool
+use more than 90% of that pool's free memory. A row alone in its pool, such as a
+discrete GPU, keeps the fitter's answer.
+
+For a single model, `verdict` is that model's `status`. For several models:
 
 ```text
 any pool uses more than 90% of its free memory  → does-not-fit
-any model's fitter says does-not-fit            → does-not-fit
+any model does not fit alone                    → does-not-fit
 otherwise, any model unknown or any pool with
   no free figure                                → unknown
 otherwise                                       → fits

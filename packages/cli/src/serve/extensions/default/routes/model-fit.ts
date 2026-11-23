@@ -1,22 +1,17 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import type { z } from 'zod'
-import { assessModelFit, SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { errorResponses } from '@/serve/lib/error-responses'
-import type { ServeConfig } from '@/serve/core/config/types'
-import { loadModelConstants } from '@/serve/core/config/constants'
-import { resolveExplicitServeModel, resolveModelAlias } from '@/serve/core/config/models'
-import { isModelSrcKey, resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
+import {
+  assessNamedModels,
+  FitInputError,
+  isInvalidModelConfig,
+  type ModelFitResponse
+} from '@/serve/core/fit'
 import {
   MAX_FIT_MODELS,
   modelFitBody,
   modelFitResult
 } from '@/serve/extensions/default/schemas/model-fit'
-
-type FitCandidate = z.infer<typeof modelFitBody>['models'][number]
-
-type ResolvedCandidate = Parameters<typeof assessModelFit>[0]['models'][number]
-type ModelType = ResolvedCandidate['modelType']
 
 const description = `
 Ask whether models fit in this host's memory when loaded together, before loading
@@ -78,115 +73,31 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async (req) => {
       const { models } = req.body
-      const candidates = models.map((candidate) =>
-        resolveCandidate(app.qvac.serveConfig, candidate)
-      )
       app.qvac.logger.info(`  model fit models=${models.map((m) => m.model).join(',')}`)
 
-      let result: Awaited<ReturnType<typeof assessModelFit>>
+      let result: ModelFitResponse
       try {
-        result = await assessModelFit({ models: candidates })
+        result = await assessNamedModels(app.qvac.serveConfig, models)
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        app.qvac.logger.error(`  model fit failed: ${message}`)
+        if (!(err instanceof FitInputError)) {
+          const message = err instanceof Error ? err.message : String(err)
+          app.qvac.logger.error(`  model fit failed: ${message}`)
+        }
         throw toHttpError(err)
       }
-
-      return {
-        object: 'model_fit' as const,
-        ...result,
-        models: result.models.map((entry, i) => ({ model: models[i]!.model, ...entry }))
-      }
+      return result
     }
   )
 }
 
-function resolveCandidate(serveConfig: ServeConfig, candidate: FitCandidate): ResolvedCandidate {
-  const requested = candidate.modelConfig ?? {}
-  assertConstantSources(requested, 'modelConfig')
-  const overrides = resolveNestedModelSrcConstants(requested)
-
-  const alias = resolveModelAlias(serveConfig, candidate.model)
-  if (alias) {
-    return {
-      modelSrc: alias.modelSrc,
-      modelType: alias.sdkType as ModelType,
-      modelConfig: mergeConfig(alias.config, overrides)
-    }
-  }
-
-  const constant = loadModelConstants().get(candidate.model)
-  if (constant) {
-    const resolved = resolveExplicitServeModel(constant.engine || constant.addon, overrides)
-    return {
-      modelSrc: constant,
-      modelType: resolved.sdkType as ModelType,
-      modelConfig: resolved.config
-    }
-  }
-
-  throw new HttpError(
-    404,
-    'model_not_found',
-    `Model "${candidate.model}" is neither a serve.models alias nor an SDK model constant.`
-  )
-}
-
-// Matched by code: the SDK does not export `PluginLoadConfigValidationFailedError`.
-// The body is validated before it reaches the SDK, so a request validation
-// failure there is the engine refusing a `modelConfig` value while applying its
-// defaults.
 export function toHttpError(err: unknown): HttpError {
-  const code = (err as { code?: unknown } | null)?.code
-  if (
-    code === SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED ||
-    code === SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED
-  ) {
+  if (err instanceof FitInputError) {
+    return new HttpError(err.code === 'model_not_found' ? 404 : 400, err.code, err.message)
+  }
+  if (isInvalidModelConfig(err)) {
     return new HttpError(400, 'invalid_model_config', (err as Error).message)
   }
   return new HttpError(500, 'model_fit_failed', 'Failed to assess model fit.')
-}
-
-// Nested objects merge key by key, so `contextParams: { n_ctx }` keeps the
-// alias's other context params. A model source is replaced whole.
-export function mergeConfig(
-  base: Record<string, unknown>,
-  overrides: Record<string, unknown>
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...base }
-  for (const [key, value] of Object.entries(overrides)) {
-    const current = merged[key]
-    merged[key] =
-      !isModelSrcKey(key) && isPlainObject(current) && isPlainObject(value)
-        ? mergeConfig(current, value)
-        : value
-  }
-  return merged
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function assertConstantSources(config: Record<string, unknown>, path: string): void {
-  const constants = loadModelConstants()
-  for (const [key, value] of Object.entries(config)) {
-    const at = `${path}.${key}`
-    if (isModelSrcKey(key)) {
-      const sources = Array.isArray(value) ? value : [value]
-      if (!sources.every((source) => typeof source === 'string' && constants.has(source))) {
-        throw new HttpError(
-          400,
-          'invalid_model_src',
-          `${at} must name an SDK model constant; paths and URLs are only accepted from serve.models.`
-        )
-      }
-      continue
-    }
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      assertConstantSources(value as Record<string, unknown>, at)
-    }
-  }
 }
 
 export default plugin

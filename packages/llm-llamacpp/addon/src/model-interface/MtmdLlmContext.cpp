@@ -1321,19 +1321,36 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  // Rejects an image stb_image cannot size (WebP, a video), so mtmd never
+  // hands it to ffmpeg. mtmd then bounds the decode itself.
   try {
     image_pixel_limit::checkBuffer(media.data(), media.size(), maxImagePixels_);
   } catch (const qvac_errors::StatusError&) {
     resetMedia();
     throw;
   }
-  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-                       visionContext(),
-                       media.data(),
-                       media.size(),
-                       /*placeholder=*/false,
-                       mtmd_helper_init_opt_default())
-                       .bitmap);
+  mtmd_helper_init_opt decodeOptions = mtmd_helper_init_opt_default();
+  decodeOptions.max_image_pixels = maxImagePixels_;
+  const mtmd_helper_bitmap_wrapper decoded = mtmd_helper_bitmap_init_from_buf(
+      visionContext(),
+      media.data(),
+      media.size(),
+      /*placeholder=*/false,
+      decodeOptions);
+  mtmd::bitmap bmp(decoded.bitmap);
+  if (decoded.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
+    resetMedia();
+    const std::string errorMsg =
+        "[MtmdLlm] Image exceeds the " +
+        std::to_string(maxImagePixels_ / 1'000'000) +
+        " MP limit. Increase image-max-megapixels to allow larger images.";
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, errorMsg);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =

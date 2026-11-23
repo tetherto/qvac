@@ -7,15 +7,17 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
+      "baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "antlr4",
         "opencv4",
+        "cpu-features",
         "flatbuffers",
         "gtk3",
         "libjpeg-turbo",
         "libpng",
+        "libspng",
         "libwebp",
         "quirc",
         "tiff",

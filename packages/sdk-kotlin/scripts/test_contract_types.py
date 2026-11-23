@@ -109,6 +109,14 @@ class ContractTypesTest(unittest.TestCase):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"value": {"type": ["string", "null"]}}, "required": ["value"]}}})
         self.assertIn("val `value`: String?", graph.render())
 
+    def test_deprecated_field_is_annotated(self):
+        graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {
+            "old": {"type": "string", "deprecated": True, "description": "Use new."},
+            "new": {"type": "string"}}}}})
+        text = graph.render()
+        self.assertIn('    @Deprecated("Use new.")\n    @SerialName("old")', text)
+        self.assertNotIn('@Deprecated("Use new.")\n    @SerialName("new")', text)
+
 
 if __name__ == "__main__":
     unittest.main()

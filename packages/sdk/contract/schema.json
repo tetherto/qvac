@@ -640,7 +640,7 @@
               "status": {
                 "type": "string",
                 "enum": ["fits", "does-not-fit", "unknown"],
-                "description": "The engine fitter's verdict for this model alone.",
+                "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                 "title": "ModelFitModelResultStatus"
               },
               "devices": {
@@ -709,6 +709,10 @@
                   }
                 ],
                 "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+              },
+              "reason": {
+                "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                "type": "string"
               }
             },
             "required": ["status", "devices", "stats"],
@@ -2602,7 +2606,8 @@
                       ]
                     },
                     "attachments": {
-                      "description": "Optional file attachments for multimodal models.",
+                      "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                      "deprecated": true,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -4724,7 +4729,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -5508,7 +5514,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -9882,7 +9889,7 @@
                       "status": {
                         "type": "string",
                         "enum": ["fits", "does-not-fit", "unknown"],
-                        "description": "The engine fitter's verdict for this model alone.",
+                        "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                         "title": "ModelFitProbeModelStatus"
                       },
                       "devices": {
@@ -9951,6 +9958,10 @@
                           }
                         ],
                         "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      },
+                      "reason": {
+                        "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                        "type": "string"
                       }
                     },
                     "required": ["status", "devices", "stats"],
@@ -14486,6 +14497,20 @@
                       "type": "string",
                       "enum": ["on", "auto", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy"
+                    },
+                    "coreml-ffn": {
+                      "description": "Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+                      "type": "boolean"
+                    },
+                    "coreml-ffn-split": {
+                      "description": "Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+                      "type": "string",
+                      "pattern": "^[1-9]\\d*x[12]$"
+                    },
+                    "coreml-ffn-cache": {
+                      "description": "Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
+                      "type": "string",
+                      "minLength": 1
                     },
                     "fit": {
                       "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.",

@@ -75,8 +75,8 @@ test('completion: cancelling a queued request never touches the active model add
     modelId,
     requestId: queuedRequestId,
     history: [
-      { role: 'system', content: 'You are a helpful assistant.', attachments: [] },
-      { role: 'user', content: 'hello', attachments: [] }
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'hello' }
     ],
     stream: true
   })
@@ -153,8 +153,8 @@ function runToCompletion(modelId: string) {
     modelId,
     requestId: `req-${modelId}`,
     history: [
-      { role: 'system', content: 'You are a helpful assistant.', attachments: [] },
-      { role: 'user', content: 'hello', attachments: [] }
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'hello' }
     ],
     stream: true
   })
