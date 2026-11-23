@@ -48,12 +48,12 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     }
   }
 
-  if ('coreml-ffn' in transformed) {
-    if (transformed['coreml-ffn'] === 'true') {
-      transformed['coreml-ffn'] = ''
-    } else {
-      delete transformed['coreml-ffn']
-    }
+  if (transformed['coreml-ffn'] === 'true') {
+    transformed['coreml-ffn'] = ''
+  } else {
+    // A cache directory set in device defaults reaches every LLM load; forward it only with the sidecar on.
+    delete transformed['coreml-ffn']
+    delete transformed['coreml-ffn-cache']
   }
 
   if ('kv-offload' in transformed) {

@@ -90,6 +90,13 @@ test('transformLlmConfig: coreml-ffn becomes a valueless flag, or is dropped', (
   t.absent('coreml-ffn' in transformLlmConfig(makeConfig({})))
 })
 
+test('transformLlmConfig: coreml-ffn-cache is not forwarded without coreml-ffn', (t) => {
+  const cache = '/app/cache/coreml-ffn'
+  const off = transformLlmConfig(makeConfig({ 'coreml-ffn': false, 'coreml-ffn-cache': cache }))
+  t.absent('coreml-ffn-cache' in off)
+  t.absent('coreml-ffn-cache' in transformLlmConfig(makeConfig({ 'coreml-ffn-cache': cache })))
+})
+
 test('transformLlmConfig: kv-offload picks the spelling that carries its polarity', (t) => {
   const enabled = transformLlmConfig(makeConfig({ 'kv-offload': true }))
   t.is(enabled['kv-offload'], '')

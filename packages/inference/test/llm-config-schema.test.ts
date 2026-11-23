@@ -503,13 +503,12 @@ test('llmConfigBaseSchema: rejects Core ML FFN splits fabric refuses', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn': 'true' }).success, false)
 })
 
-test('llmConfigSchema: Core ML FFN split and cache require coreml-ffn', (t) => {
+test('llmConfigSchema: Core ML FFN split requires coreml-ffn, the cache does not', (t) => {
   const split = llmConfigSchema.safeParse({ 'coreml-ffn-split': '3072x1' })
   t.is(split.success, false)
   t.is(split.error?.issues[0]?.path[0], 'coreml-ffn-split')
-  const cache = llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' })
-  t.is(cache.success, false)
-  t.is(cache.error?.issues[0]?.path[0], 'coreml-ffn-cache')
+  t.is(llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success, true)
+  t.is(llmConfigSchema.safeParse({ 'coreml-ffn-cache': '/tmp/c' }).success, true)
   t.is(
     llmConfigSchema.safeParse({
       'coreml-ffn': true,

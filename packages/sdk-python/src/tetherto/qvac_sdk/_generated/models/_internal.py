@@ -13197,14 +13197,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="coreml-ffn",
-            description="Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Supported for Qwen3.5 0.8B, 2B, 4B and 9B (and Qwen3.8-27B), with the split picked from the model: 1024x1, 2048x1, 2560x1 and 4096x1. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, about 0.2 GB more for 0.8B, 1 GiB at peak for 2B on an iPhone 16, 1.6 GB for 4B and 3.2 GB for 9B, and model fit checks do not count it: 4B does not fit an iPhone 16, and 9B is meant for macOS. Another model, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+            description="Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
         ),
     ] = None
     coreml_ffn_split: Annotated[
         str | None,
         Field(
             alias="coreml-ffn-split",
-            description="Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). Supported overrides are 3072x1 and 4096x1 for Qwen3.5-2B and 3072x1 for Qwen3.5-4B; an unsupported split logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+            description="Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
             pattern="^[1-9]\\d*x[12]$",
         ),
     ] = None
@@ -13212,7 +13212,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="coreml-ffn-cache",
-            description="Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Requires `'coreml-ffn': true`.",
+            description="Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
             min_length=1,
         ),
     ] = None
