@@ -63,15 +63,18 @@ export function observableIndexProvider({
   const failRemoveId: { id: bigint | null } = { id: null }
 
   // Promises a call waits on before it returns, so a test can act while the
-  // native call is in flight. `search` only gates the async index.
+  // native call is in flight. `search` and `buildIvf` only gate the async
+  // index.
   const gates: {
     create: Promise<void> | null
     load: Promise<void> | null
     search: Promise<void> | null
+    buildIvf: Promise<void> | null
   } = {
     create: null,
     load: null,
-    search: null
+    search: null,
+    buildIvf: null
   }
 
   function fail(call: string): never {
@@ -169,6 +172,13 @@ export function observableIndexProvider({
     asyncIndex.search = async (queries, k) => {
       if (gates.search) await gates.search
       return search(queries, k)
+    }
+    const buildIvf = asyncIndex.buildIvf
+    if (buildIvf) {
+      asyncIndex.buildIvf = async (nLists, nIter) => {
+        if (gates.buildIvf) await gates.buildIvf
+        return buildIvf(nLists, nIter)
+      }
     }
     return asyncIndex
   }

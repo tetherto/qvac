@@ -939,6 +939,44 @@ test('vector index: a contains batch is answered as one operation', async (t) =>
   })
 })
 
+test('vector index: a call cancelled while it waits behind a build never runs', async (t) => {
+  await withProvider(
+    async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({ ids: ['1'], vectors: [[1, 0]] })
+      let finishBuild = () => {}
+      gates.buildIvf = new Promise<void>((resolve) => {
+        finishBuild = resolve
+      })
+      const building = index.setIvf({ nLists: 1, nProbe: 1 })
+      // Let the build reach the index and wait on its gate.
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      const requestId = 'vi-cancel-queued-search'
+      const searching = handleVectorIndex({
+        type: 'vectorIndex',
+        operation: 'search',
+        indexId: index.indexId,
+        queries: [[1, 0]],
+        k: 1,
+        requestId
+      })
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      t.is(getRequestRegistry().cancel({ requestId }), 1, 'the search is waiting and cancellable')
+      await expectRejects(
+        t,
+        () => searching,
+        InferenceCancelledError,
+        'the waiting search reports the cancel without waiting for the build'
+      )
+      finishBuild()
+      await building
+      t.is(index.ivf?.built, true, 'the build it waited behind still finishes')
+      t.is(calls.prepare + calls.search + calls.searchIvf, 0, 'the cancelled search never ran')
+    },
+    { ivf: true }
+  )
+})
+
 test('vector index: setIvf(null) turns IVF off and nProbe then rejects', async (t) => {
   await withProvider(
     async (calls) => {
