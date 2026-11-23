@@ -195,3 +195,40 @@ test('unload rejection still permits a fresh load', async (t) => {
     t.is(fresh.unload.callCount, 1, `fresh addon cleaned, iteration ${iteration + 1}`)
   }
 })
+
+test('failed load cleanup remains reachable through public unload', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const model = createMultiJobModel()
+    model.addon = null
+    let cleanupAttempts = 0
+    const partial = {
+      activate: createStub(() => Promise.reject(new Error('activation failed'))),
+      unload: createStub(() => {
+        cleanupAttempts++
+        if (cleanupAttempts === 1) {
+          if (iteration % 2 === 0) throw new Error('cleanup failed')
+          return Promise.reject(new Error('cleanup failed'))
+        }
+        return Promise.resolve()
+      })
+    }
+    model._createAddon = createStub(() => partial)
+
+    await t.exception.all(() => model.load(), /activation failed/)
+    t.is(model.addon, null, `failed addon detached, iteration ${iteration + 1}`)
+    t.absent(model.state.configLoaded, `load state remains clear, iteration ${iteration + 1}`)
+    t.is(cleanupAttempts, 1, `initial cleanup attempted, iteration ${iteration + 1}`)
+
+    await model.unload()
+    t.is(cleanupAttempts, 2, `public unload retries cleanup, iteration ${iteration + 1}`)
+
+    const fresh = {
+      activate: createStub(() => Promise.resolve()),
+      unload: createStub(() => Promise.resolve())
+    }
+    model._createAddon = createStub(() => fresh)
+    await model.load()
+    t.is(model.addon, fresh, `fresh load succeeds, iteration ${iteration + 1}`)
+    await model.unload()
+  }
+})

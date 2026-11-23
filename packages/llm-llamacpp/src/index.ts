@@ -639,10 +639,13 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
       this.logger.error("Error during model load:", loadError);
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
+      const partialAddon = this.addon;
       try {
-        await this.addon?.unload?.();
-      } catch {}
-      this.addon = null;
+        await partialAddon?.unload?.();
+      } catch {
+        if (partialAddon) this._pendingCleanup.add(partialAddon);
+      }
+      if (this.addon === partialAddon) this.addon = null;
       throw loadError;
     }
     this.logger.info("Model load completed successfully");
