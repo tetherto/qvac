@@ -14,6 +14,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-20
+
+### Fixed
+
+- Update the native speech source to the revision published as `speech-cpp`
+  `2026-11-19`, isolating valid standard Parakeet TDT encoder frames from
+  right-padding in batch and push-stream transcription
+  ([#5884](https://github.com/tetherto/qvac/pull/5884)).
+
+## [0.13.0] - 2026-11-18
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
@@ -30,15 +41,32 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
 
-## [0.12.2] - 2026-11-17
+### Added
 
-### Changed
+- Load an optional shared-weight Core ML bundle for full TranscribePsy EU on
+  macOS 15 and iOS 18 or later.
+- Report cache-aware ASR streaming support in Parakeet backend information.
+
+### Fixed
+
+- Fall back to ggml when a Parakeet TDT Core ML sidecar cannot safely handle
+  an oversized input.
+- Default offline TDT push streams to 30-second decode windows and reject
+  explicitly shorter windows that can silently drop phrases.
+
 
 - Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
   ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
-- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local
+  speech engines built against its headers
+  ([#5808](https://github.com/tetherto/qvac/pull/5808)).
 
 ### Added
 

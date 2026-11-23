@@ -79,8 +79,8 @@ struct ParakeetConfig {
   // regardless of how many append-style chunks it ingests.
   // Off by default for batch-style transcription.
   bool streaming = false;
-  // 0 means model-specific default. It is resolved after GGUF model-type
-  // detection and is never forwarded to speech-cpp.
+  // 0 selects the model default. The addon forwards the automatic value for
+  // TDT so speech-cpp can select the default for the loaded variant.
   int streamingChunkMs = 0;
   int streamingHistoryMs =
       DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only

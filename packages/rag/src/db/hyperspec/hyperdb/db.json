@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "offset": 0,
   "schema": [
     {
@@ -95,6 +95,22 @@
       "key": [
         "namespace",
         "revision"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "tombstones",
+      "namespace": "rag",
+      "id": 6,
+      "type": 1,
+      "version": 2,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/tombstones",
+      "derived": false,
+      "key": [
+        "namespace",
+        "documentId"
       ],
       "trigger": null
     }

@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.31.2] - 2026-11-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.4.0` -> `11739.5.0`. No struct,
+  exported signature, op, type or RPC protocol (117) change, so consumers on
+  `^0.31.0` take this release without a rebuild.
+- A sequence saved with another KV stream count now restores into its own
+  stream, so a single-sequence state from a per-sequence cache loads into a
+  `kv_unified` cache or after `n_seq_max` changes
+  ([qvac-fabric-llm.cpp#553](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/553)).
+  A whole-context restore still needs a matching stream count.
+- `ggml_vec_index_build_ivf` trains its centroids with spherical e-means
+  ([qvac-fabric-llm.cpp#543](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/543)):
+  with `n_iter > 0` the centroids are unit length and the lists differ from
+  0.31.1; `n_iter = 0` is unchanged.
+- CUDA: row bias, GELU and layer norm fuse into the cuBLAS F16 matmul, plus a
+  faster small batched matmul, strided copy and short-row softmax, each
+  limited to the GPUs it was measured on
+  ([qvac-fabric-llm.cpp#542](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/542)).
+- Metal: few-row MMA kernels for q4_K, q6_K and iq4_nl/iq4_xs, and a chunked
+  top-k for long rows
+  ([qvac-fabric-llm.cpp#544](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/544)).
+
+### Fixed
+
+- A composite memory (iswa, msa, dsa, dsa-iswa, hybrid, hybrid-iswa, dsv4)
+  that fails partway through a restore now drops the sequence from every part
+  instead of leaving it half old and half new
+  ([qvac-fabric-llm.cpp#556](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/556)).
+- WebGPU sizes its flash-attention and MMVQ scratch for the largest small
+  batch, so a graph reserved at `n_ubatch` no longer re-reserves for a later
+  small batch
+  ([qvac-fabric-llm.cpp#559](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/559)).
+
+## [0.31.1] - 2026-11-18
+
+### Fixed
+
+- `@qvac/fabric-android-arm64` is built with the Android NDK compiler again
+  ([#5847](https://github.com/tetherto/qvac/pull/5847)). 0.31.0 was built with
+  the LLVM runtime clang from `cmake-toolchains` 2.4.0, which kept `assert()`
+  and grew the package from 106 MB to 141 MB unpacked, and ggml's CPU backend
+  ran up to ~20x slower on device. Same `qvac-fabric` `11739.4.0` source; the
+  other platform packages are rebuilt unchanged.
+
 ## [0.31.0] - 2026-11-18
 
 ### Breaking

@@ -49,6 +49,9 @@ fetchRetryMaxtimeout: 120000
 # doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
+  # 2.2+ builds Android with the LLVM runtime clang instead of the NDK's, which
+  # makes ggml's CPU backend ~20x slower on device; .github/bare-toolchain locks 2.1.2.
+  cmake-toolchains: "2.1.2"
   # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
@@ -76,11 +79,11 @@ overrides:
   # `npm run link:platform`. Older published fallbacks used by workspace
   # consumers still need their own desktop packages. Update this selector
   # alongside the workspace addon's version.
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-win32-x64": "-"
   # bare-make's LLVM resource packages find their own directory (clang's
   # resource dir) through require-asset, which needs 1.2.4 and a
   # bare-module-resolve with directory support (1.12.6). Older pins resolve it

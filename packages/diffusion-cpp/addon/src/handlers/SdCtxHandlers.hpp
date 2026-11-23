@@ -70,8 +70,9 @@ struct SdCtxConfig {
   std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
                               // (OpenCLIP ViT-H/14) for Wan 2.1 I2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
-  std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
-                          // fast preview)
+  std::string coremlUnetPath;
+  std::string coremlTaeDecoderPath;
+  std::string taesdPath; // Tiny AutoEncoder decoder/preview weights
   // -- LTX-2 (LTXAV) video model inputs --------------------------------------
   // LTX-2 reuses diffusionModelPath (diffusion transformer), llmPath (Gemma
   // text encoder) and vaePath (video VAE). These two are LTX-only extras:

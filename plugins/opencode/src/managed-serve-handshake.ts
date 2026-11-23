@@ -108,6 +108,9 @@ export function createManagedProviderConfig(
         providerID,
         name: `${listening.modelName} (local)`,
         capabilities: { tools: true, input: ['text'], output: ['text'] },
+        // The session's prompt_cache_key names a KV cache session on qvac serve,
+        // which keeps the cache across tool calls.
+        compatibility: { supportsPromptCacheKey: true },
         variants: [],
         time: { released: 0 },
         cost: [],

@@ -40,7 +40,7 @@ export interface WorldFitRequest {
  * `does-not-fit` includes a load the engine could place only by changing its
  * backend assignment. `unknown` is a placement the engine cannot plan from: a
  * `mainGpu` pin, a `device` of cpu, a module-specific `paramsBackend`, or an
- * OpenCL preference that does not name the first GPU.
+ * OpenCL preference that does not name the first GPU, or Core ML sidecars.
  */
 export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'unknown';
 export interface DiffusionFitDevice {

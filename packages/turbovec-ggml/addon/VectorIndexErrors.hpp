@@ -1,12 +1,16 @@
 #pragma once
 //
 // Maps fabric vector-index C error codes to the error names the binding throws.
+// The binding throws them as inference-addon-cpp StatusErrors, so a JS error's
+// `code` is "[ TurboVec :: <name> ]", as other addons' codes are.
 
 #include <cstdint>
 
 #include <ggml-vector-index.h>
 
 namespace turbovec_ggml::vector_index_errors {
+
+constexpr const char* ADDON_ID = "TurboVec";
 
 enum class VecIndexError : std::int32_t {
   Ok = GGML_VEC_INDEX_OK,

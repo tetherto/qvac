@@ -402,6 +402,8 @@ void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
+  params.coreml_unet_path = optPath(config_.coremlUnetPath);
+  params.coreml_tae_decoder_path = optPath(config_.coremlTaeDecoderPath);
   // LTX-2 (LTXAV) extras. Null for every non-LTX model.
   params.audio_vae_path = optPath(config_.audioVaePath);
   params.embeddings_connectors_path = optPath(config_.embeddingsConnectorsPath);
@@ -592,6 +594,10 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   if (!workload.upscaleOnly)
     qvac_lib_inference_addon_sd::validatePerformanceWorkload(
         config_, workload.width, workload.height, workload.videoFrames);
+  // The metadata-only ggml planner cannot size Core ML sidecars.
+  if (!workload.upscaleOnly && (!config_.coremlUnetPath.empty() ||
+                                !config_.coremlTaeDecoderPath.empty()))
+    return {};
   CtxParams ctx;
   fillCtxParams(ctx, true);
 
@@ -1012,8 +1018,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     if (nMulti > 0 && !usesReferences)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: init_images requires a model supporting reference editing "
-          "(FLUX.2 or Qwen-Image-2.1).");
+          "img2img: init_images requires a model supporting reference "
+          "editing.");
 
     // -- Multiple ordered reference images ---------------------------------
     if (nMulti > 0) {

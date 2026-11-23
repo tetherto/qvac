@@ -10,6 +10,11 @@ require('./integration-runtime.cjs')
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
+async function runIdMapIndexAsyncTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runIdMapIndexAsyncTest')) return __FILTERED
+  return runIntegrationModule('../integration/id-map-index-async.test.js', options)
+}
+
 async function runIdMapIndexTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runIdMapIndexTest')) return __FILTERED
   return runIntegrationModule('../integration/id-map-index.test.js', options)

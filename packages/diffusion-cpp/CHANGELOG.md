@@ -1,6 +1,59 @@
 # Changelog
 
-## [Unreleased]
+## [0.38.0] - 2026-11-22
+
+### Features
+
+- Add Fibo 2.0 Edit Turbo image editing with a checksum-verified model
+  downloader, a four-step editing example, and setup documentation
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+- Expose the `flux` scheduler in the addon API and TypeScript declarations
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+
+### Fixes
+
+- Route Fibo input images through the engine's reference-image path, enabling
+  single-image editing and multiple references
+  ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [engine #74](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/74)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#3` for the Fibo reference-image
+  capability fix ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [registry #507](https://github.com/tetherto/qvac-registry-vcpkg/pull/507)).
+
+## [0.37.1] - 2026-11-20
+
+### Features
+
+- Add optional Core ML UNet and tiny-decoder sidecars for SD 1.x/2.x image
+  generation on macOS and iOS through `files.coremlUnet` and
+  `files.coremlTaeDecoder`. Text encoding and scheduling remain on ggml;
+  tiled decoding uses the ggml tiny autoencoder. See the
+  [Core ML guide](README.md#core-ml-sidecars-on-apple) for compatible exports
+  and compute policies ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Expose `files.taesd` to replace the full VAE for encoding and decoding with
+  a tiny autoencoder. Core ML loads return `unknown` from `assessFit()`
+  because the ggml planner cannot size sidecar memory
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+
+### Fixes
+
+- Check that workspace consumers retain matching desktop binary packages
+  when using a published diffusion fallback, while local source builds use
+  their staged binaries ([#5829](https://github.com/tetherto/qvac/pull/5829)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#2` for the Core ML sidecars,
+  retaining the existing registry baseline
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Raise the `qvac-lib-inference-addon-cpp` floor from `1.5.0` to `1.7.0`.
+  Version 1.6.0 supports string runtime-stat values, and 1.7.0 adds
+  `JsAsyncTask::runOn` for addon-owned executors. This compile-time update
+  does not change the package's API or runtime behavior
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 ## [0.36.0] - 2026-11-17
 
