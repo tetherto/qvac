@@ -149,16 +149,20 @@ async function acceptedBy(gh, env, pr) {
   return false
 }
 
-// pull_request runs by head SHA; workflow_run runs by the head SHA in their run-name.
+// pull_request runs by head SHA; workflow_run runs, and the PR builds an accept dispatches, by the head SHA in their
+// run-name.
 async function producerRuns(gh, env, file, pr) {
   const repo = env.GITHUB_REPOSITORY
   const path = `.github/workflows/${file}`
+  const named = async (event) =>
+    (await gh.get(`repos/${repo}/actions/workflows/${file}/runs?event=${event}&per_page=100`)).workflow_runs.filter(
+      (r) => r.head_branch === env.DEFAULT_BRANCH && r.display_title.includes(pr.head.sha)
+    )
   const runs = [
     ...(await gh.get(`repos/${repo}/actions/workflows/${file}/runs?event=pull_request&head_sha=${pr.head.sha}&per_page=100`))
       .workflow_runs.filter((r) => r.head_repository?.full_name === pr.head.repo?.full_name),
-    ...(await gh.get(`repos/${repo}/actions/workflows/${file}/runs?event=workflow_run&per_page=100`)).workflow_runs.filter(
-      (r) => r.head_branch === env.DEFAULT_BRANCH && r.display_title.includes(pr.head.sha)
-    )
+    ...(await named('workflow_run')),
+    ...(await named('workflow_dispatch'))
   ]
     .filter((r) => r.path === path)
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)

@@ -29,26 +29,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A private org member reads as CONTRIBUTOR, so the association only drops strangers; the step decides on repo access.
   retry:
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request != null &&
       startsWith(github.event.comment.body, '/merge-guard') &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      !contains(fromJSON('["NONE", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: write
       pull-requests: read
     steps:
-      - name: Start Merge Guard for the PR head
+      - name: Start Merge Guard, and the PR build for an accepted fork, at the PR head
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.issue.number }}
+          LOGIN: ${{ github.event.comment.user.login }}
+          BODY: ${{ github.event.comment.body }}
           REF: ${{ github.event.repository.default_branch }}
         run: |
-          SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          PERMISSION=$(gh api "repos/$GH_REPO/collaborators/$LOGIN/permission" --jq .permission)
+          case "$PERMISSION" in
+            admin|write) ;;
+            *) echo "::notice::$LOGIN has $PERMISSION access; /merge-guard needs write"; exit 0 ;;
+          esac
+          read -r SHA FORK < <(gh pr view "$PR" --json headRefOid,isCrossRepository --jq '"\(.headRefOid) \(.isCrossRepository)"')
+          ACCEPT=$(printf '%s' "$BODY" | sed -nE '1s#^/merge-guard accept ([0-9a-f]{7,40})([[:space:]].*)?$#\1#p')
+          # An accept of this head starts the build that a fork's .github/ changes stopped; context checks it again.
+          if [ "$FORK" = true ] && [ -n "$ACCEPT" ] && [ "${SHA#"$ACCEPT"}" != "$SHA" ]; then
+            gh workflow run pr-build-test.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"
+          fi
           gh workflow run pr-gate-merge.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"
 
   validate-pr:

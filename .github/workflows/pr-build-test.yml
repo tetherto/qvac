@@ -1,6 +1,6 @@
 name: PR build and test
 # Carries the PR head: Merge Guard finds this run by it, and prebuild-reuse.mjs checks it before reusing a PR artifact.
-run-name: PR build and test ${{ github.event.workflow_run.head_sha || github.ref_name }}
+run-name: PR build and test ${{ github.event.workflow_run.head_sha || inputs.sha || github.ref_name }}
 
 # Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
 on:
@@ -14,15 +14,24 @@ on:
         description: Comma-separated package names or directories; empty selects by change
         type: string
         default: ""
+      # Set by Merge Guard when a maintainer accepts a fork PR's .github/ changes; context checks both against the PR.
+      pr:
+        description: PR number to build at its head, instead of this ref
+        type: string
+        default: ""
+      sha:
+        description: That PR's head commit
+        type: string
+        default: ""
 
 permissions: {}
 
 # PR code never saves to the default branch's Actions cache.
 cache-mode: read
 
-# One run per PR, keyed on the trigger's head; a dispatch per ref.
+# One run per PR, keyed on the trigger's head; a dispatch per ref, or per PR when it names one.
 concurrency:
-  group: pr-build-test-${{ github.event.workflow_run.head_repository.full_name || github.ref }}-${{ github.event.workflow_run.head_branch }}
+  group: pr-build-test-${{ github.event.workflow_run.head_repository.full_name || github.ref }}-${{ github.event.workflow_run.head_branch || inputs.pr }}
   cancel-in-progress: true
 
 jobs:
@@ -128,6 +137,8 @@ jobs:
         uses: ./.github/actions/pr-check-trust
         with:
           github-token: ${{ github.token }}
+          # A dispatch that names a PR builds PR code, so it gets the fork rules a workflow_run build does.
+          event: ${{ needs.context.outputs.pr != '' && 'workflow_run' || '' }}
           action: ${{ needs.context.outputs.action }}
           head-sha: ${{ needs.context.outputs.sha }}
           head-repo: ${{ needs.context.outputs.repository }}
