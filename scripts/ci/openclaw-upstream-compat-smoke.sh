@@ -226,7 +226,9 @@ fi
 # published plugin, by exact spec, into a throwaway sandbox, with no human at
 # the terminal. This is not a blanket opt-out of plugin trust or capability
 # checks -- end users installing @qvac/openclaw-plugin still get both prompts.
-npx openclaw plugins install "$QVAC_OPENCLAW_PLUGIN_SPEC" --force --accept-capabilities \
+# Since openclaw 2026.11.5 a bare spec resolves on ClawHub only; `npm:` pins
+# the npm registry, where the plugin is published.
+npx openclaw plugins install "npm:${QVAC_OPENCLAW_PLUGIN_SPEC}" --force --accept-capabilities \
   > "$ARTIFACT_DIR/openclaw-plugin-install.stdout" \
   2> "$ARTIFACT_DIR/openclaw-plugin-install.stderr"
 npx openclaw plugins enable qvac --accept-capabilities \
