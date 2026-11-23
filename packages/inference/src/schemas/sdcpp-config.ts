@@ -8,6 +8,8 @@ const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 
 const base64StringSchema = z.string().min(1).regex(BASE64_PATTERN)
 
+const positiveInt32Schema = z.number().int().positive().max(2147483647)
+
 const samplingMethodSchema = z.enum([
   'euler',
   'euler_a',
@@ -266,29 +268,17 @@ export const sdcppConfigSchema = z.object({
       'Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native ' +
         'options win. off retains baseline settings. Temporal tiling is unchanged.'
     ),
-  performance_max_width: z
-    .number()
-    .int()
-    .positive()
-    .max(2147483647)
+  performance_max_width: positiveInt32Schema
     .optional()
     .describe(
       'Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.'
     ),
-  performance_max_height: z
-    .number()
-    .int()
-    .positive()
-    .max(2147483647)
+  performance_max_height: positiveInt32Schema
     .optional()
     .describe(
       'Maximum video output height; requests above this declared bound are rejected by the addon.'
     ),
-  performance_max_frames: z
-    .number()
-    .int()
-    .positive()
-    .max(2147483647)
+  performance_max_frames: positiveInt32Schema
     .optional()
     .describe(
       'Maximum video output frame count; requests above this declared bound are rejected by the addon.'
@@ -837,7 +827,7 @@ export const diffusionRequestSchema = z
       .describe('Enable VAE tiling for large images on constrained VRAM, overriding model config.'),
     vae_tile_size: z
       .union([
-        z.number().int().positive().max(2147483647).meta({ title: 'DiffusionVaeTileSize' }),
+        positiveInt32Schema.meta({ title: 'DiffusionVaeTileSize' }),
         z
           .string()
           .regex(/^[0-9]+x[0-9]+$/, { message: 'vae_tile_size must be a WxH string' })
