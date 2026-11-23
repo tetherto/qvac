@@ -116,14 +116,22 @@ export const modelFitDeviceSchema = z
   })
   .meta({ title: 'ModelFitDevice' })
 
-/** The result the engine's addon returns from `assessFit`, unchanged. */
+/** The result the engine's addon returns from `assessFit`, with why an `unknown` load has no verdict. */
 export const modelFitModelResultSchema = z
   .object({
-    status: modelFitVerdictSchema.describe("The engine fitter's verdict for this model alone."),
+    status: modelFitVerdictSchema.describe(
+      "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory."
+    ),
     devices: z
       .array(modelFitDeviceSchema)
       .describe('One row per device the load uses, the host last. Empty when unknown.'),
-    stats: modelFitStatsSchema
+    stats: modelFitStatsSchema,
+    reason: z
+      .string()
+      .optional()
+      .describe(
+        'Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.'
+      )
   })
   .meta({ title: 'ModelFitModelResult' })
 

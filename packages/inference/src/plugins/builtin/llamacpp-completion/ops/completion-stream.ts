@@ -185,7 +185,18 @@ function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOp
   return model.run(prompt, opts)
 }
 
+let warnedAttachments = false
+
 export function transformMessages(messages: Array<HistoryMsg | Tool>): ChatHistory[] {
+  if (
+    !warnedAttachments &&
+    messages.some((message) => 'attachments' in message && message.attachments?.length)
+  ) {
+    warnedAttachments = true
+    logger.warn(
+      "History `attachments` is deprecated and will be removed in a future release. Pass media as ordered `content` parts: [{ type: 'text', text }, { type: 'media', path }]."
+    )
+  }
   const transformed: ChatHistory[] = []
   for (const message of messages) {
     transformed.push(...transformMessage(message))

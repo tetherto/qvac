@@ -198,6 +198,15 @@ export function getCatalogCoremlSidecars(
   return sidecars
 }
 
+/**
+ * Whether the loader also accepts a companion set kept in the legacy flat
+ * cache, one file per registry path. Only translation sets: their runtime
+ * takes each file by its own path.
+ */
+export function acceptsLegacyFlatCache(addon: RegistryItem['addon']): boolean {
+  return addon === 'nmt'
+}
+
 /** A single-file model's name in the models cache directory. */
 export function getSingleFileCacheName(
   registryPath: string,

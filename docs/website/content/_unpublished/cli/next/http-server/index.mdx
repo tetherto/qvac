@@ -404,7 +404,7 @@ curl -sS http://localhost:11435/qvac/v1/chat/batch \
 | 400 | `tools_not_enabled` | A prompt has `tools` and the alias lacks `tools` |
 | 400 | `invalid_response_format` | Bad `response_format`, or one combined with `tools` |
 | 400 | `invalid_tool_choice` | `tool_choice` names no declared tool |
-| 400 | `unsupported_image_content` | An image is not a PNG or JPEG data URL |
+| 400 | `unsupported_image_content` | An image is not a PNG or JPEG data URL, or is on a non-user message |
 | 400 | `invalid_model_type` | Alias is not a `chat` model |
 | 400 | `context_length_exceeded` | The batch does not fit the context window |
 | 404 | `model_not_found` | Unknown alias |
@@ -570,14 +570,20 @@ load that `loadModel` would refuse fails the request.
 
 `pools` gives each memory pool the verdict was judged on, with what the set takes from it and the
 lowest free and total figures reported for it. Every device that shares the host's memory joins
-the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single model's
-`verdict` is its own `status`. A set of models does not fit when any pool would use more than 90%
-of its free memory.
+the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single
+model's `verdict` is its own `status`. A set of models does not fit when any model does not fit
+alone or any pool would use more than 90% of its free memory.
 
-`models` carries each entry's engine fit result, in request order: its own `status`, one row per
+`models` carries each entry's engine fit result, in request order: its `status`, the model's
+verdict alone, which is `does-not-fit` when rows sharing one pool, such as a Metal GPU and the
+CPU, would together use more than 90% of its free memory; one row per
 device the load uses (the host last), and its `stats`: the context size and GPU layers for a
-llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
-where the backend reports one, so the same GPU matches across engines.
+llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `reason` saying why
+it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
+is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
+
+[`qvac fit`](/cli#qvac-fit) answers the same question from the terminal, with the same answer for
+the same input.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
@@ -1563,8 +1569,9 @@ shape has no field for it.
 `messages[].content` accepts a plain string or an OpenAI array of `text` and
 `image_url` parts. User messages with images preserve the order of every text and
 image part, so each image reaches the model where the client placed it. Text-only
-arrays are joined into one string without separators. On other roles, images are
-sent as attachments before the joined text.
+arrays are joined into one string without separators. Images are accepted on
+user messages only; an `image_url` part on any other role returns
+`400 unsupported_image_content`.
 
 Both shapes below are valid.
 
