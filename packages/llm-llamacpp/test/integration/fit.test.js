@@ -133,15 +133,6 @@ test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) =
   await t.exception(assess(await modelPath(), { 'ctx-size': 'not-a-number' }))
 })
 
-// ctx-size 0 keeps the trained context (40960 for this model), which the load
-// refuses to split into two slots of 131072.
-test('per-slot caps that overbook the trained context reject', { timeout: 600_000 }, async (t) => {
-  await t.exception(
-    assess(await modelPath(), { 'ctx-size': '0', parallel: '2', 'kv-unified-per-slot': '131072' }),
-    /\(2 x 131072\) must fit ctx_size=0/
-  )
-})
-
 test('an image limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
 

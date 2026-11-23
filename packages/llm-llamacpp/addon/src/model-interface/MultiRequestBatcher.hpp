@@ -20,7 +20,7 @@ enum class StopReason : uint8_t {
   DecodeError, // llama_decode returned a non-zero rc
   Cancelled,
   // The slot's context window is full: no room for even one more token.
-  // `maxTokensPerSequence` is the scheduler's `perSeqCeiling`, the same value
+  // `maxTokensPerSequence` is `ctxTotalTokens / n_parallel`, the same value
   // the driver gets as its ceiling, and `submit` rejects any request whose
   // prompt plus a positive `n_predict` would not fit. So a slot can only
   // walk into this condition with no caller cap, which makes a full window

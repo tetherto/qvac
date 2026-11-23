@@ -69,12 +69,9 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned perSeqMaxTokens);
 
 /// Per-sequence hard ceiling: the slot's even share of the pool,
-/// `ctxTotalTokens / batchSize`, lowered to `kvUnifiedPerSlot` when that is
-/// positive. When the KV cache is one shared pool, this ceiling, not the
-/// cache, keeps a slot to its share; the load requires the caps to fit the
-/// pool.
-[[nodiscard]] unsigned perSeqCeiling(
-    unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot);
+/// `ctxTotalTokens / batchSize`. When the KV cache is one shared pool, this
+/// ceiling, not the cache, keeps a slot to its share.
+[[nodiscard]] unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize);
 
 /// Observed end-to-end figures for one finished request, computed from its
 /// wall-clock stamps at drain. This is what the submitting caller experienced

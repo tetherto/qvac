@@ -5,7 +5,6 @@
 #include <cinttypes>
 #include <initializer_list>
 #include <iterator>
-#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -146,36 +145,6 @@ void requirePollLevelsInRange(
               K_LEGACY_PARSER_NAME.data(),
               it->first.c_str(),
               value.c_str()));
-    }
-  }
-}
-
-// std::stoi stops at the first non-digit, so "1e3" would cap every slot at 1.
-// The sign is allowed here so a negative cap gets its own error later.
-void requireKvUnifiedPerSlotInteger(
-    const load_fit_normalization::ConfigMap& configFilemap) {
-  for (const std::string_view key :
-       {"kv-unified-per-slot", "kv_unified_per_slot"}) {
-    const auto it = configFilemap.find(std::string(key));
-    if (it == configFilemap.end()) {
-      continue;
-    }
-    const std::string_view value = it->second;
-    const std::string_view digits =
-        value.starts_with('-') ? value.substr(1) : value;
-    const bool isInteger =
-        !digits.empty() &&
-        std::ranges::all_of(digits, [](unsigned char character) {
-          return std::isdigit(character) != 0;
-        });
-    if (!isInteger) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: '%s' must be an integer, got '%s'.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              it->first.c_str(),
-              it->second.c_str()));
     }
   }
 }
@@ -1312,7 +1281,6 @@ NormalizedLoad normalizeLoadForFit(
   params.cpuparams.poll = 0;
   params.cpuparams_batch.poll = 0;
   requirePollLevelsInRange(configFilemap);
-  requireKvUnifiedPerSlotInteger(configFilemap);
   const bool hasExplicitBatchPoll = configFilemap.contains("poll-batch") ||
                                     configFilemap.contains("poll_batch");
 
@@ -2117,11 +2085,6 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
-  // Keys reach fabric in unordered_map order, so a later fit-ctx can overwrite
-  // the marker ctx-size 0 leaves in fit_params_min_ctx.
-  const bool ctxSizeGiven =
-      configFilemap.contains("ctx-size") || configFilemap.contains("ctx_size");
-
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -2132,19 +2095,6 @@ NormalizedLoad normalizeLoadForFit(
 
   auto ctxArg = common_params_parser_init(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
-  // llama-server's --kv-unified-per-slot is not registered for
-  // LLAMA_EXAMPLE_COMMON, so fabric's server definition is used as it is.
-  // --kv-unified is not exposed: the addon decides it below.
-  common_params serverDefaults;
-  auto serverArg = common_params_parser_init(
-      serverDefaults, LLAMA_EXAMPLE_SERVER, [](int, char**) {});
-  for (auto& opt : serverArg.options) {
-    if (std::ranges::any_of(opt.args, [](const char* name) {
-          return std::string_view(name) == "--kv-unified-per-slot";
-        })) {
-      ctxArg.options.push_back(std::move(opt));
-    }
-  }
 
   // disable warmup run
   params.warmup = false;
@@ -2315,39 +2265,9 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
-  if (params.kv_unified_per_slot < 0) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(
-            qvac_errors::general_error::InvalidArgument),
-        string_format(
-            "%s: kv-unified-per-slot must be 0 (no cap) or positive, got %d.\n",
-            K_LEGACY_PARSER_NAME.data(),
-            params.kv_unified_per_slot));
-  }
   // Several slots share one KV pool, each limited to its even share by the
   // addon. One slot has the same layout either way.
   params.kv_unified = params.n_parallel >= 2;
-
-  // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
-  // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.
-  if (params.kv_unified_per_slot > 0 && params.n_ctx == 0 && !ctxSizeGiven) {
-    const int64_t pool =
-        static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot;
-    if (pool > std::numeric_limits<int32_t>::max()) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          string_format(
-              "%s: parallel x kv-unified-per-slot (%d x %d) exceeds the "
-              "largest ctx-size.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              params.n_parallel,
-              params.kv_unified_per_slot));
-    }
-    params.n_ctx = static_cast<int32_t>(pool);
-  }
 
   const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;
   postprocess_cpu_params(params.cpuparams, nullptr);
@@ -2399,33 +2319,6 @@ NormalizedLoad normalizeLoadForFit(
             "%s: warning: minimum context size is 8, using minimum size.\n",
             K_LEGACY_PARSER_NAME.data()));
     params.n_ctx = kMinNCtx;
-  }
-  // The batch scheduler refuses caps that overbook the pool. The pool fabric
-  // creates is known here, so fit checks refuse the same config: ctx-size 0
-  // keeps the trained context, which fit does not shrink.
-  const int64_t nCtx = params.n_ctx > 0 ? static_cast<int64_t>(params.n_ctx)
-                                        : trainedContext(metadata);
-  if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 && nCtx > 0) {
-    // llama_context pads n_ctx to a multiple of this, except for training
-    // contexts (llama-context.cpp).
-    constexpr int64_t kFabricCtxPad = 256;
-    const int64_t pool = params.training ? nCtx : GGML_PAD(nCtx, kFabricCtxPad);
-    if (static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot >
-        pool) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          string_format(
-              "%s: parallel x kv_unified_per_slot (%d x %d) must fit "
-              "ctx_size=%d (pool %lld); leave ctx_size unset to size the pool "
-              "to it.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              params.n_parallel,
-              params.kv_unified_per_slot,
-              params.n_ctx,
-              static_cast<long long>(pool)));
-    }
   }
   if (params.rope_freq_base != 0.0) {
     QLOG_IF(

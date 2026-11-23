@@ -285,10 +285,6 @@ function buildVlmBatchItem(item) {
 }
 
 async function setupModel(t, configOverrides = {}) {
-  return (await setupModelWithLogs(t, configOverrides)).model
-}
-
-async function setupModelWithLogs(t, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -306,10 +302,6 @@ async function setupModelWithLogs(t, configOverrides = {}) {
     verbosity: '2',
     ...configOverrides
   }
-  // An override of `undefined` leaves the key unset.
-  for (const key of Object.keys(config)) {
-    if (config[key] === undefined) delete config[key]
-  }
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },
@@ -325,20 +317,7 @@ async function setupModelWithLogs(t, configOverrides = {}) {
 
   await model.load()
 
-  return { model, logs: specLogger.logs }
-}
-
-// Native log lines reach JS asynchronously, after the call that logged them
-// returns, so wait for a matching line before reading the last one.
-async function lastLogMatch(logs, re, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs
-  while (!logs.some((line) => re.test(line)) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-  return logs
-    .map((line) => re.exec(line))
-    .filter(Boolean)
-    .pop()
+  return model
 }
 
 async function setupMultimodalBatchModel(t, configOverrides = {}) {
@@ -1331,21 +1310,16 @@ test(
   }
 )
 
-// The per-slot cap the kv_unified_per_slot tests set, below every even share.
-const KV_PER_SLOT_CAP = 512
+// Each slot's limit in the tests below: ctx_size / parallel, with ctx_size set to
+// parallel x SLOT_LIMIT.
+const SLOT_LIMIT = 512
 
-// One KV pool split evenly, as llama-server's `-kvu --kv-unified-per-slot`:
-// with ctx_size unset the pool is parallel x kv_unified_per_slot and each slot
-// is capped at KV_PER_SLOT_CAP.
+// The slots share one KV pool, each limited to its even share.
 test(
-  'continuous batching: kv_unified_per_slot splits one KV pool evenly across slots',
+  'continuous batching: slots share one KV pool, each limited to ctx_size / parallel',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
-    const { model, logs } = await setupModelWithLogs(t, {
-      parallel: '2',
-      kv_unified_per_slot: String(KV_PER_SLOT_CAP),
-      ctx_size: undefined
-    })
+    const model = await setupModel(t, { parallel: '2', ctx_size: String(2 * SLOT_LIMIT) })
 
     const cases = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
     const responses = await Promise.all(
@@ -1360,65 +1334,22 @@ test(
       )
     }
 
-    // The last context fabric logs is the one the model runs on.
-    const nCtx = await lastLogMatch(logs, /llama_context: n_ctx\s+=\s+(\d+)/)
-    t.is(
-      Number(nCtx?.[1]),
-      2 * KV_PER_SLOT_CAP,
-      'the pool is sized to parallel x kv_unified_per_slot'
-    )
-
-    await assertGenerationStopsAtCap(t, model)
-    await assertLongPromptRejectedAtCap(t, model)
+    await assertGenerationStopsAtLimit(t, model)
+    await assertLongPromptRejectedAtLimit(t, model)
   }
 )
 
-// The cap sits below the even share of ctx_size 4096 (4096 for one slot, 2048
-// for two), so the explicit ctx_size is larger than the caps add up to.
+// The multimodal context applies the same limit in the batch scheduler.
 test(
-  'continuous batching: kv_unified_per_slot caps a slot below its even share',
-  { timeout: 600_000, skip: isMobile },
-  async (t) => {
-    for (const parallel of ['1', '2']) {
-      t.comment(`parallel ${parallel}`)
-      const model = await setupModel(t, {
-        parallel,
-        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
-      })
-      await assertGenerationStopsAtCap(t, model)
-      await assertLongPromptRejectedAtCap(t, model)
-      await model.unload()
-    }
-  }
-)
-
-// The multimodal context applies the same cap, alone (parallel 1) and in the
-// batch scheduler.
-test(
-  'continuous batching MTMD: kv_unified_per_slot caps a slot',
+  'continuous batching MTMD: a slot is limited to ctx_size / parallel',
   { timeout: 900_000, skip: skipHeavyPlatform },
   async (t) => {
-    for (const parallel of ['1', '2']) {
-      t.comment(`parallel ${parallel}`)
-      const model = await setupMultimodalBatchModel(t, {
-        parallel,
-        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
-      })
-      await assertLongPromptRejectedAtCap(t, model)
-      await model.unload()
-    }
-  }
-)
-
-test(
-  'continuous batching: per-slot caps that overbook the KV pool are rejected at load',
-  { timeout: 600_000, skip: isMobile },
-  async (t) => {
-    await t.exception(
-      setupModel(t, { parallel: '2', kv_unified_per_slot: '4096' }),
-      /\(2 x 4096\) must fit ctx_size/,
-      'per-slot caps that overbook ctx_size are refused'
-    )
+    const model = await setupMultimodalBatchModel(t, {
+      parallel: '2',
+      ctx_size: String(2 * SLOT_LIMIT)
+    })
+    await assertLongPromptRejectedAtLimit(t, model)
+    await model.unload()
   }
 )
 
@@ -1434,12 +1365,12 @@ test(
   }
 )
 
-// A conversation saved without a cap is longer than the cap set at the next
-// load, so its cache file fails when it loads: through the single-prompt cache
-// at parallel 1, through a slot at parallel 2.
-async function assertOverCapCacheRejected(t, setup, parallel, tag) {
+// A conversation saved with the default context is longer than a slot of the
+// next load, so its cache file fails when it loads: through the single-prompt
+// cache at parallel 1, through a slot at parallel 2.
+async function assertOverLimitCacheRejected(t, setup, parallel, tag) {
   t.comment(`${tag}, parallel ${parallel}`)
-  const key = path.join(os.tmpdir(), `qvac-over-cap-${tag}-${parallel}-${Date.now()}.bin`)
+  const key = path.join(os.tmpdir(), `qvac-over-limit-${tag}-${parallel}-${Date.now()}.bin`)
   t.teardown(() => {
     try {
       fs.unlinkSync(key)
@@ -1447,14 +1378,12 @@ async function assertOverCapCacheRejected(t, setup, parallel, tag) {
   })
 
   const writer = await setup(t, { parallel })
-  const longPrompt = [
-    { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
-  ]
+  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(SLOT_LIMIT + 100)}` }]
   await collectText(await writer.run(longPrompt, { cacheKey: key }))
   await writer.saveCache(key)
   await writer.unload()
 
-  const reader = await setup(t, { parallel, kv_unified_per_slot: String(KV_PER_SLOT_CAP) })
+  const reader = await setup(t, { parallel, ctx_size: String(Number(parallel) * SLOT_LIMIT) })
   const error = await reader
     .run([{ role: 'user', content: 'Hi' }], { cacheKey: key })
     .then(collectText)
@@ -1462,9 +1391,9 @@ async function assertOverCapCacheRejected(t, setup, parallel, tag) {
       () => null,
       (err) => err
     )
-  t.comment(`over-cap cache: ${error?.message}`)
+  t.comment(`over-limit cache: ${error?.message}`)
   t.ok(
-    new RegExp(`exceeds (current context size|the context limit of ${KV_PER_SLOT_CAP} )`).test(
+    new RegExp(`exceeds (current context size|the context limit of ${SLOT_LIMIT} )`).test(
       error?.message || ''
     ),
     'the cache file is rejected when it loads'
@@ -1473,21 +1402,21 @@ async function assertOverCapCacheRejected(t, setup, parallel, tag) {
 }
 
 test(
-  'continuous batching: a cached prompt over kv_unified_per_slot fails at load',
+  'continuous batching: a cached prompt over the slot limit fails at load',
   { timeout: 900_000, skip: isMobile },
   async (t) => {
     for (const parallel of ['1', '2']) {
-      await assertOverCapCacheRejected(t, setupModel, parallel, 'text')
+      await assertOverLimitCacheRejected(t, setupModel, parallel, 'text')
     }
   }
 )
 
 test(
-  'continuous batching MTMD: a cached prompt over kv_unified_per_slot fails at load',
+  'continuous batching MTMD: a cached prompt over the slot limit fails at load',
   { timeout: 900_000, skip: skipHeavyPlatform },
   async (t) => {
     for (const parallel of ['1', '2']) {
-      await assertOverCapCacheRejected(t, setupMultimodalBatchModel, parallel, 'mtmd')
+      await assertOverLimitCacheRejected(t, setupMultimodalBatchModel, parallel, 'mtmd')
     }
   }
 )
@@ -1555,10 +1484,10 @@ test(
   }
 )
 
-// A short prompt after filler words, leaving about 100 tokens under the cap, so
-// a long answer runs into it.
-async function assertGenerationStopsAtCap(t, model) {
-  const filler = 'word '.repeat(KV_PER_SLOT_CAP - 150)
+// A short prompt after filler words, leaving about 100 tokens under the slot
+// limit, so a long answer runs into it.
+async function assertGenerationStopsAtLimit(t, model) {
+  const filler = 'word '.repeat(SLOT_LIMIT - 150)
   const prompt = [
     {
       role: 'user',
@@ -1569,19 +1498,16 @@ async function assertGenerationStopsAtCap(t, model) {
   const output = await collectText(response)
   const stats = response.stats
   const used = toNumber(stats?.promptTokens) + toNumber(stats?.generatedTokens)
-  t.comment(`generation to the cap: ${JSON.stringify(stats)}`)
+  t.comment(`generation to the slot limit: ${JSON.stringify(stats)}`)
   t.is(stats?.stopReason, 'contextOverflow', 'a generation that fills the slot reports it')
-  t.ok(output.length > 0, 'a generation stopped by the cap keeps its tokens')
-  // Below the even share of ctx_size 4096 this shows the cap stopped it; in the
-  // shared-pool test the share equals the cap, so either limit fits.
-  t.ok(used < 2 * KV_PER_SLOT_CAP, `the generation stopped at the cap (${used} tokens)`)
+  t.ok(output.length > 0, 'a generation stopped by the slot limit keeps its tokens')
+  // The pool holds two slots, so a slot running past its share would exceed this.
+  t.ok(used <= SLOT_LIMIT, `the generation stopped at the slot limit (${used} tokens)`)
 }
 
-// About 100 tokens over the cap.
-async function assertLongPromptRejectedAtCap(t, model) {
-  const longPrompt = [
-    { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
-  ]
+// About 100 tokens over the slot limit.
+async function assertLongPromptRejectedAtLimit(t, model) {
+  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(SLOT_LIMIT + 100)}` }]
   const error = await model
     .run(longPrompt)
     .then(collectText)
@@ -1591,9 +1517,9 @@ async function assertLongPromptRejectedAtCap(t, model) {
     )
   t.comment(`long prompt: ${error?.message}`)
   t.ok(
-    new RegExp(`(per-sequence cap|max(?: context tokens)?) ${KV_PER_SLOT_CAP}\\b`).test(
+    new RegExp(`(per-sequence cap|max(?: context tokens)?) ${SLOT_LIMIT}\\b`).test(
       error?.message || ''
     ),
-    `a prompt over one slot is rejected against the ${KV_PER_SLOT_CAP}-token cap`
+    `a prompt over one slot is rejected against the ${SLOT_LIMIT}-token limit`
   )
 }

@@ -136,18 +136,14 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
-unsigned perSeqCeiling(
-    unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot) {
+unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
   bool valid = ctxTotalTokens > 0 && batchSize > 0;
   if (!valid) {
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
         ">= 1");
   }
-  const unsigned share = ctxTotalTokens / static_cast<unsigned>(batchSize);
-  return kvUnifiedPerSlot > 0
-             ? std::min(share, static_cast<unsigned>(kvUnifiedPerSlot))
-             : share;
+  return ctxTotalTokens / static_cast<unsigned>(batchSize);
 }
 
 TimedDecodeResult timeDecodeStep(
@@ -171,8 +167,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       driverFactory_(std::move(driverFactory)),
-      perSeqMaxTokens_(perSeqCeiling(
-          ctxTotalTokens, batchSize, baseParams.kv_unified_per_slot)),
+      perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_(llama_decode),
@@ -709,7 +704,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
+            " (ctxTotalTokens / n_parallel)");
   }
   if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -721,7 +716,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             " tokens leaves no room under "
             "per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
+            " (ctxTotalTokens / n_parallel)");
   }
   if (request.prefill && promptSize > perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -731,7 +726,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "ContinuousBatchScheduler::submit: prefill prompt of " +
             std::to_string(promptSize) + " tokens exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
+            " (ctxTotalTokens / n_parallel)");
   }
   if (!request.prefill &&
       generationBudgetExceeded(
@@ -745,7 +740,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
+            " (ctxTotalTokens / n_parallel)");
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);

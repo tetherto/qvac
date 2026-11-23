@@ -31,9 +31,7 @@ namespace {
 unsigned slotCeiling(LlmContext& llmContext) {
   auto* ctx = llmContext.getCtx();
   return qvac_lib_inference_addon_llama::batching::perSeqCeiling(
-      llama_n_ctx(ctx),
-      llama_n_seq_max(ctx),
-      llmContext.getParams().kv_unified_per_slot);
+      llama_n_ctx(ctx), llama_n_seq_max(ctx));
 }
 } // namespace
 

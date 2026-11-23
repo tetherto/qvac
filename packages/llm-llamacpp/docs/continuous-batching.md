@@ -243,7 +243,7 @@ Completion is not the only terminal: `failGroupLocked` also settles a group, wit
 **Per-sequence context cap:**
 
 ```
-perSeqMaxTokens_ = min(ctxTotalTokens / batchSize, kv_unified_per_slot)  // the cap only when set
+perSeqMaxTokens_ = ctxTotalTokens / batchSize
 ```
 
 This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
@@ -343,7 +343,7 @@ slot freed, BatchGroup updated
 
 ## Per-sequence context caps
 
-With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_unified_per_slot` if that is lower. Below, `C / N` stands for whichever applies. This affects:
+With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affects:
 
 - **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
@@ -352,14 +352,13 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_un
 
 ### One shared KV pool
 
-With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. llama-server lets one slot fill the buffer unless `--kv-unified-per-slot` caps it; the addon keeps each slot to its even share, `C / N`. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
+With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. llama-server lets one slot fill the buffer unless `--kv-unified-per-slot` caps it; the addon keeps each slot to its even share, `C / N`, so it has no per-slot option:
 
 ```js
-config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
+config: { parallel: '4', ctx_size: '8192' } // one 8192-cell pool, 2048 per slot
 ```
 
-- **Pool size** — with `ctx_size` unset and `kv_unified_per_slot` set, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context. With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool, not of each slot, so each slot gets that context divided by `N`; when memory is short and `ctx_size` is unset, fit can lower the pool to `fit-ctx` (4096 by default). Set `ctx_size` to `N x` a slot size, or set `kv_unified_per_slot`, to get that slot size.
-- **Only an even split** — with `parallel >= 2`, `parallel x kv_unified_per_slot` must fit the pool (`C` rounded up to a multiple of 256), or the load fails with `InvalidArgument` before the model loads. A negative or non-integer `kv_unified_per_slot` is rejected at any `parallel`. Admission checks each slot only against its own limit, so limits adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
+- **Pool size** — `ctx_size` sizes the whole pool, rounded up to a multiple of 256. With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool, not of each slot, so each slot gets that context divided by `N`; when memory is short and `ctx_size` is unset, fit can lower the pool to `fit-ctx` (4096 by default). Set `ctx_size` to `N x` a slot size to get that slot size.
 - **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out, so decoding can be slower than with one buffer per slot. Slots sharing the buffer are not isolated from each other, so do not treat one model instance as a boundary between callers that do not trust each other.
 - **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
 - **Known issues with `parallel >= 2`** — fabric takes the whole buffer as one sequence's context in two places, until a fabric change gives it the slot limit:

@@ -1392,11 +1392,11 @@ namespace LlmLlamacpp {
      * server is ready to serve at full concurrency with no warm-up. It sizes
      * the native scheduler's worker pool one-to-one — that many OS threads are
      * created at load and held for the model's lifetime, idle or not — and the
-     * slots share one KV cache, each limited to `ctx_size / parallel` tokens,
-     * or `kv_unified_per_slot` if lower. On MiniMax-M3, `parallel >= 2` turns
-     * sparse attention off; DeepSeek V4 and long-RoPE models have known issues
-     * with it (docs/continuous-batching.md). Size it to the concurrency you
-     * actually intend to serve, not to a generous upper bound.
+     * slots share one KV cache, each limited to `ctx_size / parallel` tokens.
+     * On MiniMax-M3, `parallel >= 2` turns sparse attention off; DeepSeek V4
+     * and long-RoPE models have known issues with it
+     * (docs/continuous-batching.md). Size it to the concurrency you actually
+     * intend to serve, not to a generous upper bound.
      *
      * Range `1..256`. The upper bound is the engine's own sequence limit
      * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
@@ -1406,16 +1406,6 @@ namespace LlmLlamacpp {
      * `InvalidArgument` naming both knobs.
      */
     parallel?: NumericLike;
-    /**
-     * Context limit per slot (llama-server's `--kv-unified-per-slot`). With
-     * `ctx_size` unset, the KV cache is sized to `parallel x
-     * kv_unified_per_slot`; `ctx_size: 0` keeps the model's trained context.
-     * With `parallel >= 2`, `parallel x kv_unified_per_slot` must fit
-     * `ctx_size` rounded up to a multiple of 256. Default `0`, no limit
-     * beyond `ctx_size / parallel`; a negative or non-integer value is
-     * rejected. Also accepted as `kv-unified-per-slot`.
-     */
-    kv_unified_per_slot?: NumericLike;
     /**
      * Per-sequence cap on the process-local full-state checkpoints kept for
      * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,

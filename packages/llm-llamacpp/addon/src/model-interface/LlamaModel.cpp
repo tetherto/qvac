@@ -407,8 +407,8 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
   // The slot limit, not n_ctx_seq, which is the whole pool when unified.
-  const uint32_t nCtxSeq = batching::perSeqCeiling(
-      llama_n_ctx(ctx), llama_n_seq_max(ctx), params.kv_unified_per_slot);
+  const uint32_t nCtxSeq =
+      batching::perSeqCeiling(llama_n_ctx(ctx), llama_n_seq_max(ctx));
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -508,21 +508,6 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
       .speculative = state.llmContext_->getSpeculative(),
   };
-  // The shared pool is only split evenly: admission checks each slot against
-  // its own cap, so caps adding up to more than the pool would let the pool
-  // fill mid-decode and fail every request in progress.
-  if (cparams.kv_unified_per_slot > 0 &&
-      static_cast<uint64_t>(cparams.kv_unified_per_slot) * batchSize >
-          ctxTotalTokens) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        string_format(
-            "[LlamaModel] parallel x kv_unified_per_slot (%zu x %d) must fit "
-            "ctx_size=%u; leave ctx_size unset to size the pool to it",
-            batchSize,
-            cparams.kv_unified_per_slot,
-            ctxTotalTokens));
-  }
   // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
   // batchCapacity >= batchSize) with std::invalid_argument, which would escape
   // load unmapped. Both traps are really a `parallel` misconfiguration, so

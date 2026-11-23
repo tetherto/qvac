@@ -199,11 +199,8 @@ inline fs::path getTestBackendsDir() {
 
 class MockModelMetaData : public ModelMetaData {
 public:
-  MockModelMetaData(
-      bool oneBitQuant, std::string arch,
-      std::optional<uint32_t> contextLength = std::nullopt)
-      : oneBitQuant_(oneBitQuant), arch_(std::move(arch)),
-        contextLength_(contextLength) {}
+  MockModelMetaData(bool oneBitQuant, std::string arch)
+      : oneBitQuant_(oneBitQuant), arch_(std::move(arch)) {}
 
   [[nodiscard]] bool hasOneBitQuantization() const override {
     return oneBitQuant_;
@@ -213,16 +210,10 @@ public:
       return arch_;
     return std::nullopt;
   }
-  std::optional<uint32_t> tryGetU32(const char* key) const override {
-    if (std::string(key) == arch_ + ".context_length")
-      return contextLength_;
-    return std::nullopt;
-  }
 
 private:
   bool oneBitQuant_;
   std::string arch_;
-  std::optional<uint32_t> contextLength_;
 };
 
 } // namespace test_common

@@ -19,9 +19,8 @@ Loads with `parallel >= 2` change as follows:
   tokens gives each slot 8192 instead of 32768. When memory is short and
   `ctx_size` is unset, fit's lower bound (`fit-ctx`, 4096 by default) also
   applies to the whole pool, so with `parallel: '4'` a slot can get 1024
-  tokens where it kept at least 4096. To keep a slot size, set `ctx_size` to `parallel x` that size,
-  or set `kv_unified_per_slot`
-  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+  tokens where it kept at least 4096. To keep a slot size, set `ctx_size` to
+  `parallel x` that size ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 - On Vulkan, with flash attention off, or on CUDA older than Turing, decoding
   can be slower, because each slot's attention spans the shared buffer
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
@@ -42,15 +41,6 @@ Loads with `parallel >= 2` change as follows:
   `cacheKey` runs without it
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
-### Added
-
-- `kv_unified_per_slot` load option, llama-server's `--kv-unified-per-slot`:
-  caps each slot's context. With `ctx_size` unset, the KV cache is sized to
-  `parallel x kv_unified_per_slot`. With `parallel >= 2`, the caps must fit
-  `ctx_size` rounded up to a multiple of 256, or the load fails with
-  `InvalidArgument`. A negative or non-integer value is rejected
-  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
-
 ### Changed
 
 - `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
@@ -60,10 +50,10 @@ Loads with `parallel >= 2` change as follows:
 
 ### Fixed
 
-- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`,
-  or `kv_unified_per_slot` if lower) now fails when the cache loads, as
-  documented. The check compared against the whole context, and now also
-  counts the KV cells a multimodal prompt takes
+- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`)
+  now fails with `ContextLengthExeeded` when the cache loads, as documented.
+  The check compared against the whole context, and now also counts the KV
+  cells a multimodal prompt takes
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ## [0.72.1] - 2026-11-23
