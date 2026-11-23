@@ -487,16 +487,29 @@ jobs:
             .github/actions
             packages/sdk/ci
           persist-credentials: false
-      - if: "!cancelled() && env.REPORTED == 'true'"
+      # A later push can leave this run going, so results and e2e-tested go on the PR only while it is still at this
+      # run's commit; the status below stays on that commit either way.
+      - id: head
+        if: "!cancelled() && env.REPORTED == 'true'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.context.outputs.pr }}
+          SHA: ${{ needs.context.outputs.sha }}
+        run: |
+          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha)
+          current=$([ "$head" = "$SHA" ] && echo true || echo false)
+          [ "$current" = true ] || echo "::notice::PR moved from $SHA to $head; not reporting this run on it"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
         uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
-      - if: "!cancelled() && env.REPORTED == 'true'"
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
         uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           pattern: "*-results-*"
           path: results
-      - if: "!cancelled() && env.REPORTED == 'true'"
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MODE: ${{ needs.plan.outputs.mode }}
