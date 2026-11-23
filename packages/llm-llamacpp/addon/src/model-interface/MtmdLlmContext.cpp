@@ -15,7 +15,9 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "CacheCheckpointFile.hpp"
+#include "CacheFileIndex.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "GenerationParamsApply.hpp"
 #include "ImagePixelLimit.hpp"
 #include "ImageTokenBudget.hpp"
@@ -232,7 +234,9 @@ void MtmdLlmContext::initializeCommonState() {
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          llama_n_ctx_seq(modelCtx_.lctx));
+          std::min(
+              llama_n_ctx_seq(modelCtx_.lctx),
+              static_cast<uint32_t>(ctxCeiling())));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -1484,9 +1488,11 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
 }
 
 llama_pos MtmdLlmContext::ctxCeiling() const {
-  return perSeqCtxCeiling_ > 0
-             ? perSeqCtxCeiling_
-             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  // The slot's even share of the pool, so slots cannot overbook it.
+  return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
+                               : static_cast<llama_pos>(batching::perSeqCeiling(
+                                     llama_n_ctx(modelCtx_.lctx),
+                                     llama_n_seq_max(modelCtx_.lctx)));
 }
 
 cache::Ledger
@@ -2668,12 +2674,14 @@ void MtmdLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
 
-  if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
+  // Positions and KV cells diverge for M-RoPE images; both must fit the slot.
+  if (getNPast() > ctxCeiling() || getCacheTokens() > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),
         "MtmdLlmContext::loadCache: cache '" + cacheKey +
-            "' exceeds current context size");
+            "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+            " tokens");
   }
 
   auto* mem = llama_get_memory(modelCtx_.lctx);
@@ -2770,6 +2778,16 @@ bool MtmdLlmContext::loadCache(
       stateTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
+    // A file over the slot limit fails to load when the other slots leave too
+    // few free cells; report it as the check after a load does.
+    if (cache::CacheFileIndex::ledgerExceeds(cacheKey, ctxCeiling())) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          "MtmdLlmContext::loadCache: cache '" + cacheKey +
+              "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+              " tokens");
+    }
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
