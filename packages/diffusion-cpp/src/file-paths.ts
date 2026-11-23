@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import path = require('bare-path')
+import os = require('bare-os')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 import type { DiffusionFiles } from './index'
@@ -19,6 +20,9 @@ const COMPANION_FILE_KEYS = [
   'llmVision',
   'tokenizer',
   'vae',
+  'taesd',
+  'coremlUnet',
+  'coremlTaeDecoder',
   'esrgan',
   'highNoiseDiffusionModel',
   'uncondModel',
@@ -40,11 +44,21 @@ export function assertAbsolute(key: string, value: unknown): asserts value is st
  * Rejects a file set the engine could only report as an opaque error. Shared
  * so a fit refuses the same paths a load refuses.
  */
-export function assertFilePaths(files: DiffusionFiles & DiffusionVideoFiles): void {
+export function assertFilePaths(
+  files: DiffusionFiles & DiffusionVideoFiles,
+  hostPlatform: string = os.platform()
+): void {
   assertAbsolute('model', files.model)
   for (const key of COMPANION_FILE_KEYS) {
     if (files[key] !== undefined) {
       assertAbsolute(key, files[key])
+    }
+  }
+  if (hostPlatform !== 'darwin' && hostPlatform !== 'ios') {
+    for (const key of ['coremlUnet', 'coremlTaeDecoder'] as const) {
+      if (files[key] !== undefined) {
+        throw new TypeError(`files.${key} is supported only on macOS and iOS`)
+      }
     }
   }
 }
@@ -61,6 +75,9 @@ export interface DiffusionFilePaths {
   llmPath: string
   llmVisionPath: string
   tokenizerPath: string
+  taesdPath: string
+  coremlUnetPath: string
+  coremlTaeDecoderPath: string
   vaePath: string
   clipVisionPath: string
   esrganPath: string
@@ -92,6 +109,9 @@ export function toFilePaths(files: DiffusionFiles & DiffusionVideoFiles): Diffus
     llmVisionPath: files.llmVision || '',
     tokenizerPath: files.tokenizer || '',
     vaePath: files.vae || '',
+    taesdPath: files.taesd || '',
+    coremlUnetPath: files.coremlUnet || '',
+    coremlTaeDecoderPath: files.coremlTaeDecoder || '',
     clipVisionPath: files.clipVision || '',
     esrganPath: files.esrgan || '',
     audioVaePath: files.audioVae || '',
