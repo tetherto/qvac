@@ -87,10 +87,9 @@ export function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`)
 }
 
-// main's MQTT certificate step: each set secret into a file the test config reads by path.
+// main's MQTT certificate step: each set secret into a file the test config reads by path, in a fresh 0700 directory.
 export function mqttCerts(env) {
-  const dir = join(tmpdir(), 'mqtt-certs')
-  mkdirSync(dir, { recursive: true })
+  const dir = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'mqtt-certs-'))
   const out = {}
   for (const [secret, file, name] of [
     ['MQTT_CA_CERT', 'ca.crt', 'MQTT_CA_PATH'],
@@ -99,7 +98,7 @@ export function mqttCerts(env) {
   ]) {
     const value = (env[secret] || '').trim()
     if (!value) continue
-    writeFileSync(join(dir, file), value)
+    writeFileSync(join(dir, file), value, { mode: 0o600 })
     out[name] = join(dir, file)
   }
   return { ...env, ...out }
