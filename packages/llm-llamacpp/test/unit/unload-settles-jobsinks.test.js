@@ -105,3 +105,63 @@ test('LlamaInterface.unload() waits for asynchronous binding cleanup', async (t)
     t.ok(settled, `cleanup finished before unload resolved, iteration ${iteration + 1}`)
   }
 })
+
+test('LlamaInterface.unload() preserves failed cleanup for a public retry', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = {}
+    let attempts = 0
+    const binding = {
+      createInstance: () => handle,
+      activeJobs: (candidate) => (candidate === handle ? 1 : 0),
+      destroyInstance(candidate) {
+        t.is(candidate, handle, `same handle, iteration ${iteration + 1}`)
+        attempts++
+        if (attempts === 1) {
+          if (iteration % 2 === 0) throw new Error('cleanup failed')
+          return Promise.reject(new Error('cleanup failed'))
+        }
+        return Promise.resolve()
+      }
+    }
+    const addon = new LlamaInterface(
+      binding,
+      { path: '/tmp/test.gguf', projectionPath: '', config: {} },
+      () => {}
+    )
+
+    await t.exception.all(() => addon.unload(), /cleanup failed/)
+    t.is(addon.activeJobs(), 1, `failed cleanup remains reachable, iteration ${iteration + 1}`)
+    await addon.unload()
+    t.is(attempts, 2, `cleanup retried, iteration ${iteration + 1}`)
+    t.is(addon.activeJobs(), 0, `successful cleanup clears handle, iteration ${iteration + 1}`)
+  }
+})
+
+test('LlamaInterface.unload() shares one in-flight cleanup', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let finishDestroy
+    let attempts = 0
+    const destroyed = new Promise((resolve) => {
+      finishDestroy = resolve
+    })
+    const binding = {
+      createInstance: () => ({}),
+      destroyInstance() {
+        attempts++
+        return destroyed
+      }
+    }
+    const addon = new LlamaInterface(
+      binding,
+      { path: '/tmp/test.gguf', projectionPath: '', config: {} },
+      () => {}
+    )
+
+    const first = addon.unload()
+    const second = addon.unload()
+    t.is(second, first, `concurrent callers share cleanup, iteration ${iteration + 1}`)
+    t.is(attempts, 1, `cleanup starts once, iteration ${iteration + 1}`)
+    finishDestroy()
+    await Promise.all([first, second])
+  }
+})

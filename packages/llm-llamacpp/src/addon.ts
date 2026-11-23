@@ -193,6 +193,7 @@ export function mapAddonEvent(
 export class LlamaInterface {
   private readonly _binding: LlamaBinding;
   private _handle: object | null;
+  private _unloading: Promise<void> | null = null;
 
   constructor(
     binding: unknown,
@@ -323,10 +324,27 @@ export class LlamaInterface {
    * Unload the model and clear resources (including memory).
    */
   unload(): Promise<void> {
+    if (this._unloading) return this._unloading;
     if (!this._handle) return Promise.resolve();
-    const destroyed = this._binding.destroyInstance(this._handle);
+    const handle = this._handle;
     this._handle = null;
-    return Promise.resolve(destroyed);
+    let destroyed: Promise<void>;
+    try {
+      destroyed = Promise.resolve(this._binding.destroyInstance(handle));
+    } catch (error) {
+      this._handle = handle;
+      return Promise.reject(error);
+    }
+    const unloading = destroyed
+      .catch((error) => {
+        this._handle = handle;
+        throw error;
+      })
+      .finally(() => {
+        if (this._unloading === unloading) this._unloading = null;
+      });
+    this._unloading = unloading;
+    return unloading;
   }
 }
 
