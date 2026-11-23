@@ -10,26 +10,26 @@ const LEGACY_LOAD_KEYS = [
   'no_direct_io',
   'mlock'
 ]
-const EXTERNAL_DRAFT_KEYS = ['spec-draft-model', 'spec_draft_model']
 const UNSUPPORTED_BROWSER_KEYS = [
-  'lora',
   'rpc-servers',
   'rpc_servers',
   'rpc',
   'backendsDir',
   'openclCacheDir'
 ]
+const FILE_KEYS = ['lora', 'spec-draft-model', 'spec_draft_model']
 
 function browserLoadConfig(config = {}) {
+  if (
+    Object.prototype.hasOwnProperty.call(config, 'spec_draft_model') &&
+    Object.prototype.hasOwnProperty.call(config, 'spec-draft-model')
+  ) {
+    throw new Error('spec_draft_model and spec-draft-model must not both be set')
+  }
+
   for (const key of LEGACY_LOAD_KEYS) {
     if (config[key] !== undefined) {
       throw new Error(`${key} is not supported in the browser build; model files use plain reads`)
-    }
-  }
-
-  for (const key of EXTERNAL_DRAFT_KEYS) {
-    if (config[key] !== undefined && config[key] !== '') {
-      throw new Error(`${key} is not supported in the browser build`)
     }
   }
 
@@ -65,4 +65,23 @@ function browserLoadConfig(config = {}) {
   ])
 }
 
-module.exports = { browserLoadConfig }
+async function mountLoadFiles(params, mountFile) {
+  const config = browserLoadConfig(params.config)
+  const mountedPaths = new Map()
+  async function mountOnce(sourcePath) {
+    if (!sourcePath) return ''
+    if (!mountedPaths.has(sourcePath)) {
+      mountedPaths.set(sourcePath, await mountFile(sourcePath))
+    }
+    return mountedPaths.get(sourcePath)
+  }
+
+  const modelPath = await mountOnce(params.path)
+  const projectionPath = await mountOnce(params.projectionPath)
+  for (const key of FILE_KEYS) {
+    if (config[key]) config[key] = await mountOnce(config[key])
+  }
+  return { modelPath, projectionPath, config }
+}
+
+module.exports = { browserLoadConfig, mountLoadFiles }

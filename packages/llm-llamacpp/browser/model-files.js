@@ -93,4 +93,45 @@ async function modelFiles(path) {
   return { primary, files: orderedShards(siblings, shard, path) }
 }
 
-module.exports = { MOUNTED_FILES_KEY, modelFiles, orderedShards, shardInfo }
+async function mountModelFiles(module, mounts, mountpoint, path) {
+  if (!path) return ''
+  const { primary, files } = await modelFiles(path)
+  module.FS.mkdirTree(mountpoint)
+  try {
+    module.FS.mount(module.FS.filesystems.WORKERFS, { files }, mountpoint)
+  } catch (error) {
+    module.FS.rmdir(mountpoint)
+    throw error
+  }
+  mounts.push(mountpoint)
+  return `${mountpoint}/${primary.name}`
+}
+
+function unmountModelFiles(module, mounts) {
+  const pending = mounts.splice(0)
+  let firstError = null
+  for (const mountpoint of pending) {
+    try {
+      module.FS.unmount(mountpoint)
+    } catch (error) {
+      mounts.push(mountpoint)
+      firstError ??= error
+      continue
+    }
+    try {
+      module.FS.rmdir(mountpoint)
+    } catch (error) {
+      firstError ??= error
+    }
+  }
+  if (firstError) throw firstError
+}
+
+module.exports = {
+  MOUNTED_FILES_KEY,
+  modelFiles,
+  mountModelFiles,
+  orderedShards,
+  shardInfo,
+  unmountModelFiles
+}

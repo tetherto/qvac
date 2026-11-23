@@ -123,17 +123,6 @@ test('browser binding rejects path and ordered-part media before admission', asy
   }
 })
 
-test('browser binding rejects projection models before loading the engine', async (t) => {
-  const handle = binding.createInstance(
-    {},
-    { path: '/model.gguf', projectionPath: '/projection.gguf' },
-    () => {}
-  )
-
-  await t.exception.all(() => binding.activate(handle), /Projection model is not supported/)
-  t.is(binding.activeJobs(handle), 0)
-})
-
 test('browser calcTokens fails fast while the engine queue is busy', async (t) => {
   const handle = instance()
   const admission = await binding.runJob(handle, [{ type: 'text', input: '[]' }])

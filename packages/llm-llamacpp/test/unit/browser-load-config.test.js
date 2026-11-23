@@ -1,10 +1,19 @@
 const test = require('brittle')
-const { browserLoadConfig } = require('../../browser/load-config.js')
+const { browserLoadConfig, mountLoadFiles } = require('../../browser/load-config.js')
 
-test('browser load config rejects external speculative draft models', (t) => {
-  for (const key of ['spec-draft-model', 'spec_draft_model']) {
-    t.exception(() => browserLoadConfig({ [key]: '/models/draft.gguf' }), /not supported/)
-  }
+test('browser load config preserves file-backed model options', (t) => {
+  t.alike(browserLoadConfig({ lora: '/models/adapter.gguf' }), {
+    lora: '/models/adapter.gguf',
+    load_mode: 'none'
+  })
+  t.alike(browserLoadConfig({ 'spec-draft-model': '/models/draft.gguf' }), {
+    'spec-draft-model': '/models/draft.gguf',
+    load_mode: 'none'
+  })
+  t.alike(browserLoadConfig({ spec_draft_model: '/models/draft.gguf' }), {
+    spec_draft_model: '/models/draft.gguf',
+    load_mode: 'none'
+  })
   t.alike(browserLoadConfig({ 'spec-draft-model': '', 'spec-type': 'draft-mtp' }), {
     'spec-draft-model': '',
     'spec-type': 'draft-mtp',
@@ -12,9 +21,54 @@ test('browser load config rejects external speculative draft models', (t) => {
   })
 })
 
-test('browser load config rejects unmounted files and unavailable native services', (t) => {
+test('browser load config preserves speculative alias exclusivity', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    for (const config of [
+      {
+        'spec-draft-model': '/models/draft.gguf',
+        spec_draft_model: '/models/draft.gguf'
+      },
+      {
+        'spec-draft-model': '/models/draft-a.gguf',
+        spec_draft_model: '/models/draft-b.gguf'
+      },
+      { 'spec-draft-model': '/models/draft.gguf', spec_draft_model: undefined },
+      { 'spec-draft-model': undefined, spec_draft_model: undefined }
+    ]) {
+      let mountCalls = 0
+      await t.exception.all(
+        () =>
+          mountLoadFiles({ path: '/models/main.gguf', projectionPath: '', config }, () => {
+            mountCalls++
+            return '/engine/unexpected.gguf'
+          }),
+        /must not both be set/
+      )
+      t.is(mountCalls, 0, `iteration ${iteration + 1}`)
+    }
+  }
+})
+
+test('browser load files reject invalid config before mounting', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let mountCalls = 0
+    await t.exception.all(
+      () =>
+        mountLoadFiles(
+          { path: '/models/main.gguf', projectionPath: '', config: { rpc: 'host:50052' } },
+          () => {
+            mountCalls++
+            return '/engine/unexpected.gguf'
+          }
+        ),
+      /rpc is not supported/
+    )
+    t.is(mountCalls, 0, `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser load config rejects unavailable native services', (t) => {
   for (const [key, value] of [
-    ['lora', '/models/adapter.gguf'],
     ['rpc-servers', '127.0.0.1:50052'],
     ['rpc_servers', '127.0.0.1:50052'],
     ['rpc', '127.0.0.1:50052'],
@@ -23,6 +77,86 @@ test('browser load config rejects unmounted files and unavailable native service
   ]) {
     t.exception(() => browserLoadConfig({ [key]: value }), /not supported/)
   }
+})
+
+test('browser load files mounts every model asset once', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const mounted = []
+    const files = await mountLoadFiles(
+      {
+        path: '/models/main.gguf',
+        projectionPath: '/models/mmproj.gguf',
+        config: {
+          lora: '/models/adapter.gguf',
+          'spec-draft-model': '/models/draft.gguf'
+        }
+      },
+      (path) => {
+        mounted.push(path)
+        return `/engine/${mounted.length}/${path.slice(path.lastIndexOf('/') + 1)}`
+      }
+    )
+
+    t.alike(mounted, [
+      '/models/main.gguf',
+      '/models/mmproj.gguf',
+      '/models/adapter.gguf',
+      '/models/draft.gguf'
+    ])
+    t.alike(files, {
+      modelPath: '/engine/1/main.gguf',
+      projectionPath: '/engine/2/mmproj.gguf',
+      config: {
+        lora: '/engine/3/adapter.gguf',
+        'spec-draft-model': '/engine/4/draft.gguf',
+        load_mode: 'none'
+      }
+    })
+  }
+})
+
+test('browser load files reuse one mount for the same source path', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const mounted = []
+    const files = await mountLoadFiles(
+      {
+        path: '/models/main.gguf',
+        projectionPath: '/models/shared.gguf',
+        config: { lora: '/models/shared.gguf', 'spec-draft-model': '/models/shared.gguf' }
+      },
+      (path) => {
+        mounted.push(path)
+        return `/engine/${mounted.length}/${path.slice(path.lastIndexOf('/') + 1)}`
+      }
+    )
+
+    t.alike(mounted, ['/models/main.gguf', '/models/shared.gguf'])
+    t.is(files.projectionPath, '/engine/2/shared.gguf')
+    t.is(files.config.lora, '/engine/2/shared.gguf')
+    t.is(files.config['spec-draft-model'], '/engine/2/shared.gguf')
+  }
+})
+
+test('browser load files skip empty optional model assets', async (t) => {
+  const mounted = []
+  const files = await mountLoadFiles(
+    {
+      path: '/models/main.gguf',
+      projectionPath: '',
+      config: { lora: '', 'spec-draft-model': '' }
+    },
+    (path) => {
+      mounted.push(path)
+      return `/engine/${path.slice(path.lastIndexOf('/') + 1)}`
+    }
+  )
+
+  t.alike(mounted, ['/models/main.gguf'])
+  t.alike(files, {
+    modelPath: '/engine/main.gguf',
+    projectionPath: '',
+    config: { lora: '', 'spec-draft-model': '', load_mode: 'none' }
+  })
 })
 
 test('browser load config selects plain reads', (t) => {
