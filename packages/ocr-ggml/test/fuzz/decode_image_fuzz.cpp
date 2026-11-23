@@ -22,12 +22,33 @@ namespace {
 using qvac_lib_infer_ocr_ggml::decodeOrWrapImage;
 using qvac_lib_infer_ocr_ggml::OcrInput;
 
+// FuzzTest rejects seeds larger than the encoded-bytes domain.
+constexpr size_t kMaxEncodedBytes = 512;
+
 std::vector<uint8_t> validPngSeed() {
   const cv::Mat rgb(16, 16, CV_8UC3, cv::Scalar(0, 128, 255));
   std::vector<uint8_t> encoded;
   if (!cv::imencode(".png", rgb, encoded) || encoded.empty()) {
     throw std::runtime_error(
         "ocr-decode-image-fuzz: failed to encode PNG seed");
+  }
+  return encoded;
+}
+
+// Two-frame animated PNG, so mutations reach the APNG frame-control (fcTL)
+// path that OpenCV 4.11 did not bounds-check. cv::imencodeanimation exists
+// from OpenCV 4.12, so this also fails to build against an unpatched OpenCV.
+std::vector<uint8_t> validApngSeed() {
+  const cv::Mat first(16, 16, CV_8UC3, cv::Scalar(0, 128, 255));
+  cv::Mat second = first.clone();
+  second(cv::Rect(8, 8, 4, 4)).setTo(cv::Scalar(255, 0, 0));
+  cv::Animation animation;
+  animation.frames = {first, second};
+  animation.durations = {100, 100};
+  std::vector<uint8_t> encoded;
+  if (!cv::imencodeanimation(".png", animation, encoded) || encoded.empty()) {
+    throw std::runtime_error(
+        "ocr-decode-image-fuzz: failed to encode APNG seed");
   }
   return encoded;
 }
@@ -59,10 +80,13 @@ void EncodedNeverCrashes(const std::vector<uint8_t>& bytes) {
 }
 
 FUZZ_TEST(OcrDecodeImageFuzz, EncodedNeverCrashes)
-    .WithDomains(fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(512))
+    .WithDomains(
+        fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(
+            kMaxEncodedBytes))
     .WithSeeds([] {
       return std::vector<std::tuple<std::vector<uint8_t>>>{
           {validPngSeed()},
+          {validApngSeed()},
           {std::vector<uint8_t>{}},
           {std::vector<uint8_t>(16, 0)},
       };
@@ -150,6 +174,17 @@ TEST(OcrDecodeImageSizeGuards, RawMaximumIntDimensionsAtHostLimit) {
 TEST(OcrDecodeImageFuzzSeeds, ValidPngDecodesToRgb) {
   cv::Mat decoded;
   ASSERT_NO_THROW(decoded = decodeOrWrapImage(encodedInput(validPngSeed())));
+  EXPECT_FALSE(decoded.empty());
+  EXPECT_EQ(decoded.type(), CV_8UC3);
+  EXPECT_EQ(decoded.cols, 16);
+  EXPECT_EQ(decoded.rows, 16);
+}
+
+TEST(OcrDecodeImageFuzzSeeds, ValidApngDecodesFirstFrameToRgb) {
+  const std::vector<uint8_t> seed = validApngSeed();
+  EXPECT_LE(seed.size(), kMaxEncodedBytes);
+  cv::Mat decoded;
+  ASSERT_NO_THROW(decoded = decodeOrWrapImage(encodedInput(seed)));
   EXPECT_FALSE(decoded.empty());
   EXPECT_EQ(decoded.type(), CV_8UC3);
   EXPECT_EQ(decoded.cols, 16);
