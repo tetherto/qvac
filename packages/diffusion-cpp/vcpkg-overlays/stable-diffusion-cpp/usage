@@ -1,0 +1,32 @@
+The package stable-diffusion-cpp provides CMake integration:
+
+  find_package(stable-diffusion-cpp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE stable-diffusion::stable-diffusion)
+
+Windows builds enable LTO for the engine and ggml. Libraries built with clang-cl
+require a compatible LLVM toolchain and lld-link in the consuming application.
+
+The following header is available:
+  #include <stable-diffusion.h>   // main C API
+
+For image I/O (stb_image, stb_image_write), depend on the stb vcpkg package
+directly rather than relying on headers bundled in this port.
+
+GPU backends are controlled through the ggml dependency:
+  metal  - Metal GPU backend (macOS/iOS, auto-enabled on Apple)
+  vulkan - Vulkan GPU backend
+  cuda   - CUDA GPU backend
+  opencl - OpenCL GPU backend (Android/Adreno)
+
+Optional Core ML sidecars (macOS/iOS, feature "coreml", off by default) run the
+FLUX.2 denoiser, the SD 1.x/2.x and SDXL UNet and the TAESD/TAESDXL/SDXS tiny
+decoder on the Apple Neural Engine. For the UNet and decoder, point
+sd_ctx_params_t.coreml_unet_path / coreml_tae_decoder_path at CoreML models
+(.mlmodelc or .mlpackage; see docs/coreml.md upstream). coreml_unet_path also
+takes a folder of UNet chunks (*chunk1.mlmodelc, *chunk2.mlmodelc, ...), which
+SDXL uses on iOS. Supported: SDXS, SD 2.1-base, SDXL 1.0 base (768x768).
+
+The 2026-11-01 port includes MOSS-Image support. Supply its external
+tokenizer.json through sd_ctx_params_t.tokenizer together with the diffusion,
+Qwen3.5 text-encoder, and VAE weights. The matching ggml port uses
+GGML_MAX_NAME=160 and must be rebuilt together with the engine and consumers.
