@@ -1057,14 +1057,14 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
         const cleanup = new Set(this._pendingCleanup);
         if (currentAddon) cleanup.add(currentAddon);
         this._pendingCleanup.clear();
-        let cleanupError: unknown = null;
+        let cleanupError: Error | null = null;
         try {
           for (const addon of cleanup) {
             try {
               await addon.unload();
             } catch (error) {
               this._pendingCleanup.add(addon);
-              cleanupError ??= error;
+              cleanupError ??= error instanceof Error ? error : new Error(String(error));
             }
           }
         } finally {

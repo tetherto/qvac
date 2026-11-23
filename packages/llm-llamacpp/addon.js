@@ -193,7 +193,7 @@ class LlamaInterface {
         }
         catch (error) {
             this._handle = handle;
-            return Promise.reject(error);
+            return Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
         const unloading = destroyed
             .catch((error) => {

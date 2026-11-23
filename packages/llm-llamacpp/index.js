@@ -814,7 +814,7 @@ const LlmLlamacpp = class LlmLlamacpp {
                         }
                         catch (error) {
                             this._pendingCleanup.add(addon);
-                            cleanupError ??= error;
+                            cleanupError ??= error instanceof Error ? error : new Error(String(error));
                         }
                     }
                 }

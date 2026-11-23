@@ -333,7 +333,7 @@ export class LlamaInterface {
       destroyed = Promise.resolve(this._binding.destroyInstance(handle));
     } catch (error) {
       this._handle = handle;
-      return Promise.reject(error);
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
     const unloading = destroyed
       .catch((error) => {
