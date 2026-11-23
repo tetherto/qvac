@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+
 ## [0.31.2] - 2026-11-20
 
 ### Changed
@@ -81,17 +94,6 @@
   sent to the host decode instead of failing.
 - TurboVec IVF search scores far fewer blocks, now that each list is stored
   contiguously.
-
-### Changed
-
-- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
-  individual npm packages below the registry size limit. HIP remains in the base
-  package. CUDA remains automatically installed at the exact same version as
-  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
-  while preserving backend priority and the existing environment override; applications require no installation or inference configuration
-  changes.
-- Fabric publishing checks every compressed platform and backend tarball against
-  a 190 MB budget before publishing any packages.
 
 ## [0.30.1] - 2026-11-16
 
