@@ -42,56 +42,56 @@ async function withMockedEngine(config, createModule, testBinding) {
 }
 
 test('browser binding orders legacy inference, cache and unload operations', async () => {
-  const bindingPath = require.resolve('../../binding.browser.js')
-  const retryablePath = require.resolve('../../browser/retryable-module.js')
-  const bindingModule = require.cache[bindingPath]
-  const retryableModule = require(retryablePath)
   const calls = []
-  const module = {
-    FS: { mkdirTree() {} },
-    ccall(name) {
-      calls.push(name)
-      return 0
+  await withMockedEngine(
+    { parallel: '1' },
+    () => ({
+      FS: { mkdirTree() {} },
+      ccall(name) {
+        calls.push(name)
+        if (name === 'qvac_web_create') return 1
+        return 0
+      }
+    }),
+    async (isolated) => {
+      for (let iteration = 0; iteration < 20; iteration++) {
+        calls.length = 0
+        const runFirst = isolated.createInstance({}, {}, () => {})
+        await isolated.activate(runFirst)
+        calls.length = 0
+        await isolated.runJob(runFirst, [{ type: 'text', input: '[]' }])
+        await isolated.saveCache(runFirst, '/cache/after-run.bin')
+        assert.deepEqual(calls, ['qvac_web_validate', 'qvac_web_run', 'qvac_web_save_cache'])
+
+        calls.length = 0
+        const saveFirst = isolated.createInstance({}, {}, () => {})
+        await isolated.activate(saveFirst)
+        calls.length = 0
+        const save = isolated.saveCache(saveFirst, '/cache/before-run.bin')
+        await isolated.runJob(saveFirst, [{ type: 'text', input: '[]' }])
+        await save
+        await delay()
+        assert.deepEqual(calls, ['qvac_web_save_cache', 'qvac_web_validate', 'qvac_web_run'])
+
+        calls.length = 0
+        const unloadAfterSave = isolated.createInstance({}, {}, () => {})
+        await isolated.activate(unloadAfterSave)
+        calls.length = 0
+        await isolated.runJob(unloadAfterSave, [{ type: 'text', input: '[]' }])
+        await waitUntil(() => isolated.activeJobs(unloadAfterSave) === 0)
+        const saving = isolated.saveCache(unloadAfterSave, '/cache/before-unload.bin')
+        const unloading = isolated.destroyInstance(unloadAfterSave)
+        await saving
+        await unloading
+        assert.deepEqual(calls, [
+          'qvac_web_validate',
+          'qvac_web_run',
+          'qvac_web_save_cache',
+          'qvac_web_destroy'
+        ])
+      }
     }
-  }
-
-  require.cache[retryablePath].exports = () => () => Promise.resolve(module)
-  delete require.cache[bindingPath]
-  const isolated = require(bindingPath)
-
-  try {
-    for (let iteration = 0; iteration < 20; iteration++) {
-      calls.length = 0
-      const runFirst = isolated.createInstance({}, {}, () => {})
-      runFirst.native = 1
-      await isolated.runJob(runFirst, [{ type: 'text', input: '[]' }])
-      await isolated.saveCache(runFirst, '/cache/after-run.bin')
-      assert.deepEqual(calls, ['qvac_web_run', 'qvac_web_save_cache'])
-
-      calls.length = 0
-      const saveFirst = isolated.createInstance({}, {}, () => {})
-      saveFirst.native = 2
-      const save = isolated.saveCache(saveFirst, '/cache/before-run.bin')
-      await isolated.runJob(saveFirst, [{ type: 'text', input: '[]' }])
-      await save
-      await delay()
-      assert.deepEqual(calls, ['qvac_web_save_cache', 'qvac_web_run'])
-
-      calls.length = 0
-      const unloadAfterSave = isolated.createInstance({}, {}, () => {})
-      unloadAfterSave.native = 3
-      await isolated.runJob(unloadAfterSave, [{ type: 'text', input: '[]' }])
-      const saving = isolated.saveCache(unloadAfterSave, '/cache/before-unload.bin')
-      const unloading = isolated.destroyInstance(unloadAfterSave)
-      await saving
-      await unloading
-      assert.deepEqual(calls, ['qvac_web_save_cache', 'qvac_web_destroy'])
-    }
-  } finally {
-    if (bindingModule) require.cache[bindingPath] = bindingModule
-    else delete require.cache[bindingPath]
-    require.cache[retryablePath].exports = retryableModule
-  }
+  )
 })
 
 test('legacy browser inference owns admitted media bytes', async () => {

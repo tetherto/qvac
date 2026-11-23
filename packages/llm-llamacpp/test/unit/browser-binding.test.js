@@ -549,7 +549,7 @@ test('cooperative listener failure cancels only its job and releases it', async 
 
     t.is(terminals.length, 1, `one terminal, iteration ${iteration + 1}`)
     t.is(terminals[0].event, 'Error', `terminal type, iteration ${iteration + 1}`)
-    t.is(terminals[0].error.message, 'listener failed', `error, iteration ${iteration + 1}`)
+    t.is(terminals[0].error.code, 'CANCELLED', `error, iteration ${iteration + 1}`)
     t.is(isolated.activeSlots(handle), 0, `slots released, iteration ${iteration + 1}`)
     await isolated.destroyInstance(handle)
   }
