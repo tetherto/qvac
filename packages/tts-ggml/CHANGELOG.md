@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-23
+
 ### Fixed
 
 - The platform packages (`@qvac/tts-ggml-<host>`) now declare the matching
   `@qvac/fabric-<host>` as an optional peer dependency. Without it bare-link
   left the fabric runtime reference unresolved in a mobile application, and the
   addon failed to load on Android (`CANNOT_LOAD`) and iOS
-  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`).
+  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`)
+  ([#5902](https://github.com/tetherto/qvac/pull/5902)).
 
 ## [0.16.0] - 2026-11-18
 
