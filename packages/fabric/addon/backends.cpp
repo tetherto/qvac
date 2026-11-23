@@ -98,12 +98,12 @@ std::vector<BackendPackage> g_packages;
 } // namespace
 
 extern "C" void qvac_fabric_register_backend_package(
-    const void* address, const char* module_name, const char* backend_file) {
-  const std::string dir = moduleBackendsDir(address, module_name);
+    const void* address, const char* moduleName, const char* backendFile) {
+  const std::string dir = moduleBackendsDir(address, moduleName);
   if (dir.empty())
     return;
   const std::lock_guard<std::mutex> lock(g_packagesMutex);
-  const std::string file = utf8(fs::path(dir) / backend_file);
+  const std::string file = utf8(fs::path(dir) / backendFile);
   if (std::none_of(
           g_packages.begin(), g_packages.end(), [&](const auto& package) {
             return package.file == file;

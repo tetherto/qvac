@@ -420,14 +420,34 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
 
   for (const [name, entry] of Object.entries(manifest.models)) {
     const source = entry.s3Path === undefined ? 'urls' : 's3Path'
-    const expectedKeys = ['bytes', 'sha256', source, ...(entry.warm === undefined ? [] : ['warm'])]
+    const expectedKeys = [
+      'bytes',
+      'sha256',
+      source,
+      ...(entry.warm === undefined ? [] : ['warm']),
+      ...(entry.targets === undefined ? [] : ['targets'])
+    ]
       .sort()
       .join(',')
     t.is(
       Object.keys(entry).sort().join(','),
       expectedKeys,
-      `${name} contains only cache-key-bearing fields`
+      `${name} contains only integrity, source, and supported routing fields`
     )
+    if (entry.targets !== undefined) {
+      const targets = entry.targets
+      t.ok(Array.isArray(targets) && targets.length > 0, `${name} targets is a non-empty array`)
+      if (Array.isArray(targets)) {
+        const projectTargets = require('../../project.json').targets
+        t.ok(
+          targets.every(
+            (target) => typeof target === 'string' && Object.hasOwn(projectTargets, target)
+          ),
+          `${name} targets names existing package targets`
+        )
+        t.is(new Set(targets).size, targets.length, `${name} targets contains no duplicates`)
+      }
+    }
     if (entry.warm !== undefined) {
       t.is(entry.warm, false, `${name} only declares warm when explicitly deferred`)
     }

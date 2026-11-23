@@ -7,4 +7,4 @@
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 extern "C" QVAC_FABRIC_API void qvac_fabric_register_backend_package(
-    const void* address, const char* module_name, const char* backend_file);
+    const void* address, const char* moduleName, const char* backendFile);
