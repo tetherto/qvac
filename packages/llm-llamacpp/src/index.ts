@@ -1831,7 +1831,9 @@ namespace LlmLlamacpp {
     backendDevice: "cpu" | "gpu" | "npu";
     /**
      * Lowercase backend family that holds the primary model's weights, such as
-     * `cpu` or `cuda`. Mixed families are distinct, sorted, and comma-separated.
+     * `cpu` or `cuda`. CPU is left out whenever an accelerator holds any
+     * weights, so a partial offload reports only the accelerator families.
+     * Mixed accelerator families are distinct, sorted, and comma-separated.
      * Older addons omit it.
      */
     backendName?: string;
