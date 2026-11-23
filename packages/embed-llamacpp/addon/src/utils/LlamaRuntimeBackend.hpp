@@ -2,7 +2,6 @@
 
 #include <map>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include <ggml-backend.h>
@@ -42,49 +41,15 @@ inline std::string runtimeDeviceBackendName(
     const char* name = bckI.ggml_backend_reg_name(registry);
     return canonicalBackendFamily(name != nullptr ? name : "");
   }
-
-  // Tensor split uses an unregistered Meta(device,device,...) device.
-  // Match its members against the registry instead of guessing from ordinals.
-  const char* rawName = bckI.ggml_backend_dev_name(device);
-  const std::string name = rawName != nullptr ? rawName : "";
-  constexpr std::string_view kMetaPrefix = "Meta(";
-  if (!name.starts_with(kMetaPrefix) || !name.ends_with(")")) {
-    return {};
-  }
-  std::vector<ModelBackendAllocation> members;
-  size_t offset = kMetaPrefix.size();
-  while (offset < name.size() - 1) {
-    const size_t end = name.find_first_of(",)", offset);
-    if (end == std::string::npos) {
-      return {};
-    }
-    const std::string member = name.substr(offset, end - offset);
-    std::string family;
-    for (size_t index = 0; index < bckI.ggml_backend_dev_count(); ++index) {
-      auto candidate = bckI.ggml_backend_dev_get(index);
-      const char* candidateName = bckI.ggml_backend_dev_name(candidate);
-      if (candidateName != nullptr && member == candidateName &&
-          candidate != device) {
-        family = runtimeDeviceBackendName(candidate, bckI);
-        break;
-      }
-    }
-    if (family.empty()) {
-      return {};
-    }
-    members.push_back({1, family, false});
-    offset = end + 1;
-  }
-  return modelBackendName(members);
+  // Only tensor split creates unregistered Meta(...) devices, and embed
+  // accepts only none and layer split.
+  return {};
 }
 
 inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
   const backend_selection::BackendInterface bckI{
-      .ggml_backend_dev_count = ::ggml_backend_dev_count,
       .ggml_backend_dev_backend_reg = ::ggml_backend_dev_backend_reg,
-      .ggml_backend_dev_get = ::ggml_backend_dev_get,
-      .ggml_backend_reg_name = ::ggml_backend_reg_name,
-      .ggml_backend_dev_name = ::ggml_backend_dev_name};
+      .ggml_backend_reg_name = ::ggml_backend_reg_name};
   return runtimeDeviceBackendName(device, bckI);
 }
 
