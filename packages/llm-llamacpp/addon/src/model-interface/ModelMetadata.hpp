@@ -27,7 +27,8 @@ public:
 
   /// @brief Returns the u32 value at @p key, or nullopt if
   /// absent/uninitialized.
-  [[nodiscard]] std::optional<uint32_t> tryGetU32(const char* key) const;
+  [[nodiscard]] virtual std::optional<uint32_t>
+  tryGetU32(const char* key) const;
 
   /// @brief Returns true if the u32 value at @p key matches any of @p values.
   [[nodiscard]] bool

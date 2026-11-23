@@ -150,6 +150,36 @@ void requirePollLevelsInRange(
   }
 }
 
+// std::stoi stops at the first non-digit, so "1e3" would cap every slot at 1.
+// The sign is allowed here so a negative cap gets its own error later.
+void requireKvUnifiedPerSlotInteger(
+    const load_fit_normalization::ConfigMap& configFilemap) {
+  for (const std::string_view key :
+       {"kv-unified-per-slot", "kv_unified_per_slot"}) {
+    const auto it = configFilemap.find(std::string(key));
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    const std::string_view value = it->second;
+    const std::string_view digits =
+        value.starts_with('-') ? value.substr(1) : value;
+    const bool isInteger =
+        !digits.empty() &&
+        std::ranges::all_of(digits, [](unsigned char character) {
+          return std::isdigit(character) != 0;
+        });
+    if (!isInteger) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: '%s' must be an integer, got '%s'.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              it->first.c_str(),
+              it->second.c_str()));
+    }
+  }
+}
+
 // QVAC-24112: register remote RPC devices before backend selection runs.
 //
 // llama.cpp registers RPC endpoints from its own `--rpc` handler, which the
@@ -1282,6 +1312,7 @@ NormalizedLoad normalizeLoadForFit(
   params.cpuparams.poll = 0;
   params.cpuparams_batch.poll = 0;
   requirePollLevelsInRange(configFilemap);
+  requireKvUnifiedPerSlotInteger(configFilemap);
   const bool hasExplicitBatchPoll = configFilemap.contains("poll-batch") ||
                                     configFilemap.contains("poll_batch");
 
@@ -2369,15 +2400,15 @@ NormalizedLoad normalizeLoadForFit(
             K_LEGACY_PARSER_NAME.data()));
     params.n_ctx = kMinNCtx;
   }
-  // The batch scheduler refuses caps that overbook the pool; with an explicit
-  // ctx-size the pool fabric creates is known here, so fit checks refuse the
-  // same config. ctx-size 0 is checked once the context exists.
-  if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 &&
-      params.n_ctx > 0) {
+  // The batch scheduler refuses caps that overbook the pool. The pool fabric
+  // creates is known here, so fit checks refuse the same config: ctx-size 0
+  // keeps the trained context, which fit does not shrink.
+  const int64_t nCtx = params.n_ctx > 0 ? static_cast<int64_t>(params.n_ctx)
+                                        : trainedContext(metadata);
+  if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 && nCtx > 0) {
     // llama_context pads n_ctx to a multiple of this, except for training
     // contexts (llama-context.cpp).
     constexpr int64_t kFabricCtxPad = 256;
-    const auto nCtx = static_cast<int64_t>(params.n_ctx);
     const int64_t pool = params.training ? nCtx : GGML_PAD(nCtx, kFabricCtxPad);
     if (static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot >
         pool) {

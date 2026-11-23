@@ -48,7 +48,7 @@ Loads with `parallel >= 2` change as follows:
   caps each slot's context. With `ctx_size` unset, the KV cache is sized to
   `parallel x kv_unified_per_slot`. With `parallel >= 2`, the caps must fit
   `ctx_size` rounded up to a multiple of 256, or the load fails with
-  `InvalidArgument`. A negative value is rejected
+  `InvalidArgument`. A negative or non-integer value is rejected
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ### Changed

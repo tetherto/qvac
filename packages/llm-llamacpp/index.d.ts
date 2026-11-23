@@ -331,8 +331,8 @@ declare namespace LlmLlamacpp {
          * kv_unified_per_slot`; `ctx_size: 0` keeps the model's trained context.
          * With `parallel >= 2`, `parallel x kv_unified_per_slot` must fit
          * `ctx_size` rounded up to a multiple of 256. Default `0`, no limit
-         * beyond `ctx_size / parallel`; a negative value is rejected. Also
-         * accepted as `kv-unified-per-slot`.
+         * beyond `ctx_size / parallel`; a negative or non-integer value is
+         * rejected. Also accepted as `kv-unified-per-slot`.
          */
         kv_unified_per_slot?: NumericLike;
         /**

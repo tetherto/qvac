@@ -2135,6 +2135,64 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotTrainingPoolIsNotPadded) {
   }
 }
 
+// ctx-size 0 keeps the trained context, so fit refuses the same overbooked
+// caps the load does (baseConfig has parallel 2).
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotOverbookingTrainedContext) {
+  const auto normalize =
+      [this](const ModelMetaData& metadata, const std::string& perSlot) {
+        auto config = baseConfig();
+        config["ctx-size"] = "0";
+        config["kv-unified-per-slot"] = perSlot;
+        return lfn::normalizeLoadForFit(
+            "/tmp/model.gguf",
+            std::move(config),
+            metadata,
+            {},
+            backend({.type = backend_selection::GPU, .name = "none"}));
+      };
+  const test_common::MockModelMetaData trained{false, "llama", 2048};
+  EXPECT_EQ(normalize(trained, "1024").params.kv_unified_per_slot, 1024);
+  try {
+    static_cast<void>(normalize(trained, "1025"));
+    FAIL() << "caps that overbook the trained context must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("(2 x 1025) must fit ctx_size=0 (pool 2048)"));
+  }
+  // Without a trained context the check waits for the context to exist.
+  EXPECT_EQ(normalize(metadata_, "1025").params.kv_unified_per_slot, 1025);
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotMustBeAnInteger) {
+  const auto normalize =
+      [this](const std::string& key, const std::string& value) {
+        auto config = baseConfig();
+        config["ctx-size"] = "4096";
+        config[key] = value;
+        return lfn::normalizeLoadForFit(
+            "/tmp/model.gguf",
+            std::move(config),
+            metadata_,
+            {},
+            backend({.type = backend_selection::GPU, .name = "none"}));
+      };
+  for (const std::string key : {"kv-unified-per-slot", "kv_unified_per_slot"}) {
+    EXPECT_EQ(normalize(key, "1000").params.kv_unified_per_slot, 1000) << key;
+    for (const std::string value : {"1e3", "512abc", "1.5", " 512", "-"}) {
+      try {
+        static_cast<void>(normalize(key, value));
+        FAIL() << key << "='" << value << "' must throw";
+      } catch (const qvac_errors::StatusError& error) {
+        EXPECT_THAT(
+            error.what(),
+            ::testing::HasSubstr(
+                "'" + key + "' must be an integer, got '" + value + "'"));
+      }
+    }
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
   auto config = baseConfig();
   config["kv-unified-per-slot"] = "-512";
