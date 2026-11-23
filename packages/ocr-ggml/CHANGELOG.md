@@ -27,6 +27,11 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
 - The image-decode FuzzTest seeds a two-frame animated PNG, so bounded fuzzing
   reaches the APNG frame-control path.
 

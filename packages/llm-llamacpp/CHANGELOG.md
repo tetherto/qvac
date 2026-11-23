@@ -53,13 +53,10 @@ Loads with `parallel >= 2` change as follows:
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.31.2`, which carries
-  `qvac-fabric` `11739.4.0` -> `11739.5.0`
-  ([#5891](https://github.com/tetherto/qvac/pull/5891)): it restores a cache
-  file saved with another KV stream count, which loading per-slot cache files
-  into the unified cache needs. The mobile dev and peer dependencies
-  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.2` with it
-  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
 
 ### Fixed
 

@@ -142,6 +142,14 @@ installed pair matched, so a fabric patch needs no consumer change. The
 application still supplies the runtime at run time. Configure fails naming the
 missing package rather than failing later at link.
 
+A consumer that is itself split keeps its binary in its own platform packages,
+whose manifests the slicer writes. The slicer therefore repeats the meta's
+declaration of the same-host runtime on each of them as an optional peer
+(`@qvac/fabric-ios` on `<consumer>-ios`), and the mobile test app's assembler
+does the same for an addon it packs from fresh prebuilds. Without it bare-link
+leaves `qvac__fabric-<host>@<major>.bare` in the linked binary and the
+application cannot load the addon.
+
 ### Publish
 
 `on-merge-nx` slices, publishes each platform package, then publishes the meta

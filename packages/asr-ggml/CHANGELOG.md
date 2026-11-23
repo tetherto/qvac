@@ -14,6 +14,24 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+## [0.13.2] - 2026-11-23
+
+### Fixed
+
+- The platform packages (`@qvac/asr-ggml-<host>`) now declare the matching
+  `@qvac/fabric-<host>` as an optional peer dependency. Without it bare-link
+  left the fabric runtime reference unresolved in a mobile application, and the
+  addon failed to load on Android (`CANNOT_LOAD`) and iOS
+  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`)
+  ([#5902](https://github.com/tetherto/qvac/pull/5902)).
+
 ## [0.13.1] - 2026-11-20
 
 ### Fixed
