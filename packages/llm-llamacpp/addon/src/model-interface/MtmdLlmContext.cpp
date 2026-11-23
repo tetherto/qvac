@@ -2666,7 +2666,8 @@ void MtmdLlmContext::acceptRestoredState(
         ADDON_ID,
         toString(ContextLengthExeeded),
         "MtmdLlmContext::loadCache: cache '" + cacheKey +
-            "' exceeds current context size");
+            "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+            " tokens");
   }
 
   auto* mem = llama_get_memory(modelCtx_.lctx);
@@ -2770,7 +2771,8 @@ bool MtmdLlmContext::loadCache(
           ADDON_ID,
           toString(ContextLengthExeeded),
           "MtmdLlmContext::loadCache: cache '" + cacheKey +
-              "' exceeds current context size");
+              "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+              " tokens");
     }
     throw qvac_errors::StatusError(
         ADDON_ID,

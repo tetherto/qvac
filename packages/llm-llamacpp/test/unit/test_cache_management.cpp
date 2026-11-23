@@ -4228,10 +4228,8 @@ TEST(CrossKeyPrefixTest, BatchRequestsWithoutAKeyShareTheirPrefix) {
 
 // A hybrid model's recurrent state is shared by the copy until the new
 // sequence decodes: answering on the copy must leave the parked primed state
-// intact. The primed sequence's state is compared byte for byte, not the text a
-// later question generates: in the unified KV pool a sequence's greedy output
-// depends on where the other sequences' cells sit, so it can change while the
-// state stays the same.
+// intact. The primed sequence's state is compared byte for byte, which checks
+// that directly rather than through the text a later question generates.
 TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
   const test_common::TestModelPath modelPath = hybridModelPath();
   if (!modelPath.found()) {

@@ -1393,9 +1393,7 @@ async function assertOverLimitCacheRejected(t, setup, parallel, tag) {
     )
   t.comment(`over-limit cache: ${error?.message}`)
   t.ok(
-    new RegExp(`exceeds (current context size|the context limit of ${SLOT_LIMIT} )`).test(
-      error?.message || ''
-    ),
+    new RegExp(`exceeds the context limit of ${SLOT_LIMIT} `).test(error?.message || ''),
     'the cache file is rejected when it loads'
   )
   await reader.unload()
