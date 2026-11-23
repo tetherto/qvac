@@ -27,6 +27,18 @@ TEST(ModelBackendName, OmitsCompanionCpuAndPinnedHostBuffers) {
       "cuda");
 }
 
+TEST(ModelBackendName, CountsOnlyCpuAndPinnedHostBuffersAsCpu) {
+  using qvac_lib_inference_addon_llama::backend_reporting::holdsCpuWeights;
+  // CPU buffers.
+  EXPECT_TRUE(holdsCpuWeights(true, true, false));
+  // CUDA_Host and Vulkan_Host.
+  EXPECT_TRUE(holdsCpuWeights(true, false, true));
+  // XDNA_Host: host memory the NPU runs from.
+  EXPECT_FALSE(holdsCpuWeights(true, false, false));
+  // Device memory, such as CUDA0 or Metal.
+  EXPECT_FALSE(holdsCpuWeights(false, false, false));
+}
+
 TEST(ModelBackendName, SortsAndDeduplicatesSplitFamilies) {
   EXPECT_EQ(
       modelBackendName(

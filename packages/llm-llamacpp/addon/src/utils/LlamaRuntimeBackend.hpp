@@ -98,10 +98,16 @@ inline std::string runtimeModelBackendName(const llama_context* context) {
     if (memory.model == 0) {
       continue;
     }
+    ggml_backend_dev_t device = ggml_backend_buft_get_device(buffer);
     allocations.push_back(
         {memory.model,
-         runtimeDeviceBackendName(ggml_backend_buft_get_device(buffer)),
-         ggml_backend_buft_is_host(buffer)});
+         runtimeDeviceBackendName(device),
+         holdsCpuWeights(
+             ggml_backend_buft_is_host(buffer),
+             device == nullptr ||
+                 ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU,
+             device != nullptr &&
+                 buffer == ggml_backend_dev_host_buffer_type(device))});
   }
   return modelBackendName(allocations);
 }

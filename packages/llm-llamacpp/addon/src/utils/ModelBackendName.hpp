@@ -24,6 +24,13 @@ struct ModelBackendAllocation {
   bool host = false;
 };
 
+// A host-memory buffer holds CPU weights when the CPU owns it or it is its
+// device's pinned host buffer, such as CUDA_Host. The XDNA NPU runs from host
+// memory, so its own buffer type, XDNA_Host, names the NPU.
+inline bool holdsCpuWeights(bool host, bool cpuDevice, bool deviceHostBuffer) {
+  return host && (cpuDevice || deviceHostBuffer);
+}
+
 // CPU companion buffers do not change the reported accelerator family.
 // An unidentified non-host allocation leaves the name unknown.
 inline std::string

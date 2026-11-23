@@ -67,7 +67,7 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined
   with `backend`, `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning; only the
   defaults `backend: "auto"`, `devices: ""` and `split-mode: "none"` are accepted with it.
-  Runtime stats report `backendDevice: "npu"`.
+  Runtime stats report `backendDevice: "npu"` and `backendName: "xdna"`.
 - `device: "gpu"` with `devices: "XDNA0"` also runs on the NPU alone and reports
   `backendDevice: "npu"`; a mixed list such as `XDNA0,Vulkan0` is a GPU load. Finetuning is
   rejected for any load with `XDNA0` in `devices`, alone or in a mixed split. `backend` takes
