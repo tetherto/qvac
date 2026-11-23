@@ -237,11 +237,12 @@ alone a version already on npm, a version `main` has since moved past, and a rel
 that points at another commit. A branch at the merge commit that already has a publish run
 is reported with that run's link, not started again.
 
-An addon whose `@qvac/*` dependency range has no version on npm yet, such as consumers bumped
-together with Fabric, gets its branch at merge time but no publish run. The same workflow
-starts it once that dependency publishes: it re-checks after every successful `publish-npm.yml`
-run and every hour, and `gh workflow run addon-auto-release.yml` with no inputs runs that
-check now. To release a bump that merged before this workflow existed, or whose run failed,
+An addon whose `@qvac/*` dependency range has no version on npm yet, such as a consumer moved
+to a new Fabric minor in the same merge, gets its branch at merge time but no publish run. A
+range the published version already satisfies does not wait. The same workflow
+starts it within an hour of that dependency publishing: it re-checks every hour and after a
+successful `publish-npm.yml` run, and `gh workflow run addon-auto-release.yml` with no inputs
+runs that check now. To release a bump that merged before this workflow existed, or whose run failed,
 run it with `-f sha=<merge commit>`; add `-f dry_run=true` to see the plan first.
 
 No backmerge is needed: the version and changelog are already on `main`. Patch releases of

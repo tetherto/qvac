@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { pendingBranches, plan, qvacRanges, summary, versionBumps } from '../addon-auto-release.mjs'
+import { apply, diffBase, releaseRun, pendingBranches, plan, qvacRanges, scanReports, summary, versionBumps } from '../addon-auto-release.mjs'
 
 const SHA = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
@@ -25,6 +25,8 @@ const lookups = (over = {}) => ({
   rangeAvailable: () => true,
   branchSha: () => null,
   publishRun: () => null,
+  onMain: () => true,
+  minutesOld: () => 60,
   ...over,
 })
 
@@ -114,6 +116,23 @@ test('plan: a branch at this commit with no publish run is started; with a run i
   assert.deepEqual([row.action, row.reason], ['skip', 'publish run already exists (failure): https://example.test/runs/1'])
 })
 
+test('plan: a publish run counts only for the commit the branch points at', () => {
+  const asked = []
+  const publishRun = (branch, head) => (asked.push([branch, head]), null)
+  plan([llm('0.72.1')], lookups({ branchSha: () => SHA, publishRun }))
+  assert.deepEqual(asked, [['release-llm-llamacpp-0.72.1', SHA]])
+})
+
+test('plan: a scan never starts a branch whose commit is off main or was cut moments ago', () => {
+  const bump = { ...llm('0.73.0'), from: null, sha: OTHER }
+  const off = plan([bump], lookups({ sha: null, branchSha: () => OTHER, onMain: () => false }))[0]
+  assert.deepEqual([off.action, off.reason], ['skip', 'branch commit is not on main'])
+  const fresh = plan([bump], lookups({ sha: null, branchSha: () => OTHER, minutesOld: () => 2 }))[0]
+  assert.equal(fresh.action, 'skip')
+  assert.match(fresh.reason, /its own run handles it/)
+  assert.equal(plan([llm('0.72.1')], lookups({ onMain: () => false, minutesOld: () => 0 }))[0].action, 'release')
+})
+
 test('plan: a scanned branch is judged against its own commit, not the run commit', () => {
   const bump = { ...llm('0.73.0'), from: null, sha: OTHER }
   const [row] = plan([bump], lookups({ sha: null, branchSha: () => OTHER }))
@@ -154,13 +173,18 @@ test('qvacRanges: own platform packages and non-semver ranges are not prerequisi
   const ranges = qvacRanges({
     name: '@qvac/asr-ggml',
     dependencies: { '@qvac/fabric': '^0.32.0', '@qvac/infer-base': 'workspace:*' },
-    optionalDependencies: { '@qvac/asr-ggml-linux-x64': '0.13.2', '@qvac/fabric-linux-x64': '^0.32.0' },
+    optionalDependencies: {
+      '@qvac/asr-ggml-linux-x64': '0.13.2',
+      '@qvac/asr-ggml-ios-arm64': '0.13.2',
+      '@qvac/asr-ggml-tools': '^0.2.0',
+      '@qvac/fabric-linux-x64': '^0.32.0',
+    },
     peerDependencies: { '@qvac/fabric-ios': '^0.32.0' },
     devDependencies: { '@qvac/test-suite': '^0.15.0' },
   })
   assert.deepEqual(
     ranges.map((r) => r.name),
-    ['@qvac/fabric', '@qvac/fabric-ios', '@qvac/fabric-linux-x64']
+    ['@qvac/fabric', '@qvac/fabric-ios', '@qvac/asr-ggml-tools', '@qvac/fabric-linux-x64']
   )
 })
 
@@ -189,4 +213,88 @@ test('summary: says what happened, and only what would happen on a dry run', () 
 test('summary: points a failed publish at its run page', () => {
   const rows = [{ name: '@qvac/ocr-ggml', version: '0.36.0', action: 'skip', reason: 'publish run already exists (failure): u' }]
   assert.match(summary(rows, { title: 't', dryRun: false }), /re-run it from its run page/)
+})
+
+function recorder(failStart) {
+  const calls = []
+  return {
+    calls,
+    create: (row) => calls.push(`create ${row.branch}`),
+    start: (row) => {
+      if (failStart) throw new Error('HTTP 422\nbody')
+      calls.push(`start ${row.branch}`)
+    },
+  }
+}
+
+test('apply: release creates then starts, dispatch only starts, wait only creates a missing branch', () => {
+  const rows = [
+    { branch: 'release-a-1.0.0', action: 'release' },
+    { branch: 'release-b-1.0.0', action: 'dispatch' },
+    { branch: 'release-c-1.0.0', action: 'wait', exists: false },
+    { branch: 'release-d-1.0.0', action: 'wait', exists: true },
+    { branch: 'release-e-1.0.0', action: 'skip' },
+    { branch: 'release-f-1.0.0', action: 'failed' },
+  ]
+  const r = recorder()
+  apply(rows, { dryRun: false, ...r })
+  assert.deepEqual(r.calls, [
+    'create release-a-1.0.0',
+    'start release-a-1.0.0',
+    'start release-b-1.0.0',
+    'create release-c-1.0.0',
+  ])
+})
+
+test('apply: a dry run writes nothing, and a failed start marks only its row failed', () => {
+  const dry = recorder()
+  apply([{ branch: 'release-a-1.0.0', action: 'release' }], { dryRun: true, ...dry })
+  assert.deepEqual(dry.calls, [])
+  const r = recorder(true)
+  const rows = apply(
+    [{ branch: 'release-a-1.0.0', action: 'release' }, { branch: 'release-c-1.0.0', action: 'wait', exists: false }],
+    { dryRun: false, ...r }
+  )
+  assert.deepEqual(r.calls, ['create release-a-1.0.0', 'create release-c-1.0.0'])
+  assert.deepEqual(rows.map((x) => [x.action, x.reason]), [['failed', 'HTTP 422'], ['wait', undefined]])
+})
+
+test('scanReports: keeps starts, waits, failures and a publish needing a re-run; drops settled skips', () => {
+  const rows = [
+    { action: 'skip', reason: 'already on npm' },
+    { action: 'skip', reason: 'branch commit is not on main' },
+    { action: 'skip', reason: 'publish run already exists (in_progress): u' },
+    { action: 'skip', reason: 'publish run already exists (failure): u' },
+    { action: 'wait', reason: 'needs x' },
+    { action: 'failed', reason: 'npm view failed' },
+  ]
+  assert.deepEqual(rows.filter(scanReports).map((r) => r.reason), ['publish run already exists (failure): u', 'needs x', 'npm view failed'])
+})
+
+test('apply: a publish another run started first is reported as skipped, not started again', () => {
+  const calls = []
+  const rows = apply([{ branch: 'release-a-1.0.0', action: 'dispatch' }], {
+    dryRun: false,
+    create: () => calls.push('create'),
+    start: () => false,
+  })
+  assert.deepEqual(calls, [])
+  assert.deepEqual([rows[0].action, rows[0].reason], ['skip', 'another auto-release run started its publish first'])
+})
+
+test('diffBase: uses the push before-sha, falling back to the parent for new branches and dispatches', () => {
+  assert.equal(diffBase(SHA, OTHER), OTHER)
+  assert.equal(diffBase(SHA, '0'.repeat(40)), `${SHA}^1`)
+  assert.equal(diffBase(SHA, ''), `${SHA}^1`)
+  assert.equal(diffBase(SHA, undefined), `${SHA}^1`)
+})
+
+test('releaseRun: ignores dry runs and runs of another commit', () => {
+  const runs = [
+    { headSha: SHA, displayTitle: 'Publish to npm (dry run) on release-a-1.0.0', url: 'dry' },
+    { headSha: OTHER, displayTitle: 'Publish to npm on release-a-1.0.0', url: 'old' },
+    { headSha: SHA, displayTitle: 'Publish to npm on release-a-1.0.0', url: 'real' },
+  ]
+  assert.equal(releaseRun(runs, SHA).url, 'real')
+  assert.equal(releaseRun(runs.slice(0, 2), SHA), null)
 })

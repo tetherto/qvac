@@ -66,12 +66,16 @@ Proceed? (y/n)
 
 ### Step 3: Find or start the release run
 
-**Base branch `main` (addons):** do not cut the branch or dispatch `publish-npm.yml` yourself.
+**Native addon on `main`:** the automation covers a package that is not private, has a `publish`
+target, and is tagged `ci:addons` in `packages/<package>/project.json`. Do not cut the branch or
+dispatch `publish-npm.yml` yourself.
 
-1. Find the merge commit that bumped the version and the auto-release run for it:
+1. Find the merge commit that bumped the version (the second command must print `<version>`)
+   and the auto-release run for it:
    ```bash
    git fetch origin main
-   git log -1 --format=%H -S'"version": "<version>"' origin/main -- packages/<package>/package.json
+   git log --first-parent -1 --format=%H -S'"version": "<version>"' origin/main -- packages/<package>/package.json
+   git show <merge-commit>:packages/<package>/package.json | grep '"version"'
    gh run list --repo tetherto/qvac --workflow addon-auto-release.yml --limit 10
    gh run list --repo tetherto/qvac --workflow publish-npm.yml --branch release-<package>-<version> --limit 1
    ```
@@ -86,14 +90,14 @@ Proceed? (y/n)
    gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit>
    ```
 
-**Base branch `release-*` (patches):**
+**Any other package on `main` (for example `ci:libs`), or a patch on `release-*`:**
 
 1. Ensure we're on the base branch and up to date:
    ```bash
    git checkout <base-branch>
    git pull origin <base-branch>
    ```
-   Where `<base-branch>` is `release-<package>-<base-version>`.
+   Where `<base-branch>` is `main`, or `release-<package>-<base-version>` for a patch.
 2. Create the release branch:
    ```bash
    git checkout -b release-<package>-<version>
@@ -102,7 +106,7 @@ Proceed? (y/n)
    ```bash
    git push origin release-<package>-<version>
    ```
-4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. Every native addon publishes through `publish-npm.yml`:
+4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. These packages publish through `publish-npm.yml`:
    ```bash
    gh workflow run publish-npm.yml --repo tetherto/qvac --ref release-<package>-<version> -f packages=<package>
    ```

@@ -27,7 +27,12 @@ on:
 
 permissions: {}
 
-# No concurrency group: GitHub keeps one pending run per group, so a third quick merge would drop the second's release.
+# Scans share one group so two never start the same branch; a dropped pending scan loses nothing.
+# Bump runs get their own group, since GitHub keeps one pending run per group and would drop a merge.
+concurrency:
+  group: ${{ (github.event_name == 'push' || inputs.sha != '') && format('addon-auto-release-{0}', github.run_id) || 'addon-auto-release-scan' }}
+  cancel-in-progress: false
+
 jobs:
   release:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'

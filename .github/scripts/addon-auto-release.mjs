@@ -9,6 +9,8 @@ import { compareVersions, parseNpmView } from './lib/release-train.mjs'
 const VERSION = /^\d+\.\d+\.\d+$/
 const DEP_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies']
 const BRANCH = /^release-(.+)-(\d+\.\d+\.\d+)$/
+// A scan leaves a branch this young to the push run that cut it.
+const FRESH_MINUTES = 15
 
 const parse = (text) => {
   try {
@@ -52,24 +54,29 @@ export function pendingBranches({ heads, readMain }) {
   return pending.sort((a, b) => a.dir.localeCompare(b.dir))
 }
 
+const PLATFORMS = ['linux', 'darwin', 'win32', 'android', 'ios']
+const isOwnPlatformPackage = (own, name) =>
+  name.startsWith(`${own}-`) && PLATFORMS.includes(name.slice(own.length + 1).split('-')[0])
+
 // The package's own platform packages publish in the same run, so they are not prerequisites.
 export function qvacRanges(manifest) {
   const ranges = []
   for (const field of DEP_FIELDS) {
     for (const [name, range] of Object.entries(manifest[field] ?? {})) {
-      if (name.startsWith(`${manifest.name}-`)) continue
+      if (isOwnPlatformPackage(manifest.name, name)) continue
       if (name.startsWith('@qvac/') && /^[~^]?\d+\.\d+\.\d+$/.test(range)) ranges.push({ name, range })
     }
   }
   return ranges
 }
 
-function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha, publishRun }) {
+function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha, publishRun, onMain, minutesOld }) {
   const target = bump.sha ?? sha
   if (!VERSION.test(bump.version)) return { action: 'skip', reason: `${bump.version} is not x.y.z` }
   if (bump.from && VERSION.test(bump.from) && compareVersions(bump.version, bump.from) < 0)
     return { action: 'skip', reason: `version went down from ${bump.from}` }
   if (isPublished(bump.name, bump.version)) return { action: 'skip', reason: 'already on npm' }
+  if (bump.sha && !onMain(bump.sha)) return { action: 'skip', reason: 'branch commit is not on main' }
   const current = mainVersion(bump.dir)
   if (current && VERSION.test(current) && compareVersions(current, bump.version) > 0)
     return { action: 'skip', reason: `main has moved on to ${current}` }
@@ -77,7 +84,9 @@ function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha
   const existing = branchSha(branch)
   if (existing && existing !== target)
     return { action: 'skip', reason: `${branch} already exists at ${existing.slice(0, 9)}` }
-  const run = existing ? publishRun(branch) : null
+  if (bump.sha && minutesOld(bump.sha) < FRESH_MINUTES)
+    return { action: 'skip', reason: 'merged moments ago; its own run handles it' }
+  const run = existing ? publishRun(branch, existing) : null
   if (run)
     return {
       action: 'skip',
@@ -119,6 +128,36 @@ const LABELS = {
   failed: ['not started', 'not started'],
 }
 
+// Runs the writes each planned row needs; a failed write marks only its row failed.
+export function apply(rows, { dryRun, create, start }) {
+  for (const row of rows) {
+    const needsBranch = row.action === 'release' || (row.action === 'wait' && !row.exists)
+    const needsRun = row.action === 'release' || row.action === 'dispatch'
+    if (dryRun || !(needsBranch || needsRun)) continue
+    try {
+      if (needsBranch) create(row)
+      if (needsRun && start(row) === false) {
+        row.action = 'skip'
+        row.reason = 'another auto-release run started its publish first'
+      }
+    } catch (error) {
+      row.action = 'failed'
+      row.reason = error.message.split('\n')[0]
+    }
+  }
+  return rows
+}
+
+// Only a real publish of this exact commit counts: not a dry run, not an older branch of the same name.
+export const releaseRun = (runs, head) =>
+  runs.find((r) => r.headSha === head && !r.displayTitle?.includes('(dry run)')) ?? null
+
+// A scan reports what it starts, what waits or fails, and a publish that needs a re-run.
+export const scanReports = (row) =>
+  row.action !== 'skip' || /^publish run already exists \((failure|cancelled)/.test(row.reason)
+
+export const diffBase = (sha, before) => (before && !/^0+$/.test(before) ? before : `${sha}^1`)
+
 export function summary(rows, { title, dryRun }) {
   const lines = [`## ${title}${dryRun ? ' (dry run)' : ''}`, '']
   if (!rows.length) return [...lines, 'Nothing to release.'].join('\n')
@@ -129,7 +168,7 @@ export function summary(rows, { title, dryRun }) {
     lines.push(`| ${r.name} | ${r.version} | ${label}${r.reason ? `: ${r.reason}` : ''} |`)
   }
   if (rows.some((r) => r.action === 'wait'))
-    lines.push('', 'Waiting releases start on their own: this workflow re-checks after every npm publish and every hour.')
+    lines.push('', 'Waiting releases start on their own within an hour of the dependency publishing.')
   if (rows.some((r) => r.action === 'skip' && /publish run already exists \((failure|cancelled)/.test(r.reason)))
     lines.push('', 'A failed or cancelled publish is not restarted here; re-run it from its run page.')
   return lines.join('\n')
@@ -169,11 +208,13 @@ function lookups(repo, sha) {
       const out = capture('git', ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`]).trim()
       return out ? out.split(/\s+/)[0] : null
     },
-    publishRun: (branch) => {
-      const fields = 'status,conclusion,url'
-      const out = capture('gh', ['run', 'list', '-R', repo, '-w', 'publish-npm.yml', '-b', branch, '-L', '1', '--json', fields])
-      return JSON.parse(out)[0] ?? null
+    publishRun: (branch, head) => {
+      const fields = 'status,conclusion,url,headSha,displayTitle'
+      const out = capture('gh', ['run', 'list', '-R', repo, '-w', 'publish-npm.yml', '-b', branch, '-L', '20', '--json', fields])
+      return releaseRun(JSON.parse(out), head)
     },
+    onMain: (commit) => run('git', ['merge-base', '--is-ancestor', commit, 'origin/main']).status === 0,
+    minutesOld: (commit) => (Date.now() / 1000 - Number(capture('git', ['show', '-s', '--format=%ct', commit]).trim())) / 60,
   }
 }
 
@@ -182,7 +223,7 @@ function bumpRows(env, repo) {
   const sha = capture('git', ['rev-parse', '--verify', `${env.SHA || 'HEAD'}^{commit}`]).trim()
   if (run('git', ['merge-base', '--is-ancestor', sha, 'origin/main']).status !== 0)
     throw new Error(`${sha} is not on main; only main commits are released`)
-  const base = env.BEFORE && !/^0+$/.test(env.BEFORE) ? env.BEFORE : `${sha}^1`
+  const base = diffBase(sha, env.BEFORE)
   const changed = capture('git', ['diff', '--name-only', base, sha, '--', 'packages/*/package.json'])
     .split('\n')
     .filter(Boolean)
@@ -200,14 +241,17 @@ function scanRows(repo) {
     })
   const pending = pendingBranches({ heads, readMain: show('origin/main') })
   const bumps = []
+  const unreadable = []
   for (const { dir, version, sha } of pending) {
     run('git', ['fetch', '--no-tags', '--quiet', 'origin', sha])
     const manifest = parse(show(sha)(`packages/${dir}/package.json`))
     if (manifest?.version === version) bumps.push({ dir, name: manifest.name, from: null, version, sha, manifest })
+    else {
+      const reason = manifest ? `branch carries version ${manifest.version}` : 'could not read its package.json'
+      unreadable.push({ dir, name: dir, version, sha, branch: `release-${dir}-${version}`, action: 'failed', reason })
+    }
   }
-  const rows = plan(bumps, lookups(repo, null)).filter(
-    (r) => r.action !== 'skip' || !/^(already on npm|publish run already exists)/.test(r.reason)
-  )
+  const rows = [...plan(bumps, lookups(repo, null)).filter(scanReports), ...unreadable]
   return { title: 'Waiting addon releases', rows }
 }
 
@@ -216,22 +260,19 @@ function main() {
   const repo = env.GITHUB_REPOSITORY
   const dryRun = env.DRY_RUN === 'true'
   const { title, rows } = env.MODE === 'scan' ? scanRows(repo) : bumpRows(env, repo)
+  const { publishRun } = lookups(repo, null)
 
-  for (const row of rows) {
-    console.log(`${row.dir}@${row.version}: ${row.action}${row.reason ? ` (${row.reason})` : ''}`)
-    const create = row.action === 'release' || (row.action === 'wait' && !row.exists)
-    const start = row.action === 'release' || row.action === 'dispatch'
-    if (dryRun || !(create || start)) continue
-    try {
-      if (create)
-        capture('gh', ['api', '--method', 'POST', `repos/${repo}/git/refs`, '-f', `ref=refs/heads/${row.branch}`, '-f', `sha=${row.sha}`])
-      if (start)
-        capture('gh', ['workflow', 'run', 'publish-npm.yml', '-R', repo, '--ref', row.branch, '-f', `packages=${row.dir}`])
-    } catch (error) {
-      row.action = 'failed'
-      row.reason = error.message.split('\n')[0]
-    }
-  }
+  for (const row of rows) console.log(`${row.dir}@${row.version}: ${row.action}${row.reason ? ` (${row.reason})` : ''}`)
+  apply(rows, {
+    dryRun,
+    create: (row) =>
+      capture('gh', ['api', '--method', 'POST', `repos/${repo}/git/refs`, '-f', `ref=refs/heads/${row.branch}`, '-f', `sha=${row.sha}`]),
+    // Re-checked right before dispatch so an overlapping run's publish is not started twice.
+    start: (row) => {
+      if (publishRun(row.branch, row.sha)) return false
+      capture('gh', ['workflow', 'run', 'publish-npm.yml', '-R', repo, '--ref', row.branch, '-f', `packages=${row.dir}`])
+    },
+  })
 
   for (const row of rows.filter((r) => r.action === 'failed'))
     console.log(`::error title=Auto-release ${row.dir}::${row.reason}`)

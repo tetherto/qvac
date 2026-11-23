@@ -124,9 +124,14 @@ of a fabric rollout — see *`fabric` publishes first* below for the one follow-
 **caret dependency of `@qvac/classification-ggml`**. The consumers build against the
 released `@qvac/fabric`, so `addon-auto-release.yml` orders this itself: a consumer whose
 `@qvac/fabric` range has no version on npm gets its release branch at merge time but no
-publish run, and the workflow starts it after the Fabric publish succeeds (it re-checks
-after every `publish-npm.yml` run and hourly). Approve `fabric` first; the consumer runs
-appear after it publishes.
+publish run, and the workflow starts it within an hour of the Fabric publish (it re-checks
+hourly and after a successful `publish-npm.yml` run). Approve `fabric` first; to start the
+consumer runs at once after it publishes, run `gh workflow run addon-auto-release.yml`.
+
+This only holds when no published Fabric satisfies the consumer's range. If the range
+still accepts the Fabric already on npm (for example `^0.33.0` while Fabric goes 0.33.0 →
+0.33.1), the consumer starts at once and builds against the published 0.33.0. To build
+against the new Fabric, move the consumer's range to it in the same bump PR.
 
 Then check the caret. Read both values rather than assuming either — they move every
 release, so any version written here would be wrong by the time you read it:
@@ -276,7 +281,7 @@ indistinguishable later from one that dropped a package by accident.
   command substitution, no `&&`/`||`/`;` chaining, no pipes or redirects. Put polling
   loops / the public-install check in a script file and run `bash <file>`. Use `git -C
   <path>` and `gh --repo <repo>` instead of `cd`.
-- **Sequencing.** The consumers start together once Fabric is on npm. For a canary-first
+- **Sequencing.** Consumers whose range needs the new Fabric start together once it is on npm. For a canary-first
   pass, approve one consumer's run, verify it, then approve the rest.
 
 ## Error handling
