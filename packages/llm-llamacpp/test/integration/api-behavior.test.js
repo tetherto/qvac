@@ -4,7 +4,13 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
+const {
+  cleanupIntegrationCacheFiles,
+  ensureModel,
+  expectCuda,
+  forceVulkanLeg,
+  safeTest
+} = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const overflow = require('./_context-overflow')
 const os = require('bare-os')
@@ -92,13 +98,23 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, asyn
     t.is(response.stats.backendName, 'cpu', 'runtime stats name the CPU backend')
   } else if (os.platform() === 'darwin' || os.platform() === 'ios') {
     t.is(response.stats.backendName, 'metal', 'runtime stats name the Metal backend')
-  } else if (os.platform() === 'linux' || os.platform() === 'win32') {
+  } else if (os.platform() === 'linux') {
+    if (expectCuda) {
+      t.is(response.stats.backendName, 'cuda', 'NVIDIA GPU visible, so CUDA holds the weights')
+    } else if (forceVulkanLeg) {
+      t.is(response.stats.backendName, 'vulkan', 'CUDA hidden, so Vulkan holds the weights')
+    } else {
+      t.not(response.stats.backendName, 'cuda', 'no NVIDIA GPU, so CUDA does not hold the weights')
+    }
+  } else if (os.platform() === 'win32') {
     const expected = process.env.FORCE_VULKAN === 'true' ? ['vulkan'] : ['cuda', 'vulkan']
     t.ok(
       expected.includes(response.stats.backendName),
       'runtime stats name the desktop GPU backend'
     )
   }
+  // Android is not asserted: the family depends on the device, OpenCL on
+  // Adreno and Vulkan elsewhere.
 })
 
 safeTest(
