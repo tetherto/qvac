@@ -59,8 +59,8 @@ same OPFS directory with its original `*-00001-of-000NN.gguf` name. The
 binding verifies that the set is complete before loading it.
 
 `files.projectionModel`, `config.lora`, and
-`config.spec_draft_model`/`config['spec-draft-model']` use the same absolute
-OPFS or SDK-registered path rules. For a sharded draft model, pass its first
+`config.spec_draft_model`/`config['spec-draft-model']` use absolute OPFS paths.
+For a sharded draft model, pass its first
 shard path.
 
 ```js

@@ -39,8 +39,8 @@ std::string uniqueTestId() {
 /// Case-insensitive substring check. Used to assert generated text
 /// contains an expected token (e.g. "Paris", "Moon") regardless of
 /// capitalisation or surrounding punctuation the model may add.
-bool containsCaseInsensitive(const std::string &haystack,
-                             const std::string &needle) {
+bool containsCaseInsensitive(
+    const std::string& haystack, const std::string& needle) {
   auto toLower = [](unsigned char c) {
     return static_cast<char>(std::tolower(c));
   };
@@ -51,7 +51,7 @@ bool containsCaseInsensitive(const std::string &haystack,
   return hay_str.find(needle_str) != std::string::npos;
 }
 
-bool hasUnclosedThinkBlock(const std::string &text) {
+bool hasUnclosedThinkBlock(const std::string& text) {
   const auto openPos = text.rfind("<think>");
   if (openPos == std::string::npos) {
     return false;
@@ -67,9 +67,9 @@ std::string lowerCopy(std::string text) {
   return text;
 }
 
-bool containsAny(const std::string &haystack,
-                 const std::vector<std::string> &needles) {
-  return std::ranges::any_of(needles, [&](const std::string &needle) {
+bool containsAny(
+    const std::string& haystack, const std::vector<std::string>& needles) {
+  return std::ranges::any_of(needles, [&](const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
   });
 }
@@ -114,23 +114,32 @@ protected:
     config_["temp"] = "0";
     config_["backendsDir"] = test_common::getTestBackendsDir().string();
 
-    model_ = MP("Llama-3.2-1B-Instruct-Q4_0.gguf", nullptr, MP::OnMissing::Skip,
-                "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF");
-    qwen3Model_ = MP("Qwen3-0.6B.Q4_0.gguf", "QWEN3_BATCH_MODEL_PATH",
-                     MP::OnMissing::Skip,
-                     "https://huggingface.co/QuantFactory/Qwen3-0.6B-GGUF");
-    qwen35HybridModel_ = MP("Qwen3.5-0.8B-Q8_0.gguf", "QWEN35_BATCH_MODEL_PATH",
-                            MP::OnMissing::Skip,
-                            "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
-    harmonyModel_ = MP("gpt-oss-20b-Q2_K.gguf", "HARMONY_BATCH_MODEL_PATH",
-                       MP::OnMissing::Skip,
-                       "https://huggingface.co/mradermacher/gpt-oss-20b-GGUF");
+    model_ =
+        MP("Llama-3.2-1B-Instruct-Q4_0.gguf",
+           nullptr,
+           MP::OnMissing::Skip,
+           "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF");
+    qwen3Model_ =
+        MP("Qwen3-0.6B.Q4_0.gguf",
+           "QWEN3_BATCH_MODEL_PATH",
+           MP::OnMissing::Skip,
+           "https://huggingface.co/QuantFactory/Qwen3-0.6B-GGUF");
+    qwen35HybridModel_ =
+        MP("Qwen3.5-0.8B-Q8_0.gguf",
+           "QWEN35_BATCH_MODEL_PATH",
+           MP::OnMissing::Skip,
+           "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+    harmonyModel_ =
+        MP("gpt-oss-20b-Q2_K.gguf",
+           "HARMONY_BATCH_MODEL_PATH",
+           MP::OnMissing::Skip,
+           "https://huggingface.co/mradermacher/gpt-oss-20b-GGUF");
   }
 
   std::unique_ptr<LlamaModel> loadModel() { return loadModel(model_); }
 
   std::unique_ptr<LlamaModel>
-  loadModel(const test_common::TestModelPath &modelPath) {
+  loadModel(const test_common::TestModelPath& modelPath) {
     std::string path = model_.path;
     std::string projection;
     auto cfg = config_;
@@ -141,7 +150,7 @@ protected:
     return m;
   }
 
-  static LlamaModel::Prompt makePrompt(const std::string &userText) {
+  static LlamaModel::Prompt makePrompt(const std::string& userText) {
     LlamaModel::Prompt p;
     p.input = R"([{"role":"user","content":")" + userText + R"("}])";
     return p;
@@ -193,8 +202,9 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
 
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
-      makePrompt("What is the natural satellite that orbits Earth? "
-                 "Answer in one word.")};
+      makePrompt(
+          "What is the natural satellite that orbits Earth? "
+          "Answer in one word.")};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -205,22 +215,24 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
   EXPECT_NE(outputs[0], outputs[1]);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       CooperativeDriveReturnsOrderedConcurrentResults) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeDriveReturnsOrderedConcurrentResults) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
 
   std::vector<std::string> streamed(2);
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
-      makePrompt("What is the natural satellite that orbits Earth? "
-                 "Answer in one word.")};
+      makePrompt(
+          "What is the natural satellite that orbits Earth? "
+          "Answer in one word.")};
   for (size_t index = 0; index < prompts.size(); ++index) {
     prompts[index].outputCallback = [&streamed,
-                                     index](const std::string &token) {
+                                     index](const std::string& token) {
       streamed[index].append(token);
     };
   }
@@ -243,15 +255,16 @@ TEST_F(ContinuousBatchingIntegrationTest,
   EXPECT_EQ(model->activeSlots(), 0u);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       CooperativeDrivePropagatesDecodeFailureAndReleasesSlots) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeDrivePropagatesDecodeFailureAndReleasesSlots) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [](llama_context *, llama_batch &) -> int { return 1; });
+      *scheduler, [](llama_context*, llama_batch&) -> int { return 1; });
 
   constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7002;
   model->submitCooperative(
@@ -262,40 +275,51 @@ TEST_F(ContinuousBatchingIntegrationTest,
   EXPECT_EQ(model->activeSlots(), 0u);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       CooperativeCallbackCanCancelItsOwnJobWithoutDeadlock) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeCallbackCanCancelItsOwnJobWithoutDeadlock) {
   REQUIRE_MODEL(model_);
+  config_["n_predict"] = "256";
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
 
   constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7003;
-  auto prompt = makePrompt("Count from one to ten.");
-  prompt.outputCallback = [&model](const std::string &) {
-    model->cancelById(kJobId);
+  size_t callbackCount = 0;
+  auto prompt =
+      makePrompt("Write a detailed essay about the history of mathematics.");
+  prompt.outputCallback = [&model, &callbackCount](const std::string&) {
+    ++callbackCount;
+    if (callbackCount == 1) {
+      model->cancelById(kJobId);
+    }
   };
   model->submitCooperative({std::move(prompt)}, kJobId);
 
-  bool settled = false;
-  for (size_t step = 0; step < 10000 && !settled; ++step) {
+  std::optional<std::vector<std::string>> output;
+  size_t steps = 0;
+  for (; steps < 10000 && !output.has_value(); ++steps) {
     (void)model->stepCooperative();
-    try {
-      settled = model->takeCooperative(kJobId).has_value();
-    } catch (const qvac_errors::StatusError &) {
-      settled = true;
-    }
+    output = model->takeCooperative(kJobId);
   }
-  EXPECT_TRUE(settled);
+
+  ASSERT_EQ(callbackCount, 1u)
+      << "the cancellation callback must run exactly once";
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(output->size(), 1u);
+  EXPECT_LT(steps, 256u)
+      << "the job ran to its generation cap instead of applying cancellation";
   EXPECT_EQ(model->activeSlots(), 0u);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       CooperativeSaveRunsBeforeQueuedSuccessorOnSameKey) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeSaveRunsBeforeQueuedSuccessorOnSameKey) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
 
@@ -373,8 +397,8 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
 /// a decode rate from generation steps and a prompt-processing rate from
 /// pure-prefill steps. Prefill is compute-bound and decode is
 /// bandwidth-bound, so prompt processing runs faster per token.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchReportsPhaseSeparatedThroughput) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchReportsPhaseSeparatedThroughput) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
@@ -409,8 +433,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
 #endif
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       OneAndThreeOverlappingBatchCallsShareTwoSlots) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    OneAndThreeOverlappingBatchCallsShareTwoSlots) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
@@ -421,15 +446,15 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::atomic<bool> secondBatchEmittedBeforeFirstDone = false;
   auto firstPrompt = makePrompt("List facts about redwood forests.");
 
-  auto firstFuture =
-      std::async(std::launch::async,
-                 [&model, firstPrompt, &firstCallEntered, &firstBatchDone] {
-                   std::vector<LlamaModel::Prompt> prompts{firstPrompt};
-                   firstCallEntered.store(true);
-                   auto outputs = model->processPromptBatch(prompts);
-                   firstBatchDone.store(true);
-                   return outputs;
-                 });
+  auto firstFuture = std::async(
+      std::launch::async,
+      [&model, firstPrompt, &firstCallEntered, &firstBatchDone] {
+        std::vector<LlamaModel::Prompt> prompts{firstPrompt};
+        firstCallEntered.store(true);
+        auto outputs = model->processPromptBatch(prompts);
+        firstBatchDone.store(true);
+        return outputs;
+      });
 
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(30);
@@ -439,13 +464,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
   }
   ASSERT_TRUE(firstCallEntered.load());
 
-  auto secondFuture =
-      std::async(std::launch::async, [&model, &firstBatchDone,
-                                      &secondBatchEmittedBeforeFirstDone] {
+  auto secondFuture = std::async(
+      std::launch::async,
+      [&model, &firstBatchDone, &secondBatchEmittedBeforeFirstDone] {
         auto secondPrompt = makePrompt("List facts about coral reefs.");
         secondPrompt.outputCallback =
             [&firstBatchDone,
-             &secondBatchEmittedBeforeFirstDone](const std::string &) {
+             &secondBatchEmittedBeforeFirstDone](const std::string&) {
               if (!firstBatchDone.load()) {
                 secondBatchEmittedBeforeFirstDone.store(true);
               }
@@ -457,10 +482,12 @@ TEST_F(ContinuousBatchingIntegrationTest,
         return model->processPromptBatch(prompts);
       });
 
-  ASSERT_EQ(firstFuture.wait_for(std::chrono::seconds(60)),
-            std::future_status::ready);
-  ASSERT_EQ(secondFuture.wait_for(std::chrono::seconds(60)),
-            std::future_status::ready);
+  ASSERT_EQ(
+      firstFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
+  ASSERT_EQ(
+      secondFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
   auto firstOutputs = firstFuture.get();
   auto secondOutputs = secondFuture.get();
 
@@ -505,15 +532,15 @@ TEST_F(ContinuousBatchingIntegrationTest, OverlappingBatchDoesNotWipeActiveKv) {
   bool releaseFirst = false;
 
   auto firstPrompt = makePrompt("List several facts about redwood forests.");
-  firstPrompt.outputCallback = [&mtx, &cv, &firstTokenSeen,
-                                &releaseFirst](const std::string &) {
-    std::unique_lock<std::mutex> lk(mtx);
-    if (!firstTokenSeen) {
-      firstTokenSeen = true;
-      cv.notify_all();
-    }
-    cv.wait(lk, [&releaseFirst] { return releaseFirst; });
-  };
+  firstPrompt.outputCallback =
+      [&mtx, &cv, &firstTokenSeen, &releaseFirst](const std::string&) {
+        std::unique_lock<std::mutex> lk(mtx);
+        if (!firstTokenSeen) {
+          firstTokenSeen = true;
+          cv.notify_all();
+        }
+        cv.wait(lk, [&releaseFirst] { return releaseFirst; });
+      };
 
   auto firstFuture = std::async(std::launch::async, [&model, firstPrompt] {
     std::vector<LlamaModel::Prompt> prompts{firstPrompt};
@@ -527,7 +554,7 @@ TEST_F(ContinuousBatchingIntegrationTest, OverlappingBatchDoesNotWipeActiveKv) {
     })) << "first batch never produced a token";
   }
 
-  llama_context *lctx = model->getContext();
+  llama_context* lctx = model->getContext();
   ASSERT_NE(lctx, nullptr);
   llama_memory_t mem = llama_get_memory(lctx);
   ASSERT_NE(mem, nullptr);
@@ -554,8 +581,9 @@ TEST_F(ContinuousBatchingIntegrationTest, OverlappingBatchDoesNotWipeActiveKv) {
     releaseFirst = true;
   }
   cv.notify_all();
-  ASSERT_EQ(firstFuture.wait_for(std::chrono::seconds(60)),
-            std::future_status::ready);
+  ASSERT_EQ(
+      firstFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
   (void)firstFuture.get();
 
   EXPECT_GE(posAfter, 0)
@@ -565,8 +593,9 @@ TEST_F(ContinuousBatchingIntegrationTest, OverlappingBatchDoesNotWipeActiveKv) {
          "batch job is already in flight.";
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       ConcurrentBatchEntriesDoNotRaceOnKvWipe) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    ConcurrentBatchEntriesDoNotRaceOnKvWipe) {
   // Reproduces comment-4742982980: two batch calls that enter
   // processPromptBatchImpl concurrently can collide in the entry section
   // before either has incremented activeBatchJobs_. Without a batch-entry
@@ -582,7 +611,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
   std::atomic<int> ready{0};
 
-  auto runBatch = [&](const std::string &question) {
+  auto runBatch = [&](const std::string& question) {
     // Spin until both threads are lined up, then enter together.
     ready.fetch_add(1);
     while (ready.load() < 2) {
@@ -625,16 +654,16 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
     double elapsedMsPerPrompt;
   };
 
-  const auto measurePrompts = [](size_t promptCount, auto &&runPrompts) {
+  const auto measurePrompts = [](size_t promptCount, auto&& runPrompts) {
     const auto startedAt = std::chrono::steady_clock::now();
     std::vector<std::string> outputs = runPrompts();
     const auto finishedAt = std::chrono::steady_clock::now();
     const auto elapsedMs =
         std::chrono::duration<double, std::milli>(finishedAt - startedAt)
             .count();
-    return TimedOutputs{.outputs = std::move(outputs),
-                        .elapsedMsPerPrompt =
-                            elapsedMs / static_cast<double>(promptCount)};
+    return TimedOutputs{
+        .outputs = std::move(outputs),
+        .elapsedMsPerPrompt = elapsedMs / static_cast<double>(promptCount)};
   };
 
   auto singleModel = loadModel();
@@ -724,12 +753,12 @@ TEST_F(ContinuousBatchingIntegrationTest, ProcessDispatchesVectorOfPrompts) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
-  std::vector<LlamaModel::Prompt> prompts{makePrompt("Say hi."),
-                                          makePrompt("Say bye.")};
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say hi."), makePrompt("Say bye.")};
   std::any out = model->process(std::any(prompts));
 
   ASSERT_EQ(out.type(), typeid(std::vector<std::string>));
-  const auto &outputs = std::any_cast<const std::vector<std::string> &>(out);
+  const auto& outputs = std::any_cast<const std::vector<std::string>&>(out);
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_FALSE(outputs[1].empty());
@@ -749,8 +778,8 @@ TEST_F(ContinuousBatchingIntegrationTest, EmptyVectorReturnsEmpty) {
 /// before its cap; the smaller-cap prompt must therefore emit strictly
 /// fewer token-pieces (and thus shorter text) than the larger-cap one,
 /// and each piece-count must respect its own cap.
-TEST_F(ContinuousBatchingIntegrationTest,
-       PerPromptNPredictOverrideIsRespected) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, PerPromptNPredictOverrideIsRespected) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -763,19 +792,19 @@ TEST_F(ContinuousBatchingIntegrationTest,
   auto promptSmall = makePrompt(
       "Write a long, detailed paragraph about the history of astronomy.");
   promptSmall.generationParams.n_predict = kSmallNPredict;
-  promptSmall.outputCallback = [&piecesSmall](const std::string &) {
+  promptSmall.outputCallback = [&piecesSmall](const std::string&) {
     piecesSmall++;
   };
 
   auto promptLarge = makePrompt(
       "Write a long, detailed paragraph about the history of astronomy.");
   promptLarge.generationParams.n_predict = kLargeNPredict;
-  promptLarge.outputCallback = [&piecesLarge](const std::string &) {
+  promptLarge.outputCallback = [&piecesLarge](const std::string&) {
     piecesLarge++;
   };
 
-  std::vector<LlamaModel::Prompt> prompts{std::move(promptSmall),
-                                          std::move(promptLarge)};
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptSmall), std::move(promptLarge)};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -811,7 +840,7 @@ TEST_F(ContinuousBatchingIntegrationTest, OutputCallbackStreamsPieces) {
 
   std::string streamed;
   auto prompt = makePrompt("Say hi.");
-  prompt.outputCallback = [&streamed](const std::string &piece) {
+  prompt.outputCallback = [&streamed](const std::string& piece) {
     streamed += piece;
   };
   std::vector<LlamaModel::Prompt> prompts{prompt};
@@ -823,24 +852,24 @@ TEST_F(ContinuousBatchingIntegrationTest, OutputCallbackStreamsPieces) {
 
 /// Two prompts in the same batch must stream to their own callbacks without
 /// mixing pieces between sequences.
-TEST_F(ContinuousBatchingIntegrationTest,
-       TwoPromptCallbacksStreamIndependently) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptCallbacksStreamIndependently) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
   std::string streamedA;
   std::string streamedB;
   auto promptA = makePrompt("Say alpha.");
-  promptA.outputCallback = [&streamedA](const std::string &piece) {
+  promptA.outputCallback = [&streamedA](const std::string& piece) {
     streamedA += piece;
   };
   auto promptB = makePrompt("Say beta.");
-  promptB.outputCallback = [&streamedB](const std::string &piece) {
+  promptB.outputCallback = [&streamedB](const std::string& piece) {
     streamedB += piece;
   };
 
-  std::vector<LlamaModel::Prompt> prompts{std::move(promptA),
-                                          std::move(promptB)};
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -851,14 +880,14 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// Tool definitions are per-request prompt inputs. A two-text batch must
 /// preserve them in the formatted prompt instead of silently dropping them or
 /// rejecting the whole batch.
-TEST_F(ContinuousBatchingIntegrationTest,
-       TwoPromptBatchAcceptsToolDefinitions) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsToolDefinitions) {
   REQUIRE_MODEL(model_);
   config_["tools"] = "true";
   auto model = loadModel();
 
-  std::vector<LlamaModel::Prompt> prompts{makePrompt("Say plain text."),
-                                          makeToolPrompt()};
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), makeToolPrompt()};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -866,8 +895,8 @@ TEST_F(ContinuousBatchingIntegrationTest,
   EXPECT_FALSE(outputs[1].empty());
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       TwoPromptBatchQwen3ClosesThinkBlocks) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptBatchQwen3ClosesThinkBlocks) {
   REQUIRE_MODEL(qwen3Model_);
   config_["ctx_size"] = "4096";
   config_["n_predict"] = "512";
@@ -889,8 +918,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
 /// Generated reasoning stays resident after generation. Continuous batching
 /// must retain generated reasoning for later full-prompt reconciliation.
-TEST_F(ContinuousBatchingIntegrationTest,
-       TwoPromptBatchQwen35HybridRetainsReasoningLazily) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    TwoPromptBatchQwen35HybridRetainsReasoningLazily) {
 #if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
   GTEST_SKIP() << "Qwen3.5-0.8B closed `</think>` is not deterministic on "
                   "non-Apple-Silicon CI runners (CPU backend); see comment.";
@@ -923,30 +953,30 @@ namespace {
 /// Qwen3.5 with thinking on ends the prompt with `<think>\n`, so the model
 /// never generates the opener. Both paths must stream it exactly once, first,
 /// or a consumer that splits reasoning on the tags reads it as content.
-void expectForcedOpenerStreamedOnce(LlamaModel &model) {
+void expectForcedOpenerStreamedOnce(LlamaModel& model) {
   ASSERT_NE(LlamaModelTestPeer::scheduler(model), nullptr)
       << "test requires the continuous-batching scheduler";
-  const auto hasTextFrom = [](const std::string &text, size_t from) {
+  const auto hasTextFrom = [](const std::string& text, size_t from) {
     return text.find_first_not_of(" \t\r\n", from) != std::string::npos;
   };
-  const auto opensOnceThenGenerates = [&hasTextFrom](const std::string &text) {
+  const auto opensOnceThenGenerates = [&hasTextFrom](const std::string& text) {
     const std::string opener = "<think>";
     return text.rfind(opener, 0) == 0 &&
            text.find(opener, 1) == std::string::npos &&
            hasTextFrom(text, opener.size());
   };
-  const auto makePrompt = [](const char *input, std::string *streamed) {
+  const auto makePrompt = [](const char* input, std::string* streamed) {
     LlamaModel::Prompt prompt;
     prompt.input = input;
     if (streamed != nullptr) {
-      prompt.outputCallback = [streamed](const std::string &piece) {
+      prompt.outputCallback = [streamed](const std::string& piece) {
         *streamed += piece;
       };
     }
     return prompt;
   };
-  const char *first = R"([{"role":"user","content":"What is 17 * 23?"}])";
-  const char *second = R"([{"role":"user","content":"What is 12 * 11?"}])";
+  const char* first = R"([{"role":"user","content":"What is 17 * 23?"}])";
+  const char* second = R"([{"role":"user","content":"What is 12 * 11?"}])";
 
   const std::string single = model.processPrompt(makePrompt(first, nullptr));
   EXPECT_TRUE(opensOnceThenGenerates(single)) << single;
@@ -961,8 +991,9 @@ void expectForcedOpenerStreamedOnce(LlamaModel &model) {
   EXPECT_EQ(streamedAlone, alone[0]);
 
   std::string streamed;
-  const auto outputs = model.processPromptBatch(std::vector<LlamaModel::Prompt>{
-      makePrompt(first, &streamed), makePrompt(second, nullptr)});
+  const auto outputs = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamed), makePrompt(second, nullptr)});
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_TRUE(opensOnceThenGenerates(outputs[0])) << outputs[0];
   EXPECT_TRUE(opensOnceThenGenerates(outputs[1])) << outputs[1];
@@ -973,8 +1004,9 @@ void expectForcedOpenerStreamedOnce(LlamaModel &model) {
   std::string streamedOff;
   auto thinkingOff = makePrompt(second, &streamedOff);
   thinkingOff.generationParams.reasoning_budget = 0;
-  const auto mixed = model.processPromptBatch(std::vector<LlamaModel::Prompt>{
-      makePrompt(first, &streamedOn), std::move(thinkingOff)});
+  const auto mixed = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamedOn), std::move(thinkingOff)});
   ASSERT_EQ(mixed.size(), 2u);
   EXPECT_TRUE(opensOnceThenGenerates(mixed[0])) << mixed[0];
   EXPECT_TRUE(hasTextFrom(mixed[1], 0)) << mixed[1];
@@ -984,8 +1016,9 @@ void expectForcedOpenerStreamedOnce(LlamaModel &model) {
 }
 } // namespace
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
   REQUIRE_MODEL(qwen35HybridModel_);
   config_["ctx_size"] = "4096";
   config_["parallel"] = "2";
@@ -994,8 +1027,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
   expectForcedOpenerStreamedOnce(*model);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchMtmdStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
   const std::string vlmPath =
       test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
   const std::string mmprojPath =
@@ -1016,8 +1050,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
   expectForcedOpenerStreamedOnce(*model);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
   REQUIRE_MODEL(qwen35HybridModel_);
   config_["ctx_size"] = "512";
   config_["parallel"] = "2";
@@ -1029,9 +1064,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
       fs::temp_directory_path() /
       ("batch-qwen35-seqlimit-rollback-" + uniqueTestId() + ".bin");
 
-  const char *systemMsg =
+  const char* systemMsg =
       R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
-  const char *userTurn1 =
+  const char* userTurn1 =
       R"({"role":"user","content":"What is the capital of France?"})";
 
   LlamaModel::Prompt primer;
@@ -1084,8 +1119,8 @@ TEST_F(ContinuousBatchingIntegrationTest,
   auto sibling = makePrompt("What is 2+2? Answer with just the number.");
   sibling.generationParams.reasoning_budget = 0;
   sibling.generationParams.n_predict = 16;
-  std::vector<LlamaModel::Prompt> prompts{makeLimitPrompt(),
-                                          std::move(sibling)};
+  std::vector<LlamaModel::Prompt> prompts{
+      makeLimitPrompt(), std::move(sibling)};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -1111,11 +1146,13 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchHarmonyToolCalls) {
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_FALSE(outputs[1].empty());
-  EXPECT_TRUE(containsCaseInsensitive(outputs[0], "get_weather") ||
-              outputs[0].find("<|call|>") != std::string::npos)
+  EXPECT_TRUE(
+      containsCaseInsensitive(outputs[0], "get_weather") ||
+      outputs[0].find("<|call|>") != std::string::npos)
       << outputs[0];
-  EXPECT_TRUE(containsCaseInsensitive(outputs[1], "get_weather") ||
-              outputs[1].find("<|call|>") != std::string::npos)
+  EXPECT_TRUE(
+      containsCaseInsensitive(outputs[1], "get_weather") ||
+      outputs[1].find("<|call|>") != std::string::npos)
       << outputs[1];
 }
 
@@ -1128,8 +1165,8 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   auto cachedPrompt = makePrompt("Remember this setup.");
   cachedPrompt.prefill = true;
   cachedPrompt.cacheKey = cachePath.string();
-  std::vector<LlamaModel::Prompt> prompts{makePrompt("Say plain text."),
-                                          std::move(cachedPrompt)};
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), std::move(cachedPrompt)};
 
   auto outputs = model->processPromptBatch(prompts);
 
@@ -1157,8 +1194,9 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   fs::remove(cachePath);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchDeletedPersistedCacheBackingStoreDropsTheConversation) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheBackingStoreDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1180,7 +1218,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   auto followup = makePrompt("Write several words about the cached setup.");
   followup.cacheKey = cachePath.string();
   followup.outputCallback = [&cacheDir,
-                             &removedBackingStore](const std::string &) {
+                             &removedBackingStore](const std::string&) {
     if (!removedBackingStore.exchange(true)) {
       fs::remove_all(cacheDir);
     }
@@ -1198,8 +1236,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
       << "a deleted cache directory must not be recreated at unload";
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchDeletedPersistedCacheFileDropsTheConversation) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheFileDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1222,7 +1261,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
       makePrompt("Write several words about the cached file setup.");
   followup.cacheKey = cachePath.string();
   followup.outputCallback = [&cachePath,
-                             &removedCacheFile](const std::string &) {
+                             &removedCacheFile](const std::string&) {
     if (!removedCacheFile.exchange(true)) {
       fs::remove(cachePath);
     }
@@ -1244,8 +1283,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
   fs::remove_all(cacheDir);
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchEmptyPersistedCacheFileDropsTheConversation) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchEmptyPersistedCacheFileDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1268,7 +1308,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
       makePrompt("Write several words about the cached empty file setup.");
   followup.cacheKey = cachePath.string();
   followup.outputCallback = [&cachePath,
-                             &truncatedCacheFile](const std::string &) {
+                             &truncatedCacheFile](const std::string&) {
     if (!truncatedCacheFile.exchange(true)) {
       std::ofstream truncate(cachePath, std::ios::trunc);
     }
@@ -1305,16 +1345,18 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchSaveToMissingParentThrows) {
   try {
     model->saveCache(badCachePath.string());
     FAIL() << "expected UnableToSaveSessionFile throw";
-  } catch (const qvac_errors::StatusError &e) {
-    EXPECT_NE(std::string(e.codeString()).find("UnableToSaveSessionFile"),
-              std::string::npos);
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
   }
 
   EXPECT_FALSE(fs::exists(badCacheDir));
 }
 
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchPersistedCachePathReplacedByDirectoryStillThrows) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchPersistedCachePathReplacedByDirectoryStillThrows) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1336,7 +1378,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
       makePrompt("Write several words after loading the batch cache.");
   followup.cacheKey = cachePath.string();
   followup.outputCallback = [&cachePath,
-                             &replacedWithDirectory](const std::string &) {
+                             &replacedWithDirectory](const std::string&) {
     if (!replacedWithDirectory.exchange(true)) {
       fs::remove(cachePath);
       fs::create_directory(cachePath);
@@ -1348,9 +1390,10 @@ TEST_F(ContinuousBatchingIntegrationTest,
   try {
     model->saveCache(cachePath.string());
     FAIL() << "expected UnableToSaveSessionFile throw";
-  } catch (const qvac_errors::StatusError &e) {
-    EXPECT_NE(std::string(e.codeString()).find("UnableToSaveSessionFile"),
-              std::string::npos);
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
   }
 
   EXPECT_TRUE(replacedWithDirectory.load())
@@ -1361,8 +1404,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
 /// Several prompts on the same `cacheKey` in one batch are allowed: they run
 /// one after the other, each continuing from what the previous committed.
-TEST_F(ContinuousBatchingIntegrationTest,
-       DuplicateReadOnlyCacheKeyInBatchIsAllowed) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    DuplicateReadOnlyCacheKeyInBatchIsAllowed) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -1404,7 +1448,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchCancelUsesPolicyAndSavesCache) {
       "Write several sentences about astronomy so cancellation happens during "
       "generation.");
   cachedPrompt.cacheKey = cachePath.string();
-  cachedPrompt.outputCallback = [&model, &cancelOnce](const std::string &) {
+  cachedPrompt.outputCallback = [&model, &cancelOnce](const std::string&) {
     bool expected = false;
     if (cancelOnce.compare_exchange_strong(expected, true)) {
       model->cancel();
@@ -1461,8 +1505,10 @@ TEST_F(ContinuousBatchingIntegrationTest, CancelAllAlsoCancelsPendingPrompts) {
     auto p = makePrompt(
         "Write a long, detailed paragraph about the history of astronomy.");
     const bool isPending = i >= kParallel;
-    p.outputCallback = [&model, &cancelFired, &pendingRanAfterCancel,
-                        isPending](const std::string &) {
+    p.outputCallback = [&model,
+                        &cancelFired,
+                        &pendingRanAfterCancel,
+                        isPending](const std::string&) {
       // First token (from an active slot) requests a cancel-all.
       bool expected = false;
       if (cancelFired.compare_exchange_strong(expected, true)) {
@@ -1484,7 +1530,7 @@ TEST_F(ContinuousBatchingIntegrationTest, CancelAllAlsoCancelsPendingPrompts) {
   // call throws or returns.
   try {
     model->processPromptBatch(prompts);
-  } catch (const qvac_errors::StatusError &) {
+  } catch (const qvac_errors::StatusError&) {
     // expected once the pending prompts are surfaced as cancelled
   }
 
@@ -1505,8 +1551,8 @@ TEST_F(ContinuousBatchingIntegrationTest, CancelAllAlsoCancelsPendingPrompts) {
 ///
 /// Setup mirrors CancelAllAlsoCancelsPendingPrompts: `parallel = 2` with 6
 /// prompts so 4 are queued; the first emitted token triggers `cancel()`.
-TEST_F(ContinuousBatchingIntegrationTest,
-       CancelAllThrowsForUnrunPendingPrompts) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, CancelAllThrowsForUnrunPendingPrompts) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
@@ -1519,7 +1565,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   for (size_t i = 0; i < kPromptCount; ++i) {
     auto p = makePrompt(
         "Write a long, detailed paragraph about the history of astronomy.");
-    p.outputCallback = [&model, &cancelFired](const std::string &) {
+    p.outputCallback = [&model, &cancelFired](const std::string&) {
       bool expected = false;
       if (cancelFired.compare_exchange_strong(expected, true)) {
         model->cancel();
@@ -1532,7 +1578,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
     model->processPromptBatch(prompts);
     FAIL() << "expected cancel-all to throw for queued prompts that never ran "
               "instead of returning empty success outputs";
-  } catch (const qvac_errors::StatusError &e) {
+  } catch (const qvac_errors::StatusError& e) {
     EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
         << "expected a Cancelled error code, got: " << e.codeString();
   }
@@ -1545,23 +1591,24 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// evicted. The same policy that
 /// rejects it on the single tagged path must reject it per batch item, before
 /// anything is scheduled.
-TEST_F(ContinuousBatchingIntegrationTest,
-       TwoPromptBatchRejectsLiveOnlyPrefill) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
   auto prefillPrompt = makePrompt("Remember this setup.");
   prefillPrompt.prefill = true;
-  std::vector<LlamaModel::Prompt> prompts{makePrompt("Say plain text."),
-                                          std::move(prefillPrompt)};
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), std::move(prefillPrompt)};
 
   try {
     model->processPromptBatch(prompts);
     FAIL() << "expected processPromptBatch to reject a live-only prefill item";
-  } catch (const qvac_errors::StatusError &e) {
-    EXPECT_NE(e.codeString().find(
-                  toString(qvac_errors::general_error::InvalidArgument)),
-              std::string::npos);
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        e.codeString().find(
+            toString(qvac_errors::general_error::InvalidArgument)),
+        std::string::npos);
     EXPECT_NE(std::string(e.what()).find("prefill"), std::string::npos)
         << "unexpected rejection: " << e.what();
   }
@@ -1659,8 +1706,9 @@ TEST_F(ContinuousBatchingIntegrationTest, IdleCancelDoesNotCancelNextBatch) {
 /// also stopped the single-prompt `llmContext_`, whose `stopGeneration_`
 /// flag is consumed only by the next single prompt — which then aborts
 /// during prompt eval and returns empty output.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchCancelDoesNotPoisonNextSinglePrompt) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchCancelDoesNotPoisonNextSinglePrompt) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "128";
   auto model = loadModel();
@@ -1669,7 +1717,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   auto prompt = makePrompt(
       "Write several sentences about astronomy so cancellation happens "
       "during generation.");
-  prompt.outputCallback = [&model, &cancelOnce](const std::string &) {
+  prompt.outputCallback = [&model, &cancelOnce](const std::string&) {
     bool expected = false;
     if (cancelOnce.compare_exchange_strong(expected, true)) {
       model->cancel();
@@ -1698,17 +1746,17 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// The test injects a stub decode function that always returns 1, triggers one
 /// batch step, and asserts the resulting exception carries the FailedToDecode
 /// error code rather than an empty-output success.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchDecodeErrorThrowsFailedToDecode) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchDecodeErrorThrowsFailedToDecode) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [](llama_context *, llama_batch &) -> int { return 1; });
+      *scheduler, [](llama_context*, llama_batch&) -> int { return 1; });
 
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
@@ -1720,7 +1768,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
     FAIL() << "DECODE ERROR BUG: processPromptBatch returned successfully even "
               "though llama_decode was injected to fail. Expected a "
               "FailedToDecode StatusError.";
-  } catch (const qvac_errors::StatusError &e) {
+  } catch (const qvac_errors::StatusError& e) {
     EXPECT_NE(e.codeString().find("FailedToDecode"), std::string::npos)
         << "expected FailedToDecode in error code, got: " << e.codeString();
   }
@@ -1741,7 +1789,7 @@ TEST_F(ContinuousBatchingIntegrationTest, TeardownDeferralKeepsPendingCancels) {
   config_["parallel"] = "2";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -1768,14 +1816,15 @@ TEST_F(ContinuousBatchingIntegrationTest, TeardownDeferralKeepsPendingCancels) {
 /// issued from inside the injected decode stub -- which runs in that very
 /// unlock window. The RAII relock-guard fix reconciles deferred teardown on
 /// every lock reacquisition, closing both windows.
-TEST_F(ContinuousBatchingIntegrationTest,
-       PerSlotCancelInUnlockWindowDoesNotStreamAfterTeardown) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelInUnlockWindowDoesNotStreamAfterTeardown) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -1794,12 +1843,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // continues. The live occupant's admission id is read through the peer
   // (safe here: the unlock window holds no scheduler lock).
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [scheduler, &readyToCancel,
-                   &cancelIssued](llama_context *ctx, llama_batch &batch) {
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued](
+          llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
           const auto admissionId =
-              ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler,
-                                                              kCancelSeqId);
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
           if (admissionId.has_value()) {
             scheduler->cancel(kCancelSeqId, *admissionId);
           }
@@ -1814,8 +1864,10 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // Arm the cancel only once seqId 1 is actively generating (>= 2 streamed
   // tokens), so the step that observes the deferred cancel would otherwise
   // sample and stream another token for it.
-  promptB.outputCallback = [&seqBTokens, &readyToCancel, &cancelIssued,
-                            &streamedAfterCancel](const std::string &) {
+  promptB.outputCallback = [&seqBTokens,
+                            &readyToCancel,
+                            &cancelIssued,
+                            &streamedAfterCancel](const std::string&) {
     if (cancelIssued.load()) {
       streamedAfterCancel.store(true);
     }
@@ -1824,8 +1876,8 @@ TEST_F(ContinuousBatchingIntegrationTest,
     }
   };
 
-  std::vector<LlamaModel::Prompt> prompts{std::move(promptA),
-                                          std::move(promptB)};
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
   auto outputs = model->processPromptBatch(prompts);
 
   ASSERT_EQ(outputs.size(), 2u);
@@ -1845,14 +1897,15 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// and std::terminate'd the whole process. The batch must instead survive:
 /// the cancelled slot is freed, its keyed conversation is kept, its group
 /// completes, and the sibling sequence still finishes normally.
-TEST_F(ContinuousBatchingIntegrationTest,
-       PerSlotCancelInTheUnlockWindowKeepsTheBatchRunning) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelInTheUnlockWindowKeepsTheBatchRunning) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -1871,12 +1924,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // throwing teardown actually ran. Without it the test could pass vacuously
   // when the slot finished first and the cancel was a no-op.
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [scheduler, &readyToCancel, &cancelIssued,
-                   &cancelHitOccupied](llama_context *ctx, llama_batch &batch) {
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
+          llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
           const auto admissionId =
-              ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler,
-                                                              kCancelSeqId);
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
           cancelHitOccupied.store(admissionId.has_value());
           if (admissionId.has_value()) {
             scheduler->cancel(kCancelSeqId, *admissionId);
@@ -1896,13 +1950,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // Arm the cancel as soon as seqId 1 streams its first token: the cancel then
   // lands on the very next decode, leaving essentially no window for the slot
   // to finish naturally first.
-  promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string &) {
+  promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string&) {
     seqBTokens.fetch_add(1);
     readyToCancel.store(true);
   };
 
-  std::vector<LlamaModel::Prompt> prompts{std::move(promptA),
-                                          std::move(promptB)};
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
   // Returning from this call at all proves the teardown did not
   // std::terminate the process.
   auto outputs = model->processPromptBatch(prompts);
@@ -1925,7 +1979,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
 namespace {
 
 using qvac_lib_inference_addon_llama::batching::DriverFactory;
-using OutputFn = std::function<void(const std::string &)>;
+using OutputFn = std::function<void(const std::string&)>;
 
 /// Delegates every hook to the real driver, except that `onCancel` throws.
 class ThrowingCancelDriver : public SequenceDriver {
@@ -1952,18 +2006,18 @@ public:
     inner_->setCacheReconciliationEnabled(enabled);
   }
   void setCacheCheckpointPolicy(
-      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy &policy)
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
       override {
     inner_->setCacheCheckpointPolicy(policy);
   }
-  PrefillPlan preparePrefill(const std::vector<common_chat_msg> &chatMsgs,
-                             const std::vector<common_chat_tool> &tools,
-                             const std::vector<std::vector<uint8_t>> &media,
-                             const std::vector<PlannedMedia> &mediaPlan,
-                             bool isCacheLoaded,
-                             bool isPrefillOnlyRequest) override {
-    return inner_->preparePrefill(chatMsgs, tools, media, mediaPlan,
-                                  isCacheLoaded, isPrefillOnlyRequest);
+  PrefillPlan preparePrefill(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools,
+      const std::vector<std::vector<uint8_t>>& media,
+      const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
+      bool isPrefillOnlyRequest) override {
+    return inner_->preparePrefill(
+        chatMsgs, tools, media, mediaPlan, isCacheLoaded, isPrefillOnlyRequest);
   }
   llama_pos evalMediaSegment(size_t mediaIndex, llama_pos pos) override {
     return inner_->evalMediaSegment(mediaIndex, pos);
@@ -1979,45 +2033,45 @@ public:
   void captureHistoryCheckpoint(llama_pos pos) override {
     inner_->captureHistoryCheckpoint(pos);
   }
-  void onPrefillComplete(llama_pos currentPos,
-                         size_t prefillTokenCount) override {
+  void
+  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override {
     inner_->onPrefillComplete(currentPos, prefillTokenCount);
   }
   void syncPosition(llama_pos currentPos) override {
     inner_->syncPosition(currentPos);
   }
-  SequenceStepResult onLogitsReady(int logitIdx, unsigned generatedAfterAccept,
-                                   const OutputFn &outputCallback,
-                                   LlamaBatch *inlineDecodeBatch) override {
-    return inner_->onLogitsReady(logitIdx, generatedAfterAccept, outputCallback,
-                                 inlineDecodeBatch);
+  SequenceStepResult onLogitsReady(
+      int logitIdx, unsigned generatedAfterAccept,
+      const OutputFn& outputCallback, LlamaBatch* inlineDecodeBatch) override {
+    return inner_->onLogitsReady(
+        logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   }
-  void onSequenceEnd(const OutputFn &outputCallback) override {
+  void onSequenceEnd(const OutputFn& outputCallback) override {
     inner_->onSequenceEnd(outputCallback);
   }
-  [[nodiscard]] bool
-  onGenerationFinished(const OutputFn &outputCallback,
-                       GenerationStopReason terminalReason) override {
+  [[nodiscard]] bool onGenerationFinished(
+      const OutputFn& outputCallback,
+      GenerationStopReason terminalReason) override {
     return inner_->onGenerationFinished(outputCallback, terminalReason);
   }
-  [[nodiscard]] bool onCancel(const OutputFn &) override {
+  [[nodiscard]] bool onCancel(const OutputFn&) override {
     throw std::runtime_error("injected driver teardown failure");
   }
-  [[nodiscard]] bool onFailure(const OutputFn &outputCallback) override {
+  [[nodiscard]] bool onFailure(const OutputFn& outputCallback) override {
     return inner_->onFailure(outputCallback);
   }
-  [[nodiscard]] bool loadCache(const std::string &cacheKey,
-                               bool adoptFileCheckpoints) override {
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override {
     return inner_->loadCache(cacheKey, adoptFileCheckpoints);
   }
   [[nodiscard]] bool
-  adoptResidentState(const std::vector<llama_token> &stateTokens) override {
+  adoptResidentState(const std::vector<llama_token>& stateTokens) override {
     return inner_->adoptResidentState(stateTokens);
   }
   [[nodiscard]] std::vector<llama_token> residentStateTokens() const override {
     return inner_->residentStateTokens();
   }
-  void saveCache(const std::string &cacheKey) const override {
+  void saveCache(const std::string& cacheKey) const override {
     inner_->saveCache(cacheKey);
   }
   void snapshotPreRequestCursor() override {
@@ -2040,14 +2094,15 @@ private:
 /// StepUnlockGuard destructor when the cancel lands in the decode unlock
 /// window. A throwing teardown must be contained there: the cancelled slot is
 /// freed, its group completes, and the sibling sequence finishes normally.
-TEST_F(ContinuousBatchingIntegrationTest,
-       PerSlotCancelSwallowsThrowingDriverTeardown) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelSwallowsThrowingDriverTeardown) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -2058,8 +2113,8 @@ TEST_F(ContinuousBatchingIntegrationTest,
       ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
   ContinuousBatchSchedulerTestPeer::setDriverFactory(
       *scheduler,
-      [original](const common_params &params, uint32_t seqId,
-                 llama_pos ceiling) -> std::unique_ptr<SequenceDriver> {
+      [original](const common_params& params, uint32_t seqId, llama_pos ceiling)
+          -> std::unique_ptr<SequenceDriver> {
         std::unique_ptr<SequenceDriver> driver =
             original(params, seqId, ceiling);
         if (seqId != kCancelSeqId) {
@@ -2075,12 +2130,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // Cancel from inside the decode unlock window, so the throwing teardown
   // runs in the StepUnlockGuard destructor's reconcile.
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [scheduler, &readyToCancel, &cancelIssued,
-                   &cancelHitOccupied](llama_context *ctx, llama_batch &batch) {
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
+          llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
           const auto admissionId =
-              ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler,
-                                                              kCancelSeqId);
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
           cancelHitOccupied.store(admissionId.has_value());
           if (admissionId.has_value()) {
             scheduler->cancel(kCancelSeqId, *admissionId);
@@ -2093,12 +2149,12 @@ TEST_F(ContinuousBatchingIntegrationTest,
       makePrompt("Write a long, detailed paragraph about redwood forests.");
   auto promptB =
       makePrompt("Write a long, detailed paragraph about coral reefs.");
-  promptB.outputCallback = [&readyToCancel](const std::string &) {
+  promptB.outputCallback = [&readyToCancel](const std::string&) {
     readyToCancel.store(true);
   };
 
-  std::vector<LlamaModel::Prompt> prompts{std::move(promptA),
-                                          std::move(promptB)};
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
   // Returning at all proves the throw did not std::terminate the process.
   auto outputs = model->processPromptBatch(prompts);
 
@@ -2120,18 +2176,18 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// registry does -- can fire only after the job finished and its seqId was
 /// handed to a peer. That stale cancel must be a no-op: it was aimed at the
 /// finished job, not at whatever now occupies the slot.
-TEST_F(ContinuousBatchingIntegrationTest,
-       StaleCancelMustNotHitSlotsNextOccupant) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, StaleCancelMustNotHitSlotsNextOccupant) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
-  const auto waitForFirstPiece = [](const std::atomic<size_t> &pieces) {
+  const auto waitForFirstPiece = [](const std::atomic<size_t>& pieces) {
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(120);
     while (pieces.load() == 0 && std::chrono::steady_clock::now() < deadline) {
@@ -2139,7 +2195,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
     }
     return pieces.load() > 0;
   };
-  const auto runAlone = [&model](LlamaModel::Prompt &&prompt) {
+  const auto runAlone = [&model](LlamaModel::Prompt&& prompt) {
     return std::async(std::launch::async, [&model, prompt = std::move(prompt)] {
       std::vector<LlamaModel::Prompt> prompts{prompt};
       return model->processPromptBatch(prompts);
@@ -2154,7 +2210,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::atomic<size_t> aPieces = 0;
   auto promptA =
       makePrompt("Write a long, detailed paragraph about redwood forests.");
-  promptA.outputCallback = [&aPieces](const std::string &) {
+  promptA.outputCallback = [&aPieces](const std::string&) {
     aPieces.fetch_add(1);
   };
   auto futureA = runAlone(std::move(promptA));
@@ -2172,7 +2228,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::atomic<size_t> bPieces = 0;
   auto promptB =
       makePrompt("Write a long, detailed paragraph about coral reefs.");
-  promptB.outputCallback = [&bPieces](const std::string &) {
+  promptB.outputCallback = [&bPieces](const std::string&) {
     bPieces.fetch_add(1);
   };
   auto futureB = runAlone(std::move(promptB));
@@ -2212,11 +2268,11 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
   config_["n_predict"] = "-1";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   std::atomic<size_t> perSlotWindow = 0;
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-      *scheduler, [&perSlotWindow](llama_context *ctx, llama_batch &batch) {
+      *scheduler, [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
         perSlotWindow.store(static_cast<size_t>(llama_n_ctx(ctx)) / kParallel);
         return llama_decode(ctx, batch);
       });
@@ -2238,7 +2294,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
 }
 
 namespace {
-std::vector<uint8_t> readFileBytes(const fs::path &path);
+std::vector<uint8_t> readFileBytes(const fs::path& path);
 } // namespace
 
 /// A cancelled cached batch request commits what its caller received: the
@@ -2251,8 +2307,8 @@ std::vector<uint8_t> readFileBytes(const fs::path &path);
 /// is idle, so each `processPromptBatch` call reports CacheTokens for that
 /// batch alone. Prime a `cacheKey` with a short prefill, then cancel a
 /// continuation on the same key after its first token.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchCancelCommitsProgressAndPersists) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchCancelCommitsProgressAndPersists) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
@@ -2286,7 +2342,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   LlamaModel::Prompt cancelPrompt;
   cancelPrompt.input = continuationInput;
   cancelPrompt.cacheKey = cachePath.string();
-  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string &) {
+  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
       model->cancel();
@@ -2331,7 +2387,7 @@ namespace {
 /// Used by the "cache preserved on hard failure" test to prove the
 /// scheduler's error-recovery path does not overwrite the primed cache
 /// with an inconsistent post-throw state.
-std::vector<uint8_t> readFileBytes(const fs::path &path) {
+std::vector<uint8_t> readFileBytes(const fs::path& path) {
   std::ifstream in(path, std::ios::binary);
   return {std::istreambuf_iterator<char>(in), {}};
 }
@@ -2366,13 +2422,14 @@ std::vector<uint8_t> readFileBytes(const fs::path &path) {
 /// The graceful-cancel contract is covered by
 /// `BatchCancelRestoresMemoryWithoutOverwritingWarmCache`: it primes a cache,
 /// cancels via `model->cancel()`, and asserts the cache remains untouched.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchDecodeErrorDoesNotOverwritePrimedCache) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDecodeErrorDoesNotOverwritePrimedCache) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -2406,7 +2463,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   // cancelSlotLocked(..., KeepAdopted).
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
-      [](llama_context * /*ctx*/, llama_batch & /*b*/) { return -1; });
+      [](llama_context* /*ctx*/, llama_batch& /*b*/) { return -1; });
 
   auto failing = makePrompt("Say two short sentences about the ocean.");
   failing.cacheKey = cachePath.string();
@@ -2434,8 +2491,8 @@ TEST_F(ContinuousBatchingIntegrationTest,
   EXPECT_TRUE(postFailMtime == primedMtime)
       << "CACHE FILE mtime CHANGED on error recovery: the failed batch's "
          "state was kept and rewrote the primed cache. mtime delta="
-      << std::chrono::duration_cast<std::chrono::nanoseconds>(postFailMtime -
-                                                              primedMtime)
+      << std::chrono::duration_cast<std::chrono::nanoseconds>(
+             postFailMtime - primedMtime)
              .count()
       << "ns. The error-recovery leg must keep only the adopted, already "
          "written conversation, never the failed request's state.";
@@ -2456,12 +2513,13 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// A failed request rolls back to the conversation it adopted. That
 /// conversation can hold turns its file does not have yet, so it stays in
 /// memory and `saveCache` can still write it.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchDecodeErrorKeepsTheUnsavedConversation) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDecodeErrorKeepsTheUnsavedConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "8";
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
 
   const fs::path cachePath =
@@ -2475,7 +2533,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
-      [](llama_context * /*ctx*/, llama_batch & /*b*/) { return -1; });
+      [](llama_context* /*ctx*/, llama_batch& /*b*/) { return -1; });
   auto failing = makePrompt("Name one planet and its moon.");
   failing.cacheKey = cachePath.string();
   std::vector<LlamaModel::Prompt> failingTurn{std::move(failing)};
@@ -2498,12 +2556,12 @@ namespace {
 class BlockedDecodeHarness {
 public:
   explicit BlockedDecodeHarness(
-      LlamaModel &model,
-      qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler
-          &scheduler)
+      LlamaModel& model,
+      qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
+          scheduler)
       : model_(model) {
     ContinuousBatchSchedulerTestPeer::setDecodeFunc(
-        scheduler, [this](llama_context *ctx, llama_batch &batch) {
+        scheduler, [this](llama_context* ctx, llama_batch& batch) {
           const int rc = llama_decode(ctx, batch);
           if (decodeCalls_.fetch_add(1) == 0) {
             decodeInFlight_.store(true);
@@ -2523,7 +2581,7 @@ public:
     }
   }
 
-  void startBatch(const std::string &userText) {
+  void startBatch(const std::string& userText) {
     future_ = std::async(std::launch::async, [this, userText] {
       LlamaModel::Prompt prompt;
       prompt.input = R"([{"role":"user","content":")" + userText + R"("}])";
@@ -2548,7 +2606,7 @@ public:
   }
 
 private:
-  LlamaModel &model_;
+  LlamaModel& model_;
   std::future<std::vector<std::string>> future_;
   std::atomic<int> decodeCalls_ = 0;
   std::atomic<bool> decodeInFlight_ = false;
@@ -2563,11 +2621,12 @@ private:
 /// mid-decode that is a data race on the context. The safe contract:
 /// the call may only REQUEST cancellation; the slot must stay occupied
 /// until the worker applies it after the in-flight step.
-TEST_F(ContinuousBatchingIntegrationTest,
-       CancelSeqIsNotAppliedWhileDecodeInFlight) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CancelSeqIsNotAppliedWhileDecodeInFlight) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
 
   BlockedDecodeHarness harness(*model, *scheduler);
@@ -2595,11 +2654,11 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
 /// Same contract as above for clear(): it must not tear down slots (and
 /// touch the llama_context) while the worker is mid-decode.
-TEST_F(ContinuousBatchingIntegrationTest,
-       ClearIsNotAppliedWhileDecodeInFlight) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, ClearIsNotAppliedWhileDecodeInFlight) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
 
   BlockedDecodeHarness harness(*model, *scheduler);
@@ -2627,12 +2686,13 @@ namespace {
 /// media path takes the image as raw bytes in Prompt::media; the chat input
 /// carries a matching media marker message so tokenization lines up.
 std::vector<uint8_t> readElephantImage() {
-  for (const char *candidate :
+  for (const char* candidate :
        {"../../../media/elephant.jpg", "media/elephant.jpg"}) {
     std::ifstream file(candidate, std::ios::binary);
     if (file) {
-      return {std::istreambuf_iterator<char>(file),
-              std::istreambuf_iterator<char>()};
+      return {
+          std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>()};
     }
   }
   return {};
@@ -2652,8 +2712,8 @@ std::vector<uint8_t> readElephantImage() {
 /// scheduler builds its own real MtmdLlmContext drivers, so there was no
 /// seam to force one slot's evalMediaSegment to throw short of corrupting a
 /// real image. The injected throw stands in for a real mtmd encode failure.
-TEST_F(ContinuousBatchingIntegrationTest,
-       MediaEvalFailureFailsOnlyThatRequest) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, MediaEvalFailureFailsOnlyThatRequest) {
   const std::string vlmPath = test_common::BaseTestModelPath::get(
       "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
   const std::string mmprojPath = test_common::BaseTestModelPath::get(
@@ -2677,7 +2737,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   model->waitForLoadInitialization();
   ASSERT_TRUE(model->isLoaded());
 
-  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
@@ -2688,7 +2748,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::atomic<bool> mediaEvalInvoked = false;
   std::atomic<bool> textRunningAtThrow = false;
   ContinuousBatchSchedulerTestPeer::setEvalMediaFunc(
-      *scheduler, [&](SequenceDriver &, size_t, llama_pos) -> llama_pos {
+      *scheduler, [&](SequenceDriver&, size_t, llama_pos) -> llama_pos {
         mediaEvalInvoked.store(true);
         textRunningAtThrow.store(!textFinished.load());
         throw std::runtime_error("injected media-eval failure");
@@ -2707,7 +2767,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::atomic<size_t> textPieces = 0;
   auto textPrompt = makePrompt(
       "Write a long, detailed essay about the history of mathematics.");
-  textPrompt.outputCallback = [&textPieces](const std::string &) {
+  textPrompt.outputCallback = [&textPieces](const std::string&) {
     textPieces.fetch_add(1);
   };
   auto textFuture = std::async(std::launch::async, [&] {
@@ -2832,7 +2892,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   try {
     saveModel->processPromptBatch(savePrompts);
     saveModel->saveCache(cachePath.string());
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     saveThrew = true;
     saveErr = e.what();
   } catch (...) {
@@ -2850,7 +2910,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
     std::ifstream file(cachePath, std::ios::binary);
     ASSERT_TRUE(file.is_open());
     std::uint32_t magic = 0;
-    file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
     EXPECT_EQ(magic, static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC));
   }
 
@@ -2898,8 +2958,8 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
 /// Multimodal batch generation follows the same lazy reasoning policy as text:
 /// generated reasoning remains in the resident sequence until a later full
 /// prompt reconciles it away.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchMtmdQwen35RetainsReasoningLazily) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchMtmdQwen35RetainsReasoningLazily) {
 #if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
   GTEST_SKIP() << "Qwen3.5 MTMD closed `</think>` is not deterministic on "
                   "non-Apple-Silicon CI runners (CPU backend); see comment.";
@@ -2928,7 +2988,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr)
       << "test requires the continuous-batching scheduler";
 
-  auto makeMediaPrompt = [&](const std::string &question) {
+  auto makeMediaPrompt = [&](const std::string& question) {
     LlamaModel::Prompt prompt;
     prompt.input =
         R"([{"role":"system","content":"Answer with just one word: yes or no."},)"
@@ -2951,8 +3011,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
   EXPECT_FALSE(outputs[1].empty())
       << "second MTMD slot must complete generation";
 
-  SCOPED_TRACE("output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
-               ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
+  SCOPED_TRACE(
+      "output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
+      ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
 }
 
 /// Multimodal hybrid counterpart of `BatchCancelCommitsProgressAndPersists`:
@@ -2962,8 +3023,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
 /// rather than the primer, `saveCache` rewrites the file, and the next
 /// full-history turn continues from it. (A cancel during prefill still rolls
 /// back; see `MtmdLlmContextCancelTest`.)
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchMtmdHybridCancelCommitsProgressAndPersists) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdHybridCancelCommitsProgressAndPersists) {
   const std::string vlmPath =
       test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
   const std::string mmprojPath =
@@ -3019,7 +3081,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
       R"({"role":"user","content":"Continue the description with a short sentence."}])";
   cancelPrompt.media.push_back(image);
   cancelPrompt.cacheKey = cachePath.string();
-  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string &) {
+  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
       model->cancel();
@@ -3061,8 +3123,9 @@ TEST_F(ContinuousBatchingIntegrationTest,
 
 // The embedded cache ledger must round-trip across the single-prompt and batch
 // paths, not just within the path that wrote it.
-TEST_F(ContinuousBatchingIntegrationTest,
-       BatchTextLoadsLedgerFromSinglePromptCache) {
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchTextLoadsLedgerFromSinglePromptCache) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path cachePath =
@@ -3086,7 +3149,7 @@ TEST_F(ContinuousBatchingIntegrationTest,
   std::string err;
   try {
     outputs = model->processPromptBatch(prompts);
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     err = e.what();
   }
   EXPECT_TRUE(err.empty())

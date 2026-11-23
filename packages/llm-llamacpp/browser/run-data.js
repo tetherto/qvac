@@ -16,7 +16,7 @@ function prepareMessages(messages) {
     }
     // Admission owns the bytes just like the native TypedArray parser. The
     // caller may mutate or reuse its buffer as soon as runJob() resolves.
-    media.push(message.content.slice())
+    media.push(new Uint8Array(message.content))
   }
 
   return { messages: jsonMessages, media }

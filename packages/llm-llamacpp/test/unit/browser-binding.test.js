@@ -417,6 +417,22 @@ test('browser run data stages media bytes without JSON expansion', (t) => {
   }
 })
 
+test('browser run data owns bytes from Uint8Array subclasses', (t) => {
+  class SharedSliceArray extends Uint8Array {
+    slice() {
+      return this.subarray()
+    }
+  }
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const source = new SharedSliceArray([iteration, 2, 3])
+    const prepared = prepareRunData([{ type: 'media', content: source }])
+    source[0] = 255
+
+    t.alike(prepared.media[0][0], new Uint8Array([iteration, 2, 3]), `iteration ${iteration + 1}`)
+  }
+})
+
 test('browser run data preserves media grouping for a batch', (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     const first = new Uint8Array([1, 2])
@@ -549,7 +565,7 @@ test('cooperative listener failure cancels only its job and releases it', async 
 
     t.is(terminals.length, 1, `one terminal, iteration ${iteration + 1}`)
     t.is(terminals[0].event, 'Error', `terminal type, iteration ${iteration + 1}`)
-    t.is(terminals[0].error.code, 'CANCELLED', `error, iteration ${iteration + 1}`)
+    t.is(terminals[0].error.message, 'listener failed', `error, iteration ${iteration + 1}`)
     t.is(isolated.activeSlots(handle), 0, `slots released, iteration ${iteration + 1}`)
     await isolated.destroyInstance(handle)
   }

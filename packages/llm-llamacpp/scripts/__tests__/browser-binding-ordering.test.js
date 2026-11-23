@@ -166,7 +166,7 @@ test('cooperative browser inference cancels and cleans up when an output listene
         {},
         { config: { parallel: '2' } },
         (_owner, event, _result, error) => {
-          events.push({ event, code: error?.code })
+          events.push({ event, code: error?.code, message: error?.message })
           if (event === 'Output') throw new Error('listener failed')
         }
       )
@@ -177,8 +177,8 @@ test('cooperative browser inference cancels and cleans up when an output listene
         await waitUntil(() => isolated.activeJobs(handle) === 0)
         assert.equal(admission.accepted, true)
         assert.deepEqual(events.splice(0), [
-          { event: 'Output', code: undefined },
-          { event: 'Error', code: 'CANCELLED' }
+          { event: 'Output', code: undefined, message: undefined },
+          { event: 'Error', code: undefined, message: 'listener failed' }
         ])
         assert.equal(stopSignals.at(-1), 1)
       }

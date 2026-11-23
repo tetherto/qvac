@@ -100,10 +100,10 @@ function isCancelled(engine, handle, jobId) {
 
 function deliverTerminals(handle, id, job) {
   const engineErrorTerminal = job.terminals.find((terminal) => terminal.event === 'Error')
-  const terminals = engineErrorTerminal
-    ? [engineErrorTerminal]
-    : job.callbackError
-      ? [{ event: 'Error', data: null, error: job.callbackError }]
+  const terminals = job.callbackError
+    ? [{ event: 'Error', data: null, error: job.callbackError }]
+    : engineErrorTerminal
+      ? [engineErrorTerminal]
       : job.terminals.length > 0
         ? job.terminals
         : [{ event: 'Error', data: null, error: new Error('Job cancelled') }]

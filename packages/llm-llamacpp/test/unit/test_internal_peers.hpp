@@ -154,7 +154,7 @@ public:
   using Scheduler =
       qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler;
 
-  static void useCooperativeDrive(Scheduler &scheduler) {
+  static void useCooperativeDrive(Scheduler& scheduler) {
     std::scoped_lock lock(scheduler.mutex_);
     scheduler.driveMode_ = Scheduler::DriveMode::Cooperative;
   }
