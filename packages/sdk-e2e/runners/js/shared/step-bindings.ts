@@ -53,11 +53,31 @@ import {
   type VectorIndexIvfSettings
 } from '@qvac/sdk'
 import { StepIncompleteError, type CollectMode, type StepBindings } from '@qvac/test-suite'
+import { createRagOps } from 'rag-e2e-plugin/ops'
 import type { ResourceManager } from './resource-manager.js'
 import { unitVectors, cosineAtLeast, moreSimilarThan } from './vector-checks.js'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 /** How the shared step interpreter reaches this SDK. */
+
+const localRag = createRagOps({
+  root: os.tmpdir(),
+  join: (...parts) => path.join(...parts),
+  async removeDir(dir) {
+    await fs.promises.rm(dir, { recursive: true, force: true })
+  },
+  async listDir(dir) {
+    try {
+      return await fs.promises.readdir(dir)
+    } catch {
+      return []
+    }
+  },
+  async embed(modelId, text) {
+    const { embedding } = await embed({ modelId, text })
+    return embedding
+  }
+})
 
 /** Contract method name -> the SDK function that serves it. */
 const CALLS: Record<string, (params: never) => Promise<unknown>> = {
@@ -209,6 +229,15 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
 
   // --- plugins -------------------------------------------------------------
   invokePlugin: async (params) => ({ result: await invokePlugin(params) }),
+
+  // --- @qvac/rag in this process ---------------------------------------------
+  // The same ops the `rag-e2e-plugin` runs in the worker, here on Node with an embeddings
+  // port over the SDK's `embed()`, the way an app uses @qvac/rag beside the SDK. The
+  // result sits under `result`, as it does for `invokePlugin`.
+  ragLocal: async (params: never) => {
+    const p = params as { op: string; params?: Record<string, unknown> }
+    return { result: await localRag(p.op, p.params) }
+  },
 
   // --- transcription sessions ----------------------------------------------
   //

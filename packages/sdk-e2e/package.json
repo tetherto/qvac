@@ -40,10 +40,14 @@
     "check:catalog": "npm run build:catalog && npm run check:resource-table && npm run check:step-dependencies && npm run check:skip-matrix && qvac-test catalog:validate --config=."
   },
   "dependencies": {
+    "@qvac/rag": "^0.11.0",
     "@qvac/sdk": "file:../sdk",
     "@qvac/test-suite": "^0.15.0",
+    "@qvac/turbovec-ggml": "^0.5.0",
+    "corestore": "^7.4.7",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
+    "rag-e2e-plugin": "file:./fixtures/rag-plugin",
     "react-native": "0.88.1",
     "react-native-bare-kit": "^0.17.1"
   },

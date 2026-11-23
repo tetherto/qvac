@@ -225,6 +225,12 @@ the same way a real app would add a third-party or in-repo custom plugin. `Plugi
 own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
 use a custom plugin rather than calling `invokePlugin` directly.
 
+[`fixtures/rag-plugin/`](./fixtures/rag-plugin) (`rag-e2e-plugin`) runs `@qvac/rag` inside the worker for the
+`qvac-rag-*` tests. Its `ops.js` is the one place the suite calls `@qvac/rag`. The plugin serves those ops on Bare,
+embedding in-process on the model the client loaded. The `ragLocal` step binding serves the same ops in the
+desktop and Electron consumers on Node, with an embeddings port over `embed()`. Each case runs on both
+(`qvac-rag-<case>-bare` and `-node`).
+
 Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
 plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
