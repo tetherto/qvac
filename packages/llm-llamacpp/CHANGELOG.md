@@ -60,6 +60,12 @@ Loads with `parallel >= 2` change as follows:
   into the unified cache needs. The mobile dev and peer dependencies
   `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.2` with it
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
+  against the size its own decoder reads
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). The header check before
+  the prompt is processed stays, so an oversized image is still rejected before
+  the session cache changes, and formats stb_image cannot read (WebP, video) are
+  still rejected rather than handed to ffmpeg.
 
 ### Fixed
 
@@ -68,6 +74,9 @@ Loads with `parallel >= 2` change as follows:
   documented. The check compared against the whole context, and now also
   counts the KV cells a multimodal prompt takes
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- `assessFit` accepts `image-max-megapixels` (and `image_max_megapixels`), and
+  rejects an invalid value as the load does. Before, it rejected the key as an
+  unknown argument ([#5783](https://github.com/tetherto/qvac/pull/5783)).
 
 ## [0.72.0] - 2026-11-18
 

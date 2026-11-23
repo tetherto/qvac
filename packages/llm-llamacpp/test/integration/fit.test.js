@@ -98,7 +98,8 @@ const EVERY_SETTING = {
   'n-cpu-ffn': '1',
   'override-tensor': 'ffn_.*=CPU',
   'prefetch-weights': 'auto',
-  'fit-ctx': '2048'
+  'fit-ctx': '2048',
+  'image-max-megapixels': '8'
 }
 
 const MOBILE_REFUSED = ['main-gpu', 'split-mode', 'tensor-split']
@@ -139,6 +140,13 @@ test('per-slot caps that overbook the trained context reject', { timeout: 600_00
     assess(await modelPath(), { 'ctx-size': '0', parallel: '2', 'kv-unified-per-slot': '131072' }),
     /\(2 x 131072\) must fit ctx_size=0/
   )
+})
+
+test('an image limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+
+  await t.exception(assess(file, { 'image-max-megapixels': '0' }))
+  await t.exception(assess(file, { 'image-max-megapixels': 'many' }))
 })
 
 test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
