@@ -507,7 +507,10 @@ test('llmConfigSchema: Core ML FFN split requires coreml-ffn, the cache does not
   const split = llmConfigSchema.safeParse({ 'coreml-ffn-split': '3072x1' })
   t.is(split.success, false)
   t.is(split.error?.issues[0]?.path[0], 'coreml-ffn-split')
-  t.is(llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success, true)
+  t.is(
+    llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success,
+    true
+  )
   t.is(llmConfigSchema.safeParse({ 'coreml-ffn-cache': '/tmp/c' }).success, true)
   t.is(
     llmConfigSchema.safeParse({
