@@ -27,7 +27,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -44,7 +45,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -61,7 +63,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -78,7 +81,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -95,7 +99,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -112,7 +117,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -129,7 +135,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           },
           {
@@ -146,7 +153,8 @@
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
-              "requiresStringContent": true
+              "requiresStringContent": true,
+              "supportsPromptCacheKey": true
             }
           }
         ]

@@ -29,6 +29,7 @@ import {
   diffusionFaDisabledAccepted,
   diffusionFusionFlux2Basic,
   diffusionEsrganUpscaleX4,
+  diffusionMossImageLayout,
   diffusionStandaloneUpscalerX4,
   diffusionStandaloneUpscalerBackendDevice,
   diffusionStandaloneUpscalerCpu
@@ -96,6 +97,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     [diffusionFaAccepted.testId]: this.runBasic.bind(this, 'diffusion-fa'),
     [diffusionFaDisabledAccepted.testId]: this.runBasic.bind(this, 'diffusion-fa-disabled'),
     [diffusionEsrganUpscaleX4.testId]: this.runBasic.bind(this, 'diffusion-esrgan'),
+    [diffusionMossImageLayout.testId]: this.runBasic.bind(this, 'diffusion-moss'),
     [diffusionSeedReproducibility.testId]: this.seedReproducibility.bind(this),
     [diffusionStreamingProgress.testId]: this.streamingProgress.bind(this),
     [diffusionStatsValid.testId]: this.statsValid.bind(this),
