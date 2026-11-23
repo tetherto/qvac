@@ -94,6 +94,119 @@ test('browser binding orders legacy inference, cache and unload operations', asy
   )
 })
 
+test('cooperative browser inference resumes after the last model unloads', async () => {
+  await withMockedEngine(
+    { parallel: '2' },
+    (options) => {
+      let nextHandle = 1
+      const jobs = new Map()
+      return {
+        FS: { mkdirTree() {} },
+        ccall(name, _returnType, _types, args = []) {
+          if (name === 'qvac_web_create') return nextHandle++
+          if (name === 'qvac_web_submit') jobs.set(`${args[0]}:${args[1]}`, true)
+          if (name === 'qvac_web_step') {
+            const prefix = `${args[0]}:`
+            const key = [...jobs.keys()].find((candidate) => candidate.startsWith(prefix))
+            if (key) {
+              const id = Number(key.slice(prefix.length))
+              jobs.delete(key)
+              options.qvacEmit(args[0], id, 'JobEnded', '{}')
+            }
+          }
+          if (name === 'qvac_web_active_slots') {
+            const prefix = `${args[0]}:`
+            return [...jobs.keys()].filter((candidate) => candidate.startsWith(prefix)).length
+          }
+          return 0
+        }
+      }
+    },
+    async (isolated) => {
+      for (let iteration = 0; iteration < 20; iteration++) {
+        const handle = isolated.createInstance({}, { config: { parallel: '2' } }, () => {})
+        await isolated.activate(handle)
+        const admission = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+        await waitUntil(() => isolated.activeJobs(handle) === 0)
+        assert.equal(admission.accepted, true)
+        await isolated.destroyInstance(handle)
+      }
+    }
+  )
+})
+
+test('legacy validation waits for a suspended cooperative engine call', async () => {
+  let releaseStep
+  let signalStepStarted
+  let stepInFlight = false
+  let validationDuringStep = false
+  let validationCount = 0
+
+  await withMockedEngine(
+    { parallel: '2' },
+    (options) => {
+      let nextHandle = 1
+      const jobs = new Map()
+      return {
+        FS: { mkdirTree() {} },
+        ccall(name, _returnType, _types, args = []) {
+          if (name === 'qvac_web_create') return nextHandle++
+          if (name === 'qvac_web_submit') jobs.set(args[0], args[1])
+          if (name === 'qvac_web_step') {
+            stepInFlight = true
+            signalStepStarted()
+            return new Promise((resolve) => {
+              releaseStep = () => {
+                const id = jobs.get(args[0])
+                jobs.delete(args[0])
+                options.qvacEmit(args[0], id, 'JobEnded', '{}')
+                stepInFlight = false
+                resolve(0)
+              }
+            })
+          }
+          if (name === 'qvac_web_validate') {
+            validationCount++
+            validationDuringStep ||= stepInFlight
+          }
+          if (name === 'qvac_web_run') options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          if (name === 'qvac_web_active_slots') return jobs.has(args[0]) ? 1 : 0
+          return 0
+        }
+      }
+    },
+    async (isolated) => {
+      for (let iteration = 0; iteration < 20; iteration++) {
+        validationCount = 0
+        validationDuringStep = false
+        const stepStarted = new Promise((resolve) => {
+          signalStepStarted = resolve
+        })
+        const cooperative = isolated.createInstance({}, { config: { parallel: '2' } }, () => {})
+        const legacy = isolated.createInstance({}, { config: { parallel: '2' } }, () => {})
+        await isolated.activate(cooperative)
+        await isolated.activate(legacy)
+        legacy.cooperative = false
+
+        await isolated.runJob(cooperative, [{ type: 'text', input: '[]' }])
+        await stepStarted
+        const legacyAdmission = isolated.runJob(legacy, [{ type: 'text', input: '[]' }], false)
+        await delay()
+        assert.equal(validationCount, 0, `iteration ${iteration + 1}`)
+        releaseStep()
+        await legacyAdmission
+        await waitUntil(
+          () => isolated.activeJobs(cooperative) === 0 && isolated.activeJobs(legacy) === 0
+        )
+        assert.equal(validationDuringStep, false, `iteration ${iteration + 1}`)
+        assert.equal(validationCount, 1, `iteration ${iteration + 1}`)
+        await isolated.destroyInstance(cooperative)
+        await isolated.destroyInstance(legacy)
+      }
+    }
+  )
+})
+
 test('legacy browser inference owns admitted media bytes', async () => {
   const staged = []
   await withMockedEngine(
@@ -123,6 +236,106 @@ test('legacy browser inference owns admitted media bytes', async () => {
       }
 
       assert.equal(staged.length, 20)
+      await isolated.destroyInstance(handle)
+    }
+  )
+})
+
+test('legacy browser inference accepts media without a text message', async () => {
+  const validations = []
+  const staged = []
+  await withMockedEngine(
+    { parallel: '1' },
+    (options) => ({
+      FS: { mkdirTree() {} },
+      ccall(name, _returnType, _types, args = []) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_validate') validations.push([JSON.parse(args[1]), args[2]])
+        if (name === 'qvac_web_stage_media') staged.push(Uint8Array.from(args[4]))
+        if (name === 'qvac_web_run') options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return 0
+      }
+    }),
+    async (isolated) => {
+      const handle = isolated.createInstance({}, { config: { parallel: '1' } }, () => {})
+      await isolated.activate(handle)
+
+      for (let iteration = 0; iteration < 20; iteration++) {
+        const admission = await isolated.runJob(handle, [
+          { type: 'media', content: new Uint8Array([iteration, 7, 8]) }
+        ])
+        await waitUntil(() => isolated.activeJobs(handle) === 0)
+        assert.equal(admission.accepted, true)
+        assert.deepEqual(validations.at(-1), [[], 1], `iteration ${iteration + 1}`)
+        assert.deepEqual(staged.at(-1), new Uint8Array([iteration, 7, 8]))
+      }
+
+      assert.equal(validations.length, 20)
+      assert.equal(staged.length, 20)
+      await isolated.destroyInstance(handle)
+    }
+  )
+})
+
+test('browser media staging preserves chunk boundaries and empty inputs', async () => {
+  const staged = []
+  const size = 2 * 1024 * 1024 + 137
+  const input = new Uint8Array(size)
+  for (let index = 0; index < input.length; index++) input[index] = index % 251
+
+  await withMockedEngine(
+    { parallel: '1' },
+    () => ({
+      FS: { mkdirTree() {} },
+      ccall(name, _returnType, _types, args = []) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_stage_media') {
+          staged.push({
+            prompt: args[2],
+            media: args[3],
+            bytes: Uint8Array.from(args[4]),
+            length: args[5]
+          })
+        }
+        return 0
+      }
+    }),
+    async (isolated) => {
+      const handle = isolated.createInstance({}, { config: { parallel: '1' } }, () => {})
+      await isolated.activate(handle)
+
+      for (let iteration = 0; iteration < 20; iteration++) {
+        const start = staged.length
+        await isolated.runJob(handle, [
+          { type: 'media', content: input },
+          { type: 'media', content: new Uint8Array(0) },
+          { type: 'text', input: '[]' }
+        ])
+        await waitUntil(() => isolated.activeJobs(handle) === 0)
+
+        const calls = staged.slice(start)
+        assert.deepEqual(
+          calls.map(({ prompt, media, length }) => [prompt, media, length]),
+          [
+            [0, 0, 1024 * 1024],
+            [0, 0, 1024 * 1024],
+            [0, 0, 137],
+            [0, 1, 0]
+          ],
+          `iteration ${iteration + 1}`
+        )
+        const reconstructed = new Uint8Array(size)
+        let offset = 0
+        for (const { bytes } of calls.slice(0, 3)) {
+          reconstructed.set(bytes, offset)
+          offset += bytes.length
+        }
+        const mismatch = reconstructed.findIndex((byte, index) => byte !== input[index])
+        assert.equal(mismatch, -1, `iteration ${iteration + 1}`)
+        assert.equal(calls[3].bytes.length, 0, `empty input, iteration ${iteration + 1}`)
+      }
+
+      assert.equal(staged.length, 80)
       await isolated.destroyInstance(handle)
     }
   )

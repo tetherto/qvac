@@ -78,8 +78,8 @@ export interface LlamaBinding {
     saveCache(handle: unknown, cacheKey: string): Promise<void>;
     discardCache(handle: unknown, cacheKey: string): Promise<void>;
     calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
-    runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
-    runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
+    runJob(handle: unknown, data: AddonRunJobMessage[], rejectWhenBusy?: boolean): Promise<AddonRunJobResult>;
+    runJob(handle: unknown, data: AddonBatchRunItem[], rejectWhenBusy?: boolean): Promise<AddonBatchRunResult>;
     destroyInstance(handle: unknown): Promise<void> | void;
 }
 export type MappedAddonEvent = {
@@ -154,8 +154,8 @@ export declare class LlamaInterface {
      * can be routed; a batch result also carries the per-item `ids` assigned
      * to each sequence.
      */
-    runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
-    runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
+    runJob(data: AddonRunJobMessage[], rejectWhenBusy?: boolean): Promise<AddonRunJobResult>;
+    runJob(data: AddonBatchRunItem[], rejectWhenBusy?: boolean): Promise<AddonBatchRunResult>;
     /**
      * Unload the model and clear resources (including memory).
      */

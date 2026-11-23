@@ -183,8 +183,13 @@ function callSync(handle, name, types, args, prepare) {
   }
 }
 
-function validateJob(handle, messages) {
-  return callSync(handle, 'qvac_web_validate', ['number', 'string'], [handle.native, messages])
+function validateJob(handle, messages, hasMedia) {
+  return callSync(
+    handle,
+    'qvac_web_validate',
+    ['number', 'string', 'number'],
+    [handle.native, messages, hasMedia ? 1 : 0]
+  )
 }
 
 // Mounts one model, including all sibling GGUF shards, read-only and returns
@@ -233,6 +238,11 @@ function activate(handle) {
       handle.cooperative = config?.parallel !== undefined && Number(config.parallel) > 1
       const engine = await loadEngine()
       handle.engine = engine
+      // loadEngine() caches a healthy engine across unload/reload cycles. The
+      // last unload removes an idle engine from the pump's registry, so make
+      // every activation register the cached engine again before it can admit
+      // cooperative work.
+      engines.add(engine)
       engine.handles.add(handle)
       const { module } = engine
       try {
@@ -412,33 +422,41 @@ function runLegacyJob(handle, id, job, prepared) {
   execution.then(() => finishJob(handle, id))
 }
 
-function runJob(handle, data) {
+function runJob(handle, data, rejectWhenBusy = true) {
   if (handle.destroying) return Promise.reject(new Error('Model is not loaded'))
   const isBatch = data.length > 0 && Array.isArray(data[0].messages)
   if (isBatch && !handle.cooperative) {
     return Promise.reject(new Error('Batch run() requires the model loaded with parallel >= 2'))
   }
   const prepared = prepareRunData(data)
-  if (!handle.cooperative && legacyActiveJobs > 0) return Promise.reject(busyError())
+  if (!handle.cooperative && rejectWhenBusy && legacyActiveJobs > 0) {
+    return Promise.reject(busyError())
+  }
   if (!handle.cooperative) {
     const pending = { cancelled: false }
     handle.pendingAdmissions.add(pending)
     legacyActiveJobs++
-    return serializeHandle(handle, () => {
-      try {
-        if (pending.cancelled || handle.destroying) throw new Error('Job cancelled')
-        validateJob(handle, prepared.json)
-      } catch (error) {
+    return serializeHandle(handle, () =>
+      enqueue(() => {
+        try {
+          if (pending.cancelled || handle.destroying) throw new Error('Job cancelled')
+          validateJob(
+            handle,
+            prepared.json,
+            prepared.media.some((media) => media.length > 0)
+          )
+        } catch (error) {
+          handle.pendingAdmissions.delete(pending)
+          legacyActiveJobs--
+          throw error
+        }
         handle.pendingAdmissions.delete(pending)
-        legacyActiveJobs--
-        throw error
-      }
-      handle.pendingAdmissions.delete(pending)
-      const id = allocateJobId(handle)
-      const job = createJob(handle, id, true, true)
-      runLegacyJob(handle, id, job, prepared)
-      return { accepted: true, id }
-    })
+        const id = allocateJobId(handle)
+        const job = createJob(handle, id, true, true)
+        runLegacyJob(handle, id, job, prepared)
+        return { accepted: true, id }
+      })
+    )
   }
 
   const id = allocateJobId(handle)

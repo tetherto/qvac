@@ -174,8 +174,8 @@ class LlamaInterface {
         }
         return Promise.resolve(this._binding.finetune(this._handle, finetuningParams));
     }
-    runJob(data) {
-        return Promise.resolve(this._binding.runJob(this._handle, data));
+    runJob(data, rejectWhenBusy) {
+        return Promise.resolve(this._binding.runJob(this._handle, data, rejectWhenBusy));
     }
     /**
      * Unload the model and clear resources (including memory).

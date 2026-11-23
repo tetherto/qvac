@@ -742,7 +742,8 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     // rejectWhenBusy gates only this fast-fail pre-check: true rejects the moment
     // the pool is full (never queues); false falls through to the scheduler's
     // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
-    if ((rejectWhenBusy ?? this._rejectWhenBusy) && this._atCapacity()) {
+    const effectiveRejectWhenBusy = rejectWhenBusy ?? this._rejectWhenBusy;
+    if (effectiveRejectWhenBusy && this._atCapacity()) {
       throw runBusyError();
     }
 
@@ -759,7 +760,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     /// registering the sink afterwards never races the first chunk.
     let admission: AddonModule.AddonRunJobResult;
     try {
-      admission = await this.addon.runJob(promptMessages);
+      admission = await this.addon.runJob(promptMessages, effectiveRejectWhenBusy);
     } catch (error) {
       response.failed(error as Error);
       throw error;

@@ -163,7 +163,8 @@ GenerationParamSource jsonSource(const json& obj) {
 
 // Same rules as parsePromptInputs in AddonJs.hpp; media arrives as a byte
 // array because JSON has no binary type.
-LlamaModel::Prompt parsePrompt(const json& messages) {
+LlamaModel::Prompt
+parsePrompt(const json& messages, bool hasExternalMedia = false) {
   using qvac_errors::StatusError;
   namespace general_error = qvac_errors::general_error;
   if (!messages.is_array()) {
@@ -196,7 +197,7 @@ LlamaModel::Prompt parsePrompt(const json& messages) {
           general_error::InvalidArgument, "Unknown input type: " + type);
     }
   }
-  if (prompt.input.empty() && prompt.media.empty()) {
+  if (prompt.input.empty() && prompt.media.empty() && !hasExternalMedia) {
     throw StatusError(
         general_error::InvalidArgument,
         "At least one of text or media input is required");
@@ -303,10 +304,11 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_activate(int handle) {
   }
 }
 
-EMSCRIPTEN_KEEPALIVE int qvac_web_validate(int handle, const char* messages) {
+EMSCRIPTEN_KEEPALIVE int
+qvac_web_validate(int handle, const char* messages, int hasMedia) {
   try {
     instance(handle);
-    parsePrompt(json::parse(messages));
+    parsePrompt(json::parse(messages), hasMedia != 0);
     return 0;
   } catch (const std::exception& error) {
     return fail(error);
@@ -357,7 +359,8 @@ qvac_web_run(int handle, int jobId, const char* messages) {
   try {
     LlamaModel& model = instance(handle);
     StagedJobMedia media = takeStagedMedia(handle, jobId);
-    LlamaModel::Prompt prompt = parsePrompt(json::parse(messages));
+    LlamaModel::Prompt prompt = parsePrompt(
+        json::parse(messages), !media.empty() && !media.front().empty());
     if (media.size() > 1) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
@@ -450,14 +453,16 @@ qvac_web_submit(int handle, int jobId, int isBatch, const char* data) {
               "Each batch item requires a string id and messages array");
         }
         std::string promptId = item["id"].get<std::string>();
-        LlamaModel::Prompt prompt = parsePrompt(item["messages"]);
+        LlamaModel::Prompt prompt = parsePrompt(
+            item["messages"], index < media.size() && !media[index].empty());
         if (index < media.size())
           prependMedia(prompt, std::move(media[index]));
         prompt.outputCallback = outputCallback(handle, jobId, promptId);
         prompts.push_back(std::move(prompt));
       }
     } else {
-      LlamaModel::Prompt prompt = parsePrompt(parsed);
+      LlamaModel::Prompt prompt =
+          parsePrompt(parsed, !media.empty() && !media.front().empty());
       if (!media.empty())
         prependMedia(prompt, std::move(media.front()));
       prompt.outputCallback = outputCallback(handle, jobId);

@@ -248,6 +248,33 @@ test('browser admission reserves worker capacity before validation', async (t) =
   }
 })
 
+test('rejectWhenBusy false queues legacy browser requests', async (t) => {
+  let runs = 0
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    async ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        runs++
+        await delay()
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+
+  const model = await publicModel(isolated)
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = await model.run([{ role: 'user', content: 'first' }])
+    const second = await model.run([{ role: 'user', content: 'second' }], { rejectWhenBusy: false })
+    await first.await()
+    await second.await()
+    t.is(runs, (iteration + 1) * 2, `iteration ${iteration + 1}`)
+  }
+  await model.unload()
+})
+
 test('failed browser validation releases its admission reservation', async (t) => {
   let result = '{}'
   const isolated = isolatedBinding((options) => ({
@@ -584,6 +611,62 @@ test('cooperative cache operation does not wait for an unrelated live job', asyn
   }
 })
 
+test('browser unload cancels a legacy job waiting for admission', async (t) => {
+  const runs = []
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    async ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        const input = JSON.parse(args[2])[0].input
+        runs.push(input)
+        while (!options.qvacCancelled(args[0], args[1])) await delay()
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    await isolated.runJob(handle, [{ type: 'text', input: 'run1' }])
+    await delay()
+    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }], false)
+    const destroyed = isolated.destroyInstance(handle)
+    await t.exception.all(() => second, /Job cancelled/)
+    await destroyed
+    t.alike(runs.slice(iteration, iteration + 1), ['run1'], `iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(handle), 0, `active jobs, iteration ${iteration + 1}`)
+  }
+})
+
+test('browser active job counts remain scoped to each model', async (t) => {
+  const isolated = isolatedBinding(
+    fakeEngine(async (emit, [native, id]) => {
+      await delay()
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const first = isolated.createInstance({}, {}, () => {})
+  const second = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(first)
+  await isolated.activate(second)
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const admission = await isolated.runJob(first, [{ type: 'text', input: '[]' }])
+    t.is(isolated.activeJobs(first), 1, `first model, iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(second), 0, `second model, iteration ${iteration + 1}`)
+    await isolated.cancelJob(first, admission.id)
+    await delay()
+    t.is(isolated.activeJobs(first), 0, `settled iteration ${iteration + 1}`)
+  }
+  await isolated.destroyInstance(first)
+  await isolated.destroyInstance(second)
+})
+
 test('healthy unload retains failed filesystem cleanup for retry', async (t) => {
   let loads = 0
   let failUnmount = false
@@ -622,6 +705,11 @@ test('healthy unload retains failed filesystem cleanup for retry', async (t) => 
     await isolated.destroyInstance(failed)
     t.is(failed.engine, null, `retry detached iteration ${iteration + 1}`)
     t.alike(failed.mounts, [], `retry cleared mount iteration ${iteration + 1}`)
+
+    const recovered = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(recovered)
+    await isolated.destroyInstance(recovered)
+    t.is(recovered.engine, null, `recovered iteration ${iteration + 1}`)
   }
   t.is(loads, 1)
 })
@@ -653,11 +741,89 @@ test('ordinary destroy failures retain native resources and remain retryable', a
     await t.exception.all(() => isolated.destroyInstance(failed), /destroy failed/)
     t.ok(failed.engine, `engine retained iteration ${iteration + 1}`)
     t.is(failed.native, 1, `native handle retained iteration ${iteration + 1}`)
+    t.alike(
+      failed.mounts,
+      [`/qvac-files/${iteration}`],
+      `mount retained iteration ${iteration + 1}`
+    )
     await isolated.destroyInstance(failed)
     t.is(failed.engine, null, `retry detached iteration ${iteration + 1}`)
     t.is(failed.native, 0, `retry cleared native handle iteration ${iteration + 1}`)
+    t.alike(failed.mounts, [], `retry cleared mount iteration ${iteration + 1}`)
+
+    const recovered = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(recovered)
+    await isolated.destroyInstance(recovered)
+    t.is(recovered.engine, null, `recovered iteration ${iteration + 1}`)
   }
   t.is(loads, 1)
+})
+
+test('fatal destroy failures poison only their engine generation', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let loads = 0
+    const isolated = isolatedBinding(() => {
+      const fatal = loads++ === 0
+      return {
+        FS: {
+          unmount: () => {
+            if (fatal) throw new Error('poisoned unmount')
+          },
+          rmdir: () => {
+            if (fatal) throw new Error('poisoned rmdir')
+          }
+        },
+        ccall(name) {
+          if (name === 'qvac_web_create') return 1
+          if (name === 'qvac_web_destroy' && fatal) {
+            throw new WebAssembly.RuntimeError('destroy aborted')
+          }
+          if (name === 'qvac_web_result') return '{}'
+          return 0
+        }
+      }
+    })
+
+    const failed = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(failed)
+    failed.mounts.push(`/qvac-files/${iteration}`)
+    await isolated.destroyInstance(failed)
+    t.is(failed.engine, null, `detached iteration ${iteration + 1}`)
+    t.is(failed.mounts.length, 0, `mounts cleared iteration ${iteration + 1}`)
+
+    const recovered = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(recovered)
+    await isolated.destroyInstance(recovered)
+    t.is(loads, 2, `fresh engine iteration ${iteration + 1}`)
+  }
+})
+
+test('poisoned engines suppress unsafe filesystem cleanup errors', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const isolated = isolatedBinding(() => ({
+      FS: {
+        unmount: () => {
+          throw new Error('poisoned unmount')
+        },
+        rmdir: () => {
+          throw new Error('poisoned rmdir')
+        }
+      },
+      ccall(name) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_run') throw new WebAssembly.RuntimeError('aborted')
+        if (name === 'qvac_web_result') return '{}'
+        return 0
+      }
+    }))
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    handle.mounts.push(`/qvac-files/${iteration}`)
+    await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    while (isolated.activeJobs(handle) !== 0) await delay()
+    await isolated.destroyInstance(handle)
+    t.is(handle.engine, null, `iteration ${iteration + 1}`)
+  }
 })
 
 test('fatal WebAssembly errors invalidate only their engine generation', async (t) => {
@@ -675,6 +841,7 @@ test('fatal WebAssembly errors invalidate only their engine generation', async (
             options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
             return 0
           }
+          if (name === 'qvac_web_calc_tokens') return 3
           if (name === 'qvac_web_result') return '{}'
           return 0
         }
@@ -692,7 +859,9 @@ test('fatal WebAssembly errors invalidate only their engine generation', async (
       () => isolated.runJob(failed, [{ type: 'text', input: '[]' }]),
       /engine terminated/
     )
+    t.is(terminal.length, 1, `no rejected-job event, iteration ${iteration + 1}`)
     t.is(isolated.activeJobs(failed), 0, `no rejected active job, iteration ${iteration + 1}`)
+    await t.exception.all(() => isolated.calcTokens(failed, { text: 'hello' }), /engine terminated/)
     await isolated.destroyInstance(failed)
 
     const recovered = isolated.createInstance({}, {}, (_owner, event) => terminal.push({ event }))
