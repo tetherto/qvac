@@ -1,4 +1,9 @@
 name: PR checks
+# PR build and test and SDK e2e read the event, and the label for a labeled run, from this name.
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('[{0}{1}] {2}', github.event.action,
+  github.event.label.name && format(': {0}', github.event.label.name) || '', github.event.pull_request.title)
+  || github.workflow }}
 
 # Lint, typecheck, unit tests, generated files and dependency checks for the changed contract packages and dependents,
 # through Nx from the PR's own targets with no secrets, so forks get real results. The SDK pod (ci:sdk) runs sdk-checks.yml.

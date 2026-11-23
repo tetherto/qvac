@@ -6,14 +6,11 @@ description: >-
 
 inputs:
   github-token:
-    description: Token with pull-requests, actions and issues read, and statuses write when status-context is set
+    description: Token with pull-requests and actions read, and statuses write when status-context is set
     required: true
   branches:
     description: Base branches built, names or prefixes ending in *
     required: true
-  gate-workflow:
-    description: File name of the workflow whose pull_request runs trigger this one
-    default: pr-checks.yml
   paths:
     description: Path prefixes, one of which the PR must change; empty builds any change
     default: ""
@@ -79,10 +76,8 @@ runs:
         HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
         HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         TRIGGER_ID: ${{ github.event.workflow_run.id }}
-        TRIGGER_CREATED_AT: ${{ github.event.workflow_run.created_at }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         BRANCHES: ${{ inputs.branches }}
-        GATE_WORKFLOW: ${{ inputs.gate-workflow }}
         PATHS: ${{ inputs.paths }}
         LABELS: ${{ inputs.labels }}
         STATUS_CONTEXT: ${{ inputs.status-context }}
