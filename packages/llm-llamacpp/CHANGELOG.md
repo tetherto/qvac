@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.73.0] - 2026-11-23
 
 ### Breaking
 
@@ -43,10 +43,27 @@ Loads with `parallel >= 2` change as follows:
 
 ### Changed
 
-- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
-  `^0.32.0`, adopting the Linux x64 CUDA package split
-  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
-  automatically; installation and inference configuration remain unchanged.
+- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. It also brings 0.32's
+  Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)), which installs CUDA
+  automatically. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.31.x or
+  0.32.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
+- RPC protocol 118: `@qvac/ggml-rpc-server` and `@qvac/llm-llamacpp` must
+  both be on `@qvac/fabric` 0.33; a server and a client on different
+  protocols cannot connect.
+- `spec-type: 'draft-dflash'` drafts 5 tokens per step when
+  `spec-draft-n-max` is not set, instead of 3, as llama-server does with
+  fabric 0.33; so does `spec-type: 'auto'` when it detects a DFlash model.
+  `spec-draft-n-min` is checked against that default. Other spec types keep 3.
 
 ### Fixed
 

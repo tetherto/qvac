@@ -280,13 +280,66 @@ TEST(SpeculativeConfigTest, RejectsMinAboveMax) {
            {"spec-draft-n-max", "2"},
            {"spec-draft-n-min", "3"}}),
       std::invalid_argument);
-  // Against llama.cpp's default n_max when only n_min is given.
+  // With only n_min, the load checks it against the type's default n_max.
   const int32_t defaultNMax = common_params_speculative_draft{}.n_max;
-  EXPECT_THROW(
-      parse(
-          {{"spec-type", "draft-mtp"},
-           {"spec-draft-n-min", std::to_string(defaultNMax + 1)}}),
-      std::invalid_argument);
+  const SpeculativeConfig parsed = parse(
+      {{"spec-type", "draft-mtp"},
+       {"spec-draft-n-min", std::to_string(defaultNMax + 1)}});
+  common_params params;
+  EXPECT_THROW(applySpeculativeConfig(parsed, params), std::invalid_argument);
+}
+
+TEST(SpeculativeConfigTest, DflashDraftsFabricsDefaultUnlessNMaxIsSet) {
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+          .draftModelPath = "/models/dflash.gguf"},
+      params);
+  EXPECT_EQ(
+      params.speculative.draft.n_max,
+      common_params_speculative_draft::n_max_dflash);
+  EXPECT_FALSE(params.speculative.draft.n_max_explicit);
+
+  common_params explicitParams;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+          .draftNMax = 3,
+          .draftModelPath = "/models/dflash.gguf"},
+      explicitParams);
+  EXPECT_EQ(explicitParams.speculative.draft.n_max, 3);
+  EXPECT_TRUE(explicitParams.speculative.draft.n_max_explicit);
+}
+
+TEST(SpeculativeConfigTest, OtherTypesKeepTheGenericDefault) {
+  const int32_t defaultNMax = common_params_speculative_draft{}.n_max;
+  for (const auto type :
+       {COMMON_SPECULATIVE_TYPE_DRAFT_MTP,
+        COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK}) {
+    common_params params;
+    applySpeculativeConfig(
+        SpeculativeConfig{
+            .type = type,
+            .draftModelPath = type == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK
+                                  ? "/models/dspark.gguf"
+                                  : ""},
+        params);
+    EXPECT_EQ(params.speculative.draft.n_max, defaultNMax)
+        << common_speculative_type_to_str(type);
+  }
+}
+
+TEST(SpeculativeConfigTest, NMinIsCheckedAgainstTheDflashDefault) {
+  // Above the generic default, within draft-dflash's.
+  const int32_t dflashNMax = common_params_speculative_draft::n_max_dflash;
+  const SpeculativeConfig parsed = parse(
+      {{"spec-type", "draft-dflash"},
+       {"spec-draft-model", absoluteModelPath("dflash.gguf")},
+       {"spec-draft-n-min", std::to_string(dflashNMax)}});
+  common_params params;
+  applySpeculativeConfig(parsed, params);
+  EXPECT_EQ(params.speculative.draft.n_min, dflashNMax);
 }
 
 TEST(SpeculativeConfigTest, DraftOptionsNeedAType) {
@@ -575,6 +628,21 @@ TEST(SpeculativeAutoTest, ResolvesTheTypeBeforeTheLoad) {
             addTensor(ctx, m, "blk.2.nextn.eh_proj.weight");
           }),
       COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+}
+
+TEST(SpeculativeAutoTest, DetectedDflashTakesTheDflashDefault) {
+  const std::string path =
+      writeGguf("auto-dflash-n-max.gguf", [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "dflash");
+      });
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{.autoDetect = true, .draftModelPath = path}, params);
+  std::filesystem::remove(path);
+  ASSERT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  EXPECT_EQ(
+      params.speculative.draft.n_max,
+      common_params_speculative_draft::n_max_dflash);
 }
 
 TEST(SpeculativeAutoTest, NoTypeFailsTheLoadInsteadOfAborting) {
