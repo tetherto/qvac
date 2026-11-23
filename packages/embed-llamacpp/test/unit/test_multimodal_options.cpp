@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -160,4 +161,38 @@ TEST(MultimodalOptionsTest, LeavesATextOnlyConfigAlone) {
   const MultimodalOptions options = takeMultimodalOptions(config, false);
   EXPECT_EQ(options.imageMaxTokens, -1);
   EXPECT_EQ(config, (Config{{"device", "gpu"}, {"batch_size", "512"}}));
+}
+
+TEST(MediaDecodeOptionsTest, CountsAudioAtTheModelRateWithOneFrameOfSlack) {
+  const MediaLimits limits{.maxImagePixels = 8'000'000, .maxAudioSeconds = 30};
+  const mtmd_helper_init_opt opt = mediaDecodeOptions(limits, 16000);
+  EXPECT_EQ(opt.max_image_pixels, 8'000'000U);
+  // miniaudio counts 16001 frames for 1 s of 48 kHz audio at 16 kHz.
+  EXPECT_EQ(opt.max_audio_frames, 30U * 16000U + 1U);
+}
+
+TEST(MediaDecodeOptionsTest, SetsNoAudioLimitWithoutAnAudioEncoder) {
+  const MediaLimits limits{.maxImagePixels = 8'000'000, .maxAudioSeconds = 30};
+  for (const int rate : {-1, 0}) {
+    const mtmd_helper_init_opt opt = mediaDecodeOptions(limits, rate);
+    EXPECT_EQ(opt.max_audio_frames, 0U) << rate;
+    EXPECT_EQ(opt.max_image_pixels, 8'000'000U) << rate;
+  }
+}
+
+TEST(MediaDecodeOptionsTest, SaturatesInsteadOfWrapping) {
+  // 0 means no limit to mtmd, so an overflowing value must not wrap to it.
+  constexpr uint64_t maxFrames = std::numeric_limits<uint64_t>::max();
+  constexpr int rate = 16000;
+  const uint64_t largest = (maxFrames - 1) / rate;
+  EXPECT_EQ(
+      mediaDecodeOptions(
+          {.maxImagePixels = 1, .maxAudioSeconds = largest}, rate)
+          .max_audio_frames,
+      largest * rate + 1);
+  EXPECT_EQ(
+      mediaDecodeOptions(
+          {.maxImagePixels = 1, .maxAudioSeconds = largest + 1}, rate)
+          .max_audio_frames,
+      maxFrames);
 }

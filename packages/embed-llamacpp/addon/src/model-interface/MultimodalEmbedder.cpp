@@ -165,25 +165,18 @@ void throwIfCancelled(const std::atomic<bool>& cancelled) {
   }
 }
 
-/// The size limits a media part is checked against before it is decoded.
-struct MediaLimits {
-  uint64_t maxImagePixels;
-  uint64_t maxAudioSeconds;
-};
+} // namespace
 
-/// mtmd-helper's decode options for @p limits. mtmd compares them with the
-/// length and size its own decoders read, before it allocates the output.
 mtmd_helper_init_opt
-decodeOptions(const mtmd_context* mctx, const MediaLimits& limits) {
+mediaDecodeOptions(const MediaLimits& limits, int audioSampleRate) {
   mtmd_helper_init_opt opt = mtmd_helper_init_opt_default();
   opt.max_image_pixels = limits.maxImagePixels;
   // The audio limit counts samples at the model's rate, plus one: miniaudio
   // counts one frame more when the input rate is a multiple of the model's
   // (48 kHz to 16 kHz), so audio exactly at the limit would fail. 0 would mean
   // no limit, so a value past uint64 saturates.
-  const int sampleRate = mtmd_get_audio_sample_rate(mctx);
-  if (sampleRate > 0) {
-    const auto rate = static_cast<uint64_t>(sampleRate);
+  if (audioSampleRate > 0) {
+    const auto rate = static_cast<uint64_t>(audioSampleRate);
     constexpr uint64_t maxFrames = std::numeric_limits<uint64_t>::max();
     opt.max_audio_frames = limits.maxAudioSeconds > (maxFrames - 1) / rate
                                ? maxFrames
@@ -191,6 +184,8 @@ decodeOptions(const mtmd_context* mctx, const MediaLimits& limits) {
   }
   return opt;
 }
+
+namespace {
 
 /// A media part over a size limit: logged at WARN, as the header checks do,
 /// then thrown as UnsupportedMedia.
@@ -235,7 +230,7 @@ mtmd::bitmap decodeMedia(
       part.media.data(),
       part.media.size(),
       /* placeholder = */ false,
-      decodeOptions(mctx, limits));
+      mediaDecodeOptions(limits, mtmd_get_audio_sample_rate(mctx)));
   if (wrapper.status == MTMD_HELPER_BITMAP_AUDIO_TOO_LONG) {
     throwOverLimit(string_format(
         "media part %zu: audio exceeds the %llu s limit. Increase "
@@ -258,13 +253,20 @@ mtmd::bitmap decodeMedia(
     wrapper.bitmap = nullptr;
   }
   if (wrapper.bitmap == nullptr) {
+    // mtmd also fails audio whose length its decoder cannot read before
+    // decoding, which a valid file can lack.
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnsupportedMedia),
-        string_format(
-            "media part %zu: cannot decode it, expected an image (jpg, png, "
-            "bmp, gif, ...) or wav/mp3/flac audio",
-            index));
+        isAudio ? string_format(
+                      "media part %zu: cannot decode the audio. It is corrupt, "
+                      "or its length cannot be read before decoding (e.g. a "
+                      "FLAC without a sample count)",
+                      index)
+                : string_format(
+                      "media part %zu: cannot decode it, expected an image "
+                      "(jpg, png, bmp, gif, ...) or wav/mp3/flac audio",
+                      index));
   }
   return mtmd::bitmap(wrapper.bitmap);
 }

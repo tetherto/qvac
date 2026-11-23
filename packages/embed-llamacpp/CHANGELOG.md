@@ -11,7 +11,9 @@
   header parser (`AudioLengthLimit`) is gone: it had to match each decoder by
   hand and could not size a free-format MP3, so it rejected every one. Audio
   over the limit is still rejected with `UnsupportedMedia`, and a free-format
-  MP3 within it now embeds. Images keep the header check that rejects formats
+  MP3 within it now embeds. Audio whose length cannot be read before decoding
+  (e.g. a FLAC without a sample count) is still rejected, now with
+  `cannot decode the audio`. Images keep the header check that rejects formats
   stb_image cannot read (WebP, video).
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`

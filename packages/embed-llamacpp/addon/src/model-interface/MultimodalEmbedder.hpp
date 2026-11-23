@@ -10,6 +10,7 @@
 
 #include <llama-cpp.h>
 #include <llama/common/common.h>
+#include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
 
 #include "ImagePixelLimit.hpp"
@@ -41,6 +42,21 @@ struct MultimodalOptions {
 MultimodalOptions takeMultimodalOptions(
     std::unordered_map<std::string, std::string>& config,
     bool hasProjectionModel);
+
+/// @brief The size limits a media part is checked against before it is
+/// decoded.
+struct MediaLimits {
+  uint64_t maxImagePixels;
+  uint64_t maxAudioSeconds;
+};
+
+/// @brief mtmd-helper's decode options for @p limits. mtmd compares them with
+/// the length and size its own decoders read, before it allocates the output.
+/// @p audioSampleRate is the projector's (mtmd_get_audio_sample_rate). Below 1
+/// there is no audio encoder and no audio limit is set, since mtmd rejects
+/// audio then anyway.
+mtmd_helper_init_opt
+mediaDecodeOptions(const MediaLimits& limits, int audioSampleRate);
 
 /// @brief One part of a multimodal input, in prompt order: text, or the bytes
 /// of a media file that mtmd decodes (an image, or wav/mp3/flac audio).
