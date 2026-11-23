@@ -14,9 +14,11 @@ Translation input is defined by:
 - `to: string`: target language id
 - `text: string | string[]`: text to be translated
 
+An NMT model translates one language pair, so it takes `from` and `to` once, in `modelConfig`, when it loads. An LLM takes them on each `translate()` call.
+
 `translate()` returns an object containing `translations` — one entry per input, in the order the inputs were given — and `text`, those entries joined by newlines. When streaming is enabled it returns a `tokenStream` for real-time output instead; a batch emits one whole translation per token, so the position of each token is the position of its input.
 
-For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac/blob/main/packages/sdk/schemas/translation-config.ts).
+For a list of supported languages and their ids (string abbreviations), see [translation-config.ts](https://github.com/tetherto/qvac/blob/main/packages/inference/src/schemas/translation-config.ts).
 
 ## Functions
 
@@ -31,9 +33,49 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
 You should load a model compatible with your chosen inference engine:
 - `qvac-fabric-llm.cpp` (default): Bergamot or IndicTrans2. Bergamot uses intgemm `*.bin` + `*.spm` vocab files; IndicTrans2 uses GGML `*.bin`.
-- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`. When the model is a `registry://`, `pear://` or local file named `model[.<pair>].intgemm.alphas.bin`, the SDK uses the vocabulary beside it (`vocab[.<pair>].spm`, or `srcvocab`/`trgvocab` for English into `ja`, `ko` and `zh`), so `srcVocabSrc` and `dstVocabSrc` are only needed for other layouts and `http(s)` sources.
 
 For models available as constants, see [SDK — Models](/sdk#models).
+
+### TranslatePsy Nano packs
+
+[TranslatePsy-AfriNano](https://huggingface.co/qvac/TranslatePsy-AfriNano) and [TranslatePsy-EuroNano](https://huggingface.co/qvac/TranslatePsy-EuroNano) are compact multilingual Bergamot packs, one per direction (`en-xx`, `xx-en`) and size (`Base`, `BaseMemory`, `Tiny`):
+
+| Family | Languages besides English |
+| --- | --- |
+| AfriNano | `am`, `ha`, `ig`, `ln`, `so`, `sw`, `yo`, `zu` |
+| EuroNano | `de`, `es`, `fr`, `it`, `pt`, `fi`, `cs`, `nl`, `sv` |
+
+Load a pack like any Bergamot model, with `engine: "Bergamot"` and the `from`/`to` pair it should translate:
+
+- An `en-xx` pack translates English into any language of its family. It picks its output language from a `##<TO>` tag (for example `##SW`) at the start of the input, and the SDK prepends `##<TO> ` to every input: single, batched or streamed. An input that already starts with a `##XX` tag is sent unchanged, so one batch can mix targets.
+- An `xx-en` pack translates any language of its family into English and takes no tag.
+- Between two non-English languages, translate twice: with the `xx-en` pack, then with the `en-xx` pack. `pivotModel` cannot pass the target tag to an `en-xx` second leg, so the SDK rejects that load. An `xx-en` pack can still be the first leg of a pivot into a regular Bergamot model.
+- `loadModel()` rejects a `from`/`to` pair that is outside the pack's family or direction.
+
+The SDK recognises a pack by its registry name or path, or by the Hugging Face layout `<en-xx|xx-en>/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`, and uses the `vocab.spm` beside it. For a copy that lost that layout (renamed, bundled with an app, served from `pear://`), set `targetTag: true` on an `en-xx` pack. `targetTag: false` loads a matching file as a plain Bergamot model.
+
+```js
+import path from "node:path";
+import { loadModel, translate, unloadModel } from "@qvac/sdk";
+
+// huggingface-cli download qvac/TranslatePsy-AfriNano --include "en-xx/Base/intgemm/*" --local-dir ./TranslatePsy-AfriNano
+const modelId = await loadModel({
+  modelSrc: path.resolve("TranslatePsy-AfriNano/en-xx/Base/intgemm/model.intgemm.alphas.bin"),
+  modelType: "nmt",
+  modelConfig: { engine: "Bergamot", from: "en", to: "sw" },
+});
+
+const { text } = translate({
+  modelId,
+  text: "Good morning, how are you today?",
+  modelType: "nmt",
+  stream: false,
+});
+console.log(await text); // Swahili; the SDK sent "##SW Good morning, how are you today?"
+
+await unloadModel({ modelId });
+```
 
 ## Example
 

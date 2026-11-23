@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 
-import { BERGAMOT_MODEL_RE } from './schemas.ts'
+import { BERGAMOT_MODEL_RE, BERGAMOT_MULTILINGUAL_MODEL_RE } from './schemas.ts'
 import type { CompanionSetMetadata, CompanionSetMetadataEntry, ProcessedModel } from './types.ts'
 
 /**
@@ -15,6 +15,10 @@ import type { CompanionSetMetadata, CompanionSetMetadataEntry, ProcessedModel } 
  *   Bergamot NMT sets (directory-based):
  *     Primary: `model.<langPair>.intgemm.alphas.bin`
  *     Companions in same directory: lex, vocab/srcvocab+trgvocab, metadata
+ *     Multilingual packs (TranslatePsy Nano) drop the pair: `model.intgemm.alphas.bin`
+ *     with `vocab.spm` and a direction-named `lex.50.50.<enxx|xxen>.s2t.bin`. Their
+ *     vocab and lex files are byte-identical across pack sizes, so each set claims
+ *     its own directory's copies, which also keeps them through checksum dedup.
  *
  *   Apple Core ML bundles:
  *     Every file under a `<name>.mlmodelc/` or `<name>.mlpackage/` directory
@@ -115,11 +119,12 @@ function groupBergamotCompanions(
   companionKeys: Set<string>
 ): void {
   for (const model of models) {
-    const match = model.registryPath.match(BERGAMOT_MODEL_RE)
-    if (!match?.[1] || !match[2]) continue
+    const paired = model.registryPath.match(BERGAMOT_MODEL_RE)
+    const dirPrefix = paired?.[1] ?? model.registryPath.match(BERGAMOT_MULTILINGUAL_MODEL_RE)?.[1]
+    if (!dirPrefix) continue
 
-    const dirPrefix = match[1]
-    const langPair = match[2]
+    // Empty for a multilingual pack.
+    const langPair = paired?.[2] ?? ''
     const source = model.registrySource
 
     const companions = findBergamotCompanions(source, dirPrefix, langPair, bySourcePath)
@@ -175,20 +180,22 @@ function findBergamotCompanions(
   bySourcePath: Map<string, ProcessedModel>
 ): { key: string; model: ProcessedModel }[] {
   const found: { key: string; model: ProcessedModel }[] = []
+  const infix = langPair ? `.${langPair}` : ''
 
-  const lexPath = `${dirPrefix}lex.50.50.${langPair}.s2t.bin`
-  const lexModel = bySourcePath.get(sourceKey(source, lexPath))
+  const lexModel = langPair
+    ? bySourcePath.get(sourceKey(source, `${dirPrefix}lex.50.50.${langPair}.s2t.bin`))
+    : findMultilingualLex(source, dirPrefix, bySourcePath)
   if (lexModel) {
     found.push({ key: 'lexPath', model: lexModel })
   }
 
-  const sharedVocabPath = `${dirPrefix}vocab.${langPair}.spm`
+  const sharedVocabPath = `${dirPrefix}vocab${infix}.spm`
   const sharedVocab = bySourcePath.get(sourceKey(source, sharedVocabPath))
   if (sharedVocab) {
     found.push({ key: 'sharedVocabPath', model: sharedVocab })
   } else {
-    const srcVocabPath = `${dirPrefix}srcvocab.${langPair}.spm`
-    const trgVocabPath = `${dirPrefix}trgvocab.${langPair}.spm`
+    const srcVocabPath = `${dirPrefix}srcvocab${infix}.spm`
+    const trgVocabPath = `${dirPrefix}trgvocab${infix}.spm`
     const srcVocab = bySourcePath.get(sourceKey(source, srcVocabPath))
     const trgVocab = bySourcePath.get(sourceKey(source, trgVocabPath))
     if (srcVocab && trgVocab) {
@@ -204,6 +211,21 @@ function findBergamotCompanions(
   }
 
   return found
+}
+
+// A multilingual pack names its shortlist after the direction, not a pair.
+const MULTILINGUAL_LEX_RE = /^lex\.50\.50\.[a-z]+\.s2t\.bin$/
+
+function findMultilingualLex(
+  source: string,
+  dirPrefix: string,
+  bySourcePath: Map<string, ProcessedModel>
+): ProcessedModel | undefined {
+  const prefix = sourceKey(source, dirPrefix)
+  for (const [key, model] of bySourcePath) {
+    if (key.startsWith(prefix) && MULTILINGUAL_LEX_RE.test(key.slice(prefix.length))) return model
+  }
+  return undefined
 }
 
 function sourceKey(source: string, path: string): string {

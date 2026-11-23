@@ -16800,7 +16800,15 @@
                             "te",
                             "th",
                             "tr",
-                            "vi"
+                            "vi",
+                            "am",
+                            "ha",
+                            "ig",
+                            "ln",
+                            "so",
+                            "sw",
+                            "yo",
+                            "zu"
                           ],
                           "description": "Source language (ISO 639-1, e.g. `en`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom"
@@ -16861,13 +16869,21 @@
                             "te",
                             "th",
                             "tr",
-                            "vi"
+                            "vi",
+                            "am",
+                            "ha",
+                            "ig",
+                            "ln",
+                            "so",
+                            "sw",
+                            "yo",
+                            "zu"
                           ],
                           "description": "Target language (ISO 639-1, e.g. `de`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
                         },
                         "srcVocabSrc": {
-                          "description": "Source-language vocabulary file source (required for Bergamot).",
+                          "description": "Source-language vocabulary file source. Optional when the vocabulary sits beside a `registry://`, `pear://` or local model file.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -16966,7 +16982,7 @@
                           ]
                         },
                         "dstVocabSrc": {
-                          "description": "Target-language vocabulary file source (required for Bergamot).",
+                          "description": "Target-language vocabulary file source. Optional when the vocabulary sits beside a `registry://`, `pear://` or local model file.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -17067,6 +17083,10 @@
                         "normalize": {
                           "description": "Input normalization: 1 = on (default), 0 = off.",
                           "type": "number"
+                        },
+                        "targetTag": {
+                          "description": "TranslatePsy Nano English→X (`en-xx`) packs pick their output language from a `##<TO>` tag at the start of the input. When on, QVAC prepends `##<TO> ` (e.g. `##SW `) to every input that doesn't already start with a tag. Omit to detect the pack from its TranslatePsy registry name or path, or from the Hugging Face layout `en-xx/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`; set `true` for a copy that lost that layout (renamed, bundled, `pear://`), or `false` to load the file as a plain Bergamot model.",
+                          "type": "boolean"
                         },
                         "pivotModel": {
                           "description": "Optional second-stage model for pivot translation (translate via an intermediate language).",

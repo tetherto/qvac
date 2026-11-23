@@ -123,6 +123,10 @@ export function getAddonFromEngine(engine: ModelRegistryEngine): ModelRegistryEn
 // codegen can group `lex.*`, `vocab.*`, and `metadata.json` files with it.
 export const BERGAMOT_MODEL_RE = /^(.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/
 
+// Mirrors `BERGAMOT_MULTILINGUAL_MODEL_RE` from packages/inference/src/schemas/translation-config.ts.
+// A multilingual pack (TranslatePsy Nano) names its files without a language pair.
+export const BERGAMOT_MULTILINGUAL_MODEL_RE = /^(.+\/)model\.intgemm\.alphas\.bin$/
+
 // Mirrors `DEFAULT_REGISTRY_CORE_KEY` from packages/sdk/constants/registry.ts.
 // The Hyperdrive core key for the production QVAC model registry. Overridable
 // via the `QVAC_REGISTRY_CORE_KEY` env var when running `npm run update-models`.

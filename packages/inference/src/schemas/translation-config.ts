@@ -56,10 +56,24 @@ export const BERGAMOT_LANGUAGES = [
   'te',
   'th',
   'tr',
-  'vi'
+  'vi',
+  // TranslatePsy-AfriNano targets (the EuroNano ones are listed above)
+  'am',
+  'ha',
+  'ig',
+  'ln',
+  'so',
+  'sw',
+  'yo',
+  'zu'
 ] as const
 
 export const BERGAMOT_MODEL_RE = /^(.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/
+
+// A multilingual Bergamot pack names its files without a language pair: one
+// pack covers several targets, so it ships `model.intgemm.alphas.bin` beside a
+// shared `vocab.spm` (TranslatePsy-AfriNano / -EuroNano).
+export const BERGAMOT_MULTILINGUAL_MODEL_RE = /^(.+\/)model\.intgemm\.alphas\.bin$/
 
 export const BERGAMOT_CJK_LANG_PAIRS: readonly string[] = ['enja', 'enko', 'enzh']
 
@@ -174,11 +188,21 @@ const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   to: z.enum(BERGAMOT_LANGUAGES).describe('Target language (ISO 639-1, e.g. `de`).'),
   srcVocabSrc: modelSrcInputSchema
     .optional()
-    .describe('Source-language vocabulary file source (required for Bergamot).'),
+    .describe(
+      'Source-language vocabulary file source. Optional when the vocabulary sits beside a `registry://`, `pear://` or local model file.'
+    ),
   dstVocabSrc: modelSrcInputSchema
     .optional()
-    .describe('Target-language vocabulary file source (required for Bergamot).'),
+    .describe(
+      'Target-language vocabulary file source. Optional when the vocabulary sits beside a `registry://`, `pear://` or local model file.'
+    ),
   normalize: z.number().optional().describe('Input normalization: 1 = on (default), 0 = off.'),
+  targetTag: z
+    .boolean()
+    .optional()
+    .describe(
+      "TranslatePsy Nano English→X (`en-xx`) packs pick their output language from a `##<TO>` tag at the start of the input. When on, QVAC prepends `##<TO> ` (e.g. `##SW `) to every input that doesn't already start with a tag. Omit to detect the pack from its TranslatePsy registry name or path, or from the Hugging Face layout `en-xx/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`; set `true` for a copy that lost that layout (renamed, bundled, `pear://`), or `false` to load the file as a plain Bergamot model."
+    ),
   pivotModel: bergamotPivotModelSchema.describe(
     'Optional second-stage model for pivot translation (translate via an intermediate language).'
   )
