@@ -141,7 +141,7 @@ test('Linux x64 is split into version-locked base and CUDA packages', async (t) 
     const pack = spawnSync(
       'npm',
       ['pack', '--dry-run', '--json', '--ignore-scripts', '--cache', path.join(f.root, 'cache')],
-      { cwd: dir, encoding: 'utf8' }
+      { cwd: dir, encoding: 'utf8', shell: process.platform === 'win32' }
     )
     assert.ifError(pack.error)
     assert.equal(pack.status, 0, pack.stderr)
