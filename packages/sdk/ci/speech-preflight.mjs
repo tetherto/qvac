@@ -20,6 +20,9 @@ import {
 } from 'node:fs'
 import {
   SLICE_DEFINITIONS,
+  FABRIC_BACKEND_DEFINITIONS,
+  assertFabricBackendPackages,
+  stageSlice,
   PLATFORM_INDEX_SOURCE,
   buildSliceManifest,
   expectedAddonFile,
@@ -213,6 +216,19 @@ export function packPackage(workdir, stage, host, env) {
     throw new Error(`Missing native addon for ${manifest.name} on ${host}`)
   }
   if (manifest.addon === true) return [pack(workdir, stage, env)]
+  if (manifest.name === '@qvac/fabric' && host === 'linux-x64') {
+    assertFabricBackendPackages(prebuilds)
+    const context = {
+      metaManifest: manifest,
+      workdir,
+      outDir: join(stage, 'slices'),
+      prebuildsDir: prebuilds
+    }
+    const slices = [...FABRIC_BACKEND_DEFINITIONS, definition].map((slice) =>
+      stageSlice(slice, context)
+    )
+    return [...slices.map((slice) => pack(slice, stage, env)), pack(workdir, stage, env)]
+  }
   const slice = join(stage, 'slices', `${basename(workdir)}-${host}`)
   mkdirSync(join(slice, 'prebuilds'), { recursive: true })
   writeJson(join(slice, 'package.json'), buildSliceManifest(manifest, definition))
