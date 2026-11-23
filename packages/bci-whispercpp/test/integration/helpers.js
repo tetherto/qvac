@@ -12,6 +12,13 @@ const isMobile = platform === 'ios' || platform === 'android'
 const BCI_TEST_THREADS = 4
 const NO_GPU = os.hasEnv('NO_GPU') && os.getEnv('NO_GPU') === 'true'
 
+// contextParams for a test that also runs on the CPU lanes. A CPU lane
+// (NO_GPU=true) can still register a GPU device with ggml: the darwin-x64
+// runner is a VM whose Metal device is the "Apple Paravirtual device". Whisper
+// defaults to use_gpu=true, so without this the lane would decode on that
+// device instead of the CPU backend it is meant to cover.
+const LANE_CONTEXT_PARAMS = NO_GPU ? { use_gpu: false } : {}
+
 // ---------------------------------------------------------------------------
 // Performance reporter — captures BCI inference stats and emits them through
 // the shared QVAC perf-report pipeline (desktop) or via console markers
@@ -326,6 +333,7 @@ async function* chunkify(bytes, chunkSize) {
 module.exports = {
   BCI_TEST_THREADS,
   NO_GPU,
+  LANE_CONTEXT_PARAMS,
   isMobile,
   platform,
   getMobileAssetsDir,
