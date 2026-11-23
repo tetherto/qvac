@@ -40,22 +40,29 @@ test('browser engine inputs participate in native prebuild reuse keys', () => {
 })
 
 test('browser engine inputs do not invalidate native-only prebuilds', () => {
-  const nativeOnlyRow = { ...row, config: 'darwin-arm64' }
+  const nativeOnlyRows = [
+    { ...row, config: 'darwin-arm64' },
+    { ...row, slug: 'embed-llamacpp' }
+  ]
   const tree = (paths) => {
     if (paths.includes('packages/llm-llamacpp')) {
       return inputs.map((path) => `base\t${path}`).join('\n')
     }
     return 'shared\tpnpm-lock.yaml'
   }
-  const baseline = legKey(nativeOnlyRow, tree)
+  for (const nativeOnlyRow of nativeOnlyRows) {
+    const baseline = legKey(nativeOnlyRow, tree)
 
-  for (const changed of inputs) {
-    const changedTree = (paths) => {
-      if (paths.includes('packages/llm-llamacpp')) {
-        return inputs.map((path) => `${path === changed ? 'changed' : 'base'}\t${path}`).join('\n')
+    for (const changed of inputs) {
+      const changedTree = (paths) => {
+        if (paths.includes('packages/llm-llamacpp')) {
+          return inputs
+            .map((path) => `${path === changed ? 'changed' : 'base'}\t${path}`)
+            .join('\n')
+        }
+        return 'shared\tpnpm-lock.yaml'
       }
-      return 'shared\tpnpm-lock.yaml'
+      assert.equal(legKey(nativeOnlyRow, changedTree), baseline, `${nativeOnlyRow.slug} ${changed}`)
     }
-    assert.equal(legKey(nativeOnlyRow, changedTree), baseline, changed)
   }
 })
