@@ -82,7 +82,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_response_format:
                 'A prompt has a bad `response_format`, or one combined with `tools`',
               invalid_tool_choice: "A prompt's `tool_choice` names no declared tool",
-              unsupported_image_content: 'An image is not a PNG or JPEG data URL',
+              unsupported_image_content:
+                'An image is not a PNG or JPEG data URL, or is on a non-user message',
               context_length_exceeded: 'The batch does not fit the context window'
             },
             404: { model_not_found: 'Unknown alias' },

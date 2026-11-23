@@ -1,6 +1,12 @@
 import type { Expectation, Step, TestDefinition } from '@qvac/test-suite'
 
-/** One image-attached completion. */
+/** A user turn of ordered content parts: the images, then the prompt. */
+const imageTurn = (prompt: string, ...images: string[]) => ({
+  role: 'user',
+  content: [...images.map((path) => ({ type: 'media', path })), { type: 'text', text: prompt }]
+})
+
+/** One completion over a single image. */
 const visionSteps = (dependency: string): Step[] => [
   { useModel: { deps: [dependency], as: 'model' } },
   { asset: { kind: 'image', file: '$params.image', form: 'path', as: 'image' } },
@@ -10,13 +16,7 @@ const visionSteps = (dependency: string): Step[] => [
       collect: 'text',
       params: {
         modelId: '$model',
-        history: [
-          {
-            role: 'user',
-            content: '$params.prompt',
-            attachments: [{ path: '$image' }]
-          }
-        ],
+        history: [imageTurn('$params.prompt', '$image')],
         stream: '$params.stream?',
         generationParams: '$params.generationParams?'
       },
@@ -45,13 +45,7 @@ const createVisionTest = (
     // from; `history` below stays for the executors the other platforms still run.
     prompt,
     image: imagePath,
-    history: [
-      {
-        role: 'user',
-        content: prompt,
-        attachments: [{ path: `shared-test-data/images/${imagePath}` }]
-      }
-    ],
+    history: [imageTurn(prompt, `shared-test-data/images/${imagePath}`)],
     ...(opts.stream && { stream: true }),
     ...(opts.generationParams && { generationParams: opts.generationParams })
   },
@@ -132,13 +126,7 @@ export const visionStats = createVisionTest(
   { generationParams: { temp: 0, seed: 42 } }
 )
 
-const noUpscaleHistory = (image: string) => [
-  {
-    role: 'user',
-    content: 'Describe this image briefly.',
-    attachments: [{ path: image }]
-  }
-]
+const noUpscaleHistory = (image: string) => [imageTurn('Describe this image briefly.', image)]
 
 /** A 64x64 image must not be upscaled on its way in. */
 export const visionImageNoUpscale: TestDefinition = {
@@ -215,11 +203,7 @@ export const visionSceneUnderstanding = createVisionTest(
 )
 
 const multipleImagesHistory = (first: string, second: string) => [
-  {
-    role: 'user',
-    content: 'Compare these two images. What is in each one?',
-    attachments: [{ path: first }, { path: second }]
-  }
+  imageTurn('Compare these two images. What is in each one?', first, second)
 ]
 
 export const visionMultipleImages: TestDefinition = {
@@ -251,11 +235,7 @@ export const visionMultipleImages: TestDefinition = {
 }
 
 const multiTurnHistory = (image: string) => [
-  {
-    role: 'user',
-    content: 'What animal is in this image?',
-    attachments: [{ path: image }]
-  },
+  imageTurn('What animal is in this image?', image),
   { role: 'assistant', content: 'The image shows an elephant.' },
   { role: 'user', content: 'What color is it?' }
 ]
@@ -285,13 +265,7 @@ export const visionMultiTurn: TestDefinition = {
 export const visionErrorMissingImage: TestDefinition = {
   testId: 'vision-error-missing-image',
   params: {
-    history: [
-      {
-        role: 'user',
-        content: 'What is in this image?',
-        attachments: [{ path: 'shared-test-data/images/nonexistent.jpg' }]
-      }
-    ]
+    history: [imageTurn('What is in this image?', 'shared-test-data/images/nonexistent.jpg')]
   },
   expectation: { validation: 'throws-error', errorContains: 'not found' },
   suites: ['smoke'],
@@ -305,13 +279,7 @@ export const visionErrorMissingImage: TestDefinition = {
   }
 }
 
-const unsupportedFormatHistory = (image: string) => [
-  {
-    role: 'user',
-    content: 'What is in this image?',
-    attachments: [{ path: image }]
-  }
-]
+const unsupportedFormatHistory = (image: string) => [imageTurn('What is in this image?', image)]
 
 export const visionErrorUnsupportedFormat: TestDefinition = {
   testId: 'vision-error-unsupported-format',
