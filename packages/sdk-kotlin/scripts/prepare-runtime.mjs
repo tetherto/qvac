@@ -49,6 +49,7 @@ const pluginCapabilities = new Map([
   ['@qvac/sdk/tts-ggml/plugin', ['TTS']],
   ['@qvac/sdk/ggml-ocr/plugin', ['OCR']],
   ['@qvac/sdk/ggml-classification/plugin', ['CLASSIFICATION']],
+  ['@qvac/sdk/ggml-stereo-depth/plugin', ['STEREO_DEPTH']],
   ['@qvac/sdk/audiogen-ggml/plugin', ['AUDIO_GENERATION']],
   ['@qvac/sdk/sdcpp-generation/plugin', ['IMAGE_GENERATION', 'VIDEO_GENERATION', 'UPSCALING', 'WORLD']],
   ['@qvac/sdk/ggml-vla/plugin', ['VLA']],

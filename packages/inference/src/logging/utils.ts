@@ -76,6 +76,14 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
     return summary
   }
 
+  if (request.type === 'estimateDisparity') {
+    summary['left'] = `[${request.left.length} base64 chars]`
+    summary['right'] = `[${request.right.length} base64 chars]`
+    if (request.width !== undefined) summary['width'] = request.width
+    if (request.height !== undefined) summary['height'] = request.height
+    return summary
+  }
+
   if (request.type === 'embed' || request.type === 'embedBatch') {
     if (request.input !== undefined) {
       summary['input'] = '[1 embedding input]'
