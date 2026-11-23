@@ -25,6 +25,21 @@ function assessCase(family: string, dep: string, measured: boolean): TestDefinit
   }
 }
 
+/**
+ * `assessModelFit` for an engine whose fitter reads the model files and no
+ * registry description. It answers only once `loadModel` has downloaded them,
+ * so the case declares its dep to have them on disk and must reach a verdict.
+ */
+function filesOnlyCase(family: string, dep: string): TestDefinition {
+  return {
+    testId: `model-fit-${family}`,
+    params: { dep, measured: true },
+    expectation: { validation: 'type', expectedType: 'string' },
+    suites: ['smoke'],
+    metadata: { category: 'model-fit', dependency: dep, estimatedDurationMs: 20000 }
+  }
+}
+
 /** The fit check the load itself ran, read back off the resident model. */
 function probeCase(family: string, dep: string, measured: boolean): TestDefinition {
   return {
@@ -54,7 +69,9 @@ export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertoni
 
 export const modelFitWhisper = assessCase('whisper', 'whisper', true)
 export const modelFitBci = assessCase('bci', 'bci', true)
-export const modelFitTranslation = assessCase('translation', 'bergamot-en-fr', false)
+export const modelFitTranslation = filesOnlyCase('translation', 'bergamot-en-fr')
+export const modelFitClassification = filesOnlyCase('classification', 'classification')
+export const modelFitImageEmbedding = filesOnlyCase('image-embedding', 'image-embedding')
 
 export const modelFitProbeLlm = probeCase('llm', 'llm', true)
 export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', true)
@@ -72,6 +89,8 @@ export const modelFitProbeDiffusionEsrgan = probeCase(
 export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', true)
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', true)
 export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr', true)
+export const modelFitProbeClassification = probeCase('classification', 'classification', true)
+export const modelFitProbeImageEmbedding = probeCase('image-embedding', 'image-embedding', true)
 
 /**
  * Two measured engines assessed as one set, so their rows from two addons are
@@ -101,7 +120,9 @@ export const modelFitAssessTests = [
   modelFitOcr,
   modelFitWhisper,
   modelFitBci,
-  modelFitTranslation
+  modelFitTranslation,
+  modelFitClassification,
+  modelFitImageEmbedding
 ]
 
 export const modelFitProbeTests = [
@@ -116,7 +137,9 @@ export const modelFitProbeTests = [
   modelFitProbeDiffusionEsrgan,
   modelFitProbeUpscaler,
   modelFitProbeOcr,
-  modelFitProbeTranslation
+  modelFitProbeTranslation,
+  modelFitProbeClassification,
+  modelFitProbeImageEmbedding
 ]
 
 export const modelFitTests = [...modelFitAssessTests, modelFitTogether, ...modelFitProbeTests]

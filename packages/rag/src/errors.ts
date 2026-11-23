@@ -171,4 +171,4 @@ export function toRagError(error: unknown): QvacErrorRAG {
   })
 }
 
-addCodes(definitions, { name: '@qvac/rag', version: '0.10.0' })
+addCodes(definitions, { name: '@qvac/rag', version: '0.11.0' })

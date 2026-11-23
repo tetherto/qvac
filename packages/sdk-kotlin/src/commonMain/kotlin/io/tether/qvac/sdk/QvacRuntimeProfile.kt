@@ -19,6 +19,7 @@ enum class QvacCapability {
     TTS,
     OCR,
     CLASSIFICATION,
+    STEREO_DEPTH,
     AUDIO_GENERATION,
     IMAGE_GENERATION,
     VIDEO_GENERATION,
@@ -58,6 +59,7 @@ internal fun QvacRuntimeProfile.requirePayload(payload: JsonObject) {
         "textToSpeech", "textToSpeechStream" -> QvacCapability.TTS
         "ocrStream" -> QvacCapability.OCR
         "classify" -> QvacCapability.CLASSIFICATION
+        "estimateDisparity" -> QvacCapability.STEREO_DEPTH
         "audioGenStream" -> QvacCapability.AUDIO_GENERATION
         "diffusionStream" -> QvacCapability.IMAGE_GENERATION
         "videoStream" -> QvacCapability.VIDEO_GENERATION
@@ -96,6 +98,7 @@ private fun String.toCapability(): QvacCapability? = when (this) {
     "llm", "llamacpp-completion" -> QvacCapability.LLM
     "embeddings", "llamacpp-embedding" -> QvacCapability.EMBEDDINGS
     "ggml-image-embedding" -> QvacCapability.IMAGE_EMBEDDINGS
+    "ggml-stereo-depth" -> QvacCapability.STEREO_DEPTH
     "llamacpp-decision" -> QvacCapability.DECISION
     "llamacpp-rerank" -> QvacCapability.RERANK
     "whisper", "whispercpp-transcription", "parakeet", "parakeet-transcription",
