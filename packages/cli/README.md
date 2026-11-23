@@ -14,6 +14,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
   - [`serve`](#serve)
+  - [`app`](#app)
 - [Configuration](#configuration)
 - [System Requirements](#system-requirements)
 - [Development](#development)
@@ -429,6 +430,23 @@ Every request, `/openapi.json` included, must carry a `Host` header naming a loo
 The QVAC surface serves **`POST /qvac/v1/translate`**: text translation through an NMT alias whose `config` carries the `engine` and the `from` / `to` languages. `text` takes one string or an array, and `stream: true` emits Server-Sent Events. **`POST /qvac/v1/ocr`** reads the text in a PNG, JPEG or BMP image through an OCR alias. **`POST /qvac/v1/classifications`** ranks the labels for a PNG or JPEG image through a classification alias. **`/qvac/v1/audio/generations`** and **`/qvac/v1/audio/edits`** generate and edit music as async jobs through an `audiogen` alias, and **`POST /qvac/v1/audio/understandings`** describes a recording. It also serves **`GET /qvac/v1/system`** for the host's CPU, memory and GPU capacity, and **`POST /qvac/v1/models/fit`** to ask whether `serve.models` aliases or SDK model constants fit together before they are loaded. And it serves **`POST /qvac/v1/chat/batch`**: up to 64 chat prompts decoded together on one LLM alias, returned in prompt order. **`POST /qvac/v1/images/upscale`** upscales a PNG or JPEG through an ESRGAN alias loaded with `config.mode: "upscale"` and returns it in the `/v1/images` `b64_json` shape. **`GET /qvac/v1/registry/models`** browses and searches the live model registry, read-only. **`GET /qvac/v1/runtime/state`** and **`GET /qvac/v1/runtime/models`** report the runtime's lifecycle state and loaded models; **`POST /qvac/v1/runtime/suspend`** and **`/resume`** are admin-only and need `--enable-admin`.
 
 See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared configuration and model loading, the [QVAC surface](./docs/serve/default.md), and the [OpenAI-compatible surface](./docs/serve/openai.md) — supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
+
+### `app`
+
+Run the QV.AC app CLI. Every argument after `app` goes to it unchanged, including `--help` and `--version`.
+
+The app CLI calls itself `qvac-app` in its help and messages: where it says `qvac-app serve`, type `qvac app serve`.
+
+```bash
+qvac app [args...]
+```
+
+On first use the command downloads the compressed binary for this host from `https://static.tether.dev/qv.ac/latest/cli`, verifies its SHA-256 and size against the published manifest, and caches it unpacked under `~/.qvac/app-cli-bin`. It checks for a newer version at most once a day and keeps running the cached binary when that check fails.
+
+| Variable           | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| `QVAC_APP_CLI_URL` | Download location of the manifest and binaries (`https:` only). |
+| `QVAC_APP_CLI_DIR` | Cache directory (default: `~/.qvac/app-cli-bin`).               |
 
 ## Configuration
 
