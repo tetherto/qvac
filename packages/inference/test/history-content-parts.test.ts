@@ -115,6 +115,20 @@ test('transformMessages: a missing media part path is an AttachmentNotFoundError
   t.ok(refusal instanceof AttachmentNotFoundError, 'the caller gets the typed attachment error')
 })
 
+test('transformMessages: attachments are still sent before their text', (t) => {
+  withImages(({ a, b }) => {
+    const prompt = transformMessages([
+      { role: 'user', content: 'first', attachments: [{ path: a }] },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'second', attachments: [{ path: b }] }
+    ])
+    t.alike(
+      prompt.map((message) => message.content),
+      [a, 'first', 'ok', b, 'second']
+    )
+  })
+})
+
 test('generateCacheKey: part order and attachment order produce different keys', (t) => {
   const parts = (first: string, second: string) => [
     {

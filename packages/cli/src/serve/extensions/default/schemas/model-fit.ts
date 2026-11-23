@@ -56,7 +56,9 @@ const pool = z.looseObject({
 
 const modelResult = z.looseObject({
   model: z.string().describe('The alias or constant name as requested.'),
-  status: verdict.describe("The engine fitter's verdict for this model alone."),
+  status: verdict.describe(
+    "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory."
+  ),
   devices: z
     .array(device)
     .describe('One row per device the load uses, the host last. Empty when unknown.'),
@@ -79,7 +81,9 @@ export const modelFitResult = z.looseObject({
     .describe('The memory pools the verdict was judged on, with what the set takes from each.'),
   models: z
     .array(modelResult)
-    .describe("One entry per model, in request order: the engine addon's own fit result.")
+    .describe(
+      "One entry per model, in request order: the engine addon's fit result, with the model's verdict alone as its `status`."
+    )
 })
 
 export const MODEL_FIT_FIELD_CODES: Record<string, string> = {

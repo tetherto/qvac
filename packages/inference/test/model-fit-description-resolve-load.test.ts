@@ -10,6 +10,15 @@ import { definePlugin, type ResolveContext } from '@/schemas/plugin'
 import { ModelType } from '@/schemas/index'
 import { resolveLoadFromStubs } from '@/model-fit/description/resolve-load'
 import { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
+import { models, type RegistryItem } from '@/models/registry/models'
+import { getRuntimeContext } from '@/runtime/state'
+import {
+  getModelCacheLayout,
+  getSingleFileCacheName,
+  type ModelCacheLayout
+} from '@/utils/cache/layout'
+import { generateShortHash } from '@/utils/formatting'
+import { useTestCacheDir } from './fixtures/test-cache'
 
 function scratchFile(name: string): string {
   const dir = path.join(os.tmpdir(), `fit-load-${Math.random().toString(36).slice(2)}`)
@@ -17,6 +26,75 @@ function scratchFile(name: string): string {
   const file = path.join(dir, name)
   fs.writeFileSync(file, 'weights')
   return file
+}
+
+function layoutOf(entry: RegistryItem): ModelCacheLayout {
+  const layout = getModelCacheLayout(entry, getRuntimeContext().platform, generateShortHash)
+  if (layout === undefined) throw new Error(`${entry.name} has no cache layout`)
+  return layout
+}
+
+function smallestEntry(matches: (entry: RegistryItem) => boolean): RegistryItem {
+  const entry = (models as readonly RegistryItem[])
+    .filter(matches)
+    .sort((a, b) => a.expectedSize - b.expectedSize)[0]
+  if (entry === undefined) throw new Error('no catalog entry matches')
+  return entry
+}
+
+/**
+ * Lays out a catalog model in the test models cache the way the loader does,
+ * as sparse files of the registry sizes, and removes them on teardown.
+ */
+function cacheCatalogModel(
+  t: { teardown(fn: () => void): void },
+  entry: RegistryItem,
+  sizeOf: (size: number) => number = (size) => size
+): string {
+  const cacheDir = useTestCacheDir()
+  const layout = layoutOf(entry)
+  for (const file of layout.files) sparseFile(path.join(cacheDir, file.path), sizeOf(file.size))
+  t.teardown(() => fs.rmSync(path.join(cacheDir, layout.path), { recursive: true, force: true }))
+  return cacheDir
+}
+
+/**
+ * Lays out a companion set in the legacy flat cache, one file per registry
+ * path, and removes the files on teardown. Returns the primary file's path.
+ */
+function cacheLegacyFlatSet(t: { teardown(fn: () => void): void }, entry: RegistryItem): string {
+  const cacheDir = useTestCacheDir()
+  const { files, primaryKey } = entry.companionSet!
+  const paths = files.map((file) =>
+    path.join(cacheDir, getSingleFileCacheName(file.registryPath, generateShortHash))
+  )
+  files.forEach((file, index) => sparseFile(paths[index]!, file.expectedSize))
+  t.teardown(() => paths.forEach((file) => fs.rmSync(file, { force: true })))
+  return paths[files.findIndex((file) => file.key === primaryKey)]!
+}
+
+function sparseFile(target: string, size: number): void {
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  const fd = fs.openSync(target, 'w')
+  fs.ftruncateSync(fd, size)
+  fs.closeSync(fd)
+}
+
+function catalogSrc(entry: RegistryItem) {
+  return {
+    src: `registry://${entry.registrySource}/${entry.registryPath}`,
+    sha256Checksum: entry.sha256Checksum,
+    registryPath: entry.registryPath,
+    registrySource: entry.registrySource
+  }
+}
+
+const isTranslationSet = (entry: RegistryItem) =>
+  entry.addon === 'nmt' && entry.companionSet !== undefined
+
+const isSingleFile = (entry: RegistryItem) => {
+  const layout = getModelCacheLayout(entry, getRuntimeContext().platform, generateShortHash)
+  return layout?.files.length === 1 && layout.files[0]?.path === layout.path
 }
 
 /**
@@ -132,6 +210,33 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.reason, 'unresolvable-ref')
 })
 
+test('resolve load: a registry address names its catalog entry to the registry', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.llamacppCompletion))
+  const entry = smallestEntry(isSingleFile)
+  const looked: string[][] = []
+
+  const resolved = await resolveLoadFromStubs(
+    {
+      modelSrc: `registry://${entry.registrySource}/${entry.registryPath}`,
+      modelType: ModelType.llamacppCompletion,
+      modelConfig: {}
+    },
+    {
+      getEntry: async (registryPath, registrySource) => {
+        looked.push([registryPath, registrySource])
+        return null
+      }
+    }
+  )
+
+  t.alike(looked, [[entry.registryPath, entry.registrySource]])
+  t.is(resolved.status, 'no-stub')
+  if (resolved.status !== 'no-stub') return
+  t.is(resolved.reason, 'not-in-registry')
+})
+
 test('resolve load: a minimax pair on disk resolves to the artifacts its plugin loads', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)
@@ -182,6 +287,84 @@ test('resolve load: a translation source not on disk fetches no stub', async (t)
       registryPath: 'models/model.enfr.intgemm.alphas.bin',
       registrySource: 's3'
     },
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'no-stub')
+  if (resolved.status !== 'no-stub') return
+  t.is(resolved.reason, 'files-only-engine')
+})
+
+test('resolve load: a translation model in the legacy flat cache is read from there', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
+  const entry = smallestEntry(isTranslationSet)
+  const primary = cacheLegacyFlatSet(t, entry)
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: catalogSrc(entry),
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.is(resolved.modelPath, primary)
+  await resolved.release()
+})
+
+test('resolve load: a downloaded translation model is read from the models cache', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
+  const entry = smallestEntry(isTranslationSet)
+  const cacheDir = cacheCatalogModel(t, entry)
+  const primary = entry.companionSet!.files.find(
+    (file) => file.key === entry.companionSet!.primaryKey
+  )!
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: catalogSrc(entry),
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.is(resolved.modelPath, path.join(cacheDir, layoutOf(entry).path, primary.targetName))
+  await resolved.release()
+})
+
+test('resolve load: a downloaded single-file model is read from the models cache', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.llamacppCompletion))
+  const entry = smallestEntry(isSingleFile)
+  const cacheDir = cacheCatalogModel(t, entry)
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: catalogSrc(entry),
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.is(resolved.modelPath, path.join(cacheDir, layoutOf(entry).path))
+  await resolved.release()
+})
+
+test('resolve load: a partly downloaded model in the cache is not read', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
+  const entry = smallestEntry(isTranslationSet)
+  cacheCatalogModel(t, entry, (size) => size - 1)
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: catalogSrc(entry),
     modelType: ModelType.nmtcppTranslation,
     modelConfig: {}
   })

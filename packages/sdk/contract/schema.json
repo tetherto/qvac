@@ -640,7 +640,7 @@
               "status": {
                 "type": "string",
                 "enum": ["fits", "does-not-fit", "unknown"],
-                "description": "The engine fitter's verdict for this model alone.",
+                "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                 "title": "ModelFitModelResultStatus"
               },
               "devices": {
@@ -709,6 +709,10 @@
                   }
                 ],
                 "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+              },
+              "reason": {
+                "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                "type": "string"
               }
             },
             "required": ["status", "devices", "stats"],
@@ -2602,7 +2606,8 @@
                       ]
                     },
                     "attachments": {
-                      "description": "Optional file attachments for multimodal models.",
+                      "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                      "deprecated": true,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -4724,7 +4729,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -5508,7 +5514,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -9882,7 +9889,7 @@
                       "status": {
                         "type": "string",
                         "enum": ["fits", "does-not-fit", "unknown"],
-                        "description": "The engine fitter's verdict for this model alone.",
+                        "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                         "title": "ModelFitProbeModelStatus"
                       },
                       "devices": {
@@ -9951,6 +9958,10 @@
                           }
                         ],
                         "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      },
+                      "reason": {
+                        "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                        "type": "string"
                       }
                     },
                     "required": ["status", "devices", "stats"],
