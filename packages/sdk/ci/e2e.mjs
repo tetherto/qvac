@@ -2,7 +2,7 @@
 // One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families, sdk-python's python
 // family and sdk-kotlin's kotlin family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm
 // installs, the consumer and the producer run over MQTT, and the results are checked and compared with the newest
-// dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache|seed>. CI_MODELS_PHASE=plan installs and plans
+// dispatch run on the base branch. Usage: node ci/e2e.mjs <family|seed>. CI_MODELS_PHASE=plan installs and plans
 // the leg's models; the run then reuses the install (see _desktop.yml).
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -527,13 +527,6 @@ function bootstrap(family, env, plan) {
 }
 
 async function main(family, env) {
-  // sdk-python's cache:models: the desktop bootstrap alone.
-  if (family === 'cache') {
-    const e = modelCache(prepare(env))
-    run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
-    run('npx', ['qvac-test', 'run:bootstrap:desktop', '--config=.'], { cwd: E2E, env: e })
-    return
-  }
   // on-merge-sdk-e2e-model-cache.yml: install and plan every family it seeds.
   if (family === 'seed') {
     const e = modelCache(prepare(env))

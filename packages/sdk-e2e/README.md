@@ -290,8 +290,8 @@ gh workflow run sdk-e2e.yml --ref <branch> -f languages=js,kotlin -f platforms=a
 
 ### Model cache
 
-A leg restores only the models its own tests need, one cache entry per model. The sdk's `test:integration`
-sets `metadata.modelCache.plan`, so `_desktop.yml` runs it twice:
+A leg restores only the models its own tests need, one cache entry per model. Every language's
+`test:integration` sets `metadata.modelCache.plan`, so `_desktop.yml` runs it twice:
 
 1. With `CI_MODELS_PHASE=plan`, `e2e.mjs` installs and builds, then `scripts/model-cache-plan.mjs` resolves
    the leg's tests (suite, filter, impacted ids), their model deps and each model's files in
