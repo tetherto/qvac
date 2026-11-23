@@ -30,7 +30,9 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   sends `cache_share_across_keys: false` when it is omitted, so a keyed request
   reuses only its own state and a keyless request starts cold and resets. Set it
   to `true` to let any request reuse the longest prefix held by another
-  conversation; keyless state then remains available in model memory.
+  conversation; keyless state then remains available in model memory. The
+  setting stays part of the model id, but not of the cache folder name, so
+  turning it on keeps reading the files existing conversations already wrote.
 
 Implementation and focused tests are authoritative for the current cache format.
 

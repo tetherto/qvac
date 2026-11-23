@@ -5,6 +5,7 @@ import {
   type CacheMessage,
   getAutoCacheLookupHistory,
   getKVCacheDir,
+  kvCacheDirIdFor,
   validateAndJoinPath
 } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
@@ -61,7 +62,7 @@ export function resolveCacheFilePath(
 ): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
-  const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
+  const modelCacheDir = validateAndJoinPath(sessionCacheDir, kvCacheDirIdFor(modelId))
   return path.join(modelCacheDir, `${configHash}.bin`)
 }
 
@@ -186,7 +187,9 @@ export async function deleteCache(
   // empty/dot modelId collapses back to that same dir and would silently broaden
   // the delete — reject it.
   const targetDir =
-    options.modelId !== undefined ? validateAndJoinPath(kvCacheDir, options.modelId) : kvCacheDir
+    options.modelId !== undefined
+      ? validateAndJoinPath(kvCacheDir, kvCacheDirIdFor(options.modelId))
+      : kvCacheDir
   if (options.modelId !== undefined && path.resolve(targetDir) === path.resolve(kvCacheDir)) {
     throw new PathTraversalError(options.modelId, kvCacheDir)
   }
