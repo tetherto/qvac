@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.38.0] - 2026-11-22
+
+### Features
+
+- Add Fibo 2.0 Edit Turbo image editing with a checksum-verified model
+  downloader, a four-step editing example, and setup documentation
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+- Expose the `flux` scheduler in the addon API and TypeScript declarations
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+
+### Fixes
+
+- Route Fibo input images through the engine's reference-image path, enabling
+  single-image editing and multiple references
+  ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [engine #74](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/74)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#3` for the Fibo reference-image
+  capability fix ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [registry #507](https://github.com/tetherto/qvac-registry-vcpkg/pull/507)).
+
 ## [0.37.1] - 2026-11-20
 
 ### Features

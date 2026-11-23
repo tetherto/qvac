@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+## [0.11.1] - 2026-11-23
+
+### Fixed
+
+- The platform packages (`@qvac/audiogen-ggml-<host>`) now declare the matching
+  `@qvac/fabric-<host>` as an optional peer dependency. Without it bare-link
+  left the fabric runtime reference unresolved in a mobile application, and the
+  addon failed to load on Android (`CANNOT_LOAD`) and iOS
+  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`)
+  ([#5902](https://github.com/tetherto/qvac/pull/5902)).
+
 ## [0.11.0] - 2026-11-18
 
 ### Changed

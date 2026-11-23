@@ -46,6 +46,12 @@ EM_JS(
                  : 0;
     });
 
+// Reads cancellation state owned by binding.browser.js without entering
+// WebAssembly again while qvac_web_run is suspended.
+EM_JS(int, qvac_web_cancelled, (int handle, int jobId), {
+  return Module.qvacCancelled(handle, jobId) ? 1 : 0;
+});
+
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -213,6 +219,16 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_activate(int handle) {
   }
 }
 
+EMSCRIPTEN_KEEPALIVE int qvac_web_validate(int handle, const char* messages) {
+  try {
+    instance(handle);
+    parsePrompt(json::parse(messages));
+    return 0;
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
 // Runs one job to completion, streaming `Output` events and ending with a
 // `JobEnded` (runtime stats) or `Error` event, all tagged with @p jobId.
 EMSCRIPTEN_KEEPALIVE int
@@ -221,8 +237,16 @@ qvac_web_run(int handle, int jobId, const char* messages) {
     LlamaModel& model = instance(handle);
     LlamaModel::Prompt prompt = parsePrompt(json::parse(messages));
     auto lastYield = Clock::now();
+    auto cancelRequested = [handle, jobId, &lastYield] {
+      if (Clock::now() - lastYield >= K_YIELD_INTERVAL) {
+        emscripten_sleep(0);
+        lastYield = Clock::now();
+      }
+      return qvac_web_cancelled(handle, jobId) != 0;
+    };
+    prompt.cancelRequested = cancelRequested;
     prompt.outputCallback =
-        [&model, handle, jobId, &lastYield](const std::string& text) {
+        [&model, handle, jobId, cancelRequested](const std::string& text) {
           bool stop = qvac_web_emit(
                           handle,
                           jobId,
@@ -230,12 +254,8 @@ qvac_web_run(int handle, int jobId, const char* messages) {
                           sizeof("Output") - 1,
                           text.data(),
                           static_cast<int>(text.size())) != 0;
-          if (!stop && Clock::now() - lastYield >= K_YIELD_INTERVAL) {
-            emscripten_sleep(0);
-            lastYield = Clock::now();
-            stop = qvac_web_emit(
-                       handle, jobId, "Poll", sizeof("Poll") - 1, "", 0) != 0;
-          }
+          if (!stop)
+            stop = cancelRequested();
           if (stop)
             model.cancel();
         };

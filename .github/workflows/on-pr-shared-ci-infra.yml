@@ -11,6 +11,8 @@ on:
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/workflows/_build.yml"
       - ".github/scripts/lib/resolve-fabric-binary.mjs"
+      - ".github/scripts/prebuild-reuse.mjs"
+      - ".github/scripts/test/prebuild-reuse.test.mjs"
       - ".github/scripts/test/released-provider-install.test.mjs"
       - ".github/scripts/test/resolve-fabric-binary.test.mjs"
       - ".github/actions/cache-models/**"
@@ -138,6 +140,8 @@ jobs:
           run_install: false
       - name: Test release provider installation and resolution
         run: node --test .github/scripts/test/released-provider-install.test.mjs .github/scripts/test/resolve-fabric-binary.test.mjs
+      - name: Test prebuild cache reuse keys
+        run: node --test .github/scripts/test/prebuild-reuse.test.mjs
       - name: Run CI script unit tests
         run: node --test scripts/ci/__tests__/*.test.cjs
       - name: Validate shared agent configuration

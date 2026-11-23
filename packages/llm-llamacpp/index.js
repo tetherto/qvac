@@ -333,6 +333,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     _rejectWhenBusy;
     _jobSinks;
     _batchHandler;
+    _pendingCleanup;
     _checkpointSaveDir;
     constructor({ files, config, logger = null, opts = {} }) {
         this._modelPath = validateModelPath(files?.model);
@@ -355,6 +356,7 @@ const LlmLlamacpp = class LlmLlamacpp {
         this._finetuneJob = (0, infer_base_1.createJobHandler)({ cancel: () => this.addon?.cancel() });
         this._run = (0, infer_base_1.exclusiveRunQueue)();
         this.addon = null;
+        this._pendingCleanup = new Set();
         this._checkpointSaveDir = null;
         // Concurrency is the caller's configured `parallel` (n_seq_max); values
         // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
@@ -799,13 +801,33 @@ const LlmLlamacpp = class LlmLlamacpp {
                 // Native cleanup is unconditional: whatever settlement does, the
                 // addon must be released and the instance left cleanly unloaded.
                 this._jobSinks.clear();
-                if (this.addon) {
-                    await this.addon.unload();
-                    // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-                    // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-                    this.addon = null;
+                const currentAddon = this.addon;
+                const cleanup = new Set(this._pendingCleanup);
+                if (currentAddon)
+                    cleanup.add(currentAddon);
+                this._pendingCleanup.clear();
+                let cleanupError = null;
+                try {
+                    for (const addon of cleanup) {
+                        try {
+                            await addon.unload();
+                        }
+                        catch (error) {
+                            this._pendingCleanup.add(addon);
+                            cleanupError ??= error;
+                        }
+                    }
                 }
-                this.state.configLoaded = false;
+                finally {
+                    // Reset JavaScript state even when native cleanup reports an error.
+                    // A later load must create a new addon instead of reusing a disposed
+                    // or partially destroyed handle.
+                    if (this.addon === currentAddon)
+                        this.addon = null;
+                    this.state.configLoaded = false;
+                }
+                if (cleanupError)
+                    throw cleanupError;
             }
         });
     }

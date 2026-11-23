@@ -11,6 +11,8 @@ const { spawnSync } = require('node:child_process')
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const PACKAGE_JSON_PATH = path.join(PACKAGE_ROOT, 'package.json')
 const PATCHED_BROTLI_BASELINE = '61d7eaeb094a6acbc23d9c2e54de9208175fda47'
+// First OpenCV release whose PNG decoder bounds-checks APNG frames.
+const PATCHED_OPENCV_VERSION = '4.12.0'
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const JAVASCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.mjs'])
 const IMPORT_PATTERNS = [
@@ -146,6 +148,29 @@ test('Brotli resolves exclusively from its patched native registry', () => {
   assert.equal(registries[0].repository, 'https://github.com/microsoft/vcpkg')
   assert.equal(registries[0].baseline, PATCHED_BROTLI_BASELINE)
   assert.deepEqual(registries[0].packages, ['brotli'])
+})
+
+function compareVersions(left, right) {
+  const leftParts = left.split('#')[0].split('.').map(Number)
+  const rightParts = right.split('#')[0].split('.').map(Number)
+  for (let i = 0; i < Math.max(leftParts.length, rightParts.length); i++) {
+    const difference = (leftParts[i] || 0) - (rightParts[i] || 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+test('OpenCV is floored at the release that bounds-checks APNG frames', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'vcpkg.json'), 'utf8'))
+  const opencv = manifest.dependencies.find((dependency) => dependency.name === 'opencv4')
+
+  assert.ok(opencv, 'vcpkg.json must depend on opencv4')
+  const floor = opencv['version>=']
+  assert.equal(typeof floor, 'string', 'opencv4 needs a version>= floor')
+  assert.ok(
+    compareVersions(floor, PATCHED_OPENCV_VERSION) >= 0,
+    `opencv4 floor ${floor} is below ${PATCHED_OPENCV_VERSION}`
+  )
 })
 
 test('published files declare every external runtime module', () => {

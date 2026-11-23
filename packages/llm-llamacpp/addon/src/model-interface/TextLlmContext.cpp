@@ -523,14 +523,15 @@ size_t TextLlmContext::countChatTokens(
 
 LlmContext::EvalMessageResult TextLlmContext::evalMessage(
     const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-    bool prefill) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
+    bool prefill, const CancelRequested& cancelRequested) {
+  return evalMessageWithTools(
+      chatMsgs, {}, isCacheLoaded, prefill, cancelRequested);
 }
 
 LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-    bool prefill) {
+    bool prefill, const CancelRequested& cancelRequested) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();
@@ -578,7 +579,10 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   const auto prefillStart = std::chrono::steady_clock::now();
   llama_pos count = nPast_;
   llama_pos tokenIndex = 0;
-  while (tokenIndex < nTokens) {
+  while (tokenIndex < nTokens || stopGeneration_.load()) {
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     if (stopGeneration_.load()) {
       if (cacheRequestActive_) {
         // Cached request cancelled before it produced anything: restore the
@@ -666,6 +670,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
 
     nPast_ += textBatch->n_tokens;
     lastPromptTokenCount_ += textBatch->n_tokens;
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
     if (checkpointAt.has_value() && tokenIndex == *checkpointAt) {
       captureHistoryCheckpoint(nPast_);

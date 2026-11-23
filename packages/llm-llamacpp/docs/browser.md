@@ -21,6 +21,17 @@ browser:
 runtime. A bundler emits both variants, but the browser fetches only the one
 it selects. Each `.wasm` file must remain next to its matching `.mjs` loader.
 
+Vite preserves that loader-to-Wasm layout automatically. Plain esbuild emits
+the loader chunks but does not copy files referenced through `new URL()`.
+After an esbuild bundle, copy both binaries from
+`node_modules/@qvac/llm-llamacpp/prebuilds/web/` into the directory containing
+the emitted loader chunks:
+
+```sh
+cp node_modules/@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp.wasm dist/
+cp node_modules/@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp-64.wasm dist/
+```
+
 ## Requirements
 
 - Run it in a **Dedicated Worker**. Between GPU waits the engine runs on the
@@ -38,16 +49,14 @@ it selects. Each `.wasm` file must remain next to its matching `.mjs` loader.
 
 ## Model files
 
-Model paths are absolute paths in the origin private file system (OPFS), or
-paths registered by the SDK for user-selected browser `File` objects.
+Model paths are absolute paths in the origin private file system (OPFS).
 `/models/qwen.gguf` refers to `models/qwen.gguf` under
 `navigator.storage.getDirectory()`. Files are mounted read-only into the
 engine and read on demand; they are not copied whole into WebAssembly memory.
 
 For a sharded GGUF, pass the first shard path only. Every shard must be in the
-same OPFS directory, or registered by the SDK in the same virtual directory,
-with its original `*-00001-of-000NN.gguf` name. The binding verifies that the
-set is complete before loading it.
+same OPFS directory with its original `*-00001-of-000NN.gguf` name. The
+binding verifies that the set is complete before loading it.
 
 `files.projectionModel`, `config.lora`, and
 `config.spec_draft_model`/`config['spec-draft-model']` use the same absolute

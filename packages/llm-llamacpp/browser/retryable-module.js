@@ -3,7 +3,7 @@
 function retryableModule(factory) {
   let pending = null
 
-  return function () {
+  function load() {
     if (!pending) {
       const current = Promise.resolve().then(factory)
       pending = current
@@ -13,6 +13,12 @@ function retryableModule(factory) {
     }
     return pending
   }
+
+  load.reset = () => {
+    pending = null
+  }
+
+  return load
 }
 
 module.exports = retryableModule

@@ -2,16 +2,25 @@
 
 const assert = require('node:assert/strict')
 const { execFile } = require('node:child_process')
-const { mkdtemp, mkdir, rm, writeFile } = require('node:fs/promises')
+const { copyFile, mkdtemp, mkdir, readdir, rm, writeFile } = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
 const { promisify } = require('node:util')
 const { pathToFileURL } = require('node:url')
 const test = require('node:test')
 const { build } = require('esbuild')
+const npmCommand = require('../npm-command.cjs')
 
 const exec = promisify(execFile)
 const packageRoot = path.resolve(__dirname, '../..')
+
+test('npm commands use the JavaScript CLI on Windows', () => {
+  assert.deepEqual(
+    npmCommand('win32', { npm_execpath: 'C:\\npm\\bin\\npm-cli.js' }, 'C:\\node\\node.exe'),
+    { command: 'C:\\node\\node.exe', prefix: ['C:\\npm\\bin\\npm-cli.js'] }
+  )
+  assert.deepEqual(npmCommand('linux', {}, '/usr/bin/node'), { command: 'npm', prefix: [] })
+})
 
 test('browser prebuild validator requires both matching engine pairs', async (t) => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'llm-llamacpp-web-prebuild-'))
@@ -53,7 +62,8 @@ test('packed package root bundles for a browser without native Bare bindings', a
   await mkdir(packDir)
   await mkdir(extractDir)
 
-  const packed = await exec('npm', ['pack', '--json', '--pack-destination', packDir], {
+  const { command, prefix } = npmCommand()
+  const packed = await exec(command, [...prefix, 'pack', '--json', '--pack-destination', packDir], {
     cwd: packageRoot
   })
   const [{ filename }] = JSON.parse(packed.stdout)
@@ -63,11 +73,21 @@ test('packed package root bundles for a browser without native Bare bindings', a
     absWorkingDir: packageRoot,
     bundle: true,
     entryPoints: [path.join(extractDir, 'package', 'index.js')],
-    external: ['./prebuilds/web/*'],
     format: 'esm',
     logLevel: 'silent',
     nodePaths: [path.join(packageRoot, 'node_modules')],
     platform: 'browser',
+    plugins: [
+      {
+        name: 'external-web-engines',
+        setup(build) {
+          build.onResolve({ filter: /prebuilds\/web\// }, ({ path: enginePath }) => ({
+            external: true,
+            path: enginePath
+          }))
+        }
+      }
+    ],
     write: false
   })
   const bundle = result.outputFiles.map((file) => file.text).join('\n')
@@ -77,4 +97,48 @@ test('packed package root bundles for a browser without native Bare bindings', a
   const bundlePath = path.join(temp, 'bundle.mjs')
   await writeFile(bundlePath, bundle)
   await assert.doesNotReject(() => import(pathToFileURL(bundlePath)))
+})
+
+test('documented esbuild asset copy produces both deployable browser engines', async (t) => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'llm-llamacpp-esbuild-assets-'))
+  t.after(() => rm(temp, { force: true, recursive: true }))
+  const output = path.join(temp, 'dist')
+  const browser = path.join(temp, 'browser')
+  const prebuilds = path.join(temp, 'prebuilds', 'web')
+  const entry = path.join(temp, 'worker.js')
+  await mkdir(browser)
+  await mkdir(prebuilds, { recursive: true })
+  await copyFile(
+    path.join(packageRoot, 'browser', 'create-engine.js'),
+    path.join(browser, 'create-engine.js')
+  )
+  await writeFile(entry, "import createEngine from './browser/create-engine.js'; void createEngine")
+
+  for (const variant of ['llm-llamacpp', 'llm-llamacpp-64']) {
+    await writeFile(
+      path.join(prebuilds, `${variant}.mjs`),
+      `new URL('./${variant}.wasm', import.meta.url); export default function createEngine() {}`
+    )
+    await writeFile(path.join(prebuilds, `${variant}.wasm`), variant)
+  }
+
+  await build({
+    bundle: true,
+    entryPoints: [entry],
+    format: 'esm',
+    logLevel: 'silent',
+    outdir: output,
+    platform: 'browser',
+    splitting: true
+  })
+
+  for (const name of ['llm-llamacpp.wasm', 'llm-llamacpp-64.wasm']) {
+    await copyFile(path.join(prebuilds, name), path.join(output, name))
+  }
+
+  const files = await readdir(output)
+  assert.ok(files.some((name) => /^llm-llamacpp-[A-Z0-9]+\.js$/.test(name)))
+  assert.ok(files.some((name) => /^llm-llamacpp-64-[A-Z0-9]+\.js$/.test(name)))
+  assert.ok(files.includes('llm-llamacpp.wasm'))
+  assert.ok(files.includes('llm-llamacpp-64.wasm'))
 })

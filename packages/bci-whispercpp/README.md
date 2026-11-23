@@ -366,7 +366,10 @@ for cache warming and resource settings.
 
 On CPU the integration suite runs only brief inference, one decode per test.
 The WER sweep, the multi-window streaming tests and the accuracy regression
-run on the GPU and are skipped when `NO_GPU=true`.
+run on the GPU and are skipped when `NO_GPU=true`. With `NO_GPU=true` the
+remaining `addon.test.js` tests request `use_gpu: false`, so a CPU-only runner
+that still exposes a GPU device (the darwin-x64 VM's Metal "Apple Paravirtual
+device") decodes on the CPU backend.
 
 ```bash
 # JS unit tests
