@@ -79,16 +79,11 @@ jobs:
       fork: ${{ steps.pr.outputs.fork }}
       draft: ${{ steps.pr.outputs.draft }}
       labels: ${{ steps.pr.outputs.labels }}
+      base-ref: ${{ steps.pr.outputs.base-ref }}
       action: ${{ steps.pr.outputs.action }}
       label: ${{ steps.pr.outputs.label }}
       event: ${{ steps.pr.outputs.event }}
-      kind: >-
-        ${{ steps.pr.outputs.action != 'labeled' && 'base'
-          || (steps.pr.outputs.label == 'test-e2e-rerun-failed' && 'rerun')
-          || (steps.pr.outputs.label == 'test-e2e-smoke' && 'base')
-          || (steps.pr.outputs.label == 'test-e2e-full' && 'base')
-          || (steps.pr.outputs.label == 'test-e2e-python' && 'probe')
-          || format('ignored-{0}', steps.pr.outputs.label) }}
+      kind: ${{ steps.kind.outputs.kind }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -102,7 +97,41 @@ jobs:
           github-token: ${{ github.token }}
           branches: main, release-*, feature-*, tmp-*
           paths: packages/sdk/ packages/sdk-e2e/ packages/inference/ packages/test-suite/ packages/sdk-python/ packages/sdk-kotlin/
-          status-context: qvac/sdk-e2e
+      # main's kinds of run: a newer run of the same kind cancels this one's tests.
+      - id: kind
+        if: steps.pr.outputs.ok == 'true'
+        env:
+          ACTION: ${{ steps.pr.outputs.action }}
+          LABEL: ${{ steps.pr.outputs.label }}
+        run: |
+          kind=base
+          if [ "$ACTION" = labeled ]; then
+            case "$LABEL" in
+              test-e2e-rerun-failed) kind=rerun ;;
+              test-e2e-smoke | test-e2e-full) kind=base ;;
+              test-e2e-python) kind=probe ;;
+              *) kind="ignored-$LABEL" ;;
+            esac
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+      # Only a PR's base or rerun run reports qvac/sdk-e2e, so a probe, an ignored label or a dispatch never replaces
+      # its result; report, which finishes the status, also needs the PR.
+      - if: >-
+          steps.pr.outputs.refused != '' ||
+          (steps.pr.outputs.ok == 'true' && steps.pr.outputs.pr != '' &&
+          contains(fromJSON('["base","rerun"]'), steps.kind.outputs.kind))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          REFUSED: ${{ steps.pr.outputs.refused }}
+          FORK: ${{ steps.pr.outputs.fork }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=pending; description=Running
+          [ "$FORK" != true ] || description="Waiting for fork-ci approval"
+          [ -z "$REFUSED" ] || { state=failure; description="${REFUSED:0:140}"; }
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=qvac/sdk-e2e \
+            -f description="$description" -f target_url="$RUN_URL" > /dev/null
 
   select:
     needs: context
@@ -285,6 +314,7 @@ jobs:
       toolchain: false
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.sha }}
+      base-ref: ${{ needs.context.outputs.base-ref }}
 
   # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
   # drives it over MQTT, as main's SDK Device Farm workflows did.
@@ -328,6 +358,8 @@ jobs:
       MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
       MQTT_PORT: ${{ vars.MQTT_PORT }}
       GITHUB_TOKEN: ${{ github.token }}
+      # The PR's base for the baseline comparison; a workflow_run build has no GITHUB_BASE_REF.
+      CI_BASE_REF: ${{ needs.context.outputs.base-ref }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -520,7 +552,8 @@ jobs:
           LEGS_OK: ${{ !contains(fromJSON('["failure","cancelled"]'), needs.desktop.result) && !contains(fromJSON('["failure","cancelled"]'), needs.mobile.result) }}
           PR_EVENT: ${{ needs.context.outputs.event }}
         run: node packages/sdk/ci/e2e-report.mjs report
-      - if: "!cancelled() && needs.context.outputs.pr != ''"
+      - if: >-
+          !cancelled() && needs.context.outputs.pr != '' && contains(fromJSON('["base","rerun"]'), needs.context.outputs.kind)
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ needs.context.outputs.sha }}

@@ -3,9 +3,9 @@ name: Check Approvals
 on:
   issue_comment:
     types: [created]
-  # Each PR checks run starts the default branch's copy with the App key, for fork PRs as well; it checks out nothing.
+  # Each PR events run starts the default branch's copy with the App key, for fork PRs as well; it checks out nothing.
   workflow_run:
-    workflows: [PR checks]
+    workflows: [PR events]
     types: [requested]
 
 permissions:

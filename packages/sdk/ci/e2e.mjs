@@ -173,7 +173,9 @@ export async function compareBaseline({ env, workflow, artifact, reports, label 
     const event = env.GITHUB_EVENT_PATH
       ? JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
       : {}
+    // CI_BASE_REF: a workflow_run build's PR base, which GITHUB_BASE_REF leaves empty.
     const base =
+      env.CI_BASE_REF ||
       env.GITHUB_BASE_REF ||
       (env.GITHUB_REF_NAME !== event.repository?.default_branch
         ? event.repository?.default_branch

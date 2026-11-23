@@ -33,6 +33,10 @@ on:
         description: Install the locked bare toolchain; false for callers whose tests compile nothing
         type: boolean
         default: true
+      base-ref:
+        description: The PR's base branch, as CI_BASE_REF; a workflow_run build has no GITHUB_BASE_REF to read it from
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -197,6 +201,7 @@ jobs:
           # true when the model restore hit its exact key, so a package that downloads its own models can skip it.
           MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit }}
           PERF_RUNS: ${{ inputs.perf_runs }}
+          CI_BASE_REF: ${{ inputs.base-ref }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
           ARGS: ${{ inputs.args }}
         # Exported only when set, so an empty input never overrides a package default.
