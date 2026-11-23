@@ -351,16 +351,16 @@ function destroyInstance(handle) {
     // the native instance and mounting its files.
     const engine = handle.engine
     const native = handle.native
-    handle.native = 0
-    engine?.instances.delete(native)
-    let cleanupError = null
     if (native && !handle.failure) {
       try {
         await call(handle, 'qvac_web_destroy', ['number'], [native])
       } catch (error) {
-        if (!handle.failure) cleanupError = error
+        if (!handle.failure) throw error
       }
     }
+    handle.native = 0
+    engine?.instances.delete(native)
+    let cleanupError = null
     const module = engine?.module
     if (module) {
       try {

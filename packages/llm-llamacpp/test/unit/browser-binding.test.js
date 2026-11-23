@@ -444,7 +444,7 @@ test('healthy unload retains failed filesystem cleanup for retry', async (t) => 
   t.is(loads, 1)
 })
 
-test('ordinary destroy failures clean mounts and remain retryable', async (t) => {
+test('ordinary destroy failures retain native resources and remain retryable', async (t) => {
   let failDestroy = false
   let loads = 0
   const isolated = isolatedBinding(() => {
@@ -470,9 +470,16 @@ test('ordinary destroy failures clean mounts and remain retryable', async (t) =>
     failDestroy = true
     await t.exception.all(() => isolated.destroyInstance(failed), /destroy failed/)
     t.ok(failed.engine, `engine retained iteration ${iteration + 1}`)
-    t.is(failed.mounts.length, 0, `mounts cleared iteration ${iteration + 1}`)
+    t.is(failed.native, 1, `native handle retained iteration ${iteration + 1}`)
+    t.alike(
+      failed.mounts,
+      [`/qvac-files/${iteration}`],
+      `mount retained iteration ${iteration + 1}`
+    )
     await isolated.destroyInstance(failed)
     t.is(failed.engine, null, `retry detached iteration ${iteration + 1}`)
+    t.is(failed.native, 0, `retry cleared native handle iteration ${iteration + 1}`)
+    t.alike(failed.mounts, [], `retry cleared mount iteration ${iteration + 1}`)
 
     const recovered = isolated.createInstance({}, {}, () => {})
     await isolated.activate(recovered)
