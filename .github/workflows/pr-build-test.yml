@@ -1,5 +1,5 @@
 name: PR build and test
-# Carries the PR head, which Merge Guard finds this run by.
+# Carries the PR head: Merge Guard finds this run by it, and prebuild-reuse.mjs checks it before reusing a PR artifact.
 run-name: PR build and test ${{ github.event.workflow_run.head_sha || github.ref_name }}
 
 # Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
@@ -33,7 +33,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: read
       pull-requests: read
       statuses: write
     outputs:
@@ -144,6 +143,7 @@ jobs:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
@@ -165,6 +165,7 @@ jobs:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:

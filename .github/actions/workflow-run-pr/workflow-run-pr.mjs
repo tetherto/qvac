@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The pull request a workflow_run build is for, read from the API. From the triggering run it takes only the head SHA,
-// repository and branch; its conclusion, outputs and artifacts are never read, since a fork can name a workflow alike.
+// repository, branch and run name; its conclusion, outputs and artifacts are never read, since a fork can name a
+// workflow alike.
 
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -27,25 +28,15 @@ export function matchPr(pulls, { headSha, headRepo, repo, branches }) {
   return { pr }
 }
 
-// The label a run was triggered by: the newest label applied between the gate run before the triggering one on this
-// commit and the triggering run. With no earlier gate run the commit was pushed; with one and no label, the PR was
-// reopened or readied. Timestamps are whole seconds, so a label in the earlier run's second still counts.
-export function triggerEvent({ gateRuns, labelEvents, trigger }) {
-  const prev = gateRuns
-    .filter((r) => r.id < trigger.id)
-    .sort((a, b) => a.id - b.id)
-    .pop()
-  if (!prev) return { action: 'synchronize', label: '' }
-  const since = Date.parse(prev.created_at)
-  const until = Date.parse(trigger.created_at)
-  const label = labelEvents
-    .filter((e) => {
-      const t = Date.parse(e.created_at)
-      return t >= since && t <= until
-    })
-    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
-    .pop()
-  return label ? { action: 'labeled', label: label.label.name } : { action: 'reopened', label: '' }
+// PR checks names each run `[<action>] <title>`, or `[labeled: <label>] <title>`.
+export const RUN_NAME = /^\[([a-z_]+)(?:: (.+?))?\] /
+
+// The PR event a run stands for, from its trigger's run name. The PR's own workflow file sets that name, so a label
+// counts only while it is on the PR, and a fork's run is a push unless it names a label the PR has.
+export function triggerEvent(title, labels, fork) {
+  const [, action = 'synchronize', label = ''] = RUN_NAME.exec(title) ?? []
+  if (action === 'labeled') return { action, label: labels.includes(label) ? label : '' }
+  return { action: fork ? 'synchronize' : action, label: '' }
 }
 
 export const touchesCi = (files) =>
@@ -153,16 +144,17 @@ async function main(env) {
     return skip(`PR #${pr.number} changes nothing under ${prefixes.join(' ')}`)
   const fork = !same(pr.head.repo.full_name, repo)
 
-  // The gate's runs on this commit, from its own workflow file; the triggering one is named by the event.
-  const trigger = { id: Number(env.TRIGGER_ID), created_at: env.TRIGGER_CREATED_AT }
-  const gateRuns = await gh.all(
-    `repos/${repo}/actions/workflows/${env.GATE_WORKFLOW}/runs?event=pull_request&head_sha=${headSha}`,
-    'workflow_runs'
+  // The event payload still holds the PR title at this point; the API has the run name once it is evaluated.
+  let title = ''
+  for (let i = 0; i < 5 && !RUN_NAME.test(title); i++) {
+    if (i) await new Promise((resolve) => setTimeout(resolve, 3000))
+    title = (await gh.get(`repos/${repo}/actions/runs/${env.TRIGGER_ID}`)).display_title ?? ''
+  }
+  let { action, label } = triggerEvent(
+    title,
+    pr.labels.map((l) => l.name),
+    fork
   )
-  const labelEvents = (await gh.all(`repos/${repo}/issues/${pr.number}/events`)).filter(
-    (e) => e.event === 'labeled' && e.label
-  )
-  let { action, label } = triggerEvent({ gateRuns, labelEvents, trigger })
   // A label this workflow does not route by reruns it as a push would.
   const routed = list(env.LABELS)
   if (label && routed.length && !routed.includes(label))

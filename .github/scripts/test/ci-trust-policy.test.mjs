@@ -332,7 +332,7 @@ test("authorize-pr: external fork with pod label requires label and SHA", () => 
 });
 
 // The SDK's label-routed e2e (sdk-python's test-e2e-full GPU legs among them) runs from pr-build-test.yml.
-test("label-routed e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
+test("label-routed e2e: no stale-label synchronize run; checkout pinned to head SHA", async () => {
   // A label routes only on the event that applied it, so a stale label never
   // re-runs a new, unreviewed SHA on the self-hosted GPU runners.
   assert.match(
@@ -340,10 +340,22 @@ test("label-routed e2e: no stale-label synchronize run; checkout pinned to head 
     /event\.action === 'labeled' && event\.label/,
     "a PR label must route only on its own labeled event",
   );
+  // A workflow_run build reads its event from PR checks' run name, which the PR's own workflow file sets.
+  const { triggerEvent } = await import(
+    pathToFileURL(join(root, ".github/actions/workflow-run-pr/workflow-run-pr.mjs")).href
+  );
+  const on = ["test-e2e-full"];
+  assert.deepEqual(triggerEvent("[synchronize] t", on, false), { action: "synchronize", label: "" });
+  assert.deepEqual(triggerEvent("[labeled: test-e2e-full] t", on, false), { action: "labeled", label: "test-e2e-full" });
+  assert.deepEqual(triggerEvent("[labeled: test-e2e-full] t", [], false), { action: "labeled", label: "" },
+    "a label no longer on the PR routes nothing");
+  assert.deepEqual(triggerEvent("[reopened] t", on, true), { action: "synchronize", label: "" },
+    "a fork's run is a push unless it names a label the PR has");
+  assert.deepEqual(triggerEvent("PR title only", on, false), { action: "synchronize", label: "" });
   assert.match(
-    read(".github/actions/workflow-run-pr/workflow-run-pr.mjs"),
-    /e\.event === 'labeled'/,
-    "a workflow_run build reads the applied label from the PR's labeled events",
+    read(".github/workflows/pr-checks.yml"),
+    /^run-name: >-\n\s+\$\{\{ github\.event_name == 'pull_request' && format\('\[\{0\}\{1\}\] \{2\}'/m,
+    "PR checks names its runs [<action>] or [labeled: <label>]",
   );
   assert.match(
     read(".github/workflows/_desktop.yml"),
