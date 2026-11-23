@@ -11,7 +11,10 @@ import { pathToFileURL } from 'node:url'
 // addon and project.json holds the build commands and per-configuration settings. Linker maps, export lists and config
 // templates shape the module, and the ci/build-* and ci/verify-* scripts are the build commands' own steps.
 export const NATIVE =
-  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$|(^|\/)scripts\/(build-web|validate-web-prebuild)\.mjs$|(^|\/)web\/source-lock\.json$/
+  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
+
+export const WEB =
+  /(^|\/)scripts\/(build-web|validate-web-prebuild)\.mjs$|(^|\/)web\/source-lock\.json$/
 
 // Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
 // the build runs.
@@ -30,9 +33,13 @@ export const INPUTS = [
 ]
 
 export function legKey(row, tree) {
+  const buildsWeb = row.slug === 'llm-llamacpp' && row.config === 'linux-x64'
   const native = tree([row.dir, ...(row.providers ?? []).map((p) => `packages/${p}`)])
     .split('\n')
-    .filter((line) => NATIVE.test(line.split('\t')[1] ?? ''))
+    .filter((line) => {
+      const path = line.split('\t')[1] ?? ''
+      return NATIVE.test(path) || (buildsWeb && WEB.test(path))
+    })
     .join('\n')
   return createHash('sha256')
     .update(JSON.stringify(row))
