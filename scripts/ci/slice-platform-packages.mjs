@@ -240,7 +240,7 @@ function sliceDirName (metaManifest, definition) {
   return metaManifest.name.replace('@', '').replace('/', '-') + '-' + definition.suffix
 }
 
-// Also used by host-specific registry smoke tests. Release callers must use
+// Also used by host-specific installation preflights. Release callers must use
 // slicePlatformPackages(), which validates the complete release matrix first.
 export function stageSlice (definition, context) {
   const { metaManifest, workdir, outDir, prebuildsDir } = context

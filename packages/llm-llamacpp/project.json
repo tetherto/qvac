@@ -478,39 +478,6 @@
           "tagPrefix": "llamacpp-llm"
         }
       }
-    },
-    "test:backend": {
-      "executor": "nx:run-commands",
-      "dependsOn": [
-        "build"
-      ],
-      "options": {
-        "cwd": "packages/llm-llamacpp",
-        "commands": [
-          {
-            "command": "node ci/fabric-package-smoke.mjs",
-            "forwardAllArgs": true
-          }
-        ],
-        "parallel": false
-      },
-      "configurations": {
-        "linux-x64-cpu": {
-          "args": "--backend cpu",
-          "ci": {
-            "runner": "linux_ubuntu2204_x64"
-          }
-        },
-        "linux-x64-cuda": {
-          "args": "--backend cuda",
-          "ci": {
-            "runner": "linux_ubuntu2404_x64_gpu"
-          }
-        }
-      },
-      "metadata": {
-        "timeoutMinutes": 30
-      }
     }
   },
   "implicitDependencies": [
