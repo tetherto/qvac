@@ -51,6 +51,7 @@ public:
   using Output = std::vector<Transcript>;
   struct AnyInput {
     Input input;
+    bool includeSpeakerProbabilities = false;
   };
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -127,6 +128,9 @@ public:
   // getBackendInfo().
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
+  bool supportsCacheAwareStreaming() const {
+    return supports_cache_aware_streaming_;
+  }
   void recordTranscriptionResult(const pkt::EngineResult& result);
   void recordDiarizationResult(const pkt::DiarizationResult& result);
   int getStreamingChunkMs() const {
@@ -383,6 +387,7 @@ private:
   // the 0/1 form for stats.
   std::string encoder_backend_ = "CPU";
   int encoder_on_coreml_ = 0;
+  bool supports_cache_aware_streaming_ = false;
 
   // ── Token / sentinel constants ─────────────────────────────────────────
   // The engine itself uses different vocab IDs internally; we surface only
@@ -409,14 +414,17 @@ private:
   static constexpr int HOP_LENGTH = 160;
   static constexpr float SAMPLE_RATE = 16000.0f;
 
+  void processInput(const Input& input, bool includeSpeakerProbabilities);
+
   // ── Sortformer head dispatch ───────────────────────────────────────────
   // Returns the "Speaker N: ..." text and fills segmentsOut with the same
   // segments in structured form.
   std::string runSortformerProcess(
-      const Input& input, std::vector<SpeakerSegment>& segmentsOut);
+      const Input& input, std::vector<SpeakerSegment>& segmentsOut,
+      std::optional<SpeakerProbabilities>* probabilities = nullptr);
 
   // ── ASR head dispatch ──────────────────────────────────────────────────
-  std::string runAsrProcess(const Input& input);
+  std::string runAsrProcess(const Input& input, Transcript* details = nullptr);
 
   // ── Streaming session helpers ──────────────────────────────────────────
   // LEGACY framework path (cfg_.streaming): opened in load(), driven by
@@ -467,9 +475,14 @@ private:
   int64_t melSpecMs_ = 0;
   int64_t encoderMs_ = 0;
   int64_t decoderMs_ = 0;
+  double segmentPlanMs_ = 0;
+  double assembleMs_ = 0;
   int64_t totalEncodedFrames_ = 0;
   int64_t jobEncoderCalls_ = 0;
   int64_t jobCoremlEncoderCalls_ = 0;
+  // Offline transcriptions only: diarization has no TDT decoder.
+  int64_t jobTranscriptionCalls_ = 0;
+  int64_t jobCoremlDecoderCalls_ = 0;
   // Sortformer streaming: 1 once the v2.1 AOSC speaker cache drove a
   // session, 0 for the v1 sliding window.
   int64_t aoscActive_ = 0;

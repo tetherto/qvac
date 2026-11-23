@@ -33,6 +33,7 @@ function run(command, args, options = {}) {
 }
 
 run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: dir })
+run('npm', ['rebuild', '--ignore-scripts'], { cwd: dir })
 
 if (process.env.GITHUB_PATH) {
   appendFileSync(process.env.GITHUB_PATH, `${bin}\n`)

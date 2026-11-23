@@ -141,14 +141,22 @@ declare namespace LlmLlamacpp {
         unload(): Promise<void>;
     }
     interface LlamaConfig {
+        /**
+         * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
+         * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
+         * GPU order and then the CPU when there is none, and
+         * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
+         * `rpc-servers` or finetuning. Only the defaults `backend: 'auto'`,
+         * `devices: ''` and `split-mode: 'none'` are accepted with it. GPU
+         * selection never picks the NPU.
+         */
         device?: string;
         /**
          * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
-         * Accepted names: cuda, vulkan, metal, opencl, xdna, plus
+         * Accepted names: cuda, vulkan, metal, opencl, plus
          * `auto` for no preference. An unrecognised name is rejected; a recognised
          * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
-         * `xdna` (the AMD XDNA NPU, Linux x64) is never chosen automatically;
-         * it is used only when named here or in `devices` as `XDNA0`.
+         * Use `device: 'npu'` for the AMD XDNA NPU.
          */
         backend?: string;
         gpu_layers?: NumericLike;
@@ -277,7 +285,9 @@ declare namespace LlmLlamacpp {
          * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
          * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
          * detected) — the LLM layers still run on the GPU while the projector stays on
-         * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+         * CPU. On an NPU load it defaults to a GPU beside the NPU, else the CPU; `true`
+         * with no GPU runs it on the NPU. Only honoured when a GPU or NPU backend is
+         * selected (ignored with a warning on CPU).
          */
         "mmproj-use-gpu"?: string;
         /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -395,18 +405,26 @@ declare namespace LlmLlamacpp {
          * or with the external MTP head given as `spec_draft_model`; the model or
          * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
          * `'draft-dflash'` drafts with the DFlash model given as
-         * `spec_draft_model`. Either way the model verifies the draft, so the
-         * output keeps the distribution of plain decoding. `'none'` (default)
-         * decodes one token per step. Works on single prompts, multimodal
-         * prompts and continuous batching. Also accepted as `spec-type`.
+         * `spec_draft_model`, and `'draft-dspark'` with the DSpark model (a
+         * DFlash model with a Markov head) given as `spec_draft_model`. `'auto'`
+         * reads which of the three from the `spec_draft_model` header, as
+         * llama-server does for `-md` without `--spec-type`: a `dflash` model is
+         * DSpark with a Markov head and DFlash without, and MTP is detected only
+         * by the last block's `blk.N.nextn.eh_proj` tensor, so a Gemma 4
+         * assistant needs `'draft-mtp'` given explicitly. It fails the load for
+         * a model none of them fits. Either way the
+         * model verifies the draft, so the output keeps the distribution of plain
+         * decoding. `'none'` (default) decodes one token per step. Works on single
+         * prompts, multimodal prompts and continuous batching. Also accepted as
+         * `spec-type`.
          */
-        spec_type?: "none" | "draft-mtp" | "draft-dflash";
+        spec_type?: "none" | "draft-mtp" | "draft-dflash" | "draft-dspark" | "auto";
         /**
          * Absolute path of the draft model, as llama-server's
-         * `--spec-draft-model` (`-md`): the DFlash model, required by
-         * `spec_type: 'draft-dflash'`, or an external MTP head for
-         * `spec_type: 'draft-mtp'`. The draft model is placed like the model
-         * (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
+         * `--spec-draft-model` (`-md`): the DFlash or DSpark model, required by
+         * `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP
+         * head for `spec_type: 'draft-mtp'`. The draft model is placed like the
+         * model (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
          */
         spec_draft_model?: string;
         /**
@@ -422,8 +440,12 @@ declare namespace LlmLlamacpp {
         spec_draft_n_min?: NumericLike;
         /**
          * Minimum draft-head probability for a token to extend the draft
-         * (default 0, between 0 and 1), as `--spec-draft-p-min`. Also accepted
-         * as `spec-draft-p-min`.
+         * (default 0, between 0 and 1), as `--spec-draft-p-min`. With
+         * `'draft-dspark'` it is the confidence head's threshold: the draft stops
+         * at the first token below it. With a DSpark model that has no confidence
+         * head, a value above 0 makes fabric refuse to draft, and the model
+         * decodes without speculation, as llama-server does. Also accepted as
+         * `spec-draft-p-min`.
          */
         spec_draft_p_min?: NumericLike;
         [key: string]: string | number | boolean | string[] | undefined;
@@ -705,7 +727,7 @@ declare namespace LlmLlamacpp {
          * model-level — never per-job.
          */
         avgConcurrentSeq: number;
-        backendDevice: "cpu" | "gpu";
+        backendDevice: "cpu" | "gpu" | "npu";
         /**
          * Draft tokens proposed by speculative decoding, and how many of them
          * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).

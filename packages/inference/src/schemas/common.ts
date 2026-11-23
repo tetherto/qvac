@@ -7,8 +7,15 @@ import {
   discoverRpcServersResponseSchema
 } from '@/schemas/rpc-server'
 import { z } from 'zod'
+import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
+import {
+  openSessionRequestSchema,
+  openSessionResponseSchema,
+  closeSessionRequestSchema,
+  closeSessionResponseSchema
+} from '@/schemas/session'
 import {
   completionOrchestrateRequestSchema,
   completionOrchestrateResponseSchema,
@@ -118,6 +125,7 @@ import {
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
+import { calcTokensRequestSchema, calcTokensResponseSchema } from '@/schemas/calc-tokens'
 import {
   audioEditStreamRequestSchema,
   audioEditStreamResponseSchema,
@@ -135,6 +143,9 @@ export const requestSchema = z.union([
   stopRpcServerRequestSchema,
   discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
+  calcTokensRequestSchema,
+  openSessionRequestSchema,
+  closeSessionRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -187,6 +198,9 @@ export const responseSchema = z.discriminatedUnion('type', [
   stopRpcServerResponseSchema,
   discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
+  calcTokensResponseSchema,
+  openSessionResponseSchema,
+  closeSessionResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
@@ -235,12 +249,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   rerankResponseSchema
 ])
 
-/** Structural `AbortSignal`: fits the global one and bare-abort-controller's. */
-export interface AbortSignalLike {
-  readonly aborted: boolean
-  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
-  removeEventListener(type: 'abort', listener: () => void): void
-}
+export type { AbortSignalLike }
 
 export const rpcOptionsSchema = z.object({
   timeout: z
@@ -261,6 +270,14 @@ export const rpcOptionsSchema = z.object({
     .optional()
     .describe(
       'Per-call profiler configuration; when present, overrides the global profiler settings for this request.'
+    ),
+  sessionId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Caller session to run this request as. Set by a session handle; the ' +
+        'transport copies it onto the request body.'
     )
 })
 
@@ -268,5 +285,5 @@ export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
 
-/** `signal` ends only streams with `endsOnAbort` (the log stream); stop inference with `cancel`. */
+/** `signal` aborting ends the call and cancels its request on the worker. */
 export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }

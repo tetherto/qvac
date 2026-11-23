@@ -95,14 +95,19 @@ export function pcmContentType(sampleRate: number): string {
   return `audio/L16; rate=${sampleRate}; channels=1`
 }
 
-// Engine → native sample rate. Mirrors the constants used in the SDK
-// examples (packages/sdk/examples/tts/{chatterbox,supertonic}.ts).
-// TODO(QVAC-18522): add the GGML engine key here when the TTS-GGML migration
-// lands, otherwise the engine falls through to DEFAULT_SAMPLE_RATE and audio
-// plays back at the wrong speed.
+// Engine → native sample rate, the fallback for a run that produced no audio
+// (the route prefers the rate the engine reports). One row per @qvac/tts-ggml
+// engine that resamples; MOSS-SoundEffect emits 48 kHz, the other MOSS
+// engines their native 24 kHz.
 const ENGINE_SAMPLE_RATE: Record<string, number> = {
   chatterbox: 24000,
-  supertonic: 44100
+  supertonic: 44100,
+  parler: 44100,
+  cosyvoice3: 24000,
+  audio8: 44100,
+  moss: 24000,
+  'moss-sfx': 48000,
+  'moss-speech': 24000
 }
 
 // 24 kHz matches OpenAI's documented pcm output (mono, 16-bit signed LE)

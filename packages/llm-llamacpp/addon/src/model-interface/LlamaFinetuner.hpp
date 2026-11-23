@@ -5,6 +5,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 #include <ggml-opt.h>
 #include <llama.h>
@@ -75,6 +76,14 @@ public:
 
   /// Block until the training thread has completed the finetuning pause path.
   void waitUntilFinetuningPauseComplete();
+
+  /// Throws StatusError (InvalidArgument) when a finetune would target the NPU:
+  /// the load asked for `device: 'npu'`, even if it fell back to a GPU, or its
+  /// `devices` list names XDNA0, alone (`runtimeBackendDevice` 2) or in a
+  /// mixed split.
+  static void rejectNpuTarget(
+      const std::unordered_map<std::string, std::string>& config,
+      int64_t runtimeBackendDevice);
 
 private:
   // Unit tests reach the private checkpoint-state publication through this

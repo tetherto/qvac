@@ -90,6 +90,10 @@ class SdInterface {
     constructor(binding, configurationParams, outputCallback) {
         this._binding = binding;
         this._spatialAlign = configurationParams.embeddingsConnectorsPath ? 32 : 16;
+        // Older SdInterface callers omit these optional image paths; native reads strings.
+        configurationParams.taesdPath ??= '';
+        configurationParams.coremlUnetPath ??= '';
+        configurationParams.coremlTaeDecoderPath ??= '';
         if (!configurationParams.config) {
             configurationParams.config = {};
         }

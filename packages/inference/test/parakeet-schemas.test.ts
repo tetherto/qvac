@@ -65,6 +65,12 @@ test('parakeetLoadConfigSchema: allow-lists every legacy ONNX field', (t) => {
   }
 })
 
+test('parakeetLoadConfigSchema: omission selects the native streaming window', (t) => {
+  t.alike(parakeetLoadConfigSchema.parse({ streaming: true }), { streaming: true })
+  t.is(parakeetLoadConfigSchema.parse({ streamingChunkMs: 30000 }).streamingChunkMs, 30000)
+  t.exception(() => parakeetLoadConfigSchema.parse({ streamingChunkMs: 0 }))
+})
+
 test('parakeetLoadConfigSchema: still rejects truly unknown fields under .strict()', (t) => {
   const result = parakeetLoadConfigSchema.safeParse({
     notAParakeetField: 'anything'
@@ -106,7 +112,7 @@ test('parakeetRuntimeConfigSchema: accepts Indic ids, Nemotron locale aliases an
 })
 
 test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
-  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US']) {
+  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US', 'others', 'other-EU']) {
     t.exception(() => parakeetRuntimeConfigSchema.parse({ language }), language)
   }
 })

@@ -448,6 +448,10 @@ function generateDiffusionName({
     return `${name}_VAE`
   }
 
+  // A tokenizer (tagged 'tokenizer') is named after its model like a VAE,
+  // since its filename is generic
+  if (tags.includes('tokenizer')) return `${cleanPart(modelName)}_TOKENIZER`
+
   // Extract family name from filename
   let family = filename
     .replace(/\.\w+$/, '')
@@ -510,12 +514,25 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     const speakerHint = speakerMatch ? speakerMatch[1]! : ''
     const coremlHint = lower.includes('coreml') ? 'COREML' : ''
     const compactHint = variant === 'MOSAIC' && lower.includes('compact') ? 'COMPACT' : ''
+    // TranscribePsy publishes two 250M models: the eight-language EU-sub
+    // distillation (`transcribepsy-250m-eu-sub.gguf`, plus its Core ML GGUF)
+    // and the full 25-language EU model (`transcribepsy-250m-eu.gguf`). The
+    // EU-sub GGUFs were named first and keep their published names, so only
+    // the full model carries the region; without it both would collide into a
+    // positional `_1` suffix.
+    const regionHint =
+      variant === 'TRANSCRIBEPSY' &&
+      /[-_]eu(?=[-_.])/.test(lower) &&
+      !/[-_]eu-sub(?=[-_.])/.test(lower)
+        ? 'EU'
+        : ''
 
     const nameParts = [
       family,
       variant,
       compactHint,
       paramsHint,
+      regionHint,
       speakerHint,
       versionHint,
       coremlHint,

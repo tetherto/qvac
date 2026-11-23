@@ -1,0 +1,10 @@
+# Generated in a distinct source directory so cmake-bare gives this carrier
+# its own target and package identity. It contains no inference implementation.
+add_bare_module(backend-package INSTALL ${QVAC_FABRIC_@backend@_LIBS})
+target_sources(${backend-package} PRIVATE "@CMAKE_CURRENT_SOURCE_DIR@/addon/backend-package.cpp")
+target_include_directories(${backend-package} PRIVATE
+  "@CMAKE_CURRENT_SOURCE_DIR@/include" "@CMAKE_CURRENT_SOURCE_DIR@/addon")
+target_compile_definitions(${backend-package} PRIVATE
+  QVAC_FABRIC_MODULE_NAME="@_backend_module_name@"
+  QVAC_FABRIC_BACKEND_FILE="libqvac-ggml-@backend@.so")
+target_link_libraries(${backend-package} PRIVATE ${qvac-fabric}_module)

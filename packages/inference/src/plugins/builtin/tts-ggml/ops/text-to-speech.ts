@@ -1,3 +1,4 @@
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import { getMossJobOptions } from './moss-options'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
@@ -9,6 +10,7 @@ import { PluginRequestValidationFailedError, TextToSpeechFailedError } from '@/e
 import {
   type TtsStreamChunk,
   type TtsOpYield,
+  carriesSpeechTokenIds,
   collectTtsStats,
   chunkMetadata,
   concatPcm,
@@ -68,7 +70,10 @@ function rethrowUnlessCancelled(error: unknown, signal: AbortSignal) {
   if (!signal.aborted) throw error
 }
 
-export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYield, TtsOpResult> {
+export async function* textToSpeech(
+  params: TtsRequest,
+  context?: PluginHandlerContext
+): AsyncGenerator<TtsOpYield, TtsOpResult> {
   const request = ttsRequestSchema.parse(params)
   const {
     modelId,
@@ -105,7 +110,13 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     )
   }
 
-  await using ctx = await bindTtsCancel(model, modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    modelId,
+    request.requestId,
+    request.sessionId,
+    context
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   // Resolved inside the request context: an uncached remote reference
@@ -113,7 +124,8 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const voiceJobOptions = await resolveVoiceJobOptions(request, {
     signal: ctx.signal,
     scope: ctx.scope,
-    requestId: ctx.requestId
+    requestId: ctx.requestId,
+    sessionId: ctx.sessionId
   })
   if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 
@@ -144,6 +156,8 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     if (!stream) {
       const parts: ArrayLike<number>[] = []
       let sampleRate: number | undefined
+      const speechTokenIds: number[] = []
+      let sawSpeechTokenIds = false
       try {
         for await (const data of response.iterate()) {
           if (await cancelIfAborted(model, ctx.signal)) continue
@@ -151,6 +165,10 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
           if (data.outputArray != null) {
             sampleRate ??= data.sampleRate
             parts.push(data.outputArray)
+          }
+          if (data.speechTokenIds !== undefined) {
+            sawSpeechTokenIds = true
+            speechTokenIds.push(...data.speechTokenIds)
           }
         }
       } catch (error) {
@@ -160,7 +178,8 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
       if (ctx.signal.aborted) return finish(modelStart, response, true)
       yield {
         ...pcmFrame(concatPcm(parts)),
-        ...(sampleRate !== undefined ? { sampleRate } : {})
+        ...(sampleRate !== undefined ? { sampleRate } : {}),
+        ...(sawSpeechTokenIds ? { speechTokenIds } : {})
       }
       return finish(modelStart, response, false)
     }
@@ -170,7 +189,9 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
         if (await cancelIfAborted(model, ctx.signal)) continue
         // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
         if (data.outputArray == null) continue
-        if (data.outputArray.length === 0) continue
+        // An empty chunk is a native end marker, unless it carries the run's
+        // speech tokens (CosyVoice3 native streaming), which the caller wants.
+        if (data.outputArray.length === 0 && !carriesSpeechTokenIds(data)) continue
         yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }
       }
     } catch (error) {
@@ -209,12 +230,20 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     const parts: ArrayLike<number>[] = []
     let sampleRate: number | undefined
     let replyText: string | undefined
+    // CosyVoice3 batch output carries the run's speech tokens with the PCM;
+    // under native chunk streaming they arrive on the final empty chunk.
+    const speechTokenIds: number[] = []
+    let sawSpeechTokenIds = false
 
     try {
       for await (const data of response.iterate()) {
         if (await cancelIfAborted(model, ctx.signal)) continue
         sampleRate ??= data.sampleRate
         if (data.text !== undefined) replyText = data.text
+        if (data.speechTokenIds !== undefined) {
+          sawSpeechTokenIds = true
+          speechTokenIds.push(...data.speechTokenIds)
+        }
         parts.push(data.outputArray)
       }
     } catch (error) {
@@ -224,7 +253,8 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     yield {
       ...pcmFrame(concatPcm(parts)),
       ...(sampleRate !== undefined ? { sampleRate } : {}),
-      ...(replyText !== undefined ? { text: replyText } : {})
+      ...(replyText !== undefined ? { text: replyText } : {}),
+      ...(sawSpeechTokenIds ? { speechTokenIds } : {})
     }
     return finish(modelStart, response, false)
   }

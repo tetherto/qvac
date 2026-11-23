@@ -11,6 +11,13 @@ iOS, `--coreml` loads the Core ML distribution instead
 decoder bundles with the GGUF, and both stages run on the Neural Engine.
 Anywhere else that constant is refused at load time.
 
+`--eu` loads the full 25-language TranscribePsy-250M-EU instead
+(`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`): one GGUF with its CAFE language
+adapters and gate embedded, ggml on every platform, no Core ML distribution.
+`--language` picks its route: `en` for the English trunk, `other` for the
+non-English adapters, or `auto` (the default) to let the gate decide from the
+first seconds of the recording.
+
 Long recordings are encoded in overlapping windows, so memory stays flat
 however long the file is. Without `--window-sec` the engine uses the 60 s
 windows with 25 % overlap the model recommends; an explicit window is sent as
@@ -22,7 +29,7 @@ separately. Python calls the worker directly, so `transcribe` yields
 `TranscribeResponse` frames: the example joins their `text` and reads `stats`
 off the closing frame.
 
-RUN: python examples/transcription_parakeet_transcribepsy.py <audio-file> [--coreml] [--window-sec <seconds>]
+RUN: python examples/transcription_parakeet_transcribepsy.py <audio-file> [--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]
 """
 
 from __future__ import annotations
@@ -39,14 +46,16 @@ from tetherto.qvac_sdk import (
 )
 from tetherto.qvac_sdk.models import (
     PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+    PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,
     PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
 )
 
 ENCODER_FRAMES_PER_SECOND = 12.5
 RECOMMENDED_OVERLAP = 0.25
+EU_LANGUAGES = ("en", "other", "auto")
 USAGE = (
     "Usage: python examples/transcription_parakeet_transcribepsy.py <audio-file> "
-    "[--coreml] [--window-sec <seconds>]"
+    "[--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]"
 )
 
 
@@ -66,9 +75,21 @@ def fmt(value: float | None, digits: int) -> str:
     return "?" if value is None else f"{value:.{digits}f}"
 
 
-def parse_args(args: list[str]) -> tuple[str, bool, float | None] | None:
-    audio_path = next((arg for arg in args if not arg.startswith("--")), None)
+def parse_args(
+    args: list[str],
+) -> tuple[str, bool, bool, str | None, float | None] | None:
+    value_flags = {"--window-sec", "--language"}
+    audio_path = next(
+        (
+            arg
+            for index, arg in enumerate(args)
+            if not arg.startswith("--")
+            and (index == 0 or args[index - 1] not in value_flags)
+        ),
+        None,
+    )
     use_coreml = "--coreml" in args
+    use_eu = "--eu" in args
     window_seconds = None
     if "--window-sec" in args:
         index = args.index("--window-sec")
@@ -78,9 +99,16 @@ def parse_args(args: list[str]) -> tuple[str, bool, float | None] | None:
             return None
         if not window_seconds > 0:
             return None
-    if audio_path is None:
+    language = None
+    if "--language" in args:
+        index = args.index("--language")
+        language = args[index + 1] if index + 1 < len(args) else None
+        # The route only means something to the full EU model; EU-sub has no gate.
+        if not use_eu or language not in EU_LANGUAGES:
+            return None
+    if audio_path is None or (use_eu and use_coreml):
         return None
-    return audio_path, use_coreml, window_seconds
+    return audio_path, use_eu, use_coreml, language, window_seconds
 
 
 async def main() -> int:
@@ -88,7 +116,7 @@ async def main() -> int:
     if parsed is None:
         print(USAGE, file=sys.stderr)
         return 1
-    audio_path, use_coreml, window_seconds = parsed
+    audio_path, use_eu, use_coreml, language, window_seconds = parsed
 
     # An explicit window becomes the engine's frame counts; the overlap is
     # shared half and half with each neighbouring window.
@@ -103,22 +131,26 @@ async def main() -> int:
         }
     )
 
-    model_src = (
-        PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
-        if use_coreml
-        else PARAKEET_TRANSCRIBEPSY_250M_Q8_0
-    )
+    if use_eu:
+        model_src = PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0
+        variant = f"EU, 25 languages, route {language or 'auto'}"
+    elif use_coreml:
+        model_src = PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
+        variant = "EU-sub, Core ML distribution"
+    else:
+        model_src = PARAKEET_TRANSCRIBEPSY_250M_Q8_0
+        variant = "EU-sub, ggml"
+    route = {"language": language} if use_eu and language is not None else {}
 
     async with Client() as client:
         t = client.transport
         try:
-            backend = "Core ML distribution" if use_coreml else "ggml"
-            print(f"▸ Loading TranscribePsy ({backend})...")
+            print(f"▸ Loading TranscribePsy ({variant})...")
             model_id = await load_model(
                 t,
                 model_src=model_src,
                 model_type="parakeet-transcription",
-                model_config=long_form,
+                model_config={**long_form, **route},
                 on_progress=print_progress,
             )
 

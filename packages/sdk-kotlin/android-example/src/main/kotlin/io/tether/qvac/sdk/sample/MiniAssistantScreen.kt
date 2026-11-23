@@ -59,7 +59,9 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
-import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentVariant2Item
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionDoneStopReason
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
@@ -419,8 +421,20 @@ class MiniAssistantScreen(
         appendMessage("user", displayPrompt + if (imagePath == null) "" else "\n[Image attached]")
         history += CompletionStreamRequestHistoryItem(
             role = "user",
-            content = CompletionStreamRequestHistoryItemContent.Variant1(displayPrompt),
-            attachments = imagePath?.let { listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = it)) },
+            content = if (imagePath == null) {
+                CompletionStreamRequestHistoryItemContent.Variant1(displayPrompt)
+            } else {
+                CompletionStreamRequestHistoryItemContent.Variant2(
+                    listOf(
+                        CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(
+                            CompletionStreamRequestHistoryItemContentItemMedia(path = imagePath),
+                        ),
+                        CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(
+                            CompletionStreamRequestHistoryItemContentItemText(text = displayPrompt),
+                        ),
+                    ),
+                )
+            },
         )
         selectedImagePath = null
         attachmentText = "Record a message or attach an image."

@@ -1,13 +1,18 @@
+import type Buffer from 'bare-buffer'
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import type { AudioGenStreamRequest, AudioGenStreamResponse } from '@/schemas/audio-gen'
 import { resolveAudioGenInputs } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-run'
 
 export function audioGenStream(
-  request: AudioGenStreamRequest
+  request: AudioGenStreamRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<AudioGenStreamResponse> {
   return streamAudioGenRun({
     type: 'audioGenStream',
     request,
+    context,
     async start(model, ctx, logger) {
       // Reference/source audio is decoded before the run is admitted so the
       // model slot is never held by a request that fails on input decoding.

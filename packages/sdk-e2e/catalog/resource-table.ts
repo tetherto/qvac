@@ -145,6 +145,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { ctx_size: 4096, tools: true, parallel: 2 }
   },
 
+  // A prefill needs a message; this one comes from `system_prompt`.
+  'prefill-llm-system-prompt': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: {
+      ctx_size: 4096,
+      tools: true,
+      parallel: 1,
+      system_prompt: 'Follow the user instructions. Be brief.'
+    }
+  },
+
   'tools-qwen35': {
     on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
@@ -522,6 +534,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {}
   },
 
+  // The full 25-language TranscribePsy-250M-EU: one GGUF with its CAFE language
+  // adapters and gate embedded. ggml on every platform (no Core ML
+  // distribution); without `language` the gate routes each recording itself.
+  'parakeet-transcribepsy-eu': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF pinned to its English trunk (`language: "en"`), the route
+  // the gate would pick for the English fixtures; `"other"` would select the
+  // non-English adapters instead.
+  'parakeet-transcribepsy-eu-en': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { language: 'en' }
+  },
+
   bci: {
     // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
     // never loads it, so it must not pay for the weights.
@@ -578,6 +608,21 @@ export const RESOURCE_TABLE: ResourceTable = {
       prediction: 'flux2_flow',
       llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
       vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' }
+    }
+  },
+
+  // MOSS-Image pulls about 16 GB, so it runs on the Linux JS leg only.
+  'diffusion-moss': {
+    on: ['desktop-linux'],
+    constant: { $const: 'MOSS_IMAGE_SFT_5B_BF16' },
+    type: 'sdcpp-generation',
+    config: {
+      device: 'gpu',
+      threads: 4,
+      flash_attn: true,
+      llmModelSrc: { $const: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M' },
+      vaeModelSrc: { $const: 'MOSS_IMAGE_VAE' },
+      tokenizerSrc: { $const: 'MOSS_IMAGE_SFT_TOKENIZER' }
     }
   },
 

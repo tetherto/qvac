@@ -19,6 +19,7 @@ export interface NativeIndex {
   readonly bitWidth: number
   addWithIds(vectors: Float32Array, ids: BigUint64Array): void
   remove(id: bigint): boolean
+  compact(): void
   contains(id: bigint): boolean
   search(queries: Float32Array, k: number): NativeSearchResult
   searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array): NativeSearchResult

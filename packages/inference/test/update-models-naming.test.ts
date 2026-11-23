@@ -1729,6 +1729,31 @@ test('diffusion: VAE type selection does not depend on tag order or noise tags',
   t.is(ltxVae('audio_vae.safetensors', ['vae', 'VAE', 'audio']), 'LTX_2_3_AUDIO_VAE')
 })
 
+test('diffusion: MOSS-Image tokenizer.json — tokenizer tag names it after the model', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+
+  const { model, exportName } = processAndName({
+    path: 'OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json',
+    source: 'hf',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 19989325,
+    sha256: 'ee'.repeat(32),
+    tags: ['tokenizer'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 900,
+      blockLength: 10,
+      byteOffset: 9000000,
+      byteLength: 19989325
+    }
+  })
+
+  t.is(model.addon, 'diffusion')
+  t.is(exportName, 'MOSS_IMAGE_SFT_TOKENIZER')
+})
+
 // ---------------------------------------------------------------------------
 // Parakeet: English CTC vs Indic Conformer CTC
 // ---------------------------------------------------------------------------
@@ -1898,6 +1923,58 @@ test('parakeet: TranscribePsy GGUF names the model and keeps the Core ML build d
 
   t.is(plain.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0')
   t.is(coreml.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0')
+})
+
+test('parakeet: the full TranscribePsy EU GGUF is named apart from the EU-sub distillation', (t) => {
+  // TranscribePsy-250M-EU (25 European languages, CAFE adapters and language
+  // gate embedded) is published from S3 by the registry. It shares the
+  // `transcribepsy-250m` stem and q8_0 quantization with EU-sub, whose
+  // constants predate it and keep their names, so the full model carries the
+  // region instead of falling into a positional `_1` suffix.
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+  const entry = (path: string, source: string) => ({
+    path,
+    source,
+    engine: 'parakeet-transcription',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 300000000,
+    sha256: 'ee'.repeat(32),
+    quantization: 'q8_0',
+    params: '250M',
+    tags: ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'multilingual'],
+    blobBinding: { coreKey, blockOffset: 1, blockLength: 1, byteOffset: 1, byteLength: 300000000 }
+  })
+
+  const full = processAndName(
+    entry('qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf', 's3')
+  )
+  t.is(full.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0')
+  t.is(full.model.modelId, 'transcribepsy-250m-eu.gguf')
+
+  // Both GGUFs named in one run: the EU-sub names are unchanged and nothing
+  // collides.
+  const usedNames = new Set<string>()
+  const names = [
+    'qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf',
+    'qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf',
+    'qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf'
+  ].map((path) =>
+    generateExportName({
+      path,
+      engine: 'parakeet-transcription',
+      name: '',
+      quantization: 'q8_0',
+      params: '250M',
+      tags: ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'multilingual'],
+      usedNames
+    })
+  )
+  t.alike(names, [
+    'PARAKEET_TRANSCRIBEPSY_250M_Q8_0',
+    'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0',
+    'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'
+  ])
 })
 
 test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {

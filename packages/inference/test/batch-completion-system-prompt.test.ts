@@ -7,6 +7,7 @@ import {
   type AnyModel
 } from '@/runtime/model-registry'
 import { ModelType } from '@/schemas'
+import { llmConfigSchema } from '@/schemas/llamacpp-config'
 
 // The configured `system_prompt` has to reach the model through the batch
 // handler the same way it does through `completion`, or one model and one
@@ -67,7 +68,7 @@ function registerRecordingBatchModel(
 
 async function runBatch(
   modelId: string,
-  history: Array<Array<{ role: string; content: string; attachments: never[] }>>
+  history: Array<Array<{ role: string; content: string }>>
 ): Promise<void> {
   const handler = llmPlugin.handlers.batchCompletionStream.handler as unknown as LooseHandler
   const gen = handler({
@@ -80,11 +81,11 @@ async function runBatch(
 }
 
 function user(content: string) {
-  return { role: 'user', content, attachments: [] as never[] }
+  return { role: 'user', content }
 }
 
 function system(content: string) {
-  return { role: 'system', content, attachments: [] as never[] }
+  return { role: 'system', content }
 }
 
 test('batchCompletionStream: seeds the configured system prompt per prompt', async (t) => {
@@ -143,6 +144,25 @@ test('batchCompletionStream: keeps a prompt system message over the configured o
     prompts[1]!.messages.filter((msg) => msg.role === 'system')[0]!.content,
     'Always answer with the single word BANANA.',
     'the prompt without one is seeded'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('batchCompletionStream: sends no system message when none is configured', async (t) => {
+  clearRegistry()
+
+  const modelId = `batch-no-sysprompt-${Date.now()}`
+  const prompts: RecordedPrompt[] = []
+  registerRecordingBatchModel(modelId, prompts, llmConfigSchema.parse({ tools: true }))
+
+  await runBatch(modelId, [[user('Capital of France?')]])
+
+  t.alike(
+    prompts[0]!.messages.map((msg) => msg.role),
+    ['user'],
+    'the history reaches the model as sent'
   )
 
   unregisterModel(modelId)
@@ -210,11 +230,10 @@ test('batchCompletionStream: a prompt with a loaded deferred tool declares it an
   const { executeToolSearch } = await import('@/utils/tools/defer')
   const loaded = [
     user('Area?'),
-    { role: 'assistant', content: '<call tool_search>', attachments: [] as never[] },
+    { role: 'assistant', content: '<call tool_search>' },
     {
       role: 'tool',
-      content: executeToolSearch(tools as never, { query: 'calculate_area' }, []),
-      attachments: [] as never[]
+      content: executeToolSearch(tools as never, { query: 'calculate_area' }, [])
     }
   ]
 

@@ -6,9 +6,10 @@ import type { ShardFileMetadata } from '@/schemas/index'
 import { calculateCachedFileChecksum } from '@/utils/checksum'
 import { validateAndJoinPath, joinWithinBase } from '@/utils/path-security'
 import { generateShortHash } from '@/utils/formatting'
+import { getSingleFileCacheName } from '@/utils/cache/layout'
 import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
-import { resolveClearStorageTarget } from '@/utils/clear-storage'
+import { resolveClearStorageTarget, isCacheShardPath } from '@/utils/clear-storage'
 
 const logger = getEngineLogger()
 
@@ -98,10 +99,20 @@ export function getCompanionSetPath(setKey: string, targetName: string): string 
  * Get cache path for a single (non-sharded, non-companion) registry model.
  */
 export function getSingleFileCachePath(registryPath: string): string {
-  // A path ending in "/" falls back to the whole path, separators included.
-  const filename = registryPath.split('/').pop() || registryPath
-  const sourceHash = generateShortHash(registryPath)
-  return joinWithinBase(getModelsCacheDir(), `${sourceHash}_${filename}`)
+  return joinWithinBase(
+    getModelsCacheDir(),
+    getSingleFileCacheName(registryPath, generateShortHash)
+  )
+}
+
+/** Whether `path` is a file of `expectedSize` bytes. Reads the size only, never the content. */
+export async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
+  if (expectedSize <= 0) return false
+  try {
+    return (await fsPromises.stat(path)).size === expectedSize
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -122,6 +133,21 @@ export function getClearStorageTarget(modelPath: string): {
   kind: 'file' | 'directory'
 } {
   return resolveClearStorageTarget(modelPath, getModelsCacheDir())
+}
+
+/**
+ * Returns the deletion targets for `clearStorage` on a sharded model: its
+ * cache directory when it lives in the QVAC cache, otherwise only its files.
+ */
+export function getShardedClearStorageTargets(
+  modelPath: string,
+  modelFiles: readonly string[]
+): { path: string; kind: 'file' | 'directory' }[] {
+  const shardDir = path.dirname(modelPath)
+  if (isCacheShardPath(modelPath, getModelsCacheDir(), path.sep)) {
+    return [{ path: shardDir, kind: 'directory' }]
+  }
+  return modelFiles.map((name) => ({ path: path.join(shardDir, name), kind: 'file' as const }))
 }
 
 /**

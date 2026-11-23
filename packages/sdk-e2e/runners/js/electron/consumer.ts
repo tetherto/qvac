@@ -21,7 +21,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
@@ -46,6 +46,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
 import { ParakeetStreamExecutor } from '../shared/executors/node/parakeet-stream-executor.js'
 import { ParakeetExecutor } from '../shared/executors/node/parakeet-executor.js'
@@ -58,6 +59,7 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
@@ -98,7 +100,7 @@ function resolveElectronRuntimeDir() {
   return snapCommon ? path.join(snapCommon, 'qvac-test-runtime') : process.cwd()
 }
 
-function resolveBatchAttachmentPath(inputPath: string) {
+function resolveBatchMediaPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
   return path.resolve(process.cwd(), 'assets/images', fileName)
@@ -137,8 +139,12 @@ function ensureElectronE2EConfig() {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureElectronE2EConfig()
 
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 export async function runSnapRefreshProbe() {
@@ -164,7 +170,7 @@ export const executor = createExecutor({
     // catalog/platform-skips.ts.
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
@@ -176,6 +182,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
 
@@ -205,6 +212,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

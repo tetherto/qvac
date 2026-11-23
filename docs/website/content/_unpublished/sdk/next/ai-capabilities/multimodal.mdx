@@ -7,13 +7,13 @@ schemaType: HowTo
 
 ## Overview
 
-[Text generation](/sdk/ai-capabilities/text-generation) supports multimodal prompts. Multimodal lets you attach media files to inputs for [`completion()`](/sdk/reference/api#completion). You can include multiple attachments in the same request (e.g., to compare two images).
+[Text generation](/sdk/ai-capabilities/text-generation) supports multimodal prompts. A user message in the [`completion()`](/sdk/reference/api#completion) history can mix text and media files, in the order you give them. You can include several images in the same message (e.g., to compare two images).
 
 Compared to text-only completion inference, the key differences are:
 - You must load a multimodal-capable LLM **and** its matching `projectionModelSrc` via [`loadModel()`](/sdk/reference/api#loadmodel).
-- Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk), or an ordered `content` array that interleaves text and media parts (see [Ordered text and media](#ordered-text-and-media)).
+- A `user` message passes `content` as an ordered array of text and media parts (see [Ordered text and media](#ordered-text-and-media)).
 - Images larger than 50 megapixels (width × height) are rejected before decoding. To accept larger images, raise the limit at load time with `modelConfig['image-max-megapixels']` (a positive integer, in millions of pixels).
-- Aside from attachments, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
+- Aside from the content parts, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
 
 ## Functions
 
@@ -52,7 +52,7 @@ Loading Flash weights with `image_no_upscale` unset — or base weights with `im
 
 ## Ordered text and media
 
-`attachments` sends every image before the message text. When the position of an image inside the text matters — multiple-choice options that are pictures, illustrated forms, steps — pass `content` as an ordered array of parts instead, on a `user` message:
+Pass `content` as an ordered array of parts on a `user` message. Each image stays where you put it, so the text can refer to the picture next to it — multiple-choice options that are pictures, illustrated forms, steps:
 
 ```js
 const history = [
@@ -70,7 +70,29 @@ const history = [
 ]
 ```
 
-Each media part becomes a media marker at its own position in the rendered turn, so the model sees the text and each image in one turn, in order. A part is `{ type: 'text', text }` or `{ type: 'media', path }`; the file must exist on disk. Parts and `attachments` cannot be combined on the same message, and content parts are only valid on `user` messages.
+Each media part becomes a media marker at its own position in the rendered turn, so the model sees the text and each image in one turn, in order. A part is `{ type: 'text', text }` or `{ type: 'media', path }`; the file must exist on disk. Content parts are only valid on `user` messages.
+
+### Migrating from `attachments`
+
+`attachments` is deprecated and will be removed in a future release. It sends every image before the message text, so the model cannot tell which image the text refers to. Move each attachment into `content` as a media part, at the position the text refers to it:
+
+```js
+// Deprecated
+{ role: 'user', content: 'Compare these.', attachments: [{ path: a }, { path: b }] }
+
+// Ordered parts
+{
+  role: 'user',
+  content: [
+    { type: 'text', text: 'Compare ' },
+    { type: 'media', path: a },
+    { type: 'text', text: ' with ' },
+    { type: 'media', path: b }
+  ]
+}
+```
+
+To keep the old order exactly, put the media parts first and the text last. A message cannot use both `attachments` and content parts.
 
 ## Example
 
@@ -100,9 +122,17 @@ The following script shows an example of multimodal completion with one image (a
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Multimodal.kt title="Multimodal.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
 

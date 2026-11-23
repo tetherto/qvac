@@ -117,7 +117,7 @@ export interface IngestParams {
 export type IngestStage = 'chunk' | 'embed' | 'commit'
 
 // `chunk` counts text documents, `embed` counts chunks sent to the port and
-// `commit` counts documents written.
+// `commit` counts documents written or found unchanged.
 export interface IngestProgress {
   stage: IngestStage
   done: number
@@ -130,11 +130,18 @@ export interface IngestOptions {
   onProgress?: (progress: IngestProgress) => void
 }
 
-export interface IngestedDocument {
+// `unchanged`: the stored generation already has the same content, so nothing
+// was written. Content covers the chunks after chunking, their vectors when
+// precomputed, and the document metadata.
+export type IngestedDocument = {
   id: string
   generation: number
   chunkCount: number
-}
+} & (
+  | { status: 'created' | 'unchanged' }
+  // `removedChunks` counts the previous generation's chunks.
+  | { status: 'replaced'; removedChunks: number }
+)
 
 export interface IngestResult {
   documents: IngestedDocument[]
@@ -174,9 +181,16 @@ export interface TextQuery {
   spaceId?: never
 }
 
+// `k` is the number of hits to return. With `perDocument`, every document's best
+// hit is seated before any document gets a second one, and no document gets
+// more than `perDocument`. When `scope.documentIds` lists at most `k` documents,
+// each one that has chunks gets a hit. Hits scoring below `minScore` are
+// dropped first, so a result can hold fewer than `k`.
 export type SearchParams = (VectorQuery | TextQuery) & {
   scope: SearchScope
   k: number
+  perDocument?: number
+  minScore?: number
   // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
   signal?: AbortSignal
 }
@@ -185,7 +199,20 @@ export type ScopedSearchParams = (VectorQuery | TextQuery) & {
   // Intersected with the bound scope; it can narrow it, never widen it.
   scope?: Partial<SearchScope>
   k: number
+  perDocument?: number
+  minScore?: number
   signal?: AbortSignal
+}
+
+// Lifted from the document's `metadata`, else from the chunk's `metadataJson`
+// (the rag-extract chunk format). `page` only comes from the chunk. A key is
+// absent unless it holds a non-empty string, or for `page` an integer >= 1.
+export interface SearchCitation {
+  title?: string
+  page?: number
+  sourceUrl?: string
+  sourcePath?: string
+  mimeType?: string
 }
 
 export interface SearchHit {
@@ -193,15 +220,153 @@ export interface SearchHit {
   documentId: string
   chunkId: string
   ordinal: number
+  // The document's generation the chunk belongs to; re-ingest bumps it.
+  generation: number
+  // Chunks in that generation.
+  chunkCount: number
   content: string
   metadataJson?: string
   // The document's `metadata` from ingest, when it had any.
   documentMetadata?: Record<string, unknown>
+  citation: SearchCitation
   score: number
+}
+
+// `fromOrdinal` defaults to 0 and `limit` to 64 chunks, at most 1,024. Pass the
+// first page's `generation` on later pages: a document re-ingested or deleted
+// since then fails with DOCUMENT_CHANGED instead of mixing generations.
+export interface ReadDocumentParams {
+  namespace: string
+  documentId: string
+  generation?: number
+  fromOrdinal?: number
+  limit?: number
+}
+
+export type ScopedReadDocumentParams = Omit<ReadDocumentParams, 'namespace'>
+
+export interface DocumentChunk {
+  chunkId: string
+  ordinal: number
+  content: string
+  metadataJson?: string
+}
+
+export interface DocumentPage {
+  namespace: string
+  documentId: string
+  generation: number
+  chunkCount: number
+  metadata?: Record<string, unknown>
+  chunks: DocumentChunk[]
+  // The `fromOrdinal` of the next page; null after the last chunk.
+  nextOrdinal: number | null
+}
+
+// Documents come in document ID order. `after` is the previous page's `next`;
+// `limit` defaults to 100, at most 1,024.
+export interface ListDocumentsParams {
+  namespace: string
+  after?: string
+  limit?: number
+}
+
+export type ScopedListDocumentsParams = Omit<ListDocumentsParams, 'namespace'>
+
+export interface DocumentSummary {
+  documentId: string
+  generation: number
+  chunkCount: number
+  // The namespace revision that committed this generation, so sorting by it
+  // gives ingest order. 0 for documents written before revisions were recorded.
+  revision: number
+  metadata?: Record<string, unknown>
+}
+
+export interface DocumentListPage {
+  documents: DocumentSummary[]
+  next: string | null
+}
+
+// Without `documentIds`, the whole namespace. With them, only those documents
+// and their delete records; an ID the namespace doesn't have is left out.
+export interface ExportNamespaceParams {
+  namespace: string
+  documentIds?: string[]
+}
+
+export interface ExportOptions {
+  // Checked before each frame; an aborted export fails with OPERATION_CANCELLED.
+  signal?: AbortSignal
+}
+
+export interface ImportNamespaceParams {
+  namespace: string
+  // The bytes of an `exportNamespace` stream, in any chunking.
+  source: AsyncIterable<Uint8Array>
+  // Used only when the import creates the namespace. Defaults to `{ storage: 'q8' }`.
+  index?: { storage?: IndexStorage }
+}
+
+// Counts the documents and delete records read so far.
+export interface ImportProgress {
+  documents: number
+  deletes: number
+}
+
+export interface ImportOptions {
+  // Checked before each document commits; also ends a wait on the source.
+  signal?: AbortSignal
+  onProgress?: (progress: ImportProgress) => void
+}
+
+// `deleted`: a delete record in the stream removed the target's document.
+export interface ImportedDocument {
+  id: string
+  generation: number
+  status: 'created' | 'replaced' | 'unchanged' | 'deleted'
+}
+
+// `superseded`: the target holds a newer generation. `deleted`: the target
+// deleted that generation or a later one. `conflict`: the target holds the
+// same generation with other content.
+export interface ImportSkip {
+  id: string
+  generation: number
+  reason: 'superseded' | 'deleted' | 'conflict'
+}
+
+export interface ImportResult {
+  documents: ImportedDocument[]
+  skipped: ImportSkip[]
+  cancelled: boolean
+  revision: number
+}
+
+export interface NamespaceSummary {
+  name: string
+  spaceId: string
+  space: EmbeddingSpace
+  index: { storage: IndexStorage }
+  revision: number
+  documentCount: number
+  chunkCount: number
+}
+
+export interface DropNamespaceParams {
+  name: string
+}
+
+export interface DropNamespaceResult {
+  name: string
+  documentCount: number
+  chunkCount: number
 }
 
 export interface ScopedRag {
   search(params: ScopedSearchParams): Promise<SearchHit[]>
+  readDocument(params: ScopedReadDocumentParams): Promise<DocumentPage>
+  listDocuments(params?: ScopedListDocumentsParams): Promise<DocumentListPage>
 }
 
 export interface Rag {
@@ -211,5 +376,11 @@ export interface Rag {
   ingest(params: IngestParams, options?: IngestOptions): Promise<IngestResult>
   deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult>
   search(params: SearchParams): Promise<SearchHit[]>
+  readDocument(params: ReadDocumentParams): Promise<DocumentPage>
+  listDocuments(params: ListDocumentsParams): Promise<DocumentListPage>
+  exportNamespace(params: ExportNamespaceParams, options?: ExportOptions): AsyncIterable<Uint8Array>
+  importNamespace(params: ImportNamespaceParams, options?: ImportOptions): Promise<ImportResult>
+  listNamespaces(): Promise<NamespaceSummary[]>
+  dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult>
   scoped(scope: SearchScope): ScopedRag
 }

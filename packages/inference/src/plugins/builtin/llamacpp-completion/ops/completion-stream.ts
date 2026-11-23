@@ -16,7 +16,11 @@ import {
   logCacheSave,
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
-import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import {
+  extractSystemPrompt,
+  getCurrentCacheInfo,
+  resolveCacheFilePath
+} from '@/plugins/ops/kv-cache-utils'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import { shouldCommitCachedTurn } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 import {
@@ -32,7 +36,13 @@ import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { buildAutoCacheSaveHistory, normalizeCacheMessage, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import { AttachmentNotFoundError } from '@/errors/index'
+import {
+  AttachmentNotFoundError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSharingDisabledError,
+  KvCacheSeedSourceNotFoundError,
+  RequestValidationFailedError
+} from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
@@ -105,7 +115,7 @@ export function withParallelToolCalls(
   }
 }
 
-type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'> & {
+type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill' | 'baseCacheKey'> & {
   generationParams?: CompletionGenerationParams
 }
 
@@ -175,7 +185,18 @@ function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOp
   return model.run(prompt, opts)
 }
 
+let warnedAttachments = false
+
 export function transformMessages(messages: Array<HistoryMsg | Tool>): ChatHistory[] {
+  if (
+    !warnedAttachments &&
+    messages.some((message) => 'attachments' in message && message.attachments?.length)
+  ) {
+    warnedAttachments = true
+    logger.warn(
+      "History `attachments` is deprecated and will be removed in a future release. Pass media as ordered `content` parts: [{ type: 'text', text }, { type: 'media', path }]."
+    )
+  }
   const transformed: ChatHistory[] = []
   for (const message of messages) {
     transformed.push(...transformMessage(message))
@@ -213,7 +234,7 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: Hi
   return [{ role: 'system', content: configured } as T, ...history]
 }
 
-type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'>
+type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill' | 'baseCacheKey'>
 
 type CacheOwningModel = AnyModel & {
   saveCache?(cacheKey: string): Promise<void>
@@ -280,6 +301,9 @@ async function* processModelResponse(
     }),
     ...(cacheOptions?.prefill !== undefined && {
       prefill: cacheOptions.prefill
+    }),
+    ...(cacheOptions?.baseCacheKey !== undefined && {
+      baseCacheKey: cacheOptions.baseCacheKey
     })
   }
   const hasRunOptions = Object.keys(runOptions).length > 0
@@ -349,6 +373,7 @@ export async function* completion(
     modelId,
     kvCache,
     prefill,
+    seedFrom,
     tools,
     toolSearch,
     generationParams,
@@ -357,8 +382,20 @@ export async function* completion(
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
 
+  // seedFrom needs a named kvCache key other than itself: the auto key is
+  // never returned to the caller, so it cannot be named on either side.
+  if (seedFrom !== undefined && (typeof kvCache !== 'string' || seedFrom === kvCache)) {
+    throw new InvalidSeedFromParamsError()
+  }
+
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
+  // The addon cannot render a prompt without messages; tools alone are not enough.
+  if (prefill && history.length === 0) {
+    throw new RequestValidationFailedError(
+      'prefill needs at least one message: add a system message to history or set modelConfig.system_prompt'
+    )
+  }
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   // With deferred tools the prompt carries the always-loaded ones, `tool_search`
   // and its catalog, and whatever earlier searches loaded. `null` when nothing
@@ -483,6 +520,27 @@ export async function* completion(
   let rollbackOnUnwind = false
   scope.defer(() => (rollbackOnUnwind ? session.rollback(turn) : session.releaseTurn(turn)))
 
+  // A seed starts a chat that has no cache yet; a chat that has one keeps it.
+  // The addon ignores `baseCacheKey` on a model loaded with sharing off and
+  // skips a missing source silently, so both are checked here first.
+  let baseCacheKey: string | undefined
+  if (seedFrom !== undefined && turn.createdCache) {
+    if ((modelConfig as { cache_share_across_keys?: boolean }).cache_share_across_keys !== true) {
+      throw new KvCacheSeedSharingDisabledError(modelId)
+    }
+    const sourcePath = resolveCacheFilePath(modelId, configHash, seedFrom)
+    try {
+      await fs.promises.access(sourcePath)
+    } catch (error) {
+      // Only a missing file is "not found"; a permission or I/O error keeps its cause.
+      if ((error as { code?: string }).code !== 'ENOENT') throw error
+      throw new KvCacheSeedSourceNotFoundError(seedFrom, modelId)
+    }
+    baseCacheKey = sourcePath
+  } else if (seedFrom !== undefined) {
+    requestLogger.debug(`[kv-cache] seedFrom ignored: "${kvCache}" already has a cache`)
+  }
+
   logMessagesToAddon(prompt, 'PROMPT_SEND')
 
   const result = yield* processModelResponse(
@@ -490,7 +548,11 @@ export async function* completion(
     prompt,
     toolsToRender,
     mergedGenerationParams,
-    { cacheKey: turn.cachePath, ...(prefill !== undefined && { prefill }) },
+    {
+      cacheKey: turn.cachePath,
+      ...(prefill !== undefined && { prefill }),
+      ...(baseCacheKey !== undefined && { baseCacheKey })
+    },
     dialect,
     setActiveResponse
   )

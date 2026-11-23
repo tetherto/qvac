@@ -66,7 +66,8 @@ export interface ParakeetConfig {
   /**
    * Indic CTC language id or Nemotron locale alias (for example `"en-US"`,
    * `"hi-IN"`, or `"auto"`). Empty selects `"auto"` for Nemotron and keeps
-   * full-vocabulary greedy decode for CTC.
+   * full-vocabulary greedy decode for CTC. Full TranscribePsy EU takes
+   * `"en"`, `"other"`, or `"auto"` (also when empty).
    */
   language?: string;
   /**
@@ -75,10 +76,11 @@ export interface ParakeetConfig {
    */
   streaming?: boolean;
   /**
-   * Streaming chunk cadence. Defaults to 320 ms for Nemotron, 560 ms for the
-   * Unified RNN-T model, and 2000 ms for existing models. Nemotron supports
-   * 80, 160, 320, 560, or 1120 ms; Unified RNN-T supports 80, 160, 560, or
-   * 1040 ms and snaps any other value down to the nearest trained chunk.
+   * Decode window in milliseconds. Omit or set to 0 for the model default.
+   * Offline TDT push streams default to 30000 ms and require at least 30000 ms.
+   * Full TranscribePsy EU defaults to 2000 ms. Nemotron defaults to 320 ms
+   * (80, 160, 320, 560, or 1120 ms). Unified RNN-T defaults to 560 ms
+   * (80, 160, 560, or 1040 ms). Other Unified values snap down to a trained cadence.
    */
   streamingChunkMs?: number;
   /** Sortformer rolling-history window in ms (default: 30000). */
@@ -153,7 +155,7 @@ export interface ParakeetConfig {
   longFormContextFrames?: number;
   /**
    * Directory containing dynamically-loaded ggml backend libraries. Defaults
-   * to the package's own `prebuilds/` folder.
+   * to the backends the `@qvac/fabric` runtime ships.
    */
   backendsDir?: string;
   /**
@@ -236,7 +238,10 @@ const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
 ];
 
 /** Rejects per-call `run()` options on an engine that takes none. */
-export function assertNoRunOptions(options: ASRRunOptions, engine: string): void {
+export function assertNoRunOptions(
+  options: ASRRunOptions,
+  engine: string,
+): void {
   const keys = Object.keys(options ?? {});
   if (keys.length === 0) return;
   throw new QvacErrorAddonASRGgml({
@@ -272,10 +277,7 @@ function lastSegmentOf(data: unknown): TranscriptionSegment | null {
  * against Float32Array views whose backing buffer is larger than the view.
  */
 function chunkBuffer(chunk: Float32Array): ArrayBuffer {
-  if (
-    chunk.byteOffset === 0 &&
-    chunk.byteLength === chunk.buffer.byteLength
-  ) {
+  if (chunk.byteOffset === 0 && chunk.byteLength === chunk.buffer.byteLength) {
     return chunk.buffer as ArrayBuffer;
   }
   return chunk.buffer.slice(
@@ -350,10 +352,7 @@ export class ParakeetDriver implements AsrDriver {
 
   async reload(newConfig: ASRGgmlReloadConfig = {}): Promise<void> {
     const overrides = newConfig as ParakeetReloadConfig;
-    this.ctx.logger.debug(
-      "Reloading addon with new configuration",
-      overrides,
-    );
+    this.ctx.logger.debug("Reloading addon with new configuration", overrides);
     const nextParams = { ...this.params, ...overrides.parakeetConfig };
     this.validateConfig(nextParams);
     this.params = nextParams;
@@ -395,11 +394,23 @@ export class ParakeetDriver implements AsrDriver {
     audio: NormalizedAudioStream,
     options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
-    assertNoRunOptions(options, "parakeet");
+    const { includeSpeakerProbabilities, ...other } = options ?? {};
+    assertNoRunOptions(other, "parakeet");
+    if (
+      includeSpeakerProbabilities !== undefined &&
+      typeof includeSpeakerProbabilities !== "boolean"
+    ) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: "includeSpeakerProbabilities must be a boolean",
+      });
+    }
     const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
-    void this._pumpBatchAudio(audio).catch((error: unknown) => {
-      this.ctx.job.fail(asError(error));
-    });
+    void this._pumpBatchAudio(audio, includeSpeakerProbabilities).catch(
+      (error: unknown) => {
+        this.ctx.job.fail(asError(error));
+      },
+    );
     return Promise.resolve(response);
   }
 
@@ -437,7 +448,7 @@ export class ParakeetDriver implements AsrDriver {
         const teardown = this.addon?.endStreaming().catch(() => {});
         this.ctx.job.fail(asError(error));
         await teardown;
-      }
+      },
     );
 
     const responseDone = response.await();
@@ -496,7 +507,10 @@ export class ParakeetDriver implements AsrDriver {
     return opts as ParakeetStreamingRunConfig;
   }
 
-  async _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void> {
+  async _pumpBatchAudio(
+    audio: NormalizedAudioStream,
+    includeSpeakerProbabilities?: boolean,
+  ): Promise<void> {
     const addon = this._requireAddon();
     this.ctx.logger.debug("Start handling audio stream");
     for await (const chunk of audio) {
@@ -514,7 +528,13 @@ export class ParakeetDriver implements AsrDriver {
     }
     if (!this.ctx.job.active) return;
     this.ctx.logger.debug("Sending end-of-input signal");
-    await addon.append({ type: END_OF_INPUT });
+    await addon.append({
+      type: END_OF_INPUT,
+      job:
+        includeSpeakerProbabilities === undefined
+          ? {}
+          : { includeSpeakerProbabilities },
+    });
   }
 
   async _pumpStreamingAudio(
@@ -522,9 +542,7 @@ export class ParakeetDriver implements AsrDriver {
     markClosing: () => void,
   ): Promise<void> {
     const addon = this._requireAddon();
-    this.ctx.logger.debug(
-      "Start pumping audio into duplex streaming session",
-    );
+    this.ctx.logger.debug("Start pumping audio into duplex streaming session");
     for await (const chunk of audio) {
       if (chunk.length === 0) continue;
       await addon.appendStreamingAudio(chunk);
@@ -555,25 +573,18 @@ export class ParakeetDriver implements AsrDriver {
       streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
       streamingEmitPartials: this.params.streamingEmitPartials !== false,
       streamingEnergyVad: this.params.streamingEnergyVad === true,
-      streamingEnergyVadThresholdDb:
-        this.params.streamingEnergyVadThresholdDb,
+      streamingEnergyVadThresholdDb: this.params.streamingEnergyVadThresholdDb,
       streamingEnergyVadWindowMs: this.params.streamingEnergyVadWindowMs,
-      streamingEnergyVadHangoverMs:
-        this.params.streamingEnergyVadHangoverMs,
+      streamingEnergyVadHangoverMs: this.params.streamingEnergyVadHangoverMs,
       streamingSpeakerVad: this.params.streamingSpeakerVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
-      streamingRightLookaheadMs:
-        this.params.streamingRightLookaheadMs ?? -1,
-      streamingSpkCacheEnable:
-        this.params.streamingSpkCacheEnable !== false,
+      streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
+      streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
       streamingSpkCacheLen: this.params.streamingSpkCacheLen,
       streamingFifoLen: this.params.streamingFifoLen,
-      streamingChunkLeftContextMs:
-        this.params.streamingChunkLeftContextMs,
-      streamingChunkRightContextMs:
-        this.params.streamingChunkRightContextMs,
-      streamingSpkCacheUpdatePeriod:
-        this.params.streamingSpkCacheUpdatePeriod,
+      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs,
+      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs,
+      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod,
       diarizationThreshold: this.params.diarizationThreshold,
       diarizationMinSegmentMs: this.params.diarizationMinSegmentMs,
       prewarm: this.params.prewarm === true,
@@ -620,7 +631,10 @@ export class ParakeetDriver implements AsrDriver {
       // the model's end-of-utterance flag (double-signal).
       this.ctx.job.output(data);
       const segment = lastSegmentOf(data);
-      if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
+      if (
+        segment?.isEndOfTurn === true &&
+        segment.eotConfidence === undefined
+      ) {
         this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
       }
       return;

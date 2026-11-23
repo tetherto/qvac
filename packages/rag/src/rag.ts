@@ -1,27 +1,17 @@
 import HyperDB from 'hyperdb'
-import qvacCrypto from '#crypto'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
+import { FIRST_NATIVE_ID, encodeNativeId } from './db/encoding.js'
 import {
-  FIRST_NATIVE_ID,
-  MAX_NATIVE_ID,
-  decodeNativeId,
-  encodeNativeId,
-  encodeVector,
-  packNativeIds
-} from './db/encoding.js'
-import {
-  CHUNKS,
   DOCUMENTS,
-  MUTATIONS,
   NAMESPACES,
-  NATIVE_IDS,
   SPACES,
-  type ChunkRecord,
+  TOMBSTONES,
   type DocumentRecord,
   type NamespaceRecord,
-  type SpaceRecord
+  type SpaceRecord,
+  type TombstoneRecord
 } from './db/records.js'
 import {
   EMBED_BATCH_SIZE,
@@ -32,9 +22,16 @@ import {
 } from './embeddings.js'
 import {
   parseDelete,
+  parseDropNamespace,
+  parseExport,
+  parseImport,
   parseIngest,
   parseIngestOptions,
+  parseListDocuments,
   parseNamespaceName,
+  parseReadDocument,
+  parseScopedListDocuments,
+  parseScopedReadDocument,
   parseSearch,
   type ParsedDocument,
   type ValidDocument,
@@ -42,7 +39,31 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
-import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
+import {
+  appendMutation,
+  checkChunks,
+  deleteDocument,
+  getNamespace,
+  newLineageId,
+  hashContent,
+  readNamespace,
+  sameLineage,
+  storageOf,
+  withSnapshot,
+  withTransaction,
+  writeGeneration
+} from './writes.js'
+import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
+import { dropNamespaceRows, listNamespaceSummaries } from './namespaces.js'
+import { exportFrames } from './transfer/export.js'
+import { importStream } from './transfer/import.js'
+import {
+  checkQuery,
+  scanSearch,
+  throwIfAborted,
+  type SearchOptions,
+  type SearchQuery
+} from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
 import {
@@ -52,7 +73,6 @@ import {
   type IndexRegistry
 } from './vector-index/registry.js'
 import { indexSearch } from './vector-index/search.js'
-import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type {
   Hypercore,
   HyperDBInstance,
@@ -64,14 +84,27 @@ import type {
   CreateRagOptions,
   DeleteDocumentsParams,
   DeleteDocumentsResult,
+  DocumentListPage,
+  DocumentPage,
+  DropNamespaceParams,
+  DropNamespaceResult,
+  ExportNamespaceParams,
+  ExportOptions,
+  ImportNamespaceParams,
+  ImportOptions,
+  ImportResult,
   IngestedDocument,
   IngestOptions,
   IngestParams,
-  IndexStorage,
   IngestResult,
+  ListDocumentsParams,
   NamespaceInfo,
+  NamespaceSummary,
   Rag,
+  ReadDocumentParams,
+  ScopedListDocumentsParams,
   ScopedRag,
+  ScopedReadDocumentParams,
   ScopedSearchParams,
   SearchHit,
   SearchParams,
@@ -188,6 +221,12 @@ export function createRag(options: CreateRagOptions): Rag {
   let closed = false
   let closing: Promise<void> | null = null
   const inflight = new Set<Promise<unknown>>()
+  // Closers for the snapshots of open exports. An export lives as long as its
+  // consumer pulls, so close() ends them instead of waiting.
+  const exports = new Set<() => Promise<void>>()
+  // Halts for running imports: close() stops their reads instead of waiting on
+  // a source that may never send again.
+  const imports = new Set<() => void>()
 
   // A failed open is not cached, so ready() can be retried.
   function ready(): Promise<void> {
@@ -221,7 +260,9 @@ export function createRag(options: CreateRagOptions): Rag {
 
   async function drain(): Promise<void> {
     if (opening) await opening.catch(() => {})
+    for (const halt of imports) halt()
     await Promise.allSettled(inflight)
+    await Promise.allSettled(Array.from(exports, (closeExport) => closeExport()))
     db = null
     indexes = null
     const releasing = release
@@ -288,7 +329,8 @@ export function createRag(options: CreateRagOptions): Rag {
         revision: 0,
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
         createdAt: new Date(),
-        indexStorage: storage
+        indexStorage: storage,
+        lineageId: newLineageId()
       })
       await tx.flush()
       return { name, spaceId, revision: 0, index: { storage } }
@@ -303,6 +345,8 @@ export function createRag(options: CreateRagOptions): Rag {
     const { signal, onProgress } = parseIngestOptions(options)
     const instance = database()
     const indexRegistry = registry()
+    // Commits check the lineage, so a drop and re-create during embedding is caught.
+    await ensureLineage(instance, namespace)
     const { ns, space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
     const port = documents.some((entry) => entry.kind !== 'embedded')
       ? requireEmbedder(namespace, space)
@@ -311,14 +355,26 @@ export function createRag(options: CreateRagOptions): Rag {
       if (entry.kind === 'embedded') checkChunks(namespace, ns, space, entry.document)
     }
 
-    const jobs = prepareJobs(documents, chunker, onProgress)
+    const jobs = prepareJobs(documents, chunker, space.spaceId, onProgress)
     // The jobs hold everything still needed; committed ones are released below.
     documents.length = 0
+    await withSnapshot(instance, (reader) => findUnchanged(reader, namespace, jobs))
     const queue: Array<{ job: IngestJob; ordinal: number }> = []
-    for (const job of jobs) {
+    let start = 0
+    // Inserts at `start`: a requeued job blocks every later commit, so it is embedded next.
+    function enqueue(job: IngestJob, at: number): void {
+      // No spread: a document's chunk count can exceed the argument limit.
+      const after = queue.splice(at)
+      job.missing = 0
       job.vectors.forEach((vector, ordinal) => {
-        if (!vector) queue.push({ job, ordinal })
+        if (vector) return
+        queue.push({ job, ordinal })
+        job.missing++
       })
+      for (const entry of after) queue.push(entry)
+    }
+    for (const job of jobs) {
+      if (job.missing > 0) enqueue(job, queue.length)
     }
 
     const results: IngestedDocument[] = []
@@ -332,14 +388,29 @@ export function createRag(options: CreateRagOptions): Rag {
         // Checked once the lock is held, so an abort while waiting for another
         // write still skips this document.
         const job = jobs[next]
-        const document = toValidDocument(job, space.spaceId)
-        checkChunks(namespace, ns, space, document)
-        const committed = await withTransaction(instance, (tx) =>
-          signal?.aborted
-            ? Promise.resolve(null)
-            : commitDocument(tx, indexRegistry, namespace, document)
-        )
+        let committed: Committed | 'changed' | null
+        if (job.vectors.includes(undefined)) {
+          // Found unchanged before embedding; another call may have replaced
+          // or deleted the document since.
+          committed = await withTransaction(instance, (tx) =>
+            signal?.aborted
+              ? Promise.resolve(null)
+              : recheckUnchanged(tx, namespace, job.id, job.contentHash)
+          )
+        } else {
+          const document = toValidDocument(job, space.spaceId)
+          checkChunks(namespace, ns, space, document)
+          committed = await withTransaction(instance, (tx) =>
+            signal?.aborted
+              ? Promise.resolve(null)
+              : commitDocument(tx, indexRegistry, ns, document, job.contentHash)
+          )
+        }
         if (!committed) return false
+        if (committed === 'changed') {
+          enqueue(job, start)
+          return true
+        }
         // A large call would otherwise hold every vector it embedded until it returns.
         job.chunks = []
         job.vectors = []
@@ -353,7 +424,8 @@ export function createRag(options: CreateRagOptions): Rag {
 
     try {
       cancelled = !(await commitReady())
-      for (let start = 0; !cancelled && start < queue.length; start += EMBED_BATCH_SIZE) {
+      // commitReady can requeue a document, so the queue may grow while this runs.
+      while (!cancelled && start < queue.length) {
         if (signal?.aborted) {
           cancelled = true
           break
@@ -367,7 +439,8 @@ export function createRag(options: CreateRagOptions): Rag {
           job.vectors[ordinal] = rows[row]
           job.missing--
         })
-        onProgress?.({ stage: 'embed', done: start + batch.length, total: queue.length })
+        start += batch.length
+        onProgress?.({ stage: 'embed', done: start, total: queue.length })
         cancelled = !(await commitReady())
       }
     } catch (error) {
@@ -408,8 +481,7 @@ export function createRag(options: CreateRagOptions): Rag {
         const document = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
         if (!document) continue
         // A spread push would exceed the argument limit on large documents.
-        for (const nativeId of await deleteGeneration(tx, document)) removed.push(nativeId)
-        await tx.delete(DOCUMENTS, { namespace, documentId })
+        for (const nativeId of await deleteDocument(tx, document)) removed.push(nativeId)
         deleted.push(documentId)
       }
       if (deleted.length === 0) return { deleted, revision: ns.revision }
@@ -431,16 +503,142 @@ export function createRag(options: CreateRagOptions): Rag {
     if (!query) return []
     return await runSearch(handles, scope, query, request.k, {
       strict: true,
+      perDocument: request.perDocument,
+      minScore: request.minScore,
       signal: request.signal
     })
+  }
+
+  async function readDocument(params: ReadDocumentParams): Promise<DocumentPage> {
+    const { namespace, ...request } = parseReadDocument(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await readDocumentPage(reader, namespace, request)
+    })
+  }
+
+  async function listDocuments(params: ListDocumentsParams): Promise<DocumentListPage> {
+    const { namespace, ...request } = parseListDocuments(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await listDocumentPage(reader, namespace, request)
+    })
+  }
+
+  // Bad input and a closed RAG throw here; everything else surfaces from the
+  // iteration. The stream reads one snapshot, so later commits don't show.
+  function exportNamespace(
+    params: ExportNamespaceParams,
+    options?: ExportOptions
+  ): AsyncIterable<Uint8Array> {
+    const { namespace, documentIds, signal } = parseExport(params, options)
+    const instance = database()
+    return { [Symbol.asyncIterator]: () => runExport(instance, namespace, documentIds, signal) }
+  }
+
+  async function* runExport(
+    instance: HyperDBInstance,
+    namespace: string,
+    documentIds: string[] | undefined,
+    signal: AbortSignal | undefined
+  ): AsyncGenerator<Uint8Array> {
+    const check = () => {
+      if (closed) throw notReady('it has been closed')
+      throwIfAborted(signal)
+    }
+    check()
+    let open = true
+    let snapshot: HyperDBReader | null = null
+    const closeSnapshot = async () => {
+      if (!open || !snapshot) return
+      open = false
+      await snapshot.close()
+    }
+    let reader: HyperDBReader
+    try {
+      // Tracked until the snapshot is registered, so close() can't miss it.
+      reader = await track(async () => {
+        await ensureLineage(instance, namespace)
+        check()
+        const created = instance.snapshot()
+        snapshot = created
+        exports.add(closeSnapshot)
+        return created
+      })
+    } catch (error) {
+      throw closed ? notReady('it has been closed') : toRagError(error)
+    }
+    try {
+      const { ns, space } = await readNamespace(reader, namespace)
+      yield* exportFrames(reader, ns, space, documentIds, check)
+    } catch (error) {
+      throw closed ? notReady('it has been closed') : toRagError(error)
+    } finally {
+      exports.delete(closeSnapshot)
+      await closeSnapshot().catch(() => {})
+    }
+  }
+
+  async function importNamespace(
+    params: ImportNamespaceParams,
+    options?: ImportOptions
+  ): Promise<ImportResult> {
+    const request = parseImport(params, options)
+    const target = {
+      instance: database(),
+      indexes: registry(),
+      namespace: request.namespace,
+      index: request.index,
+      onClose: (halt: () => void) => {
+        imports.add(halt)
+        return () => imports.delete(halt)
+      }
+    }
+    try {
+      return await importStream(target, request.source, request.options)
+    } catch (error) {
+      throw closed ? notReady('it has been closed') : toRagError(error)
+    }
+  }
+
+  async function listNamespaces(): Promise<NamespaceSummary[]> {
+    return await withSnapshot(database(), listNamespaceSummaries)
+  }
+
+  async function dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult> {
+    const name = parseDropNamespace(params)
+    const indexRegistry = registry()
+    const dropped = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
+    await indexRegistry.drop(name, dropped.createdAt, indexConfig)
+    return dropped.result
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
   // namespace no longer has is skipped, so the handle keeps working with what
   // remains and fails closed to no hits. Only the scope's shape can error.
+  // Reading a document outside the scope fails like reading a missing one.
   function scoped(scope: SearchScope): ScopedRag {
     const bound = parseScope(scope)
+    const { namespace, documentIds } = bound
     return {
+      async readDocument(params: ScopedReadDocumentParams): Promise<DocumentPage> {
+        const request = parseScopedReadDocument(params)
+        const instance = database()
+        if (documentIds !== undefined && !documentIds.includes(request.documentId)) {
+          throw outOfScope(namespace, request.documentId)
+        }
+        return await withSnapshot(instance, async (reader) => {
+          await getNamespace(reader, namespace)
+          return await readDocumentPage(reader, namespace, request)
+        })
+      },
+      async listDocuments(params?: ScopedListDocumentsParams): Promise<DocumentListPage> {
+        const request = parseScopedListDocuments(params)
+        return await withSnapshot(database(), async (reader) => {
+          await getNamespace(reader, namespace)
+          return await listDocumentPage(reader, namespace, request, documentIds)
+        })
+      },
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const request = parseSearch({ scope: undefined, ...params })
         const narrowed = intersectScope(bound, request.scope)
@@ -449,6 +647,8 @@ export function createRag(options: CreateRagOptions): Rag {
         if (!query) return []
         return await runSearch(handles, narrowed, query, request.k, {
           strict: false,
+          perDocument: request.perDocument,
+          minScore: request.minScore,
           signal: request.signal
         })
       }
@@ -485,7 +685,7 @@ export function createRag(options: CreateRagOptions): Rag {
     scope: SearchScope,
     query: SearchQuery,
     k: number,
-    options: { strict: boolean; signal?: AbortSignal }
+    options: SearchOptions
   ): Promise<SearchHit[]> {
     const open = () => indexRegistry.open(scope.namespace, indexConfig)
     for (let attempt = 0; ; attempt++) {
@@ -510,9 +710,19 @@ export function createRag(options: CreateRagOptions): Rag {
     ingest: (params, options) => track(() => ingest(params, options)),
     deleteDocuments: (params) => track(() => deleteDocuments(params)),
     search: (params) => track(() => search(params)),
+    readDocument: (params) => track(() => readDocument(params)),
+    listDocuments: (params) => track(() => listDocuments(params)),
+    exportNamespace,
+    importNamespace: (params, options) => track(() => importNamespace(params, options)),
+    listNamespaces: () => track(() => listNamespaces()),
+    dropNamespace: (params) => track(() => dropNamespace(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
-      return { search: (params) => track(() => handle.search(params)) }
+      return {
+        search: (params) => track(() => handle.search(params)),
+        readDocument: (params) => track(() => handle.readDocument(params)),
+        listDocuments: (params) => track(() => handle.listDocuments(params))
+      }
     }
   }
 }
@@ -524,6 +734,12 @@ interface IngestJob {
   // Precomputed vectors are set up front; the rest are filled by the port.
   vectors: Array<Float32Array | undefined>
   missing: number
+  contentHash: string
+}
+
+interface Committed {
+  document: IngestedDocument
+  revision: number
 }
 
 // Chunks every text document before anything is written, so text that yields
@@ -531,6 +747,7 @@ interface IngestJob {
 function prepareJobs(
   documents: ParsedDocument[],
   chunker: Chunker,
+  spaceId: string,
   onProgress: IngestOptions['onProgress']
 ): IngestJob[] {
   const textTotal = documents.filter((entry) => entry.kind === 'text').length
@@ -538,8 +755,10 @@ function prepareJobs(
   return documents.map((entry): IngestJob => {
     const { id, metadata } = entry.document
     if (entry.kind === 'embedded') {
-      const vectors = entry.document.chunks.map((chunk) => chunk.embedding)
-      return { id, metadata, chunks: entry.document.chunks, vectors, missing: 0 }
+      const { chunks } = entry.document
+      const vectors = chunks.map((chunk) => chunk.embedding)
+      const contentHash = hashContent(spaceId, metadata, chunks, vectors)
+      return { id, metadata, chunks, vectors, missing: 0, contentHash }
     }
     let chunks = entry.kind === 'chunked' ? entry.document.chunks : []
     if (entry.kind === 'text') {
@@ -553,8 +772,45 @@ function prepareJobs(
       chunked++
       onProgress?.({ stage: 'chunk', done: chunked, total: textTotal })
     }
-    return { id, metadata, chunks, vectors: chunks.map(() => undefined), missing: chunks.length }
+    const vectors = chunks.map(() => undefined)
+    const contentHash = hashContent(spaceId, metadata, chunks, vectors)
+    return { id, metadata, chunks, vectors, missing: chunks.length, contentHash }
   })
+}
+
+// Runs before anything is embedded, so an unchanged text document costs no
+// embedding calls. Its chunks are kept in case it changes before the commit.
+async function findUnchanged(
+  reader: HyperDBReader,
+  namespace: string,
+  jobs: IngestJob[]
+): Promise<void> {
+  for (const job of jobs) {
+    const stored = await reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: job.id })
+    if (stored?.contentHash === job.contentHash) job.missing = 0
+  }
+}
+
+async function recheckUnchanged(
+  tx: HyperDBTransaction,
+  namespace: string,
+  documentId: string,
+  contentHash: string
+): Promise<Committed | 'changed'> {
+  const ns = await getNamespace(tx, namespace)
+  const stored = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
+  return stored?.contentHash === contentHash
+    ? { document: unchangedResult(stored), revision: ns.revision }
+    : 'changed'
+}
+
+function unchangedResult(stored: DocumentRecord): IngestedDocument {
+  return {
+    id: stored.documentId,
+    generation: stored.generation,
+    chunkCount: stored.chunkCount,
+    status: 'unchanged'
+  }
 }
 
 function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
@@ -574,199 +830,70 @@ function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
 async function commitDocument(
   tx: HyperDBTransaction,
   indexes: IndexRegistry,
-  namespace: string,
-  document: ValidDocument
-): Promise<{ document: IngestedDocument; revision: number }> {
+  started: NamespaceRecord,
+  document: ValidDocument,
+  contentHash: string
+): Promise<Committed> {
+  const namespace = started.name
   const ns = await getNamespace(tx, namespace)
-  const previous = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: document.id })
-  const removed = previous ? await deleteGeneration(tx, previous) : []
-  const generation = previous ? previous.generation + 1 : 1
-
-  let nextId = decodeNativeId(ns.nextNativeId)
-  if (MAX_NATIVE_ID - nextId + 1n < BigInt(document.chunks.length)) {
-    throw new QvacErrorRAG({ code: ERR_CODES.NATIVE_ID_EXHAUSTED, adds: namespace })
-  }
-
-  const added: bigint[] = []
-  for (let ordinal = 0; ordinal < document.chunks.length; ordinal++) {
-    const chunk = document.chunks[ordinal]
-    const nativeId = encodeNativeId(nextId)
-    added.push(nextId)
-    nextId++
-    await tx.insert(CHUNKS, {
-      namespace,
-      documentId: document.id,
-      generation,
-      ordinal,
-      chunkId: chunk.id,
-      content: chunk.content,
-      metadataJson: chunk.metadataJson,
-      nativeId,
-      vector: encodeVector(chunk.embedding)
-    })
-    await tx.insert(NATIVE_IDS, {
-      namespace,
-      nativeId,
-      documentId: document.id,
-      generation,
-      ordinal
-    })
-  }
-
-  await tx.insert(DOCUMENTS, {
-    namespace,
-    documentId: document.id,
-    generation,
-    chunkCount: document.chunks.length,
-    contentHash: hashDocument(document),
-    metadata: document.metadata,
-    updatedAt: new Date()
-  })
-  const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
-  await indexes.prune(tx, namespace)
-  await tx.flush()
-  await indexes.apply(namespace, revision, added, () => concatEmbeddings(document), removed)
-
-  return {
-    document: { id: document.id, generation, chunkCount: document.chunks.length },
-    revision
-  }
-}
-
-// Deletes a document's current chunks and their native IDs; returns the IDs.
-async function deleteGeneration(
-  tx: HyperDBTransaction,
-  document: DocumentRecord
-): Promise<bigint[]> {
-  const { namespace, documentId, generation } = document
-  const key = { namespace, documentId, generation }
-  const chunks = await tx.find<ChunkRecord>(CHUNKS, { gte: key, lte: key }).toArray()
-  const removed: bigint[] = []
-  for (const chunk of chunks) {
-    await tx.delete(CHUNKS, chunk)
-    await tx.delete(NATIVE_IDS, { namespace, nativeId: chunk.nativeId })
-    removed.push(decodeNativeId(chunk.nativeId))
-  }
-  return removed
-}
-
-async function appendMutation(
-  tx: HyperDBTransaction,
-  ns: NamespaceRecord,
-  added: bigint[],
-  removed: bigint[],
-  nextNativeId: Uint8Array
-): Promise<number> {
-  const revision = ns.revision + 1
-  await tx.insert(MUTATIONS, {
-    namespace: ns.name,
-    revision,
-    added: packNativeIds(added),
-    removed: packNativeIds(removed),
-    createdAt: new Date()
-  })
-  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId })
-  return revision
-}
-
-function concatEmbeddings(document: ValidDocument): Float32Array {
-  const dims = document.chunks[0]?.embedding.length ?? 0
-  const vectors = new Float32Array(document.chunks.length * dims)
-  document.chunks.forEach((chunk, i) => vectors.set(chunk.embedding, i * dims))
-  return vectors
-}
-
-function storageOf(ns: NamespaceRecord): IndexStorage {
-  return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
-}
-
-function checkChunks(
-  namespace: string,
-  ns: NamespaceRecord,
-  space: SpaceRecord,
-  document: ValidDocument
-): void {
-  const turbovec = storageOf(ns).startsWith('turbovec-')
-  for (const chunk of document.chunks) {
-    if (chunk.spaceId !== space.spaceId) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
-        adds: `chunk '${chunk.id}' is in space ${chunk.spaceId}, namespace '${namespace}' is in ${space.spaceId}`
-      })
-    }
-    if (chunk.embedding.length !== space.dimensions) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-        adds: `chunk '${chunk.id}' has ${chunk.embedding.length} dimensions, namespace '${namespace}' expects ${space.dimensions}`
-      })
-    }
-    if (turbovec && chunk.embedding.some((value) => Math.abs(value) >= TURBOVEC_MAX_COMPONENT)) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.INVALID_INPUT,
-        adds: `chunk '${chunk.id}' has a component of magnitude 1e16 or more, which '${storageOf(ns)}' storage can't index`
-      })
-    }
-  }
-}
-
-function hashDocument(document: ValidDocument): string {
-  const hash = qvacCrypto.createHash('sha256')
-  for (const chunk of document.chunks) {
-    hash.update(JSON.stringify([chunk.id, chunk.content, chunk.metadataJson ?? null]))
-  }
-  return hash.digest('hex') as string
-}
-
-async function getNamespace(reader: HyperDBReader, name: string): Promise<NamespaceRecord> {
-  const ns = await reader.get<NamespaceRecord>(NAMESPACES, { name })
-  if (!ns) throw new QvacErrorRAG({ code: ERR_CODES.NAMESPACE_NOT_FOUND, adds: name })
-  return ns
-}
-
-async function readNamespace(
-  reader: HyperDBReader,
-  name: string
-): Promise<{ ns: NamespaceRecord; space: SpaceRecord }> {
-  const ns = await getNamespace(reader, name)
-  const space = await reader.get<SpaceRecord>(SPACES, { spaceId: ns.spaceId })
-  if (!space) {
+  if (!sameLineage(ns.lineageId, started.lineageId)) {
     throw new QvacErrorRAG({
-      code: ERR_CODES.DB_OPERATION_FAILED,
-      adds: `embedding space ${ns.spaceId} of namespace '${name}' is missing`
+      code: ERR_CODES.NAMESPACE_NOT_FOUND,
+      adds: `namespace '${namespace}' was dropped while the ingest ran`
     })
   }
-  return { ns, space }
-}
-
-async function withSnapshot<T>(
-  db: HyperDBInstance,
-  operation: (reader: HyperDBReader) => Promise<T>
-): Promise<T> {
-  const snapshot = db.snapshot()
-  try {
-    return await operation(snapshot)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await snapshot.close()
+  // The namespace may have been dropped and re-created in another space.
+  const spaceId = document.chunks[0]?.spaceId
+  if (spaceId !== ns.spaceId) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `namespace '${namespace}' is now in space ${ns.spaceId}`
+    })
   }
-}
-
-// Unflushed writes are dropped when the transaction closes.
-async function withTransaction<T>(
-  db: HyperDBInstance,
-  operation: (tx: HyperDBTransaction) => Promise<T>
-): Promise<T> {
-  const tx = await db.exclusiveTransaction()
-  try {
-    return await operation(tx)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await tx.close()
+  const previous = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: document.id })
+  // A concurrent call may have written the same content since findUnchanged.
+  if (previous?.contentHash === contentHash) {
+    return { document: unchangedResult(previous), revision: ns.revision }
+  }
+  let last = previous?.generation ?? 0
+  if (!previous) {
+    const key = { namespace, documentId: document.id }
+    const tombstone = await tx.get<TombstoneRecord>(TOMBSTONES, key)
+    if (tombstone) {
+      last = tombstone.generation
+      await tx.delete(TOMBSTONES, key)
+    }
+  }
+  const generation = last + 1
+  const { revision, removedChunks } = await writeGeneration(
+    tx,
+    indexes,
+    ns,
+    document,
+    contentHash,
+    generation,
+    previous
+  )
+  const result = { id: document.id, generation, chunkCount: document.chunks.length }
+  return {
+    document: previous
+      ? { ...result, status: 'replaced', removedChunks }
+      : { ...result, status: 'created' },
+    revision
   }
 }
 
 function notReady(reason: string): QvacErrorRAG {
   return new QvacErrorRAG({ code: ERR_CODES.NOT_READY, adds: reason })
+}
+
+// An export names its namespace's lineage, so a namespace from before lineages
+// existed gets one first.
+async function ensureLineage(instance: HyperDBInstance, namespace: string): Promise<void> {
+  await withTransaction(instance, async (tx) => {
+    const ns = await getNamespace(tx, namespace)
+    if (ns.lineageId) return
+    await tx.insert(NAMESPACES, { ...ns, lineageId: newLineageId() })
+    await tx.flush()
+  })
 }

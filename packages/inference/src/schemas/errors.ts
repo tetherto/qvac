@@ -43,6 +43,7 @@ export const ERROR_CODES = {
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
   MODEL_FIT_REFUSED: 52212,
+  MODEL_FIT_REJECTED: 52213,
 
   // Model operations (52,400-52,799)
   RPC_SERVER_OPERATION_FAILED: 52423,
@@ -83,6 +84,7 @@ export const ERROR_CODES = {
   RAG_LIST_WORKSPACES_FAILED: 52809,
   RAG_CHUNK_FAILED: 52810,
   RAG_WORKSPACE_NOT_OPEN: 52811,
+  RAG_WORKSPACE_BUSY: 52812,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -115,6 +117,9 @@ export const ERROR_CODES = {
   INVALID_DELETE_CACHE_PARAMS: 53201,
   CACHE_DIR_NOT_ABSOLUTE: 53202,
   CACHE_DIR_NOT_WRITABLE: 53203,
+  INVALID_SEED_FROM_PARAMS: 53204,
+  KV_CACHE_SEED_SOURCE_NOT_FOUND: 53205,
+  KV_CACHE_SEED_SHARING_DISABLED: 53206,
 
   // Config operations (53,350-53,499)
   CONFIG_ALREADY_SET: 53351,
@@ -123,6 +128,13 @@ export const ERROR_CODES = {
   LIFECYCLE_SUSPEND_FAILED: 53600,
   LIFECYCLE_RESUME_FAILED: 53601,
   LIFECYCLE_OPERATION_BLOCKED: 53602,
+
+  // Caller sessions and model leases (53,620-53,649)
+  SESSION_ID_CONFLICT: 53620,
+  SESSION_NOT_OPEN: 53621,
+  MODEL_LEASED: 53622,
+  OWNER_ONLY: 53623,
+  MODEL_RECONFIGURED: 53624,
 
   // System / runtime (53,500-53,699)
   FFMPEG_NOT_AVAILABLE: 53500,
@@ -151,7 +163,8 @@ export const ERROR_CODES = {
 
   // Model registry query (53,950-54,000)
   QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
-  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951,
+  QVAC_MODEL_REGISTRY_BUSY: 53952
 } as const
 
 const errorDefinitions: ErrorCodesMap = {
@@ -302,6 +315,11 @@ const errorDefinitions: ErrorCodesMap = {
       `${modelType}: the engine fitter projects this load will not fit (${reason})${
         detail ? `: ${detail}` : ''
       }`
+  },
+  [ERROR_CODES.MODEL_FIT_REJECTED]: {
+    name: 'MODEL_FIT_REJECTED',
+    message: (modelType: string, detail: string) =>
+      `${modelType}: the engine fitter could not assess this load (${detail})`
   },
 
   // Model operations
@@ -493,6 +511,11 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'RAG_WORKSPACE_NOT_OPEN',
     message: (workspace: string) => `RAG workspace '${workspace}' is not open`
   },
+  [ERROR_CODES.RAG_WORKSPACE_BUSY]: {
+    name: 'RAG_WORKSPACE_BUSY',
+    message: (workspace: string) =>
+      `RAG workspace '${workspace}' is running another session's operation; retry when it finishes`
+  },
 
   // Vector index
   [ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {
@@ -610,6 +633,20 @@ const errorDefinitions: ErrorCodesMap = {
     message: (cacheDir: string, details?: string) =>
       `Cache directory is not writable: ${cacheDir}${details ? `. ${details}` : ''}`
   },
+  [ERROR_CODES.INVALID_SEED_FROM_PARAMS]: {
+    name: 'INVALID_SEED_FROM_PARAMS',
+    message: 'seedFrom needs a caller-managed kvCache key other than itself'
+  },
+  [ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND]: {
+    name: 'KV_CACHE_SEED_SOURCE_NOT_FOUND',
+    message: (seedFrom: string, modelId: string) =>
+      `No cache named "${seedFrom}" exists for model "${modelId}" with this system prompt`
+  },
+  [ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED]: {
+    name: 'KV_CACHE_SEED_SHARING_DISABLED',
+    message: (modelId: string) =>
+      `seedFrom has no effect on model "${modelId}": it was not loaded with cache_share_across_keys true`
+  },
 
   // Config operations
   [ERROR_CODES.CONFIG_ALREADY_SET]: {
@@ -631,6 +668,31 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'LIFECYCLE_OPERATION_BLOCKED',
     message: (requestType: string, lifecycleState: string) =>
       `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`
+  },
+
+  // Caller sessions and model leases
+  [ERROR_CODES.SESSION_ID_CONFLICT]: {
+    name: 'SESSION_ID_CONFLICT',
+    message: (sessionId: string) => `Session id "${sessionId}" is already open`
+  },
+  [ERROR_CODES.SESSION_NOT_OPEN]: {
+    name: 'SESSION_NOT_OPEN',
+    message: (sessionId: string) => `Session "${sessionId}" is not open`
+  },
+  [ERROR_CODES.MODEL_LEASED]: {
+    name: 'MODEL_LEASED',
+    message: (modelId: string, leaseCount: string) =>
+      `Model "${modelId}" is held by ${leaseCount} other session(s); it cannot be reconfigured while another session uses it`
+  },
+  [ERROR_CODES.OWNER_ONLY]: {
+    name: 'OWNER_ONLY',
+    message: (operation: string, sessionId: string) =>
+      `Operation "${operation}" is reserved for the runtime owner; session "${sessionId}" cannot call it`
+  },
+  [ERROR_CODES.MODEL_RECONFIGURED]: {
+    name: 'MODEL_RECONFIGURED',
+    message: (modelId: string) =>
+      `Model "${modelId}" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded`
   },
 
   // System / runtime
@@ -732,7 +794,20 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
     message: (registrySource: string, registryPath: string) =>
       `QVAC model registry has no model at ${registrySource}/${registryPath}`
+  },
+  [ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
+    name: 'QVAC_MODEL_REGISTRY_BUSY',
+    message: modelRegistryBusyMessage
   }
+}
+
+// `current` also covers a wait queued behind this process's own work while
+// another process is owed the store next.
+export function modelRegistryBusyMessage(holder: string, waitedMs: number): string {
+  const waited = `${Math.round(waitedMs / 1000)}s`
+  return holder === 'legacy'
+    ? `Another QVAC process on an older SDK holds the model registry until it exits; gave up after ${waited}. Close or upgrade that process, then retry.`
+    : `Another QVAC process is using the model registry or is next in line for it; gave up after ${waited}. Retry shortly.`
 }
 
 addCodes(errorDefinitions, { name: 'qvac-inference', version: '1.0.0' })

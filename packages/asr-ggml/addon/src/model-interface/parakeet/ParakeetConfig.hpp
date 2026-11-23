@@ -79,8 +79,8 @@ struct ParakeetConfig {
   // regardless of how many append-style chunks it ingests.
   // Off by default for batch-style transcription.
   bool streaming = false;
-  // 0 means model-specific default. It is resolved after GGUF model-type
-  // detection and is never forwarded to speech-cpp.
+  // 0 selects the model default. The addon forwards the automatic value for
+  // TDT so speech-cpp can select the default for the loaded variant.
   int streamingChunkMs = 0;
   int streamingHistoryMs =
       DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only
@@ -145,21 +145,6 @@ struct ParakeetConfig {
   int longFormWindowFrames = 0;
   int longFormContextFrames = 0;
 
-  // ── Dynamic-backend loading ────────────────────────────────────────────
-  // Forwarded to pkt::EngineOptions::backends_dir /
-  // opencl_cache_dir. On Android (and any other GGML_BACKEND_DL=ON
-  // build) the ggml core is statically linked into this addon's
-  // `.bare` module while the GPU backends ship as separately
-  // dlopen()'d `.so` files (libqvac-speech-ggml-{vulkan,opencl}.so
-  // plus the per-arch CPU variants under
-  // libqvac-speech-ggml-cpu-android_armv*_*.so). A set `backendsDir`
-  // is scanned as given; unset, the addon looks beside the loaded
-  // module, and `ggml_backend_load_all_from_path()` finds them at
-  // runtime. `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
-  // ggml-opencl's program-binary cache (Android-only, ignored
-  // elsewhere). Both default to empty -> let parakeet-cpp fall back
-  // to its own resolution (ggml's compile-time default search path
-  // for backends; whatever the env var holds for the OpenCL cache).
   std::string backendsDir;
   std::string openclCacheDir;
 

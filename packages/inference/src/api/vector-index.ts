@@ -9,9 +9,13 @@ import {
   type VectorIndexAddParams,
   type VectorIndexHit,
   type VectorIndexIdsParams,
+  type VectorIndexIvfSettings,
+  type VectorIndexIvfState,
   type VectorIndexRequest,
   type VectorIndexResponse,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
+  type VectorIndexState,
   type VectorIndexStorage,
   type VectorIndexWriteParams
 } from '@/schemas/index'
@@ -48,10 +52,66 @@ export interface VectorIndex {
   readonly storage: VectorIndexStorage | undefined
   /** Number of live entries as of the last call that changed or reported it. */
   readonly length: number
+  /**
+   * TQ+ calibration state as of create, load, or the last successful add.
+   * Undefined when an external provider does not report calibration.
+   */
+  readonly calibrated: boolean | undefined
+  /**
+   * Staged search setting as of the last successful call that reported it.
+   * Undefined when an external provider does not report the setting.
+   */
+  readonly stagedSearch: boolean | undefined
+  /**
+   * IVF settings from the last call that reported them; `built` says whether
+   * searches use the IVF lists. Null while IVF is off, as on every new or
+   * loaded index. Undefined when an external provider has no IVF search.
+   */
+  readonly ivf: VectorIndexIvfState | null | undefined
+
+  /**
+   * Turns TurboVec staged search on or off. Off on every new or loaded index.
+   * On supported hosts, dimensions divisible by 32 and at least 32,768 entries
+   * use a shortlist for faster searches with lower recall. Other dimensions
+   * and v3 snapshots retain the setting but scan in full. The setting is not
+   * saved in snapshots. Rejects non-TurboVec storage or unsupported providers.
+   */
+  setStagedSearch(
+    params: VectorIndexSetStagedSearchParams,
+    options?: RPCOptions
+  ): Promise<{ stagedSearch: boolean }>
+
+  /**
+   * Turns IVF search on or off. With settings, it groups the entries into
+   * `nLists` lists now, and `search()` scans only the `nProbe` lists nearest
+   * each query. On a large F32 index that can be many times faster than a
+   * full scan. On TurboVec storage the gain varies with the index, so measure
+   * it on your data. Either way it can miss true nearest entries. A higher `nProbe` misses fewer and costs more; `nProbe >= nLists` scans
+   * every entry. `nLists` is an upper bound: an index with fewer entries
+   * builds one list per entry, while `ivf.nLists` keeps the requested value.
+   * `nIter` sets the clustering passes of the build, and the default 0 keeps
+   * the initial centroids. Null turns IVF off. The build blocks the worker until
+   * it finishes, and its cost grows with `nIter`, `nLists`, the entry count
+   * and `dim`.
+   *
+   * Any later add or remove sets `ivf.built` to false, and searches scan every
+   * entry until the next `setIvf()`. So does a build that fails; the handle
+   * keeps its last reported state until another call reports one. Snapshots
+   * do not save the setting.
+   * Repeating the call with the same `nLists` and `nIter` on a built index
+   * only changes `nProbe`. Staged search, when on, also applies within the
+   * probed lists. Rejects providers without IVF support.
+   */
+  setIvf(
+    settings: VectorIndexIvfSettings | null,
+    options?: RPCOptions
+  ): Promise<{ ivf: VectorIndexIvfState | null }>
 
   /**
    * Adds vectors under the given ids in one atomic batch. Rejects duplicate
    * ids, ids equal to 2^64 - 1, and rows whose length differs from `dim`.
+   * A fresh TurboVec index attempts calibration from a first batch of at
+   * least 1,000 vectors. A smaller first batch leaves it uncalibrated.
    * @returns The number of live entries after the add.
    */
   add(params: VectorIndexAddParams, options?: RPCOptions): Promise<{ length: number }>
@@ -59,17 +119,22 @@ export interface VectorIndex {
   /**
    * Finds the `k` nearest entries to one query. Hits are ordered by
    * descending score, then ascending id, and fewer than `k` are returned
-   * when the index holds fewer entries.
+   * when the index holds fewer entries. With built IVF lists it scans only
+   * the nearest ones. `nProbe` overrides the setting for this call and
+   * rejects while IVF is off.
    * @overloadLabel "Single query"
    */
-  search(params: { query: number[]; k: number }, options?: RPCOptions): Promise<VectorIndexHit[]>
+  search(
+    params: { query: number[]; k: number; nProbe?: number },
+    options?: RPCOptions
+  ): Promise<VectorIndexHit[]>
 
   /**
    * Finds the `k` nearest entries to each query row; one hit list per row.
    * @overloadLabel "Multiple queries"
    */
   search(
-    params: { queries: number[][]; k: number },
+    params: { queries: number[][]; k: number; nProbe?: number },
     options?: RPCOptions
   ): Promise<VectorIndexHit[][]>
 
@@ -112,6 +177,9 @@ interface OpenedIndex {
   dim: number
   length: number
   storage?: VectorIndexStorage | undefined
+  calibrated?: boolean | undefined
+  stagedSearch?: boolean | undefined
+  ivf?: VectorIndexIvfState | null | undefined
 }
 
 /**
@@ -136,6 +204,9 @@ export function createVectorIndexClient(transport: typeof send) {
   function createHandle(opened: OpenedIndex): VectorIndex {
     const { indexId, dim, storage } = opened
     let length = opened.length
+    let calibrated = opened.calibrated
+    let stagedSearch = opened.stagedSearch
+    let ivf = opened.ivf
     let disposed = false
 
     // Row lengths are checked here so a mismatch fails before any request is
@@ -160,10 +231,23 @@ export function createVectorIndexClient(transport: typeof send) {
       const queries = 'queries' in params ? params.queries : [params.query]
       assertRows(queries, 'queries')
       const response = await call(
-        { type: 'vectorIndex', operation: 'search', indexId, queries, k: params.k },
+        {
+          type: 'vectorIndex',
+          operation: 'search',
+          indexId,
+          queries,
+          k: params.k,
+          ...(params.nProbe !== undefined && { nProbe: params.nProbe })
+        },
         options
       )
       return 'queries' in params ? response.results : (response.results[0] ?? [])
+    }
+
+    function syncCachedState(response: VectorIndexState) {
+      calibrated = response.calibrated
+      stagedSearch = response.stagedSearch
+      ivf = response.ivf
     }
 
     const handle = {
@@ -172,6 +256,40 @@ export function createVectorIndexClient(transport: typeof send) {
       storage,
       get length() {
         return length
+      },
+      get calibrated() {
+        return calibrated
+      },
+      get stagedSearch() {
+        return stagedSearch
+      },
+      get ivf() {
+        return ivf
+      },
+      async setStagedSearch(params: VectorIndexSetStagedSearchParams, options?: RPCOptions) {
+        const response = await call(
+          { type: 'vectorIndex', operation: 'setStagedSearch', indexId, enabled: params.enabled },
+          options
+        )
+        stagedSearch = response.stagedSearch
+        return { stagedSearch }
+      },
+      async setIvf(settings: VectorIndexIvfSettings | null, options?: RPCOptions) {
+        const response = await call(
+          {
+            type: 'vectorIndex',
+            operation: 'setIvf',
+            indexId,
+            ivf: settings && {
+              nLists: settings.nLists,
+              nProbe: settings.nProbe,
+              ...(settings.nIter !== undefined && { nIter: settings.nIter })
+            }
+          },
+          options
+        )
+        ivf = response.ivf
+        return { ivf }
       },
       async add(params: VectorIndexAddParams, options?: RPCOptions) {
         assertRows(params.vectors, 'vectors')
@@ -186,6 +304,7 @@ export function createVectorIndexClient(transport: typeof send) {
           options
         )
         length = response.length
+        syncCachedState(response)
         return { length }
       },
       search,
@@ -195,6 +314,7 @@ export function createVectorIndexClient(transport: typeof send) {
           options
         )
         length = response.length
+        syncCachedState(response)
         return response.removed
       },
       async contains(params: VectorIndexIdsParams, options?: RPCOptions) {
@@ -268,7 +388,7 @@ const client = createVectorIndexClient(send)
  * documents.
  *
  * @param params - Index parameters
- * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 1024.
+ * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 16384.
  * @param params.storage - Storage mode from `VectorIndexStorage`; defaults to `TURBOVEC_Q4`. `TURBOVEC_Q2` halves memory again at lower recall; `F32`, `Q8`, and `Q4` are exact or generically quantised stores for dimensions TurboVec cannot hold.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns A handle whose methods add, search, remove, snapshot, and dispose the index.

@@ -3,10 +3,7 @@ import {
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
-import {
-  END_OF_INPUT,
-  MAX_BUFFERED_BYTES,
-} from "../../lib/constants";
+import { END_OF_INPUT, MAX_BUFFERED_BYTES } from "../../lib/constants";
 import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
 import type { ParakeetSpeakerAttributionConfig } from "./options";
@@ -38,12 +35,18 @@ export interface ParakeetConfigurationParams {
   captionEnabled?: boolean;
   timestampsEnabled?: boolean;
   seed?: number;
-  /** Indic CTC language id or Nemotron locale alias; empty selects auto. */
+  /**
+   * Indic CTC language id, Nemotron locale alias, or the full TranscribePsy
+   * EU route (`"en"`, `"other"`, `"auto"`); empty selects auto.
+   */
   language?: string;
   streaming?: boolean;
   /**
-   * Model-specific when omitted: Nemotron 320 ms, Unified RNN-T 560 ms,
-   * existing models 2000 ms.
+   * Decode window in milliseconds. Omit or set to 0 for the model default.
+   * Offline TDT push streams default to 30000 ms and require at least 30000 ms.
+   * Full TranscribePsy EU defaults to 2000 ms. Nemotron defaults to 320 ms
+   * (80, 160, 320, 560, or 1120 ms). Unified RNN-T defaults to 560 ms
+   * (80, 160, 560, or 1040 ms). Other Unified values snap down to a trained cadence.
    */
   streamingChunkMs?: number;
   streamingHistoryMs?: number;
@@ -101,10 +104,7 @@ export interface WeightData {
 }
 
 export type AudioInput =
-  | Float32Array
-  | Int16Array
-  | ArrayBuffer
-  | ArrayBufferView;
+  Float32Array | Int16Array | ArrayBuffer | ArrayBufferView;
 
 export type AppendData =
   | { type: "audio"; data?: ArrayBufferLike }
@@ -299,9 +299,17 @@ export class ParakeetInterface {
     }
     if (isError || eventStr.includes("Error")) return "Error";
     if (
-      data !== null && typeof data === "object" &&
+      data !== null &&
+      typeof data === "object" &&
       (data as { type?: unknown }).type === "endOfTurn"
-    ) return "EndOfTurn";
+    )
+      return "EndOfTurn";
+    if (
+      data !== null &&
+      typeof data === "object" &&
+      (data as { type?: unknown }).type === "progress"
+    )
+      return "Progress";
     if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
@@ -334,8 +342,7 @@ export class ParakeetInterface {
   ): void {
     const isError = typeof error === "string" && error.length > 0;
     const mappedEvent = this._mapAddonEvent(event, data, isError);
-    const isTerminal =
-      mappedEvent === "Error" || mappedEvent === "JobEnded";
+    const isTerminal = mappedEvent === "Error" || mappedEvent === "JobEnded";
     const jobId = this._activeJobId;
 
     if (jobId === null) {
@@ -433,7 +440,11 @@ export class ParakeetInterface {
     const previousState = this._state;
     let accepted = false;
     try {
-      accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
+      accepted = this._binding.runJob(this._handle, {
+        ...job,
+        type: "audio",
+        input,
+      });
     } catch (error) {
       this._setState(previousState);
       throw error;

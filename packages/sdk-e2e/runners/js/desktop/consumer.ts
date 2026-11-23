@@ -9,7 +9,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
@@ -36,6 +36,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
 import { ParakeetStreamExecutor } from '../shared/executors/node/parakeet-stream-executor.js'
 import { ParakeetExecutor } from '../shared/executors/node/parakeet-executor.js'
@@ -53,6 +54,7 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 import * as MODEL_CONSTANTS from '@qvac/sdk'
@@ -117,7 +119,7 @@ function ensureDesktopE2EConfig() {
   }
 }
 
-function resolveBatchAttachmentPath(inputPath: string) {
+function resolveBatchMediaPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
   return path.resolve(process.cwd(), 'assets/images', fileName)
@@ -126,10 +128,12 @@ function resolveBatchAttachmentPath(inputPath: string) {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureDesktopE2EConfig()
 
-  // `filteredTests` (when present) is the producer's post-filter test list
-  // delivered via register-ack; absence keeps the legacy "warm everything" path.
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 const stepBindings = createStepBindings(resources)
@@ -142,7 +146,7 @@ export const executor = createExecutor({
     new RerankExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
@@ -154,6 +158,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
 
@@ -192,6 +197,7 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new KvCacheRestartExecutor(resources),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

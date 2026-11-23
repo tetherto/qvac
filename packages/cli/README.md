@@ -9,6 +9,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Installation](#installation)
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
+  - [`fit`](#fit)
   - [`configure`](#configure)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
@@ -108,6 +109,74 @@ qvac doctor --json
 
 # Fail-fast in a script (exit 1 on any required check)
 qvac doctor --quiet || exit 1
+```
+
+### `fit`
+
+Check whether one model, or several loaded together, fit this machine's memory
+before anything is downloaded. Each model's engine fitter runs against the
+registry's weightless description of the model, tens of KB, or against the
+model's own files when it is already downloaded. The answer is the one
+`POST /qvac/v1/models/fit` gives for the same input.
+
+```bash
+qvac fit [options] [models...]
+```
+
+Each model is an SDK model constant name, such as `QWEN3_8B_INST_Q4_K_M`, or a
+`serve.models` alias from the config file.
+
+**Options:**
+
+| Flag                         | Description                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--set <[target:]key=value>` | Config to judge with, for one model or model type, or for every model without a target. Repeatable. |
+| `--catalog`                  | Judge every SDK model on its own, and list the models with no verdict apart, each with its reason.  |
+| `--json`                     | Output the answer as JSON, in the shape the `models/fit` route returns.                             |
+| `-c, --config <path>`        | Config file with `serve.models` aliases (default: auto-detect `qvac.config.*`).                     |
+
+A `--set` target is a model, or a model type such as `llamacpp-completion` for
+every model of that type. A model's own setting wins over its type's, and its
+type's over one for every model. A dotted key nests (`contextParams.n_ctx=4096`).
+A value is read as JSON when it parses (`8192`, `true`, `["a"]`) and as a string
+otherwise. A companion source, such as `projectionModelSrc`, names an SDK model
+constant.
+
+**Output:** each model's verdict alone, the context and GPU layers a language
+model was judged at, and the memory it takes on each device against what is
+free. An `unknown` model shows why it has no verdict, and a model whose devices
+each fit but overflow the pool they share names that pool. Then the verdict, with
+what the models take from each memory pool: for one model its own, for several
+all of them loaded together. A Metal GPU and the CPU share one pool, the host's
+memory.
+
+**Exit status:** `0` fits, `2` does not fit, `3` unknown, `1` error. Catalog
+mode exits `0` once every model is judged.
+
+**What to pass:**
+
+- A language model is judged at the SDK's default context of 1024 tokens unless
+  `ctx_size` is set. `--set ctx_size=0` reports the longest context that fits.
+- A model made of several parts needs its companion files and engine in its
+  config: a TTS model needs `ttsEngine`, a translation model its `engine` and a
+  language pair (`from`, `to`). A translation model is judged once downloaded.
+- A companion file on its own, such as a projector, VAE or codec, cannot be
+  judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it.
+
+**Examples:**
+
+```bash
+# One model at 8K context
+qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
+
+# Two models loaded together, the larger at the longest context that fits
+qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
+
+# A translation model with its language pair
+qvac fit BERGAMOT_DE_EN --set engine=Bergamot --set from=de --set to=en
+
+# Every SDK model, language models at the longest context that fits, as JSON
+qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json
 ```
 
 ### `configure`
@@ -264,7 +333,11 @@ an installed `node_modules` tree has prebuilds for the requested host(s). For
 Android and iOS hosts, it also checks every declared `engines.bare` range
 against the Bare that Bare Kit runs on that platform, as pinned by the SDK's
 bare-stow. Desktop hosts are checked against the Bare of the project's
-`bare-sidecar`.
+`bare-sidecar`. For a bundle that `qvac bundle sdk` wrote for the
+`pear-runtime` target, they are checked against the `bare-sidecar` that
+`pear-runtime` resolves, and for the `bare-kit` target, against
+`bare-kit-kotlin` as bare-stow pins it. The target is read from the
+`package.json` next to the bundle.
 
 ```bash
 qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
@@ -281,7 +354,7 @@ parsed as bare-pack bundles, directories are walked as `node_modules` trees.
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--addons-source <path>` | Required. Path to a worker bundle in `qvac/worker/` or a `node_modules` directory.                                                                                    |
 | `--host <target>`        | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
-| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release newer than the built-in tables, and no npm registry lookup for override suggestions.      |
+| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release missing from the built-in tables, and no npm registry lookup for override suggestions.    |
 | `--project-root <path>`  | Optional. Project root used to resolve bundle resolutions and detect the package manager for override suggestions (default: cwd).                                     |
 | `--json`                 | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                 |
 | `--quiet, -q`            | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                 |
@@ -322,9 +395,9 @@ qvac verify bundle --addons-source qvac/worker/index.bundle \
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`. |
-| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the Bare that Bare Kit runs on a requested Android or iOS host. The issue lists those hosts.                                                                                                                                          |
-| `engines-mismatch`         | warning | A package that is not an addon declares an `engines.bare` range that does not include the Bare that Bare Kit runs on a requested Android or iOS host.                                                                                                                                            |
-| `unknown-runtime-version`  | warning | A package declares `engines.bare` and an Android or iOS host was requested, but the Bare version of that platform's Bare Kit could not be determined, for example because the binding is newer than the built-in tables and `--offline` is set.                                                  |
+| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the Bare that a requested host runs: Bare Kit's on Android and iOS, and on desktop the `bare-sidecar`'s described above. The issue lists those hosts.                                                                                 |
+| `engines-mismatch`         | warning | A package that is not an addon declares an `engines.bare` range that does not include the Bare that a requested Android, iOS or desktop host runs.                                                                                                                                               |
+| `unknown-runtime-version`  | warning | A package declares `engines.bare`, but the Bare version of a requested host could not be determined, for example because the Bare Kit binding is missing from the built-in tables and `--offline` is set, or because no `bare-sidecar` is installed for a desktop host.                          |
 | `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                 |
 | `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                       |
 | `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                                                               |
@@ -346,15 +419,18 @@ the project's own `@qvac/sdk`, then finds the Bare version in this order, and
 says so before any step that uses the network:
 
 1. Built-in tables of binding → bare-kit versions and bare-kit → Bare
-   versions, read from each release's `CMakeLists.txt`.
-2. For a release newer than its table's newest entry: the binding's
-   `CMakeLists.txt` and the matching bare-kit `CMakeLists.txt` on
-   `raw.githubusercontent.com` (up to two requests, 5 s timeout each). Skipped
-   with `--offline`.
+   versions, read from each release's `CMakeLists.txt`. The tables also list
+   the releases whose `CMakeLists.txt` names no version; those are reported
+   as unknown without a lookup.
+2. For a release missing from the tables: the binding's `CMakeLists.txt` and
+   the matching bare-kit `CMakeLists.txt` on `raw.githubusercontent.com` (up
+   to two requests, 5 s timeout each). Skipped with `--offline`.
 
 The tables are regenerated with `npm run bare-kit-runtimes:generate` in
-`packages/sdk`, which only probes releases newer than their newest entries
-(`npm run bare-kit-runtimes:generate -- --full` rebuilds them).
+`packages/sdk`, which reads every tag of each repository and probes the
+releases the tables do not list yet. A failed request stops the run without
+writing the tables. `npm run bare-kit-runtimes:generate -- --full` rebuilds
+them from every release.
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 prints one fix per affected platform. For each failing package it fetches the
@@ -384,7 +460,7 @@ See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request
 | Flag                             | Description                                                                                                                          |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                             |
-| `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                                |
+| `-p, --port <number>`            | Port to listen on (default: `11435`).                                                                                                |
 | `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                              |
 | `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request.  |
 | `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                              |
@@ -495,7 +571,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.23.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.24.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -523,7 +599,7 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.23.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.24.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 

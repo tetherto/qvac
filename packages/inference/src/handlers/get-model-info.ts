@@ -10,6 +10,7 @@ import { getAllModelIds, getModelEntry } from '@/runtime/model-registry'
 import { generateShortHash } from '@/utils/index'
 import { promises as fsPromises } from 'bare-fs'
 import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
+import { acceptsLegacyFlatCache } from '@/utils/cache/layout'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { ModelNotFoundError } from '@/errors/index'
 import {
@@ -18,7 +19,7 @@ import {
   getCoremlSidecarSpec,
   getCoremlSetKey
 } from '@/handlers/load-model/coreml-sidecars'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 
 type CacheStatusResult = {
@@ -133,7 +134,12 @@ async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStat
         filename
       )
       await fsPromises.access(primaryPath)
-      const set = await findCoremlCompanionSet(await getRegistryClient(), model, platform)
+      let set: Awaited<ReturnType<typeof findCoremlCompanionSet>>
+      {
+        // A status check reports what is on disk rather than wait on another process.
+        await using lease = await acquireRegistryClient({ wait: 'status' })
+        set = await findCoremlCompanionSet(lease.client, model, platform)
+      }
       if (set) {
         const status = await handleCompanionSetModel(set, model.registryPath, model.addon)
         if (status.isCached) return status
@@ -192,10 +198,7 @@ async function handleCompanionSetModel(
     )
     const legacyResult = await checkCacheStatus(fileEntries, legacyPaths, primaryKey)
     if (legacyResult.isCached) return legacyResult
-  } else if (addon === 'nmt') {
-    // Legacy flat-cache compatibility for Bergamot-style companion sets.
-    // This is valid only for families whose runtime still works with explicit
-    // per-file absolute paths; it is not a generic rule for all companion sets.
+  } else if (acceptsLegacyFlatCache(addon)) {
     const flatPaths = files.map((f) => getSingleFileCachePath(f.registryPath))
     const flatResult = await checkCacheStatus(fileEntries, flatPaths, primaryKey)
     if (flatResult.isCached) return flatResult

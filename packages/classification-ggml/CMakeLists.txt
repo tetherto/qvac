@@ -41,6 +41,11 @@ if(NOT BUILD_FUZZING)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GgmlBackend.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelFootprint.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelFit.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp
   )
 
   target_sources(

@@ -7,9 +7,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-const workflow = readFileSync(join(root, '.github/workflows/reusable-prebuilds.yml'), 'utf8')
-const step = workflow.split('        name: Verify Linux x64 XDNA module\n')[1].split('        run: |\n')[1].split('\n      - ')[0]
-const script = step.split('\n').map(line => line.slice(10)).join('\n')
+// fabric's linux-x64 build runs this check after bare-make install.
+const script = readFileSync(join(root, 'packages/fabric/ci/verify-xdna-module.sh'), 'utf8')
 
 function checkPackage(t, includeInstructions) {
   const cwd = mkdtempSync(join(tmpdir(), 'qvac-xdna-package-'))

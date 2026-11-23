@@ -1,0 +1,217 @@
+---
+title: Platform support
+icon: Stethoscope
+description: Hardware, operating systems, and clients QVAC supports, and what each one requires.
+schemaType: TechArticle
+---
+
+## Overview
+
+Read this page when you choose where your QVAC application will run, or when you prepare a machine for it. That can be your development machine, your users' devices, or your servers. The page tells you which platforms QVAC supports, which hardware it uses on each one, and what software the host needs.
+
+These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), because all of them drive the same worker.
+
+<Callout type="info">
+  A supported platform runs QVAC, but it may not run every model! A model needs to fit in the device's memory, and the device needs enough compute to run it. For example, video generation needs a GPU with a lot of VRAM, so it does not run on every supported device. Each [AI capability](/sdk#ai-tasks) page lists its own hardware requirements.
+</Callout>
+
+## Compatibility matrix
+
+| Platform | Min version | Architecture | GPU backends | Clients | Notes |
+|----------|-------------|--------------|--------------|---------|-------|
+| macOS | 14.0+ | arm64 | Metal | JS/TS, Python, CLI | Intel Macs are not supported. |
+| iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Devices and simulators. |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA, ROCm/HIP (x64) | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
+| Android | 10+ (API 29) | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
+| Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference. |
+
+## Hardware
+
+QVAC runs AI inference on the CPU or the GPU. The GPU is much faster, especially for large models, while small models often run well on the CPU. QVAC uses the GPU when the device has one it can use, and falls back to the CPU when it doesn't.
+
+### CPU
+
+The CPU works on every supported platform and needs no driver.
+
+On x64, most capabilities pick the fastest code path your processor supports, so processors without AVX2, such as Intel Sandy Bridge and Ivy Bridge, still run them, only slower. Image generation, video generation and world simulation need AVX2, and so do transcription, text-to-speech and audio generation on Windows.
+
+### Memory and disk
+
+- RAM: 2 GB minimum, 4 GB recommended. With less than 4 GB, most LLMs fail to load.
+- Free RAM when loading a model: 2 GB.
+- Free disk: 5 GB. A single model is often several GB.
+
+To check whether a specific model fits a device, use [`assessModelFit`](/sdk/models/assess-model-fit).
+
+### GPU
+
+#### Backends
+
+| Backend | Platforms | GPUs | Needs on the host |
+|---------|-----------|------|-------------------|
+| Metal | macOS arm64, iOS | Apple silicon | Nothing |
+| Vulkan `>= 1.4` | Linux, Windows, Android | Any GPU with a Vulkan driver | A Vulkan loader and a GPU driver with Vulkan support |
+| CUDA | Linux x64, Linux arm64, Windows x64 | NVIDIA | The NVIDIA driver and the CUDA 13 runtime libraries |
+| ROCm/HIP | Linux x64 | AMD gfx1151 (Strix Halo) | - |
+| OpenCL | Android | Qualcomm Adreno 700+ | Nothing |
+
+All backends ship prebuilt. CUDA support varies by AI capability: every capability that offers CUDA supports it on Linux x64, and some also support it on Linux arm64 and Windows x64. Each capability page says which.
+
+#### Does QVAC use my NVIDIA GPU?
+
+Yes, on Linux and Windows. Where the AI capability supports CUDA, QVAC uses it when the NVIDIA driver and the CUDA runtime libraries are installed. Otherwise, QVAC uses the GPU through Vulkan, which the NVIDIA driver provides.
+
+#### Backend selection
+
+When more than one backend is available, QVAC prefers CUDA, then Vulkan, then the CPU. Some AI capabilities use the GPU by default and others need you to turn it on; each capability page documents its default and how to pick a backend or device.
+
+To force the CPU, or another setting, on specific devices, use [`deviceDefaults`](/sdk/configuration#devicepattern).
+
+#### GPU drivers and runtimes
+
+##### Vulkan
+
+On Linux and Windows, Vulkan `>= 1.4` usually comes with the GPU driver: you need a Vulkan loader and a driver with Vulkan support.
+
+On Linux:
+
+<Callout type="info">
+On PCs, the Vulkan runtime is usually installed along with the GPU drivers. In other words, _if you've installed the correct driver for your GPU (with Vulkan support), you typically don't need to install anything else._
+</Callout>
+
+To verify it, install Vulkan tools and run `vulkaninfo`:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu" default>
+
+```bash
+sudo apt update
+sudo apt install -y vulkan-tools
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora/RHEL">
+
+```bash
+sudo dnf install -y vulkan-tools vulkan-devel
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+In minimalist/headless installations (e.g., Ubuntu Server), you may need to manually install the Vulkan loader, and ensure a Vulkan-capable GPU driver (ICD) is installed. The exact packages vary by distro and GPU vendor. For example:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu (Intel/AMD via Mesa)" default>
+
+```bash
+sudo apt update
+sudo apt install -y libvulkan1 mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora">
+
+```bash
+sudo dnf install -y vulkan-loader mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+Ensure QVAC can detect the GPU Vulkan driver by adding your user to the `render` and `video` groups:
+
+```bash
+sudo usermod -aG render,video $USER
+```
+
+On Windows, install the correct GPU vendor driver. To verify it, [install the Vulkan SDK](https://vulkan.lunarg.com) and run:
+
+```powershell
+vulkaninfo --summary
+```
+
+##### CUDA
+
+Install the NVIDIA driver and the CUDA 13 runtime libraries: `cudart` and `cuBLAS`, plus `nvrtc` on Linux. On Windows, QVAC loads them from `%CUDA_PATH%\bin\x64`, not from `PATH`. On NVIDIA Jetson, QVAC uses CUDA 12.6 instead.
+
+These rules apply to most AI capabilities. Image generation has exceptions; see [Image generation](/sdk/ai-capabilities/image-generation#hardware).
+
+If the driver or a library is missing, QVAC skips CUDA and uses Vulkan or the CPU. You don't need to configure anything.
+
+{/* TODO(addons review): add a verification command and the package names per distro. */}
+
+##### Metal
+
+Nothing to install: Metal is part of macOS and iOS.
+
+### NPU
+
+On Linux x64, QVAC can use an AMD XDNA2 NPU. It is opt-in and needs XRT 2.25 or newer. See [AMD NPU](/sdk/ai-capabilities/text-generation#amd-npu).
+
+## Software
+
+These requirements apply with or without a GPU.
+
+### Operating system
+
+#### Linux
+
+- Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) `>= 13`.
+- `libatomic.so.1`: required by the Linux `rocksdb-native` prebuilds used by the SDK's storage dependencies, including for CPU-only inference. Minimal container images may not include it.
+
+On Debian or Ubuntu, install it with:
+
+```bash
+sudo apt update
+sudo apt install -y libatomic1
+```
+
+In a container build running as root, omit `sudo`. Missing libatomic can prevent the worker from starting before any model loads; see [missing libatomic at startup](/resources/troubleshooting#startup-failure-missing-libatomicso1).
+
+On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
+
+##### RDMA (optional)
+
+RDMA needs `libibverbs.so.1`, your NIC's provider package, and an RDMA device. TCP RPC does not require libibverbs. On Debian or Ubuntu, the provider is commonly supplied by `ibverbs-providers`:
+
+```bash
+sudo apt install -y libibverbs1 ibverbs-providers
+```
+
+Missing libibverbs disables RDMA while RPC continues over TCP, unless `expectRdma: true` requires RDMA. See [RPC library troubleshooting](/resources/troubleshooting#rpc-server-failure-missing-libibverbsso1).
+
+#### Windows
+
+Transcription, text-to-speech and audio generation need Vulkan `>= 1.4`, even for CPU-only inference. Other capabilities run on the CPU without it. See [Vulkan](#vulkan).
+
+### Clients and runtimes
+
+Each client has its own requirements. Install steps live on each client's page.
+
+| Client | Requirements |
+|--------|--------------|
+| [JS/TS SDK](/sdk/js-ts-sdk) | Node.js `>= v22.17` (bundling the worker, for any target, needs `^22.21.0 \|\| >=24.9.0`), npm `>= v10.9`; Bare `>= v1.32.0` when targeting Bare; Expo `>= v58` for mobile. |
+| [Python SDK](/sdk/python-sdk) | Python `>= 3.10`. Node.js is not required. Bare comes from the `bare-sidecar` wheels, which cover the desktop platforms. Linux needs glibc `>= 2.34`: with an older glibc, or musl, `bare-sidecar` installs without Bare and the client cannot start. |
+| [Kotlin SDK](/sdk/kotlin-sdk) | Android `arm64-v8a`, API 29 or newer, `compileSdk` 36 or newer; Kotlin `>= 2.3`. Desktop JVM is experimental. |
+| [CLI](/cli) | Node.js `^22.21.0 \|\| >=24.9.0`. Desktop only: `darwin-arm64`, `linux-arm64`, `linux-x64`, `win32-x64`. |
+
+### Native packages and installers
+
+QVAC's native runtime ships as one package per host, such as `@qvac/fabric-linux-x64`.
+
+- **Desktop:** the platform packages are optional dependencies, and your package manager installs the one that matches your OS and CPU. Installs with `--omit=optional` skip it, so the app fails at startup, not at install.
+- **Mobile:** no package manager picks a mobile package on its own, so your app declares it as a direct dependency. The Expo plugin's `installMissingPrebuilds` option adds it for you with npm 7+, pnpm, bun, or Yarn Berry (2+); it refuses Yarn Classic (v1). See [Expo setup](/sdk/js-ts-sdk#expo).
+
+## Known limits
+
+- **No Android emulators.** QVAC runs on physical Android devices only.
+- **The CLI runs on desktops only.** See [Clients and runtimes](#clients-and-runtimes).
+- **Intel Macs are not supported.** See [Compatibility matrix](#compatibility-matrix).
+- **On Windows, transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference.** See [Windows](#windows).
+- **Minimal Linux images may lack `libatomic.so.1`.** See [Linux](#linux).
+- **`--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
+
+## Check your setup
+
+Run `qvac doctor` to check the current host, the toolchains for your deploy targets, and the `@qvac/sdk` install in your project. See [`qvac doctor`](/cli#qvac-doctor) for every check and its output.

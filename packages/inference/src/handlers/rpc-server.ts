@@ -14,7 +14,7 @@ import {
   RequestIdConflictError
 } from '@/errors/index'
 
-const requests = new Map<Promise<unknown>, string>()
+const requests = new Map<Promise<unknown>, { requestId: string; sessionId: string | undefined }>()
 let closing: Promise<void> | undefined
 
 async function run<T>(operation: string, work: () => Promise<T>): Promise<T> {
@@ -40,13 +40,14 @@ async function run<T>(operation: string, work: () => Promise<T>): Promise<T> {
 async function withContext<T>(
   kind: 'rpcServer' | 'rpcDiscovery',
   requestId: string,
+  sessionId: string | undefined,
   work: (ctx: import('@/runtime/request-context').RequestContext) => Promise<T>
 ): Promise<T> {
   const task = (async () => {
-    await using ctx = await getRequestRegistry().begin({ requestId, kind })
+    await using ctx = await getRequestRegistry().begin({ requestId, sessionId, kind })
     return await work(ctx)
   })()
-  requests.set(task, requestId)
+  requests.set(task, { requestId, sessionId })
   try {
     return await task
   } catch (error) {
@@ -61,10 +62,15 @@ async function withContext<T>(
 
 export async function handleStartRpcServer(request: StartRpcServerRequest) {
   return run('startRpcServer', () =>
-    withContext('rpcServer', request.requestId ?? generateRandomRequestId(), async (ctx) => ({
-      type: 'startRpcServer' as const,
-      ...(await rpcServers.start(request, ctx))
-    }))
+    withContext(
+      'rpcServer',
+      request.requestId ?? generateRandomRequestId(),
+      request.sessionId,
+      async (ctx) => ({
+        type: 'startRpcServer' as const,
+        ...(await rpcServers.start(request, ctx))
+      })
+    )
   )
 }
 export async function handleStopRpcServer(request: StopRpcServerRequest) {
@@ -75,17 +81,22 @@ export async function handleStopRpcServer(request: StopRpcServerRequest) {
 }
 export async function handleDiscoverRpcServers(request: DiscoverRpcServersRequest) {
   return run('discoverRpcServers', () =>
-    withContext('rpcDiscovery', request.requestId ?? generateRandomRequestId(), async (ctx) => ({
-      type: 'discoverRpcServers' as const,
-      servers: await discoverRpcEndpoints(request.topic, request.timeoutMs ?? 5000, ctx)
-    }))
+    withContext(
+      'rpcDiscovery',
+      request.requestId ?? generateRandomRequestId(),
+      request.sessionId,
+      async (ctx) => ({
+        type: 'discoverRpcServers' as const,
+        servers: await discoverRpcEndpoints(request.topic, request.timeoutMs ?? 5000, ctx)
+      })
+    )
   )
 }
 
 export function closeRpcResources(): Promise<void> {
   if (closing) return closing
   closing = (async () => {
-    for (const requestId of requests.values()) getRequestRegistry().cancel({ requestId })
+    for (const target of requests.values()) getRequestRegistry().cancel(target)
     const stopping = rpcServers.close()
     const results = await Promise.allSettled([stopping, ...requests.keys()])
     const stopResult = results[0]!

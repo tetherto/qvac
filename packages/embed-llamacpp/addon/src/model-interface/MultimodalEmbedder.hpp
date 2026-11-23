@@ -10,13 +10,15 @@
 
 #include <llama-cpp.h>
 #include <llama/common/common.h>
+#include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
 
-#include "AudioLengthLimit.hpp"
 #include "ImagePixelLimit.hpp"
 
 /// @brief Projector options of a load config, with @qvac/llm-llamacpp's keys.
 struct MultimodalOptions {
+  static constexpr uint64_t DEFAULT_MAX_AUDIO_SECONDS = 600;
+
   /// image-min-tokens / image-max-tokens: per-image token budget of
   /// dynamic-resolution vision encoders; -1 keeps the projector's default.
   int imageMinTokens = -1;
@@ -27,8 +29,9 @@ struct MultimodalOptions {
   std::optional<bool> useGpu;
   /// image-max-megapixels: largest image accepted, checked before decoding.
   uint64_t maxImagePixels = image_pixel_limit::DEFAULT_MAX_PIXELS;
-  /// audio-max-seconds: longest audio accepted, checked before decoding.
-  uint64_t maxAudioSeconds = audio_length_limit::DEFAULT_MAX_SECONDS;
+  /// audio-max-seconds: longest audio accepted. mtmd checks it against the
+  /// length its decoder reads, before it allocates the samples.
+  uint64_t maxAudioSeconds = DEFAULT_MAX_AUDIO_SECONDS;
 };
 
 /// @brief Reads and erases the projector options from @p config: fabric's
@@ -39,6 +42,21 @@ struct MultimodalOptions {
 MultimodalOptions takeMultimodalOptions(
     std::unordered_map<std::string, std::string>& config,
     bool hasProjectionModel);
+
+/// @brief The size limits a media part is checked against before it is
+/// decoded.
+struct MediaLimits {
+  uint64_t maxImagePixels;
+  uint64_t maxAudioSeconds;
+};
+
+/// @brief mtmd-helper's decode options for @p limits. mtmd compares them with
+/// the length and size its own decoders read, before it allocates the output.
+/// @p audioSampleRate is the projector's (mtmd_get_audio_sample_rate). Below 1
+/// there is no audio encoder and no audio limit is set, since mtmd rejects
+/// audio then anyway.
+mtmd_helper_init_opt
+mediaDecodeOptions(const MediaLimits& limits, int audioSampleRate);
 
 /// @brief One part of a multimodal input, in prompt order: text, or the bytes
 /// of a media file that mtmd decodes (an image, or wav/mp3/flac audio).

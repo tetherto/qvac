@@ -106,6 +106,31 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
+// A resolved config carries a system prompt only when the caller configures one.
+test('no system_prompt default is injected', (t) => {
+  const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
+
+  t.absent('system_prompt' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
+
+  const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    {},
+    ctx,
+    [],
+    []
+  )
+  t.absent('system_prompt' in resolved, 'absent when the caller sets none')
+
+  const configured = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { system_prompt: 'Answer in French.' },
+    ctx,
+    [],
+    []
+  )
+  t.is(configured.system_prompt, 'Answer in French.', 'a configured prompt is kept')
+})
+
 // gpu_layers stays absent from a resolved config unless the caller sets it.
 test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
@@ -302,6 +327,20 @@ test('BUILTIN: Pixel device gets cpu + flashAttention off', (t) => {
   t.alike(log?.appliedPatterns, ['Android devices (default)', 'Pixel devices (default)'])
   t.is(embedResult.device, 'cpu')
   t.is(embedResult.flashAttention, 'off')
+
+  const rerankResult = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppRerank,
+    {},
+    ctx,
+    [],
+    BUILTIN_DEVICE_PATTERNS,
+    (l) => {
+      log = l
+    }
+  )
+
+  t.alike(log?.appliedPatterns, ['Pixel devices (default)'])
+  t.is(rerankResult.device, 'cpu')
 })
 
 test('BUILTIN: Non-Pixel Android gets flashAttention off only', (t) => {
@@ -419,4 +458,34 @@ test('draftModelSrc pairs with a spec_type from device defaults', (t) => {
       ),
     /draftModelSrc requires/
   )
+})
+
+test('a Core ML FFN cache in device defaults does not block loads that leave it off', (t) => {
+  const ctx: RuntimeContext = { platform: 'ios' }
+  const patterns: DevicePattern[] = [
+    {
+      name: 'Core ML cache',
+      match: { platform: 'ios' },
+      defaults: { [ModelType.llamacppCompletion]: { 'coreml-ffn-cache': '/app/cache/coreml-ffn' } }
+    }
+  ]
+
+  const plain = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    {},
+    ctx,
+    patterns,
+    []
+  )
+  t.is(plain['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+
+  const enabled = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { 'coreml-ffn': true },
+    ctx,
+    patterns,
+    []
+  )
+  t.is(enabled['coreml-ffn'], true)
+  t.is(enabled['coreml-ffn-cache'], '/app/cache/coreml-ffn')
 })

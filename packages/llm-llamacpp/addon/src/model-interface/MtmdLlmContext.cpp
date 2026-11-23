@@ -1161,15 +1161,9 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
+    // The token was already streamed, so it is decoded even when a cancel
+    // landed meanwhile (see `TextLlmContext::generateResponse`).
     llamaBatchClear(*batch);
-    if (stopGeneration_.load()) {
-      // Route through the post-loop `cancelGenerationCleanup` instead
-      // of injecting EOT — EOT would advance the cursor past rollback.
-      // The token was already streamed, so count it (see the same branch in
-      // `TextLlmContext::generateResponse`).
-      ++lastGeneratedTokenCount_;
-      break;
-    }
     llamaBatchAdd(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
@@ -1313,19 +1307,36 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  // Rejects an image stb_image cannot size (WebP, a video), so mtmd never
+  // hands it to ffmpeg. mtmd then bounds the decode itself.
   try {
     image_pixel_limit::checkBuffer(media.data(), media.size(), maxImagePixels_);
   } catch (const qvac_errors::StatusError&) {
     resetMedia();
     throw;
   }
-  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-                       visionContext(),
-                       media.data(),
-                       media.size(),
-                       /*placeholder=*/false,
-                       mtmd_helper_init_opt_default())
-                       .bitmap);
+  mtmd_helper_init_opt decodeOptions = mtmd_helper_init_opt_default();
+  decodeOptions.max_image_pixels = maxImagePixels_;
+  const mtmd_helper_bitmap_wrapper decoded = mtmd_helper_bitmap_init_from_buf(
+      visionContext(),
+      media.data(),
+      media.size(),
+      /*placeholder=*/false,
+      decodeOptions);
+  mtmd::bitmap bmp(decoded.bitmap);
+  if (decoded.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
+    resetMedia();
+    const std::string errorMsg =
+        "[MtmdLlm] Image exceeds the " +
+        std::to_string(maxImagePixels_ / 1'000'000) +
+        " MP limit. Increase image-max-megapixels to allow larger images.";
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, errorMsg);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =
@@ -2279,12 +2290,9 @@ void MtmdLlmContext::generateSpeculative(
   llama_token sampled = step.token;
 
   while (true) {
-    if (stopGeneration_.load()) {
-      ++lastGeneratedTokenCount_;
-      return;
-    }
-    if (nRemain == 0) {
-      // The plain loop decodes the token it stops on for the budget.
+    if (stopGeneration_.load() || nRemain == 0) {
+      // See TextLlmContext::generateSpeculative: `sampled` was streamed, so
+      // it is decoded before stopping.
       llamaBatchClear(*batch);
       llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, false);
       decodeOrThrow();

@@ -30,6 +30,20 @@ inputs:
       linux-aarch64 distribution and is valid only on arm64 runners.
     required: false
     default: "server"
+  msvc-scope:
+    description: >-
+      job exports the CUDA-compatible MSVC environment to every later step. file
+      writes it to $RUNNER_TEMP/qvac-msvc.env and exports QVAC_MSVC_ENV_FILE, so
+      only the commands that load it compile with that toolset.
+    required: false
+    default: "job"
+  export:
+    description: >-
+      env exports CUDA_PATH, CUDACXX, PATH and the rest to every later step. path
+      exports only QVAC_CUDA_<TARGET>_PATH, so a second toolkit sits beside the
+      first and only commands that read it use it.
+    required: false
+    default: "env"
 
 outputs:
   msvc-version:
@@ -51,9 +65,8 @@ runs:
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
     # combined `actions/cache` let any authorized PR populate the entry that
     # main's privileged runs then restore, and cpp-lint reaches here with no
-    # label at all. Linux keeps its existing r4 key so cached toolkits stay
-    # valid. Windows uses a separate key so its x64 server toolkit cannot
-    # collide with Linux x64.
+    # label at all. Windows uses a separate key so its x64 server toolkit
+    # cannot collide with Linux x64.
     - name: Select CUDA cache key
       id: cache-key
       shell: bash
@@ -64,7 +77,7 @@ runs:
         if [ "$RUNNER_OS" = "Windows" ]; then
           key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-Windows-$RUNNER_ARCH-r1"
         else
-          key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-$RUNNER_ARCH-r4"
+          key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-$RUNNER_ARCH-r5"
         fi
         echo "key=$key" >> "$GITHUB_OUTPUT"
 
@@ -129,7 +142,8 @@ runs:
         # Each list below is the minimal set that compiles and links the ggml
         # CUDA backend for its target: nvcc, cudart, cccl and cublas, plus on
         # 13.x libnvvm (cicc lives there in the 13.x split) and crt, plus
-        # culibos on Linux 13.x. The runtime-loaded module resolves CUDA
+        # culibos and nvrtc on Linux 13.x (nvrtc for qvac-fabric's
+        # GGML_CUDA_NVRTC_FUSION). The runtime-loaded module resolves CUDA
         # libraries at run time.
         #
         # NVIDIA publishes separate server ARM and Jetson distributions. CUDA
@@ -163,6 +177,7 @@ runs:
         cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.0.96-archive.tar.xz 25b8071951baba827be1580b841d363464f6ee6c39f48d33a81646f90cc95ed1
         cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.0.85-archive.tar.xz ed845eae8c1767706b6ee91e40c608a03f6f633551a849b63f7346d32d73ee60
         cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.0.85-archive.tar.xz 98fca11f9ab89be61385a67eee686c1ebf76fad9c7269d0cf9090edfcdb8a8ac
+        cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-13.0.88-archive.tar.xz 00038aac08e1dba6f1933237dbfb217ac6452ae24fab970edcac808f103ca64b
         libcublas/linux-x86_64/libcublas-linux-x86_64-13.1.1.3-archive.tar.xz 980cbd746a63566602d1699e2ade005c49408bd95618a57d0888f475e5c721a4"
 
         COMPONENTS_linux_sbsa="\
@@ -172,6 +187,7 @@ runs:
         cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.0.96-archive.tar.xz e2c78564330a09d890f98a066a2082a32c78256ffcc6bccca1696bd2abbaf445
         cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.0.85-archive.tar.xz eca22ded176804a78afcba3fe1909e7d473366ee1cb9f3784080df23bc8e74d5
         cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.0.85-archive.tar.xz ab5ecee37c8adc7efbc2a88ab091de9d978924c4d7f66c3e0c42f23983a1beb3
+        cuda_nvrtc/linux-sbsa/cuda_nvrtc-linux-sbsa-13.0.88-archive.tar.xz decf9977ab114ff195c8cdfce6fbc94aea4a62efdae628092cbb9fd1c31cda1a
         libcublas/linux-sbsa/libcublas-linux-sbsa-13.1.1.3-archive.tar.xz 88b4d3d94d536d9a122eb149af01dc524699336ba3c0b33d019e175d177235fb"
 
         # CUDA 12.6.3 for Jetson. The 12.x linux-aarch64 split has four
@@ -265,7 +281,16 @@ runs:
       env:
         MSVC_INSTALLATION: ${{ steps.select-msvc.outputs.installation }}
         MSVC_VERSION: ${{ steps.select-msvc.outputs.version }}
+        MSVC_SCOPE: ${{ inputs.msvc-scope }}
       run: |
+        $target = $env:GITHUB_ENV
+        if ($env:MSVC_SCOPE -eq "file") {
+          $target = Join-Path $env:RUNNER_TEMP "qvac-msvc.env"
+          Set-Content -Path $target -Value $null
+          "QVAC_MSVC_ENV_FILE=$target" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        } elseif ($env:MSVC_SCOPE -ne "job") {
+          throw "setup-cuda: msvc-scope must be job or file, got '$env:MSVC_SCOPE'"
+        }
         $selectedVersion = [version]$env:MSVC_VERSION
         $vcvars = Join-Path $env:MSVC_INSTALLATION "VC\Auxiliary\Build\vcvars64.bat"
         $toolsetFamily = "$($selectedVersion.Major).$($selectedVersion.Minor)"
@@ -295,7 +320,7 @@ runs:
           $prefix = "$name="
           $line = $environment | Where-Object { $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
           if ($line) {
-            $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            $line | Out-File -FilePath $target -Encoding utf8 -Append
           }
         }
         "CUDAHOSTCXX=$hostCompiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -308,6 +333,7 @@ runs:
       env:
         CUDA_TARGET: ${{ inputs.cuda-target }}
         CUDA_VERSION: ${{ inputs.cuda-version }}
+        EXPORT: ${{ inputs.export }}
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           nvcc="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit/bin/nvcc.exe"
@@ -317,6 +343,12 @@ runs:
         if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
         cuda_prefix="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit"
         echo "CUDA prefix: $cuda_prefix"
+        if [ "$EXPORT" = "path" ]; then
+          echo "QVAC_CUDA_$(echo "$CUDA_TARGET" | tr '[:lower:]' '[:upper:]')_PATH=$cuda_prefix" >> "$GITHUB_ENV"
+          exit 0
+        elif [ "$EXPORT" != "env" ]; then
+          echo "::error::setup-cuda: export must be env or path, got '$EXPORT'"; exit 1
+        fi
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
         # The qvac triplets hash it into qvac-fabric's ABI, and with it set the

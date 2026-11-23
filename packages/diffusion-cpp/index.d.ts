@@ -20,7 +20,7 @@ export interface Addon {
 export type SamplerMethod = 'euler' | 'euler_a' | 'heun' | 'dpm2' | 'dpm++2m' | 'dpm++2mv2' | 'dpm++2s_a' | 'lcm' | 'ipndm' | 'ipndm_v' | 'ddim_trailing' | 'tcd' | 'res_multistep' | 'res_2s';
 export type WeightType = 'auto' | 'f32' | 'f16' | 'bf16' | 'q2_k' | 'q3_k' | 'q4_0' | 'q4_1' | 'q4_k' | 'q5_0' | 'q5_1' | 'q5_k' | 'q6_k' | 'q8_0';
 export type RngType = 'cpu' | 'cuda' | 'std_default';
-export type ScheduleType = 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits' | 'sgm_uniform' | 'simple' | 'lcm' | 'smoothstep' | 'kl_optimal' | 'bong_tangent' | 'ltx2';
+export type ScheduleType = 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits' | 'sgm_uniform' | 'simple' | 'lcm' | 'smoothstep' | 'kl_optimal' | 'bong_tangent' | 'ltx2' | 'flux';
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow';
 export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime';
 export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylorseer' | 'cache-dit';
@@ -36,6 +36,12 @@ export interface SdConfig {
     vae_decode_only?: boolean;
     vae_tiling?: boolean;
     flash_attn?: boolean;
+    /** Validated model/device profiles; explicit low-level options take precedence. */
+    performance_profile?: 'auto' | 'off';
+    /** Optional video output limits. Declare all three to permit bounded memory profiles. */
+    performance_max_width?: NumericLike;
+    performance_max_height?: NumericLike;
+    performance_max_frames?: NumericLike;
     diffusion_fa?: boolean;
     mmap?: boolean;
     offload_to_cpu?: boolean;
@@ -73,6 +79,12 @@ export interface DiffusionFiles {
     /** External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder. */
     tokenizer?: string;
     vae?: string;
+    /** Replaces the full VAE for all encoding and decoding (SD/SDXL). */
+    taesd?: string;
+    /** Apple Core ML SD 1.x/2.x UNet sidecar (.mlmodelc directory). */
+    coremlUnet?: string;
+    /** Apple Core ML tiny decoder sidecar; requires SDXS or taesd weights. */
+    coremlTaeDecoder?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;
     uncondModel?: string;

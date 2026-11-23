@@ -7,6 +7,10 @@
 //   keeps the `blk.*.nextn.*` MTP layers that the unsloth quants used
 //   elsewhere strip. The external-head tests attach that quant as
 //   `spec-draft-model` to unsloth's, which has no MTP layers.
+// - DSpark (`spec-type: 'draft-dspark'`) on LiquidAI's LFM2.5-1.2B-Instruct
+//   with its DSpark drafter (about 1 GB of models). It runs on mobile, where
+//   the models are pre-staged, and on desktop with
+//   QVAC_RUN_SPECULATIVE_DSPARK=1, which CI's GPU legs set.
 // - Opt-in, with models CI does not download:
 //   - QVAC_RUN_SPECULATIVE_DFLASH=1: DFlash (`spec-type: 'draft-dflash'`) on
 //     Qwen3-4B with AtomicChat's GGUF of z-lab's drafter (about 3 GB of
@@ -74,6 +78,8 @@ const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
+const skipDspark = isMobile ? false : optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
+const DSPARK_DRAFT = 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf'
 const tolerateDivergence =
   platform === 'android' || readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
@@ -116,6 +122,10 @@ const VARIANTS = [
     target: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
     type: 'draft-mtp',
     draft: 'gemma-4-E2B-it-assistant-Q8_0.gguf',
+    // Its MTP tensors are nextn_proj_pre/post, not the nextn.eh_proj that
+    // fabric's type detection looks for, so `auto` refuses it, as
+    // llama-server does.
+    autoDetects: false,
     skip: skipMtpHeads
   },
   {
@@ -124,6 +134,16 @@ const VARIANTS = [
     type: 'draft-mtp',
     draft: 'Qwen3.5-2B-MTP-Q4_0.gguf',
     skip: skipMtpHeads
+  },
+  {
+    // The drafter's block is 9 tokens; the default n-max of 3 would use a
+    // third of it.
+    label: 'DSpark',
+    target: 'LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
+    type: 'draft-dspark',
+    draft: 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf',
+    extra: { 'spec-draft-n-max': '9' },
+    skip: skipDspark
   }
 ]
 
@@ -151,7 +171,7 @@ async function modelPath(name) {
 
 async function variantConfig(variant, extra = {}) {
   const draft = variant.draft ? { 'spec-draft-model': await modelPath(variant.draft) } : {}
-  return baseConfig({ 'spec-type': variant.type, ...draft, ...extra })
+  return baseConfig({ 'spec-type': variant.type, ...draft, ...variant.extra, ...extra })
 }
 
 async function loadModel(target, config, files = {}) {
@@ -448,8 +468,85 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
   )
 }
 
+// `spec-type: 'auto'` reads the type from the drafter's header and must then
+// run exactly as the explicit type: same tokens, same drafts. The external
+// MTP head on Qwen3.5-0.8B runs in CI; the other drafters are opt-in.
+const AUTO_CASES = [
+  {
+    label: 'an external MTP head',
+    target: NO_MTP_MODEL,
+    type: 'draft-mtp',
+    draft: MTP_MODEL
+  },
+  ...VARIANTS.filter((v) => v.draft)
+]
+
+for (const variant of AUTO_CASES) {
+  safeTest(
+    `spec-type auto drafts like ${variant.type} for ${variant.label}`,
+    { timeout: Math.max(600_000, variant.timeout || 0), skip: variant.skip },
+    async (t) => {
+      async function run(type) {
+        const model = await loadModel(
+          variant.target,
+          baseConfig({
+            'spec-type': type,
+            'spec-draft-model': await modelPath(variant.draft),
+            ...variant.extra
+          })
+        )
+        try {
+          return await runOnce(model, PROMPT)
+        } finally {
+          await model.unload()
+        }
+      }
+      if (variant.autoDetects === false) {
+        await t.exception(run('auto'), /spec-type "auto" detected no speculative type/)
+        return
+      }
+      const explicit = await run(variant.type)
+      const detected = await run('auto')
+      assertDrafted(t, explicit.stats, variant.type)
+      assertDrafted(t, detected.stats, 'auto')
+      if (tolerateDivergence) {
+        // Two loads may round differently here, so the runs need not match.
+        if (detected.output !== explicit.output) {
+          const at = commonPrefixLength(detected.output, explicit.output)
+          t.comment(`auto diverged from ${variant.type} at character ${at}`)
+        }
+        return
+      }
+      t.is(detected.output, explicit.output, `same output as ${variant.type}`)
+      t.is(detected.stats.draftTokens, explicit.stats.draftTokens, 'same drafted tokens')
+      t.is(
+        detected.stats.draftAcceptedTokens,
+        explicit.stats.draftAcceptedTokens,
+        'same accepted tokens'
+      )
+    }
+  )
+}
+
+safeTest('spec-type auto fails to load a drafter of no type', { timeout: 300_000 }, async (t) => {
+  // A plain Qwen3.5 model: no MTP layers, not a DFlash model.
+  const model = new LlmLlamacpp({
+    files: { model: [await modelPath(MTP_MODEL)] },
+    config: baseConfig({
+      'spec-type': 'auto',
+      'spec-draft-model': await modelPath(NO_MTP_MODEL)
+    }),
+    logger: null
+  })
+  await t.exception(
+    model.load(),
+    /spec-type "auto" detected no speculative type from '.*': .*; set spec-type explicitly/
+  )
+  await model.unload().catch(() => {})
+})
+
 safeTest(
-  'spec-type rejects types other than draft-mtp and draft-dflash',
+  'spec-type rejects types other than draft-mtp, draft-dflash, draft-dspark and auto',
   { timeout: 300_000 },
   async (t) => {
     const model = new LlmLlamacpp({
@@ -457,20 +554,25 @@ safeTest(
       config: baseConfig({ 'spec-type': 'ngram-simple' }),
       logger: null
     })
-    await t.exception(model.load(), /must be "none", "draft-mtp" or "draft-dflash"/)
+    await t.exception(
+      model.load(),
+      /must be "none", "draft-mtp", "draft-dflash", "draft-dspark" or "auto"/
+    )
     await model.unload().catch(() => {})
   }
 )
 
-safeTest('draft-dflash requires spec-draft-model', { timeout: 300_000 }, async (t) => {
-  const model = new LlmLlamacpp({
-    files: { model: [await modelPath(MTP_MODEL)] },
-    config: baseConfig({ 'spec-type': 'draft-dflash' }),
-    logger: null
+for (const type of ['draft-dflash', 'draft-dspark', 'auto']) {
+  safeTest(`${type} requires spec-draft-model`, { timeout: 300_000 }, async (t) => {
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath(MTP_MODEL)] },
+      config: baseConfig({ 'spec-type': type }),
+      logger: null
+    })
+    await t.exception(model.load(), /requires spec-draft-model/)
+    await model.unload().catch(() => {})
   })
-  await t.exception(model.load(), /requires spec-draft-model/)
-  await model.unload().catch(() => {})
-})
+}
 
 safeTest('draft-mtp fails to load a model without MTP layers', { timeout: 300_000 }, async (t) => {
   const model = new LlmLlamacpp({
@@ -514,8 +616,8 @@ safeTest('an external head without MTP layers fails to load', { timeout: 300_000
   await model.unload().catch(() => {})
 })
 
-// A head for another model is refused before fabric loads it; fabric itself
-// aborts on a width mismatch and does not check the vocabulary.
+// A head for another model is refused from both GGUF headers, before any
+// weights are read.
 // prestage-ignore: Qwen3-0.6B-Q8_0.gguf — desktop-only; the test skips on mobile
 safeTest(
   'an external head for another model fails to load',
@@ -526,7 +628,36 @@ safeTest(
       config: baseConfig({ 'spec-draft-model': await modelPath(MTP_MODEL) }),
       logger: null
     })
-    await t.exception(model.load(), /the MTP head '.*' does not match the model/)
+    await t.exception(model.load(), /the draft model '.*' does not match the model/)
     await model.unload().catch(() => {})
+  }
+)
+
+// A DSpark drafter for another model aborts the process in fabric's fit and
+// load, so fabric's header check refuses it first: the load fails and the
+// fit rejects with the same reason. Kept here rather than in fit.test.js
+// because the drafter is opt-in.
+safeTest(
+  'a DSpark drafter for another model is refused',
+  { timeout: 600_000, skip: skipDspark },
+  async (t) => {
+    const config = baseConfig({
+      'spec-type': 'draft-dspark',
+      'spec-draft-model': await modelPath(DSPARK_DRAFT)
+    })
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath(NO_MTP_MODEL)] },
+      config,
+      logger: null
+    })
+    await t.exception(model.load(), /the draft model '.*' does not match the model: 65536 tokens/)
+    await model.unload().catch(() => {})
+    // A cpu load has no fit verdict, so the fit stops before the draft.
+    if (useCpu) return
+    await t.exception(
+      LlmLlamacpp.assessFit({ modelPath: await modelPath(NO_MTP_MODEL), config }),
+      /the draft model does not match the model: 65536 tokens/,
+      'the fit refuses it the same way'
+    )
   }
 )

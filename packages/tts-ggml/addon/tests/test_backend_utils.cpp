@@ -2,6 +2,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include <qvac-fabric.h>
 
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
@@ -10,7 +11,6 @@
 
 using qvac::ttsggml::backendDeviceCode;
 using qvac::ttsggml::backendIdFromName;
-using qvac::ttsggml::defaultBackendsDir;
 using qvac::ttsggml::resolveBackendsDir;
 using qvac_errors::createTTSError;
 using qvac_errors::tts_error::toString;
@@ -22,18 +22,14 @@ TEST(BackendUtils, ResolveBackendsDirUsesAConfiguredDirAsGiven) {
   EXPECT_EQ(resolveBackendsDir(dir).string(), dir);
 }
 
-TEST(BackendUtils, ResolveBackendsDirDefaultsToTheModulesDirectory) {
-  // The test binary is the module here and has no <name>/ subdirectory.
+TEST(BackendUtils, ResolveBackendsDirDefaultsToTheFabricBackendsDirectory) {
   const std::filesystem::path resolved = resolveBackendsDir("");
-  EXPECT_EQ(resolved, defaultBackendsDir());
+  EXPECT_EQ(resolved.string(), std::string(qvac_fabric_backends_dir()));
   ASSERT_FALSE(resolved.empty());
   EXPECT_TRUE(std::filesystem::is_directory(resolved));
-  EXPECT_NE(resolved.filename().string(), QVAC_ADDON_MODULE_NAME);
 }
 
-TEST(BackendUtils, BackendIdCpu) {
-  EXPECT_EQ(backendIdFromName("CPU"), 0);
-}
+TEST(BackendUtils, BackendIdCpu) { EXPECT_EQ(backendIdFromName("CPU"), 0); }
 
 TEST(BackendUtils, BackendIdMetalPrefix) {
   EXPECT_EQ(backendIdFromName("Metal"), 1);
@@ -62,8 +58,10 @@ TEST(BackendUtils, BackendIdOpenClPrefix) {
 TEST(BackendUtils, BackendIdUnknownReturnsSentinel) {
   EXPECT_EQ(backendIdFromName(""), 99);
   EXPECT_EQ(backendIdFromName("ZLUDA"), 99);
-  EXPECT_EQ(backendIdFromName("cpu"), 99) << "case-sensitive: lowercase 'cpu' is not the CPU backend";
-  EXPECT_EQ(backendIdFromName("Metalorama"), 1) << "rfind(prefix, 0) only checks at start";
+  EXPECT_EQ(backendIdFromName("cpu"), 99)
+      << "case-sensitive: lowercase 'cpu' is not the CPU backend";
+  EXPECT_EQ(backendIdFromName("Metalorama"), 1)
+      << "rfind(prefix, 0) only checks at start";
 }
 
 TEST(BackendUtils, BackendDeviceCodeMatchesGgmlEnum) {
@@ -97,7 +95,8 @@ TEST(TTSErrors, ToStringCoversAllKnownCodes) {
   EXPECT_EQ(toString(TTSErrorCode::ModelFileNotFound), "ModelFileNotFound");
   EXPECT_EQ(toString(TTSErrorCode::ConfigFileNotFound), "ConfigFileNotFound");
   EXPECT_EQ(toString(TTSErrorCode::InvalidAPI), "InvalidAPI");
-  EXPECT_EQ(toString(TTSErrorCode::InitializationFailed), "InitializationFailed");
+  EXPECT_EQ(
+      toString(TTSErrorCode::InitializationFailed), "InitializationFailed");
   EXPECT_EQ(toString(TTSErrorCode::SynthesisFailed), "SynthesisFailed");
 }
 
@@ -108,15 +107,15 @@ TEST(TTSErrors, ToStringFallsBackForUnknownCodes) {
 }
 
 TEST(TTSErrors, CreateTTSErrorTagsErrorWithTTSAddonId) {
-  const auto err = createTTSError(TTSErrorCode::ModelFileNotFound,
-                                  "missing model.gguf");
+  const auto err =
+      createTTSError(TTSErrorCode::ModelFileNotFound, "missing model.gguf");
   const std::string code = err.codeString();
   EXPECT_NE(code.find(std::string(TTSAddonId)), std::string::npos)
       << "codeString should embed addonId; got: " << code;
   EXPECT_NE(code.find("ModelFileNotFound"), std::string::npos)
       << "codeString should embed local code; got: " << code;
-  EXPECT_NE(std::string(err.what()).find("missing model.gguf"),
-            std::string::npos);
+  EXPECT_NE(
+      std::string(err.what()).find("missing model.gguf"), std::string::npos);
   EXPECT_FALSE(err.isJSError());
 }
 

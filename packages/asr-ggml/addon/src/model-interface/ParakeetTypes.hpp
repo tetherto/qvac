@@ -17,6 +17,14 @@ struct SpeakerSegment {
   int speakerId = -1;
 };
 
+/** Frame-major probabilities: values[frame * speakers + speaker]. */
+struct SpeakerProbabilities {
+  std::vector<float> values;
+  int frames = 0;
+  int speakers = 0;
+  double frameStrideSeconds = 0.0;
+};
+
 /**
  * Transcription result segment
  */
@@ -58,6 +66,10 @@ struct Transcript {
   std::optional<bool> isFinal;
   std::optional<int> chunkIndex;
   std::optional<float> eotConfidence;
+  std::optional<std::string> encoderBackend;
+  std::optional<double> encoderMs;
+  std::optional<double> decoderMs;
+  std::optional<SpeakerProbabilities> speakerProbabilities;
 
   Transcript()
       : toAppend{false}, start(-1.0F), end(-1.0F), id{0}, isEndOfTurn{false},

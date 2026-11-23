@@ -73,6 +73,13 @@ const cases = [
     quantization: 'q8_0',
     expected: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'
   },
+  // The full 25-language TranscribePsy-250M-EU GGUF: the EU-sub names above
+  // predate it and stay, so the region goes on the full model only.
+  {
+    path: 'ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf',
+    quantization: 'q8_0',
+    expected: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'
+  },
   {
     path: 'ggml/parakeet/parakeet-unified-en-0.6b.q8_0.gguf',
     quantization: 'q8_0',
@@ -111,6 +118,21 @@ for (const { path, quantization, expected } of cases) {
     )
   })
 }
+
+test('diffusion naming: a tokenizer.json is named after its model', () => {
+  assert.equal(
+    generateExportName({
+      path: 'OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json',
+      engine: 'sdcpp-generation',
+      name: 'MOSS-Image-SFT',
+      quantization: '',
+      params: '',
+      tags: ['tokenizer'],
+      usedNames: new Set()
+    }),
+    'MOSS_IMAGE_SFT_TOKENIZER'
+  )
+})
 
 test('generated Parakeet names match the SDK and work in managed config', () => {
   const sdkModels: Record<string, { registryPath: string; name: string }> = JSON.parse(

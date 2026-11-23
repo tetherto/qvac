@@ -26,8 +26,9 @@ namespace qvac::asrggml::whisper {
 
 #if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
 /**
- * Registers the ggml backends shipped as separate modules. Static builds have
- * nothing to load and do not declare this.
+ * Registers the ggml backends the @qvac/fabric runtime ships as separate
+ * modules. Hosts whose backends are linked into the runtime do not declare
+ * this.
  */
 void ensureBackendsLoaded(const std::string& backendsDir);
 #endif
@@ -125,11 +126,12 @@ public:
 
   // Active backend identity captured by captureActiveBackendInfo() at load();
   // surfaced to JS via the addon's getBackendInfo() verb. getBackendId()
-  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other (lock-stepped
-  // with parakeet's BackendId). getBackendDeviceClass(): 0=CPU 1=GPU.
-  // gpuMem*Mb are the device-memory snapshot at load(); -1 = "device does
-  // not report" (matching runtimeStats()). Report constructor defaults
-  // (CPU / 0 / "CPU" / "") before load.
+  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 5=WebGPU 99=other
+  // (lock-stepped with parakeet's BackendId). Device class: 0=CPU 1=GPU 2=NPU
+  // -1=unknown. gpuMem*Mb are the device-memory snapshot at load(); -1 =
+  // "device does not report" (matching runtimeStats()). Report constructor
+  // defaults (CPU / 0 / "CPU" / "") before load.
+  bool getEncoderOnCoreml() const;
   int64_t getBackendId() const { return backend_id_; }
   int64_t getBackendDeviceClass() const { return backend_device_; }
   const std::string& getBackendName() const { return backend_name_; }

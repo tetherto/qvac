@@ -4,6 +4,99 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Native OpenCV moves from `opencv4` 4.11.0 to 4.14.0. The PNG decoder in
+  4.11.0 does not bounds-check animated PNG (APNG) frames, so a crafted image
+  passed to OCR can overflow the heap. The fixes ship from OpenCV 4.12.0
+  ([opencv#26739](https://github.com/opencv/opencv/pull/26739),
+  [opencv#26782](https://github.com/opencv/opencv/pull/26782),
+  [opencv#26854](https://github.com/opencv/opencv/pull/26854),
+  [opencv#27138](https://github.com/opencv/opencv/pull/27138)), and
+  `vcpkg.json` now requires `opencv4` `>= 4.12.0`. Existing binaries require a
+  rebuild.
+- The `microsoft/vcpkg` registry block that owns OpenCV moves from
+  `16c71a39` (June 2025) to the `2026.10.16` release, which also updates the
+  image codecs OpenCV links: libpng 1.6.47 -> 1.6.59, libjpeg-turbo 3.1.0 ->
+  3.2.0, libwebp 1.5.0 -> 1.6.0, tiff 4.7.0 -> 4.7.2, liblzma 5.8.1 -> 5.8.4
+  and zlib 1.3.1 -> 1.3.2. libjpeg-turbo 3.2 depends on `libspng` and OpenCV
+  4.14 on `cpu-features` (Android), so both now resolve from that block. Brotli
+  keeps its own baseline.
+
+### Changed
+
+- The image-decode FuzzTest seeds a two-frame animated PNG, so bounded fuzzing
+  reaches the APNG frame-control path.
+
+## [0.35.0] - 2026-11-19
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+
+### Fixed
+
+- Build against `qvac-lib-inference-addon-cpp` 1.7.0, where a runtime stat
+  value can also hold a string. The runtime stats use `RuntimeStatValue`, and
+  the dependency floor is now `1.7.0`
+  ([#5731](https://github.com/tetherto/qvac/pull/5731)).
+
+## [0.34.0] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- This package needed no code change for the new fabric.
+
+## [0.33.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- This package needed no code change for the new fabric.
+
 ## [0.33.0] - 2026-11-09
 
 ### Fixed

@@ -47,6 +47,7 @@
 #include "addon/GgmlLogForwarding.hpp"
 #include "addon/StreamingSessionRegistry.hpp"
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/BackendIdentity.hpp"
 #include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/ParakeetStreamingProcessor.hpp"
 #include "model-interface/ParakeetTypes.hpp"
@@ -61,27 +62,9 @@ namespace qvac::asrggml::addon_js {
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
 
-// ── Native log forwarding ────────────────────────────────────────────────
-//
-// One process-wide install, shared by both engines. Hook choice:
-//   - ggml_log_set(forwardGgmlLog) covers ggml-origin lines in
-//     parakeet-only processes.
-//   - parakeet_log_set(forwardGgmlLog) routes speech-cpp's own parakeet
-//     lines ("[parakeet] ..." warnings, prewarm diagnostics), which otherwise
-//     go to stderr. It also re-applies the callback to ggml.
-//   - whisper_log_set(forwardGgmlLog) stores the callback in whisper's
-//     g_state.log_callback AND re-applies it to ggml -- both immediately and
-//     again inside whisper_backend_init_gpu() (src/whisper.cpp). A raw
-//     ggml_log_set alone would therefore be clobbered by whisper's init,
-//     while this order guarantees whisper-origin lines (whisper_model_load,
-//     "whisper_backend_init_gpu: using <name> backend", ...) and ggml-origin
-//     lines ("ggml_vulkan: Found N Vulkan devices ...") all land in the same
-//     forwardGgmlLog -> QLOG -> JsLogger pipe, whichever engine initializes
-//     later. There is no second callback left to clobber.
 inline void installNativeLogForwarderOnce() {
   static std::once_flag once;
   std::call_once(once, [] {
-    ggml_log_set(&forwardGgmlLog, nullptr);
     parakeet_log_set(&forwardGgmlLog, nullptr);
     whisper_log_set(&forwardGgmlLog, nullptr);
   });
@@ -234,6 +217,39 @@ transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
     obj.setProperty(
         env, "eotConfidence", js::Number::create(env, *t.eotConfidence));
   }
+  if (t.encoderMs)
+    obj.setProperty(env, "encoderMs", js::Number::create(env, *t.encoderMs));
+  if (t.decoderMs)
+    obj.setProperty(env, "decoderMs", js::Number::create(env, *t.decoderMs));
+  if (t.encoderBackend)
+    obj.setProperty(
+        env, "encoderBackend", js::String::create(env, *t.encoderBackend));
+  if (t.speakerProbabilities) {
+    const auto& probabilities = *t.speakerProbabilities;
+    auto matrix = js::Object::create(env);
+    js_value_t* buffer = nullptr;
+    void* data = nullptr;
+    JS(js_create_arraybuffer(
+        env, probabilities.values.size() * sizeof(float), &data, &buffer));
+    if (!probabilities.values.empty())
+      std::memcpy(
+          data,
+          probabilities.values.data(),
+          probabilities.values.size() * sizeof(float));
+    js_value_t* values = nullptr;
+    JS(js_create_typedarray(
+        env, js_float32array, probabilities.values.size(), buffer, 0, &values));
+    matrix.setProperty(env, "values", values);
+    matrix.setProperty(
+        env, "frames", js::Number::create(env, probabilities.frames));
+    matrix.setProperty(
+        env, "speakers", js::Number::create(env, probabilities.speakers));
+    matrix.setProperty(
+        env,
+        "frameStrideSeconds",
+        js::Number::create(env, probabilities.frameStrideSeconds));
+    obj.setProperty(env, "speakerProbabilities", matrix);
+  }
   // Diarization, speaker-attributed ASR and MOSS-Transcribe-Diarize.
   if (t.speakerId >= 0) {
     obj.setProperty(env, "speakerId", js::Number::create(env, t.speakerId));
@@ -357,6 +373,30 @@ struct JsParakeetEndOfTurnHandler
             }) {}
 };
 
+struct JsMossProgressHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          moss::MossTranscribeModel::Progress> {
+  JsMossProgressHandler()
+      : JsBaseOutputHandler(
+            [this](const moss::MossTranscribeModel::Progress& progress)
+                -> js_value_t* {
+              auto obj = js::Object::create(this->env_);
+              obj.setProperty(
+                  this->env_,
+                  "type",
+                  js::String::create(this->env_, "progress"));
+              obj.setProperty(
+                  this->env_,
+                  "generatedTokens",
+                  js::Number::create(this->env_, progress.generatedTokens));
+              obj.setProperty(
+                  this->env_,
+                  "maxNewTokens",
+                  js::Number::create(this->env_, progress.maxNewTokens));
+              return obj;
+            }) {}
+};
+
 // ── createInstance ───────────────────────────────────────────────────────
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -374,6 +414,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   unique_ptr<model::IModel> model;
   parakeet::ParakeetModel* parakeetModel = nullptr;
+  moss::MossTranscribeModel* mossModel = nullptr;
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outputHandlers;
   if (engineType == EngineType::Parakeet) {
     auto ownedModel = make_unique<parakeet::ParakeetModel>(
@@ -384,9 +425,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     outputHandlers.add(make_shared<JsParakeetVadEventHandler>());
     outputHandlers.add(make_shared<JsParakeetEndOfTurnHandler>());
   } else if (engineType == EngineType::MossTranscribe) {
-    model = make_unique<moss::MossTranscribeModel>(
+    auto ownedModel = make_unique<moss::MossTranscribeModel>(
         adapter.buildMossTranscribeConfig(configurationParams, env));
+    mossModel = ownedModel.get();
+    model = std::move(ownedModel);
     outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
+    outputHandlers.add(make_shared<JsMossProgressHandler>());
   } else {
     model = make_unique<whisper::WhisperModel>(
         adapter.buildWhisperConfig(configurationParams, env));
@@ -422,6 +466,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
           queue->queueResult(std::any(event));
         });
   }
+  if (mossModel) {
+    mossModel->setOnProgressCallback(
+        [queue = addon->addonCpp->outputQueue](
+            const moss::MossTranscribeModel::Progress& progress) {
+          queue->queueResult(std::any(progress));
+        });
+  }
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -451,7 +502,15 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       nullptr) {
     vector<float> inputSamples =
         js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
-    return instance.runJob(any(std::move(inputSamples)));
+    parakeet::ParakeetModel::AnyInput input;
+    input.input = std::move(inputSamples);
+    auto object = args.getJsObject(1, "inputObj");
+    input.includeSpeakerProbabilities =
+        object
+            .getOptionalPropertyAs<js::Boolean, bool>(
+                env, "includeSpeakerProbabilities")
+            .value_or(false);
+    return instance.runJob(any(std::move(input)));
   }
 
   if (dynamic_cast<moss::MossTranscribeModel*>(
@@ -1006,17 +1065,17 @@ JSCATCH
 //
 // Returns the backend the engine resolved at load() as a JS object:
 // `{ backendDevice, backendId, backendName, backendDescription,
-// encoderBackend, encoderOnCoreml }` (+ whisper-only extras
-// `gpuMemTotalMb`/`gpuMemFreeMb`, -1 = device does not report). The
+// encoderBackend, encoderOnCoreml }`. Parakeet also reports
+// `supportsCacheAwareStreaming`. Whisper reports `gpuMemTotalMb` and
+// `gpuMemFreeMb` (-1 = device does not report). The
 // description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX
 // 3090") recovered from the ggml device registry; it is the
 // nvidia-smi-independent fallback the perf reporter uses on CI runners
 // where the host probes can't see the GPU. encoderBackend is "coreml" when
 // parakeet loaded an Apple Neural Engine encoder sidecar at load(), else it
-// mirrors backendName; the whisper-cpp port builds without
-// WHISPER_COREML, so its arm always reports encoderOnCoreml=false -- the
-// keys exist purely for cross-engine shape stability. Available after
-// activate(); reports CPU/"" before load.
+// mirrors backendName. Whisper queries its native default state; MOSS also
+// exposes its actual per-transcription route on output segments. Available
+// after activate(); reports CPU/"" before load.
 
 inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -1062,6 +1121,10 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         env,
         "modelType",
         js::String::create(env, parakeetModel->getModelTypeName()));
+    result.setProperty(
+        env,
+        "supportsCacheAwareStreaming",
+        js::Boolean::create(env, parakeetModel->supportsCacheAwareStreaming()));
     return result;
   }
 
@@ -1073,13 +1136,25 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         js::String::create(
             env,
             std::string(
-                mossModel->getBackendDeviceClass() == 1 ? "GPU" : "CPU")));
+                backendDeviceLabel(mossModel->getBackendDeviceClass()))));
     result.setProperty(
         env, "backendId", js::Number::create(env, mossModel->getBackendId()));
     result.setProperty(
         env,
         "backendName",
         js::String::create(env, mossModel->getBackendName()));
+    result.setProperty(
+        env,
+        "backendDescription",
+        js::String::create(env, mossModel->getBackendDescription()));
+    result.setProperty(
+        env,
+        "encoderBackend",
+        js::String::create(env, mossModel->getEncoderBackend()));
+    result.setProperty(
+        env,
+        "encoderOnCoreml",
+        js::Boolean::create(env, mossModel->getEncoderOnCoreml()));
     result.setProperty(
         env, "modelType", js::String::create(env, "moss-transcribe"));
     return result;
@@ -1091,7 +1166,8 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
   result.setProperty(
       env,
       "backendDevice",
-      js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+      js::String::create(
+          env, std::string(backendDeviceLabel(static_cast<int>(deviceClass)))));
   result.setProperty(
       env,
       "backendId",
@@ -1105,12 +1181,18 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
       env,
       "backendDescription",
       js::String::create(env, whisperModel.getBackendDescription()));
-  // Mirror of backendName: whisper has no encoder sidecar.
+  // The native state, rather than the requested config, owns Core ML truth.
   result.setProperty(
       env,
       "encoderBackend",
-      js::String::create(env, whisperModel.getBackendName()));
-  result.setProperty(env, "encoderOnCoreml", js::Boolean::create(env, false));
+      js::String::create(
+          env,
+          whisperModel.getEncoderOnCoreml() ? "coreml"
+                                            : whisperModel.getBackendName()));
+  result.setProperty(
+      env,
+      "encoderOnCoreml",
+      js::Boolean::create(env, whisperModel.getEncoderOnCoreml()));
   result.setProperty(env, "modelType", js::String::create(env, "whisper"));
   // Whisper-only extras: device-memory snapshot at load().
   result.setProperty(

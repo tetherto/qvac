@@ -45,7 +45,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *
  * @param params - The completion parameters
  * @param params.modelId - The identifier of the model to use for completion
- * @param params.history - Array of conversation messages with role, content, and optional attachments
+ * @param params.history - Array of conversation messages. A user message passes media as ordered `content` parts, `[{ type: "text", text }, { type: "media", path }]`, so each image sits where the text refers to it. `attachments` is deprecated.
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true
  * @param params.tools - Optional array of tools (can be simple ToolInput with Zod schemas or full Tool objects)
  * @param params.mcp - Optional array of MCP client inputs for tool integration
@@ -69,14 +69,20 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   validation must encode it explicitly in `schema`.
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
- * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache; cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.system_prompt`); cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from, such as a
+ *   system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no
+ *   cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is
+ *   processed; the source is never written. Ignored once the chat has a cache. Requires a string `kvCache`
+ *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
+ *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
  *   - `true`: Auto-generate cache key based on conversation history
  *   - `"custom-key"`: Use provided string as cache key for manual session management
  *   - `false` or `undefined`: No caching
- *   - ⚡ Performance: When cache exists, only the last message is sent to the model (includes multimodal attachments)
+ *   - ⚡ Performance: The whole conversation is sent every turn; the model keeps the longest prefix it already holds and decodes only the rest
  *   - 🗑️ Cleanup: Use `deleteCache({ kvCacheKey })` to remove cached sessions
  *
  *   **Auto-cache (`kvCache: true`) — assistant turn contract.** When
@@ -222,6 +228,7 @@ export function completion(params: CompletionParams): CompletionRun {
         history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
         prefill: params.prefill,
+        seedFrom: params.seedFrom,
         tools: allTools.length > 0 ? allTools : undefined,
         toolSearch: params.toolSearch,
         stream: params.stream ?? true,

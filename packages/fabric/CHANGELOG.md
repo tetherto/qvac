@@ -1,5 +1,257 @@
 # Changelog
 
+## [0.32.0] - 2026-11-23
+
+This release splits the Linux x64 CUDA backend into its own automatically
+installed package so Fabric can continue to ship all backends within npm's
+package size limit. Installation and inference behavior remain unchanged.
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+- The Fabric meta, platform and CUDA packages move together to 0.32.0.
+  Existing consumers using `^0.31.0` stay on the previous packaging; adopting
+  this layout requires explicitly updating their Fabric dependency ranges.
+
+## Pull Requests
+
+- [#5824](https://github.com/tetherto/qvac/pull/5824) - QVAC-28570: split Fabric Linux x64 GPU backend packages.
+
+## [0.31.2] - 2026-11-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.4.0` -> `11739.5.0`. No struct,
+  exported signature, op, type or RPC protocol (117) change, so consumers on
+  `^0.31.0` take this release without a rebuild.
+- A sequence saved with another KV stream count now restores into its own
+  stream, so a single-sequence state from a per-sequence cache loads into a
+  `kv_unified` cache or after `n_seq_max` changes
+  ([qvac-fabric-llm.cpp#553](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/553)).
+  A whole-context restore still needs a matching stream count.
+- `ggml_vec_index_build_ivf` trains its centroids with spherical e-means
+  ([qvac-fabric-llm.cpp#543](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/543)):
+  with `n_iter > 0` the centroids are unit length and the lists differ from
+  0.31.1; `n_iter = 0` is unchanged.
+- CUDA: row bias, GELU and layer norm fuse into the cuBLAS F16 matmul, plus a
+  faster small batched matmul, strided copy and short-row softmax, each
+  limited to the GPUs it was measured on
+  ([qvac-fabric-llm.cpp#542](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/542)).
+- Metal: few-row MMA kernels for q4_K, q6_K and iq4_nl/iq4_xs, and a chunked
+  top-k for long rows
+  ([qvac-fabric-llm.cpp#544](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/544)).
+
+### Fixed
+
+- A composite memory (iswa, msa, dsa, dsa-iswa, hybrid, hybrid-iswa, dsv4)
+  that fails partway through a restore now drops the sequence from every part
+  instead of leaving it half old and half new
+  ([qvac-fabric-llm.cpp#556](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/556)).
+- WebGPU sizes its flash-attention and MMVQ scratch for the largest small
+  batch, so a graph reserved at `n_ubatch` no longer re-reserves for a later
+  small batch
+  ([qvac-fabric-llm.cpp#559](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/559)).
+
+## [0.31.1] - 2026-11-18
+
+### Fixed
+
+- `@qvac/fabric-android-arm64` is built with the Android NDK compiler again
+  ([#5847](https://github.com/tetherto/qvac/pull/5847)). 0.31.0 was built with
+  the LLVM runtime clang from `cmake-toolchains` 2.4.0, which kept `assert()`
+  and grew the package from 106 MB to 141 MB unpacked, and ggml's CPU backend
+  ran up to ~20x slower on device. Same `qvac-fabric` `11739.4.0` source; the
+  other platform packages are rebuilt unchanged.
+
+## [0.31.0] - 2026-11-18
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.3.0#1` -> `11739.4.0`.
+  `common_params_speculative_draft` gains `n_auto`, and
+  `mtmd_helper_init_opt`, `mtmd_helper_video_init_params` and
+  `mtmd_helper_bitmap_wrapper` gain decode-limit and status fields, so native
+  consumers must rebuild against these headers. No op, type or RPC protocol
+  numbers change.
+- On a TurboVec index, `ggml_vec_index_build_ivf` now stores the rows in IVF
+  list order. Prepared filters made before the build are refused,
+  `ggml_vec_index_ids` reports the new order, and the next
+  `ggml_vec_index_sync` rewrites the whole file.
+
+### Added
+
+- Opt-in WebGPU backend build for shared speech and LLM consumers using `VCPKG_MANIFEST_FEATURES=webgpu`.
+- mtmd-helper decode limits (`max_audio_frames`, `max_image_pixels`,
+  `max_frame_pixels`), all off by default, with the failure reason in
+  `mtmd_helper_bitmap_wrapper.status`.
+- Core ML FFN prefill for Qwen3.5 0.8B and 2B, with the FFN split picked
+  automatically.
+
+### Fixed
+
+- OpenCL: uploads that convert on the device are serialized, GROUP_NORM
+  normalizes every batch item (also on Metal), the fused GROUP_NORM+MUL+ADD
+  path is fixed, and flash-attention query chunks above 4096 rows are offset
+  correctly. On Android, OpenCL stays loaded when the Vulkan module is not.
+- XDNA: the fused decode and the equal split work again for qwen35, and a
+  model whose in-projection or `attn_output` the decode GEMV cannot read is
+  sent to the host decode instead of failing.
+- TurboVec IVF search scores far fewer blocks, now that each list is stored
+  contiguously.
+
+## [0.30.1] - 2026-11-16
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.3.0` -> `11739.3.0#1`: the same
+  source, with the static symbol tables stripped from the Linux release backend
+  modules (`libqvac-ggml-*.so`). The `@qvac/fabric-linux-x64` tarball shrinks
+  by about 1.9 MB, back under npm's size limit. 0.30.0 reached npm only for
+  android-arm64, darwin-arm64, darwin-x64, ios and linux-arm64 (linux-x64 was
+  rejected with `E413 Payload Too Large`), so 0.30.1 is the first complete
+  0.30 release and carries the 0.30.0 changes below.
+
+## [0.30.0] - 2026-11-16
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.2.1` -> `11739.3.0`.
+  `GGML_OP_ROPE_FLUX` is appended to `ggml_op`, so existing op and type
+  numbers do not move. `common_params_speculative_draft` gains `n_short` and
+  `long_cost` mid-struct, which shifts the `common_params` layout, so native
+  consumers that use the `common` library must rebuild against these headers.
+- The RPC protocol moves from 116 to 117, so RPC clients and
+  `ggml-rpc-server` must move to this version together.
+
+### Added
+
+- `ggml_rope_flux`, the fused Flux RoPE from diffusion GGML, on CPU, Vulkan
+  and Metal. CUDA declines it, so callers build the unfused RoPE there.
+- Logical buffer-capacity queries `ggml_backend_buft_get_max_capacity` and
+  `ggml_backend_get_max_buffer_capacity`, with a Vulkan provider. Without a
+  provider they return the existing maximum buffer size.
+- DSpine draft models, run with `--spec-type draft-dflash`. The draft ubatch
+  must hold `-np * (--spec-draft-n-max + 1)` tokens, and the target head
+  must not be repacked or row-split (`--no-repack`, no `-sm row`).
+- `--spec-draft-n-short N` and `--spec-draft-long-cost R` for lattice
+  drafters (DFlash2, DSpine, LiliCorr). N must be 0 or at least
+  `--spec-draft-n-min`, and other drafters reject it.
+- Metal `IM2COL_3D`, used by the Wan video models.
+- OpenCL (Adreno) ops for the speech engines: `LEAKY_RELU`, `SIN`, `COS`,
+  `ARGMAX`, `COL2IM_1D`, and BF16 and Q8_0 rows in `GET_ROWS`. Chatterbox,
+  MOSS-Speech and ACE-Step no longer abort on these ops with the GPU on. The
+  conv paths (im2col, tall F16 matmuls, weight upload transposes) are faster.
+
+### Changed
+
+- A DFlash or DSpark draft model, or an external MTP head, that does not match
+  the model is now rejected before the fit with the reason (vocabulary, width,
+  target layer or block size), instead of aborting on a ggml assert. The error
+  text consumers see for a mismatched draft model changes.
+- Vulkan caps each buffer at the smaller of `maxBufferSize` and
+  `maxMemoryAllocationSize`: an op with a larger tensor goes to another
+  backend, and a larger allocation fails with a warning.
+
+### Fixed
+
+- The RPC device no longer offers the ragged and deferred gated delta net ops.
+  A Metal, Vulkan or OpenCL RPC server running qwen35 or qwen35moe layers no
+  longer aborts on `SSM_CONV_RAGGED`, and a model with any RPC layer uses the
+  equal split and ignores `LLAMA_GDN_DEFERRED`.
+- The CPU AMX matmul no longer writes out of bounds with a batched `src1`.
+- The CPU backend declines the `IM2COL_3D` inputs its kernel asserts on.
+
+## [0.29.2] - 2026-11-13
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.2.0#1` -> `11739.2.1`, which adds one
+  CPU backend fix (tetherto/qvac#5537): on Linux and Android, a CPU threadpool
+  with a `cpumask` no longer pins the thread that calls into ggml. The worker
+  threads ggml creates are still pinned, OpenMP workers only for the duration
+  of a graph, and NUMA mode still pins every compute thread. The build recipe
+  from 0.29.1 (CUDA K/V quant pairs, NVRTC fusion) is unchanged, and there is
+  no API, ABI or RPC change.
+
+## [0.29.1] - 2026-11-12
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.2.0` -> `11739.2.0#1`: the same
+  source, with two CUDA build changes from the port:
+  - CUDA flash attention builds ggml's default K/V quant pairs instead of a
+    pinned subset, which adds the `f8_e4m3` pairs. An FP8 KV cache
+    (`cache-type-k/v = f8_e4m3`) now has a CUDA flash-attention kernel.
+  - The Linux CUDA 13 modules (x64 and DGX Spark arm64) build with
+    `GGML_CUDA_NVRTC_FUSION`, which fuses each graph's elementwise ops into
+    NVRTC-generated kernels. The module now also needs `libnvrtc.so.13`
+    beside cudart and cuBLAS; a host without it does not load the CUDA module
+    and falls back to another backend. Generated kernels are cached under
+    `~/.cache/ggml-nvrtc`, and `GGML_CUDA_NVRTC_FUSION=0` turns the pass off
+    at run time. The Jetson (CUDA 12.6) and Windows modules are unchanged.
+
+## [0.29.0] - 2026-11-11
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.1.1` -> `11739.2.0`.
+  `GGML_TYPE_F8_E4M3` takes type 43 and the TurboQuant and PolarQuant KV-cache
+  types move from 43-50 to 52-59, so native consumers must rebuild against
+  these headers.
+- The RPC protocol moves from 113 to 116 for the new type number and the four
+  new ops, so RPC clients and `ggml-rpc-server` must move to this version
+  together.
+
+### Added
+
+- FP8 E4M3 (`GGML_TYPE_F8_E4M3`, `LLAMA_FTYPE_MOSTLY_F8_E4M3`) for weights and
+  the KV cache, with CUDA FP8 matmuls and flash attention. The FP8
+  prompt-processing attention kernel is opt-in with `GGML_CUDA_FA_F8=1`.
+- ConvRot ops for ComfyUI TensorWise I8 diffusion weights: `ggml_mul_mat_convrot`,
+  `ggml_convrot`, `ggml_convrot_mul_mat` and `ggml_convrot_repack_q8_0`. F32
+  matmuls honor `GGML_PREC_F32`.
+- Ragged ubatches for the qwen35 and qwen35moe recurrent layers
+  (`ggml_ssm_conv_ragged`, `ggml_gated_delta_net_ragged`, CPU and CUDA):
+  sequences of different lengths share one ubatch. They are used with a
+  unified KV cache, no speculative rollback, and devices that support the ops;
+  `LLAMA_RS_RAGGED=0` turns them off.
+- Graph-leaf APIs: `ggml_graph_leaf`, `ggml_graph_leafs`, `ggml_graph_n_leafs`
+  and `ggml_graph_add_leaf`.
+
+### Fixed
+
+- Speculative drafts (DFlash, DSpark, EAGLE3) over several sequences mark
+  every sampling chain as a graph output, so the chains no longer share
+  buffers and one sequence's acceptance no longer collapses.
+- With `GGML_CUDA_GRAPH_OPT=1`, CUDA keeps the tensors of concurrent branches
+  allocated until they join, so attention results no longer depend on timing.
+- XDNA flushes the K/V rows a state restore writes before the decode
+  attention, repairs a lost first line of a bf16 GEMM block's output, and
+  holds the compute lock in its support query.
+- Under `tool_choice` required, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling. Continuing an assistant message that already
+  holds content still works.
+
+### Changed
+
+- XDNA runs the fused decode by default for residual widths above 1024
+  (Qwen3.5 2B, 4B and 9B; `GGML_XDNA_FUSED_WIDE=0` keeps the host decode), and
+  can run the prefill GEMM and attention on one merged design with
+  `GGML_XDNA_PFX=1`.
+- Metal fuses more of the Qwen3.5 decode: the FFN norm, the q/k L2 norms, the
+  conv state update and the gated delta net gates.
+- qwen35, qwen35moe and qwen3next read their recurrent states in place, and
+  `n_kv` is padded to at least 1/16 of the used cells once more than 4096
+  cells are in use.
+
 ## [0.28.0] - 2026-11-08
 
 ### Breaking

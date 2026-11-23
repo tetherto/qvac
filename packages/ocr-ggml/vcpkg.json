@@ -4,6 +4,7 @@
   "dependencies": [
     {
       "name": "opencv4",
+      "version>=": "4.12.0",
       "default-features": false,
       "features": [
         "jpeg",
@@ -19,7 +20,7 @@
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.5.0"
+      "version>=": "1.7.0"
     },
     {
       "name": "qvac-lint-cpp",

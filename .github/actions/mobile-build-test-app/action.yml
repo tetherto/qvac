@@ -1,0 +1,36 @@
+name: Build mobile test app
+description: Install the Expo CLI, then build the mobile test framework's JS app around a package and link its native addons, ready for a native project.
+
+inputs:
+  platform:
+    description: Android or iOS
+    required: true
+  workdir:
+    description: Package directory, with prebuilds/ and test/mobile/
+    required: true
+  npm-name:
+    description: The package's npm name
+    required: true
+  app-dir:
+    description: Mobile test framework checkout
+    default: test-framework
+  dependency-prebuilds:
+    description: Newline-separated <npm name>=<dir> pairs whose platform packages are built from dir
+    default: ""
+  per-test-timeout-minutes:
+    description: Raise the generated 20 minute per-test ceiling; empty keeps it
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # The platform package installer moves here when run-mobile-integration-tests loses its last caller.
+    - shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        ADDON_DIR: ${{ inputs.workdir }}
+        NPM_NAME: ${{ inputs.npm-name }}
+        APP_DIR: ${{ inputs.app-dir }}
+        DEPENDENCY_PREBUILDS: ${{ inputs.dependency-prebuilds }}
+        TIMEOUT_MINUTES: ${{ inputs.per-test-timeout-minutes }}
+      run: node "$GITHUB_ACTION_PATH/mobile-build-test-app.mjs"
