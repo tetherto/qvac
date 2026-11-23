@@ -1,4 +1,5 @@
 import fs from 'bare-fs'
+import path from 'bare-path'
 
 import { PluginLoadConfigValidationFailedError, PluginNotFoundError } from '@/errors/index'
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
@@ -8,11 +9,20 @@ import {
   type ModelSrcInput,
   type TranscriptionFitWorkload
 } from '@/schemas/index'
+import { registryUrlSchema } from '@/schemas/load-model'
 import type { ResolveContext } from '@/schemas/plugin'
 import { getPlugin } from '@/plugins/registry'
-import { getRuntimeContext } from '@/runtime/state'
+import { getConfiguredCacheDir, getRuntimeContext } from '@/runtime/state'
+import {
+  acceptsLegacyFlatCache,
+  getModelCacheLayout,
+  getSingleFileCacheName
+} from '@/utils/cache/layout'
+import { hasFileOfSize } from '@/utils/cache/paths'
+import { generateShortHash } from '@/utils/formatting'
+import { joinWithinBase } from '@/utils/path-security'
 import { formatZodError } from '@/utils/zod-error'
-import { getModelByPath } from '@/models/registry/index'
+import { getModelByPath, type RegistryItem } from '@/models/registry/index'
 import {
   fetchFitStub,
   fetchFitStubSet,
@@ -50,11 +60,22 @@ function srcString(modelSrc: ModelSrcInput): string {
 
 /**
  * The stub ref a source carries, or `undefined` where it names no registry
- * artifact. A catalog constant carries the checksum and coordinates; a bare
- * string names a location and nothing the registry can be asked about.
+ * artifact. A catalog constant carries the checksum and coordinates. A
+ * `registry://` address, such as the companion source a plugin derives, takes
+ * them from its catalog entry. Any other string names a location and nothing
+ * the registry can be asked about.
  */
 function stubRefFor(modelSrc: ModelSrcInput) {
-  if (typeof modelSrc === 'string') return undefined
+  if (typeof modelSrc === 'string') {
+    const entry = catalogEntryFor(modelSrc)
+    if (entry === undefined) return undefined
+    return {
+      name: entry.name,
+      sha256Checksum: entry.sha256Checksum,
+      registryPath: entry.registryPath,
+      registrySource: entry.registrySource
+    }
+  }
   const { sha256Checksum, registryPath, registrySource } = modelSrc
   if (sha256Checksum === undefined || registryPath === undefined) return undefined
   return {
@@ -63,6 +84,65 @@ function stubRefFor(modelSrc: ModelSrcInput) {
     registryPath,
     ...(registrySource !== undefined && { registrySource })
   }
+}
+
+/** The catalog entry a source names, as a catalog constant or a `registry://` address. */
+function catalogEntryFor(modelSrc: ModelSrcInput): RegistryItem | undefined {
+  if (typeof modelSrc !== 'string') {
+    return modelSrc.registryPath === undefined ? undefined : getModelByPath(modelSrc.registryPath)
+  }
+  const address = registryUrlSchema.safeParse(modelSrc)
+  return address.success ? getModelByPath(address.data.registryPath) : undefined
+}
+
+/**
+ * The path `loadModel` would load a catalog model from, when every file the
+ * loader keeps for it is in the models cache at its registry size. A
+ * companion set in the legacy flat cache is read first, as the loader reads it.
+ */
+async function cachedCatalogPath(entry: RegistryItem): Promise<string | undefined> {
+  const cacheDir = getConfiguredCacheDir()
+  const flat = await legacyFlatCachePath(entry, cacheDir)
+  if (flat !== undefined) return flat
+
+  const layout = getModelCacheLayout(entry, getRuntimeContext().platform, generateShortHash)
+  if (layout === undefined) return undefined
+
+  for (const file of layout.files) {
+    if (!(await hasFileOfSize(joinWithinBase(cacheDir, file.path), file.size))) return undefined
+  }
+
+  if (layout.files.length === 1 && layout.files[0]?.path === layout.path) {
+    return joinWithinBase(cacheDir, layout.path)
+  }
+  const { companionSet } = entry
+  const primary = companionSet?.files.find((file) => file.key === companionSet.primaryKey)
+  const primaryName = primary?.targetName ?? path.basename(entry.registryPath)
+  return joinWithinBase(cacheDir, `${layout.path}/${primaryName}`)
+}
+
+/**
+ * The primary file of a companion set kept in the legacy flat cache, one file
+ * per registry path, when the loader accepts that cache for it and every file
+ * is there at its registry size.
+ */
+async function legacyFlatCachePath(
+  entry: RegistryItem,
+  cacheDir: string
+): Promise<string | undefined> {
+  const { companionSet } = entry
+  if (companionSet === undefined || !acceptsLegacyFlatCache(entry.addon)) return undefined
+
+  let primaryPath: string | undefined
+  for (const file of companionSet.files) {
+    const filePath = joinWithinBase(
+      cacheDir,
+      getSingleFileCacheName(file.registryPath, generateShortHash)
+    )
+    if (!(await hasFileOfSize(filePath, file.expectedSize))) return undefined
+    if (file.key === companionSet.primaryKey) primaryPath = filePath
+  }
+  return primaryPath
 }
 
 function stubSetFor(registryPath: string): FitStubSet | undefined {
@@ -112,7 +192,8 @@ class NoStubError extends Error {
  * keys are the real load's.
  *
  * A source already on disk is read directly, since it describes the load more
- * exactly than a stub does. A files-only engine reads only sources on disk.
+ * exactly than a stub does: a path that exists, or a catalog model whose files
+ * are in the models cache. A files-only engine reads only sources on disk.
  *
  * @throws {PluginNotFoundError} When no plugin handles the model type.
  * @throws {PluginLoadConfigValidationFailedError} When the plugin's schema
@@ -140,6 +221,11 @@ export async function resolveLoadFromStubs(
   const resolveModelPath = async (src: ModelSrcInput): Promise<string> => {
     const location = srcString(src)
     if (location !== '' && fs.existsSync(location)) return location
+
+    const entry = catalogEntryFor(src)
+    const cached = entry === undefined ? undefined : await cachedCatalogPath(entry)
+    if (cached !== undefined) return cached
+
     if (FILES_ONLY_ENGINES.has(load.modelType)) throw new NoStubError('files-only-engine')
 
     const ref = stubRefFor(src)

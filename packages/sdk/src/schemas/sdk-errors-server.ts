@@ -23,6 +23,7 @@ export const SDK_SERVER_ERROR_CODES = {
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
   MODEL_FIT_REFUSED: 52212,
+  MODEL_FIT_REJECTED: 52213,
 
   // Model Operations (52,400-52,799)
   RPC_SERVER_OPERATION_FAILED: 52423,
@@ -207,6 +208,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `${modelType}: the engine fitter projects this load will not fit (${reason})${
         detail ? `: ${detail}` : ''
       }`
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_FIT_REJECTED]: {
+    name: 'MODEL_FIT_REJECTED',
+    message: (modelType: string, detail: string) =>
+      `${modelType}: the engine fitter could not assess this load (${detail})`
   },
 
   // Model Operations (52,400-52,799)

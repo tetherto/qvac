@@ -264,9 +264,27 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 
 A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
 above) runs the same configurations on a branch. Every leg builds `packages/inference` and
-`packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
-in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
-the newest dispatch run's on the base branch; a failed test fails the leg.
+`packages/test-suite` from the checkout and tests them together with `packages/sdk`, and uploads its reports
+as `sdk-results-<configuration>`. The job summary compares them with the newest dispatch run's on the base
+branch; a failed test fails the leg.
+
+#### Model cache
+
+A leg restores only the models its own tests need, one cache entry per model. The sdk's `test:integration`
+sets `metadata.modelCache.plan`, so `_desktop.yml` runs it twice:
+
+1. With `CI_MODELS_PHASE=plan`, `e2e.mjs` installs and builds, then `scripts/model-cache-plan.mjs` resolves
+   the leg's tests (suite, filter, impacted ids), their model deps and each model's files in
+   `.qvac-cache`.
+2. `.github/actions/sdk-e2e-model-cache` restores those entries and checks every file against its
+   registry checksum.
+3. The run reuses the install and `scripts/model-cache-bootstrap.mjs` downloads only the models the
+   restore missed. A failed plan leaves the run to download every model itself.
+
+Test legs never write the cache. `on-merge-sdk-e2e-model-cache.yml` fills it on `main` (`node
+packages/sdk/ci/e2e.mjs seed` plans every family per OS), when the catalog, the registry or the cache
+scripts change, and every two days so the cache server keeps the entries. A new model in a pull request
+downloads in every run until that pull request merges and the seed runs.
 
 `scripts/impacted-tests.mjs` lists the testIds a change touches
 (`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.

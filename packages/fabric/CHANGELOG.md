@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.32.0] - 2026-11-23
+
+This release splits the Linux x64 CUDA backend into its own automatically
+installed package so Fabric can continue to ship all backends within npm's
+package size limit. Installation and inference behavior remain unchanged.
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+- The Fabric meta, platform and CUDA packages move together to 0.32.0.
+  Existing consumers using `^0.31.0` stay on the previous packaging; adopting
+  this layout requires explicitly updating their Fabric dependency ranges.
+
+## Pull Requests
+
+- [#5824](https://github.com/tetherto/qvac/pull/5824) - QVAC-28570: split Fabric Linux x64 GPU backend packages.
+
+## [0.31.2] - 2026-11-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.4.0` -> `11739.5.0`. No struct,
+  exported signature, op, type or RPC protocol (117) change, so consumers on
+  `^0.31.0` take this release without a rebuild.
+- A sequence saved with another KV stream count now restores into its own
+  stream, so a single-sequence state from a per-sequence cache loads into a
+  `kv_unified` cache or after `n_seq_max` changes
+  ([qvac-fabric-llm.cpp#553](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/553)).
+  A whole-context restore still needs a matching stream count.
+- `ggml_vec_index_build_ivf` trains its centroids with spherical e-means
+  ([qvac-fabric-llm.cpp#543](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/543)):
+  with `n_iter > 0` the centroids are unit length and the lists differ from
+  0.31.1; `n_iter = 0` is unchanged.
+- CUDA: row bias, GELU and layer norm fuse into the cuBLAS F16 matmul, plus a
+  faster small batched matmul, strided copy and short-row softmax, each
+  limited to the GPUs it was measured on
+  ([qvac-fabric-llm.cpp#542](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/542)).
+- Metal: few-row MMA kernels for q4_K, q6_K and iq4_nl/iq4_xs, and a chunked
+  top-k for long rows
+  ([qvac-fabric-llm.cpp#544](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/544)).
+
+### Fixed
+
+- A composite memory (iswa, msa, dsa, dsa-iswa, hybrid, hybrid-iswa, dsv4)
+  that fails partway through a restore now drops the sequence from every part
+  instead of leaving it half old and half new
+  ([qvac-fabric-llm.cpp#556](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/556)).
+- WebGPU sizes its flash-attention and MMVQ scratch for the largest small
+  batch, so a graph reserved at `n_ubatch` no longer re-reserves for a later
+  small batch
+  ([qvac-fabric-llm.cpp#559](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/559)).
+
 ## [0.31.1] - 2026-11-18
 
 ### Fixed

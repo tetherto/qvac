@@ -64,6 +64,7 @@ const METADATA = {
   prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models'],
   // A model directory no manifest lists: { path, keyFiles }, relative to the package; cache:models fills it.
+  // { path, plan: true } instead: the target plans its own models (_desktop.yml).
   modelCache: ['test:integration'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration'],
@@ -216,9 +217,13 @@ export function checkMetadata(project, target) {
       `${project.name} ${target}: metadata.secrets takes ${SECRETS.join(', ')}, found ${unknownSecrets.join(', ')}`
     )
   if (meta.modelCache) {
-    const { path, keyFiles, ...extra } = meta.modelCache
-    if (typeof path !== 'string' || !Array.isArray(keyFiles) || !keyFiles.length || Object.keys(extra).length)
-      throw new Error(`${project.name} ${target}: metadata.modelCache takes path and a non-empty keyFiles`)
+    const { path, keyFiles, plan, ...extra } = meta.modelCache
+    const keyed = Array.isArray(keyFiles) && keyFiles.length > 0 && plan === undefined
+    const planned = plan === true && keyFiles === undefined
+    if (typeof path !== 'string' || !(keyed || planned) || Object.keys(extra).length)
+      throw new Error(
+        `${project.name} ${target}: metadata.modelCache takes path and either a non-empty keyFiles or plan: true`
+      )
   }
   if (meta.publish) {
     const extra = Object.keys(meta.publish).filter((k) => !PUBLISH_KEYS.includes(k))

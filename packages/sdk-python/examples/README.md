@@ -67,7 +67,7 @@ extra.
 | `kv_cache.py`                      | `kv-cache-example.ts`                                  | `kv_cache` on `completion`: auto-keyed reuse across turns, compared against an uncached replay                            |
 | `batch_completion.py`              | `batch-completion.ts`                                  | `batch_completion_stream`: many prompts in one call on a `parallel`-loaded model, grouped by prompt id                    |
 | `finetune.py`                      | `finetune/llamacpp-finetune.ts`                        | `finetune_with_progress` LoRA run with per-tick progress; `finetune` with `operation` to pause and resume                 |
-| `multimodal.py`                    | `llamacpp-multimodal.ts`                               | image `attachments` on a `completion` history; `projectionModelSrc` loaded alongside the LLM                              |
+| `multimodal.py`                    | `llamacpp-multimodal.ts`                               | ordered text and image `content` parts on a `completion` history; `projectionModelSrc` loaded alongside the LLM           |
 | `cancel.py`                        | `cancel-by-request-id.ts`                              | `cancel` by `request_id`, `InferenceCancelledError`                                                                       |
 | `embeddings.py`                    | `embed-p2p.ts`                                         | `embed` (`EmbedRequest`)                                                                                                  |
 | `rag_turbovec.py`                  | `rag/rag-turbovec.ts`                                  | `vector_index` (`VectorIndexRequest`) — TurboVec index over `embed` vectors, with snapshot `write`/`load`                 |

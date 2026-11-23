@@ -70,6 +70,11 @@ export function readHostAddonPackage(packageRoot) {
     name: manifest.name,
     version: manifest.version,
     hostAddon: manifest.imports[HOST_ADDON_IMPORT],
+    declaredDependencies: {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+    },
     packageRoot,
   };
 }
@@ -182,6 +187,22 @@ export function planPlatformPackages(packages, platforms, modulesDir) {
   return [...plan.values()];
 }
 
+// The binary links the same-platform package of every split addon the meta
+// depends on (@qvac/fabric-ios for a fabric consumer), and bare-link rewrites
+// that reference only when the package holding the binary declares it. Matches
+// the optional peers the slicer publishes.
+export function buildLinkedAddonPeers(entry) {
+  const platformSuffix = entry.platformPackage.slice(entry.name.length);
+  const linked = Object.entries(entry.declaredDependencies ?? {}).filter(
+    ([name]) => name !== entry.platformPackage && name.endsWith(platformSuffix),
+  );
+  if (linked.length === 0) return {};
+  return {
+    peerDependencies: Object.fromEntries(linked),
+    peerDependenciesMeta: Object.fromEntries(linked.map(([name]) => [name, { optional: true }])),
+  };
+}
+
 // Writes <stagingRoot>/<mangled name> from the meta package's own
 // prebuilds/<host>, in the layout the slicer publishes.
 export function assemblePlatformPackage(entry, stagingRoot) {
@@ -194,6 +215,7 @@ export function assemblePlatformPackage(entry, stagingRoot) {
     addon: true,
     exports: { '.': './index.js', './package': './package.json' },
     files: ['index.js', 'prebuilds'],
+    ...buildLinkedAddonPeers(entry),
   };
   fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   fs.writeFileSync(path.join(root, 'index.js'), PLATFORM_INDEX_SOURCE);
