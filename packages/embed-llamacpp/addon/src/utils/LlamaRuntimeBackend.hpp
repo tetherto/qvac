@@ -15,7 +15,8 @@
 #include <llama-ext.h>
 #else
 // Fabric 0.31 exports this staged API but does not install llama-ext.h.
-// Keep the declaration identical to Fabric's src/llama-ext.h.
+// Copied from qvac-fabric v11739.4.0 src/llama-ext.h (@qvac/fabric 0.31.1).
+// Recheck it against that file on every Fabric bump.
 struct llama_memory_breakdown_data {
   size_t model = 0;
   size_t context = 0;
