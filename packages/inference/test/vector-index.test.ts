@@ -97,10 +97,8 @@ test('storageFromBitWidth: maps unambiguous widths and leaves 4 bits undefined',
 for (const operation of ['create', 'load'] as const) {
   test(`vectorIndex: a ${operation} cancelled during the native open is released and reported cancelled`, async (t) => {
     await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
-      let finishOpen = () => {}
-      gates[operation] = new Promise<void>((resolve) => {
-        finishOpen = resolve
-      })
+      const open = deferred()
+      gates[operation] = () => open.promise
       const requestId = `vi-cancel-${operation}`
       const pending = handleVectorIndex(
         operation === 'create'
@@ -109,7 +107,7 @@ for (const operation of ['create', 'load'] as const) {
       )
       await new Promise<void>((resolve) => setTimeout(resolve, 5))
       t.is(getRequestRegistry().cancel({ requestId }), 1, 'the open is in flight and cancellable')
-      finishOpen()
+      open.resolve()
       await expectRejects(t, () => pending, InferenceCancelledError, 'the open reports the cancel')
       t.is(calls[operation], 1)
       t.is(calls.dispose, 1, 'the index the cancelled caller opened is released')
@@ -122,10 +120,8 @@ test('vectorIndex: a search cancelled while the provider runs reports the cancel
   await withProvider(async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
     const index = await createVectorIndex({ dim: 2 })
     await index.add({ ids: ['1'], vectors: [[1, 0]] })
-    let finishSearch = () => {}
-    gates.search = new Promise<void>((resolve) => {
-      finishSearch = resolve
-    })
+    const search = deferred()
+    gates.search = () => search.promise
     const requestId = 'vi-cancel-search'
     const pending = handleVectorIndex({
       type: 'vectorIndex',
@@ -137,8 +133,104 @@ test('vectorIndex: a search cancelled while the provider runs reports the cancel
     })
     await new Promise<void>((resolve) => setTimeout(resolve, 5))
     t.is(getRequestRegistry().cancel({ requestId }), 1, 'the search is in flight and cancellable')
-    finishSearch()
+    search.resolve()
     await expectRejects(t, () => pending, InferenceCancelledError, 'the search reports the cancel')
+  })
+})
+
+for (const operation of ['search', 'load'] as const) {
+  test(`vector index: an active ${operation} can reject before the provider finishes`, async (t) => {
+    await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+      const index = operation === 'search' ? await createVectorIndex({ dim: 2 }) : undefined
+      const started = deferred()
+      const finish = deferred()
+      gates[operation] = (options) => {
+        const signal = options?.signal
+        return new Promise<void>((resolve, reject) => {
+          const abort = () => reject(signal?.reason)
+          signal?.addEventListener('abort', abort, { once: true })
+          void finish.promise.then(() => {
+            signal?.removeEventListener('abort', abort)
+            resolve()
+          })
+          started.resolve()
+        })
+      }
+      const requestId = `vi-cancel-active-${operation}`
+      const pending = handleVectorIndex(
+        index
+          ? {
+              type: 'vectorIndex',
+              operation: 'search',
+              indexId: index.indexId,
+              queries: [[1, 0]],
+              k: 1,
+              requestId
+            }
+          : {
+              type: 'vectorIndex',
+              operation: 'load',
+              path: tempSnapshotPath('aborted-active-load'),
+              requestId
+            }
+      )
+      let error: unknown
+      const settled = pending.catch((cause: unknown) => {
+        error = cause
+      })
+      try {
+        await Promise.race([started.promise, pending])
+        t.is(getRequestRegistry().cancel({ requestId }), 1)
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        t.ok(error instanceof InferenceCancelledError, 'cancellation reaches the active provider')
+      } finally {
+        finish.resolve()
+        await settled
+      }
+      if (operation === 'load') {
+        t.is(calls.load, 1)
+        t.is(getOpenVectorIndexCount(), 0, 'the cancelled load leaves no registered index')
+      }
+    })
+  })
+}
+
+test('vector index: cancelling an active removal leaves later ids in the index', async (t) => {
+  await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({
+      ids: ['1', '2', '3'],
+      vectors: [
+        [1, 0],
+        [0, 1],
+        [1, 1]
+      ]
+    })
+    const started = deferred()
+    const finish = deferred()
+    gates.remove = async (id) => {
+      if (id === 1n) {
+        started.resolve()
+        await finish.promise
+      }
+    }
+    const requestId = 'vi-cancel-active-remove'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'remove',
+      indexId: index.indexId,
+      ids: ['1', '2', '3'],
+      requestId
+    })
+    try {
+      await Promise.race([started.promise, pending])
+      t.is(getRequestRegistry().cancel({ requestId }), 1)
+    } finally {
+      finish.resolve()
+    }
+    await expectRejects(t, () => pending, InferenceCancelledError, 'the removal reports the cancel')
+    t.is(calls.remove, 1, 'only the removal already in flight completes')
+    t.alike(await index.contains({ ids: ['1', '2', '3'] }), [false, true, true])
   })
 })
 
@@ -944,10 +1036,8 @@ test('vector index: a call cancelled while it waits behind a build never runs', 
     async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
       const index = await createVectorIndex({ dim: 2 })
       await index.add({ ids: ['1'], vectors: [[1, 0]] })
-      let finishBuild = () => {}
-      gates.buildIvf = new Promise<void>((resolve) => {
-        finishBuild = resolve
-      })
+      const build = deferred()
+      gates.buildIvf = () => build.promise
       const building = index.setIvf({ nLists: 1, nProbe: 1 })
       // Let the build reach the index and wait on its gate.
       await new Promise<void>((resolve) => setTimeout(resolve, 5))
@@ -968,7 +1058,7 @@ test('vector index: a call cancelled while it waits behind a build never runs', 
         InferenceCancelledError,
         'the waiting search reports the cancel without waiting for the build'
       )
-      finishBuild()
+      build.resolve()
       await building
       t.is(index.ivf?.built, true, 'the build it waited behind still finishes')
       t.is(calls.prepare + calls.search + calls.searchIvf, 0, 'the cancelled search never ran')

@@ -4,6 +4,7 @@
 import fs from 'bare-fs'
 import { z } from 'zod'
 import type {
+  TurboVecCallOptions,
   TurboVecIndexProvider,
   TurboVecIndexSearchResult as SearchResult
 } from '@/plugins/turbovec-index'
@@ -63,17 +64,19 @@ export function observableIndexProvider({
   const failRemoveId: { id: bigint | null } = { id: null }
 
   // Promises a call waits on before it returns, so a test can act while the
-  // native call is in flight. `search` and `buildIvf` only gate the async
-  // index.
+  // native call is in flight. Methods on an open index only wait on gates
+  // when the index is async.
   const gates: {
-    create: Promise<void> | null
-    load: Promise<void> | null
-    search: Promise<void> | null
-    buildIvf: Promise<void> | null
+    create: (() => Promise<void>) | null
+    load: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    search: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    remove: ((id: bigint) => Promise<void>) | null
+    buildIvf: (() => Promise<void>) | null
   } = {
     create: null,
     load: null,
     search: null,
+    remove: null,
     buildIvf: null
   }
 
@@ -169,14 +172,19 @@ export function observableIndexProvider({
     if (sync) return index
     const asyncIndex = asAsync(index)
     const search = asyncIndex.search
-    asyncIndex.search = async (queries, k) => {
-      if (gates.search) await gates.search
+    asyncIndex.search = async (queries, k, options) => {
+      if (gates.search) await gates.search(options)
       return search(queries, k)
+    }
+    const remove = asyncIndex.remove
+    asyncIndex.remove = async (id) => {
+      if (gates.remove) await gates.remove(id)
+      return remove(id)
     }
     const buildIvf = asyncIndex.buildIvf
     if (buildIvf) {
       asyncIndex.buildIvf = async (nLists, nIter) => {
-        if (gates.buildIvf) await gates.buildIvf
+        if (gates.buildIvf) await gates.buildIvf()
         return buildIvf(nLists, nIter)
       }
     }
@@ -187,13 +195,13 @@ export function observableIndexProvider({
     async create(options) {
       calls.create++
       if (failures.create) fail('create')
-      if (gates.create) await gates.create
+      if (gates.create) await gates.create()
       return createIndex(options.dim)
     },
-    async load() {
+    async load(_path, options) {
       calls.load++
       if (failures.load) fail('load')
-      if (gates.load) await gates.load
+      if (gates.load) await gates.load(options)
       return createIndex(8, 8)
     }
   }

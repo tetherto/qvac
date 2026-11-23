@@ -39,5 +39,6 @@ export interface TurboVecIndex {
 
 export interface TurboVecIndexProvider {
   create(options: { dim: number; storage: `${VectorIndexStorage}` }): MaybePromise<TurboVecIndex>
-  load(path: string): MaybePromise<TurboVecIndex>
+  /** If load rejects on abort, the provider frees any index that opens later. */
+  load(path: string, options?: TurboVecCallOptions): MaybePromise<TurboVecIndex>
 }

@@ -33,6 +33,14 @@ no public cancel method, so cancelling an active call discards its result after
 native inference finishes. The model slot stays occupied until that point. Its
 plugin declares `cancel: { scope: 'none' }`.
 
+Vector index handlers pass the request signal through the backend to the
+provider. A provider that rejects an active call before its native work finishes
+must keep that work in order with later calls and wait for it before freeing
+the index. If a snapshot load rejects on abort, the provider frees any index
+that opens later. If the provider returns an index after cancellation, the
+handler releases it. The backend checks the signal between IDs in a removal
+batch, including when the provider ignores the signal.
+
 ## Caller-ended streams
 
 A stream that waits on a source outside the registry, such as a log subscription,

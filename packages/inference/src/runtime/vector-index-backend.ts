@@ -11,8 +11,9 @@ import type {
  * unsigned 64-bit ids go in; finished hit rows come out. Anything specific
  * to a native engine (warm-up, result padding, how the storage mode is
  * reported) is handled by the backend that implements this, not by callers.
- * Calls on one index run in call order. A call whose `signal` aborts rejects
- * at once; one that has not reached the native index never runs.
+ * Calls on one index run in call order. A queued call skips native work when
+ * its signal aborts. An active call can reject before native work ends if the
+ * provider supports cancellation.
  */
 export interface VectorIndexState {
   readonly length: number
@@ -63,5 +64,5 @@ export interface OpenVectorIndex extends VectorIndexState {
 
 export interface VectorIndexBackend {
   create(dim: number, storage: VectorIndexStorage): OpenVectorIndex | Promise<OpenVectorIndex>
-  load(path: string): OpenVectorIndex | Promise<OpenVectorIndex>
+  load(path: string, signal?: AbortSignal): OpenVectorIndex | Promise<OpenVectorIndex>
 }

@@ -159,6 +159,14 @@ The following script turns IVF on for a small `F32` index, compares a probed sea
 
 External index providers may not support these controls. Their `calibrated`, `stagedSearch` and `ivf` properties are then `undefined`, and `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError`. The Python and Kotlin SDKs report a missing `ivf` as `null`, the same value as IVF turned off. In those SDKs, the only way to tell that a provider doesn't support IVF is that `setIvf()` rejects.
 
+#### Cancelling vector index calls
+
+In the JavaScript and TypeScript SDK, pass the pending operation's `requestId` to `cancel({ requestId })`. A call cancelled while it waits for its turn skips the native operation. Disposal still runs to release the index.
+
+With TurboVec 0.7, an active call can reject with `InferenceCancelledError` while its native work finishes. An add can still insert its batch, a remove can still delete IDs already submitted, and a write can still replace the snapshot. A staged search change can also take effect. If cancellation leaves the IVF lists stale, searches scan every entry until you rebuild the lists with `setIvf()`.
+
+Later calls on the same index wait for the earlier native work. Use `contains()` to check the affected IDs before retrying a cancelled add or remove. Providers without active cancellation support, including TurboVec 0.5, may wait for the current call to finish.
+
 ### External vector DB
 
 #### MongoDB

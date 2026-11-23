@@ -148,10 +148,13 @@ export async function createVectorIndex(params: {
   }
 }
 
-export async function loadVectorIndex(params: { path: string; sessionId?: string | undefined }) {
+export async function loadVectorIndex(
+  params: { path: string; sessionId?: string | undefined },
+  signal?: AbortSignal
+) {
   const backend = requireBackend()
   const { index, indexId } = await openVectorIndex(resolveSessionId(params), () =>
-    backend.load(resolveVectorIndexPath(params.path))
+    backend.load(resolveVectorIndexPath(params.path), signal)
   )
   return {
     indexId,

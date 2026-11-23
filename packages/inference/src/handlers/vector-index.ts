@@ -83,7 +83,7 @@ async function runOperation(
       return { ...base, operation: 'create', ...opened }
     }
     case 'load': {
-      const opened = await loadVectorIndex(request)
+      const opened = await loadVectorIndex(request, signal)
       if (signal.aborted) {
         await disposeVectorIndex(opened)
         throw new InferenceCancelledError(requestId)

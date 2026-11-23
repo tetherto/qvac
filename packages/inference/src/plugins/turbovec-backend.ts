@@ -219,6 +219,7 @@ function openIndex(
             const present = await index.remove(id, { signal })
             if (present) markChanged()
             removed.push(present)
+            signal?.throwIfAborted()
           }
         } catch (error) {
           // An aborted call rejects at once while the native removal runs on,
@@ -247,8 +248,8 @@ export function getTurboVecBackend(): VectorIndexBackend | undefined {
     async create(dim, storage) {
       return openIndex(await provider.create({ dim, storage }), storage)
     },
-    async load(path) {
-      const index = await provider.load(path)
+    async load(path, signal) {
+      const index = await provider.load(path, { signal })
       return openIndex(index, storageFromBitWidth((index as { bitWidth?: unknown }).bitWidth))
     }
   }
