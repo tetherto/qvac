@@ -130,7 +130,8 @@ function foldEnum(value: string, values: unknown): string | undefined {
   return matches.length === 1 ? (matches[0] as string) : undefined
 }
 
-function omittable(schema: unknown): boolean {
+// A field that can't hold a string or null, so a written `null` can only mean "left out".
+export function omittable(schema: unknown): boolean {
   const types = schemaTypes(schema)
   return types.size > 0 && !types.has('string') && !types.has('null')
 }

@@ -39,6 +39,7 @@ const BARE_FUNCTION_FRAME: FrameSpec = {
 // `<|start|>assistant`); they say nothing about whether the call was made.
 const PROTOCOL_TOKEN = /^(?:<\|[^<>\s]{0,40}>(?:assistant)?|<[^<>\s|]{1,40}\|>|<｜[^<>]{0,40}>)/
 const MAX_PENDING_PROTOCOL_TOKEN = 48
+const ROLE_SUFFIX = 'assistant'
 
 export const MAX_TOOL_FRAME_CHARS = 1_048_576
 
@@ -141,9 +142,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let activeToolFrame: FrameSpec | null = null
   let bareNameSeen = false
 
-  // Only a call at the end of the turn is made: one followed by more prose was
-  // an example. A closed frame's calls wait here until the turn ends or only
-  // whitespace, protocol tokens or another frame has followed.
+  // Only calls at the end of the turn are made: frames followed by more prose
+  // were examples. Closed frames separated only by whitespace or protocol
+  // tokens wait here together; visible text demotes them all, the turn end
+  // or a frame that fails to parse makes them.
   let trailingCalls: { raw: string; calls: ToolCall[] } | null = null
   const demotedToolCallKeys = new Set<string>()
 
@@ -245,6 +247,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       if (normalized) trimAfterThinking = false
     }
     if (!normalized) return
+    if (trailingCalls) {
+      if (!normalized.trim()) {
+        trailingCalls.raw += normalized
+        return
+      }
+      demoteTrailingCalls(events)
+    }
     contentParts.push(normalized)
     events.push({ type: 'contentDelta', seq: nextSeq(), text: normalized })
   }
@@ -284,6 +293,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
   // A made call waits behind earlier undecided ones so the order is kept.
   function emitMadeCall(events: CompletionEvent[], call: ToolCall) {
+    releaseTrailingCalls(events)
     if (deferredCalls.length > 0) deferredCalls.push({ call, made: true })
     else emitStreamedToolCall(events, call)
   }
@@ -363,6 +373,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
     if (inner.trim().length === 0) {
       if (openedInThinking) return returnToThinking()
+      releaseTrailingCalls(events)
       events.push({
         type: 'toolError',
         seq: nextSeq(),
@@ -388,11 +399,18 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
 
     if (closed && toolCalls.length > 0 && !openedInThinking) {
-      trailingCalls = { raw, calls: toolCalls }
+      if (trailingCalls) {
+        trailingCalls.raw += raw
+        trailingCalls.calls.push(...toolCalls)
+      } else {
+        trailingCalls = { raw, calls: toolCalls }
+      }
       state = 'afterTool'
       return
     }
 
+    // A failed call attempt is not prose: the calls before it were made.
+    releaseTrailingCalls(events)
     for (const call of toolCalls) emitMadeCall(events, call)
 
     if (toolCalls.length === 0) {
@@ -428,6 +446,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
     if (frame?.bare) return emitContent(events, raw)
 
+    releaseTrailingCalls(events)
     events.push({
       type: 'toolError',
       seq: nextSeq(),
@@ -496,7 +515,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       }
       const opener = toolOpeners.find((m) => trimmed.startsWith(m))
       if (opener) {
-        releaseTrailingCalls(events)
+        // The next frame joins the held group; the text after it decides them all.
+        trailingCalls!.raw += rest.slice(0, rest.length - trimmed.length)
         openToolFrame(opener, markerToEntry.get(opener)!.spec, false)
         return trimmed.slice(opener.length)
       }
@@ -507,7 +527,18 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       }
       const token = PROTOCOL_TOKEN.exec(trimmed)
       if (token) {
-        rest = trimmed.slice(token[0].length)
+        const after = trimmed.slice(token[0].length)
+        // `<|start|>` may still be followed by `assistant` in the next push.
+        if (
+          token[0].startsWith('<|') &&
+          !token[0].endsWith(ROLE_SUFFIX) &&
+          after.length < ROLE_SUFFIX.length &&
+          ROLE_SUFFIX.startsWith(after)
+        ) {
+          afterToolTail = rest
+          return ''
+        }
+        rest = after
         continue
       }
       if (
@@ -782,12 +813,20 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   // The turn ended with the calls still held: they were made, unless it failed.
+  // Text held after them that is not markup was prose, so they were examples.
   function settleTrailingCalls(events: CompletionEvent[], failed: boolean) {
-    if (state !== 'afterTool') return
-    afterToolTail = ''
+    if (state === 'afterTool') {
+      const tail = afterToolTail
+      afterToolTail = ''
+      state = 'content'
+      const trimmed = tail.trim()
+      const markup =
+        !trimmed || /^<[|｜]/.test(trimmed) || toolOpeners.some((m) => m.startsWith(trimmed))
+      if (failed || !markup) demoteTrailingCalls(events)
+      if (!markup) emitContent(events, tail)
+    }
     if (failed) demoteTrailingCalls(events)
     else releaseTrailingCalls(events)
-    state = 'content'
   }
 
   // The turn ended right after a call inside `<think>`: it was made, unless
@@ -832,8 +871,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     const naturalStop = opts?.stopReason === 'eos' || opts?.stopReason === 'stopSequence'
 
     drainTails(events)
-    settleTrailingCalls(events, failed)
     closeOpenFrames(events, failed)
+    settleTrailingCalls(events, failed)
     settleHeldCalls(events, failed)
     // The block never closed, so every call left in it was made. A cancelled
     // turn says nothing about the ones the model had not confirmed.

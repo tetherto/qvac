@@ -208,6 +208,85 @@ test('a bare call is recovered and hidden at every split', (t) => {
   }
 })
 
+test('adjacent blocks followed by prose are all examples, at every split', (t) => {
+  const block = (p: string) => `<function=login><parameter=password>${p}</parameter></function>`
+  const text = `${block('a')}\n${block('b')}\nThese are examples, not requests.`
+  for (let split = 0; split <= text.length; split++) {
+    const r = run([text.slice(0, split), text.slice(split)], [LOGIN])
+    t.is(r.content, text, `split ${split}: shown as text`)
+    t.is(r.calls.length + r.finalCalls.length, 0, `split ${split}: no call`)
+  }
+})
+
+test('adjacent blocks at the end of the turn are all made, in order', (t) => {
+  const block = (p: string) => `<function=login><parameter=password>${p}</parameter></function>`
+  const text = `${block('a')}\n${block('b')}\n`
+  for (let split = 0; split <= text.length; split++) {
+    const r = run([text.slice(0, split), text.slice(split)], [LOGIN])
+    t.alike(argsOf(r), [
+      ['login', { password: 'a' }],
+      ['login', { password: 'b' }]
+    ])
+    t.is(r.content, '', `split ${split}: markup hidden`)
+  }
+})
+
+test('a role marker split across pushes does not demote the calls before it', (t) => {
+  const weather: Tool = {
+    type: 'function',
+    name: 'get_weather',
+    description: 'weather',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  }
+  const call = (city: string) =>
+    `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"${city}"}<|call|>`
+  const text = `${call('Tokyo')}<|start|>assistant${call('Lima')}`
+  for (let split = 0; split <= text.length; split++) {
+    const r = run([text.slice(0, split), text.slice(split)], [weather], 'harmony')
+    t.alike(
+      argsOf(r),
+      [
+        ['get_weather', { city: 'Tokyo' }],
+        ['get_weather', { city: 'Lima' }]
+      ],
+      `split ${split}`
+    )
+    t.is(r.content, '', `split ${split}: no visible text`)
+  }
+})
+
+test('an unfinished tag after a call at the end of the turn is shown and makes it an example', (t) => {
+  const block = '<function=login><parameter=password>a</parameter></function>'
+  const r = run([block, ' <note'], [LOGIN])
+  t.is(r.content, `${block} <note`)
+  t.is(r.calls.length + r.finalCalls.length, 0)
+
+  const glue = run([block, '<|im_end'], [LOGIN])
+  t.alike(argsOf(glue), [['login', { password: 'a' }]], 'a cut-off special token is markup')
+  t.is(glue.content, '')
+})
+
+test('an optional non-null qwen35 parameter written as null is left out', (t) => {
+  const search: Tool = {
+    type: 'function',
+    name: 'search',
+    description: 'search',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string' }, limit: { type: 'integer' } },
+      required: ['query']
+    }
+  }
+  const r = run(
+    [
+      '<tool_call>\n<function=search>\n<parameter=query>cats</parameter>\n<parameter=limit>null</parameter>\n</function>\n</tool_call>'
+    ],
+    [search]
+  )
+  t.alike(argsOf(r), [['search', { query: 'cats' }]])
+  t.is(r.errors, 0)
+})
+
 test('repaired arguments are the same in the stream and the final result', (t) => {
   const text =
     '<tool_call>\n<function=http_request>\n<parameter=url>https://x.test</parameter>\n' +

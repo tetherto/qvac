@@ -6,7 +6,7 @@ import {
   parameterTypes,
   type ParserResult
 } from '@/utils/tools/shared'
-import { readStructured } from '@/utils/tools/repair'
+import { omittable, readStructured } from '@/utils/tools/repair'
 
 // Coerce raw parameter text to the type declared in the tool's JSON schema.
 // String values are raw (not JSON-quoted); arrays/objects are valid JSON.
@@ -122,12 +122,16 @@ function decodeFunctionCall(
   tools: Tool[],
   raw: string
 ): { call: ToolCall; error?: undefined } | { call?: undefined; error: ToolCallError } {
-  const schemaProperties = tools.find((t) => t.name === name)?.parameters?.properties ?? {}
+  const parameters = tools.find((t) => t.name === name)?.parameters
+  const schemaProperties = parameters?.properties ?? {}
+  const required = parameters?.required ?? []
   const args: Record<string, unknown> = {}
   try {
     for (const pm of paramsBlock.matchAll(PARAM_REGEX)) {
       const paramName = pm[1]!.trim()
-      args[paramName] = coerceParamValue(pm[2]!, schemaProperties[paramName])
+      const schema = schemaProperties[paramName]
+      if (pm[2]!.trim() === 'null' && !required.includes(paramName) && omittable(schema)) continue
+      args[paramName] = coerceParamValue(pm[2]!, schema)
     }
   } catch (err) {
     return {
