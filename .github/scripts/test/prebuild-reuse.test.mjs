@@ -14,7 +14,11 @@ const row = {
 const inputs = [
   'packages/llm-llamacpp/scripts/build-web.mjs',
   'packages/llm-llamacpp/scripts/validate-web-prebuild.mjs',
-  'packages/llm-llamacpp/web/source-lock.json'
+  'packages/llm-llamacpp/scripts/npm-command.cjs',
+  'packages/llm-llamacpp/web/source-lock.json',
+  'packages/llm-llamacpp/web/CMakeLists.txt',
+  'packages/llm-llamacpp/web/include/qvac-fabric.h',
+  'packages/llm-llamacpp/addon/src/js-interface/web/binding.cpp'
 ]
 
 test('browser engine inputs participate in native prebuild reuse keys', () => {

@@ -14,7 +14,7 @@ export const NATIVE =
   /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
 
 export const WEB =
-  /(^|\/)scripts\/(build-web|validate-web-prebuild)\.mjs$|(^|\/)web\/source-lock\.json$/
+  /(^|\/)addon\/src\/js-interface\/web\/|(^|\/)web\/|(^|\/)scripts\/(build-web\.mjs|validate-web-prebuild\.mjs|npm-command\.cjs)$/
 
 // Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
 // the build runs.
@@ -38,7 +38,7 @@ export function legKey(row, tree) {
     .split('\n')
     .filter((line) => {
       const path = line.split('\t')[1] ?? ''
-      return NATIVE.test(path) || (buildsWeb && WEB.test(path))
+      return WEB.test(path) ? buildsWeb : NATIVE.test(path)
     })
     .join('\n')
   return createHash('sha256')
