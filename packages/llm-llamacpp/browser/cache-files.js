@@ -8,11 +8,15 @@ function ensureParentDirectory(module, path) {
 }
 
 function ensureMessageCacheDirectories(module, serializedMessages) {
-  const messages = JSON.parse(serializedMessages)
-  for (const message of messages) {
-    if (!message || typeof message !== 'object') continue
-    ensureParentDirectory(module, message.cacheKey)
+  const visit = (messages) => {
+    if (!Array.isArray(messages)) return
+    for (const message of messages) {
+      if (!message || typeof message !== 'object') continue
+      if (Array.isArray(message.messages)) visit(message.messages)
+      ensureParentDirectory(module, message.cacheKey)
+    }
   }
+  visit(JSON.parse(serializedMessages))
 }
 
 module.exports = { ensureMessageCacheDirectories, ensureParentDirectory }

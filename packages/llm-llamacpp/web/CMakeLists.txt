@@ -79,7 +79,7 @@ target_link_options(llm-llamacpp PRIVATE
   -sSTACK_SIZE=8388608
   -sMAXIMUM_MEMORY=${WASM_MAXIMUM_MEMORY}
   -lworkerfs.js
-  "-sEXPORTED_FUNCTIONS=_qvac_web_create,_qvac_web_activate,_qvac_web_run,_qvac_web_save_cache,_qvac_web_discard_cache,_qvac_web_calc_tokens,_qvac_web_destroy,_qvac_web_result"
+  "-sEXPORTED_FUNCTIONS=_qvac_web_create,_qvac_web_activate,_qvac_web_stage_media,_qvac_web_run,_qvac_web_submit,_qvac_web_step,_qvac_web_cancel_job,_qvac_web_active_slots,_qvac_web_save_cache,_qvac_web_discard_cache,_qvac_web_calc_tokens,_qvac_web_destroy,_qvac_web_result"
   "-sEXPORTED_RUNTIME_METHODS=ccall,FS"
   -sASYNCIFY=1
   -sASYNCIFY_STACK_SIZE=1048576)

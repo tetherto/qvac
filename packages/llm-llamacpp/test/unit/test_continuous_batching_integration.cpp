@@ -215,6 +215,91 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
   EXPECT_NE(outputs[0], outputs[1]);
 }
 
+TEST_F(ContinuousBatchingIntegrationTest,
+       CooperativeDriveReturnsOrderedConcurrentResults) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+
+  std::vector<std::string> streamed(2);
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("What is the capital of France? Answer in one word."),
+      makePrompt("What is the natural satellite that orbits Earth? "
+                 "Answer in one word.")};
+  for (size_t index = 0; index < prompts.size(); ++index) {
+    prompts[index].outputCallback = [&streamed,
+                                     index](const std::string &token) {
+      streamed[index].append(token);
+    };
+  }
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7001;
+  model->submitCooperative(prompts, kJobId);
+  std::optional<std::vector<std::string>> outputs;
+  for (size_t step = 0; step < 10000 && !outputs.has_value(); ++step) {
+    (void)model->stepCooperative();
+    outputs = model->takeCooperative(kJobId);
+  }
+
+  ASSERT_TRUE(outputs.has_value());
+  ASSERT_EQ(outputs->size(), 2u);
+  EXPECT_EQ(*outputs, streamed);
+  EXPECT_TRUE(containsCaseInsensitive((*outputs)[0], "Paris"));
+  EXPECT_TRUE(containsCaseInsensitive((*outputs)[1], "Moon"));
+  const auto stats = model->consumeJobStats(kJobId);
+  EXPECT_GT(test_common::getStatValue(stats, "avgConcurrentSeq"), 1.0);
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest,
+       CooperativeDrivePropagatesDecodeFailureAndReleasesSlots) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [](llama_context *, llama_batch &) -> int { return 1; });
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7002;
+  model->submitCooperative(
+      {makePrompt("What is the capital of France? Answer in one word.")},
+      kJobId);
+  (void)model->stepCooperative();
+  EXPECT_THROW((void)model->takeCooperative(kJobId), qvac_errors::StatusError);
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest,
+       CooperativeCallbackCanCancelItsOwnJobWithoutDeadlock) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto *scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7003;
+  auto prompt = makePrompt("Count from one to ten.");
+  prompt.outputCallback = [&model](const std::string &) {
+    model->cancelById(kJobId);
+  };
+  model->submitCooperative({std::move(prompt)}, kJobId);
+
+  bool cancelled = false;
+  for (size_t step = 0; step < 10000 && !cancelled; ++step) {
+    (void)model->stepCooperative();
+    try {
+      (void)model->takeCooperative(kJobId);
+    } catch (const qvac_errors::StatusError &) {
+      cancelled = true;
+    }
+  }
+  EXPECT_TRUE(cancelled);
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "128";

@@ -154,6 +154,11 @@ public:
   using Scheduler =
       qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler;
 
+  static void useCooperativeDrive(Scheduler &scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    scheduler.driveMode_ = Scheduler::DriveMode::Cooperative;
+  }
+
   /// Override the decode function used by stepLocked(); inject a stub that
   /// returns a non-zero rc or blocks to exercise the decode path.
   static void setDecodeFunc(Scheduler& scheduler, Scheduler::DecodeFunc fn) {
