@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const fs = require('bare-fs')
 const os = require('bare-os')
 const process = require('bare-process')
 
@@ -22,6 +23,18 @@ const isDarwinX64 = platform === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = platform === 'linux' && os.arch() === 'arm64'
 const isIos = platform === 'ios'
 const isMobile = isIos || platform === 'android'
+
+// CUDA_VISIBLE_DEVICES=-1 hides CUDA the same way FORCE_VULKAN does.
+const forceVulkan = process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
+
+// Expect CUDA only with an NVIDIA driver present, detected outside the addon
+// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia<N>;
+// WSL2 exposes only libcuda under /usr/lib/wsl/lib.
+const hasNvidiaGpu =
+  platform === 'linux' &&
+  os.arch() === 'x64' &&
+  (fs.readdirSync('/dev').some((d) => /^nvidia\d+$/.test(d)) ||
+    fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
 
 // Test constants
 const TEST_TIMEOUT = 600_000
@@ -846,7 +859,7 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT },
   } else if (os.platform() === 'darwin' || os.platform() === 'ios') {
     t.is(response.stats.backendName, 'metal', 'runtime stats name the Metal backend')
   } else if (os.platform() === 'linux' || os.platform() === 'win32') {
-    const expected = process.env.FORCE_VULKAN === 'true' ? ['vulkan'] : ['cuda', 'vulkan']
+    const expected = forceVulkan ? ['vulkan'] : hasNvidiaGpu ? ['cuda'] : ['cuda', 'vulkan']
     t.ok(
       expected.includes(response.stats.backendName),
       'runtime stats name the desktop GPU backend'
