@@ -1,6 +1,7 @@
 import { Option, type Command } from 'commander'
 import { collect } from '@/cli/options'
 import { handleError } from '@/errors'
+import { IOS_ENGINES, iosEngineFor, type IosEngine } from '@/bundle-sdk/options'
 
 export function registerBundleCommand(program: Command): void {
   const bundleCmd = program
@@ -29,6 +30,12 @@ export function registerBundleCommand(program: Command): void {
       []
     )
     .option('--defer <module>', 'Defer a module (repeatable)', collect, [])
+    .addOption(
+      new Option(
+        '--ios-engine <engine>',
+        'Engine the worker runs with on iOS, for --target react-native (default: javascriptcore)'
+      ).choices(IOS_ENGINES)
+    )
     .option(
       '--no-install',
       'Do not install missing addon platform packages for mobile hosts into package.json'
@@ -44,12 +51,14 @@ export function registerBundleCommand(program: Command): void {
         language: 'javascript' | 'python'
         host: string[]
         defer: string[]
+        iosEngine?: IosEngine
         install: boolean
         quiet?: boolean
         verbose?: boolean
         offline?: boolean
       }) => {
         try {
+          const iosEngine = iosEngineFor(options.target, options.iosEngine)
           const { bundleSdk, HostPrebuildsInstallFailedError, HostPrebuildsInstallRefusedError } =
             await import('@/bundle-sdk/index')
           const bundleOptions = {
@@ -60,6 +69,7 @@ export function registerBundleCommand(program: Command): void {
             language: options.language,
             hosts: options.host.length > 0 ? options.host : undefined,
             defer: options.defer.length > 0 ? options.defer : undefined,
+            iosEngine,
             quiet: options.quiet,
             verbose: options.verbose,
             network: options.offline !== true

@@ -26,6 +26,7 @@ const ERROR_LABELS: Record<string, string> = {
   ConfigNotFoundError: 'Configuration Error',
   ConfigLoadError: 'Config Load Error',
   ServeOptionsError: 'Serve Options Error',
+  BundleOptionsError: 'Bundle Options Error',
   CorsOriginError: 'CORS Configuration Error',
   FitUsageError: 'Usage Error',
   FitSettingError: 'Usage Error',
