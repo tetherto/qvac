@@ -16,15 +16,21 @@
   `common_params_speculative_draft::n_max_explicit`. Native consumers must
   rebuild against these headers, and every addon loaded in one process must
   resolve the same `@qvac/fabric` minor.
+- `mtmd.h` / `mtmd-helper.h`: `mtmd_gen_audio_process` takes an
+  `mtmd_gen_state`, and `mtmd_gen_inp`, `mtmd_gen_out`, `mtmd_caps`,
+  `mtmd_audio_stream_params`, `mtmd_helper_gen_audio_inp` and
+  `mtmd_helper_video_init_params` change layout. `mtmd_helper_model_can_chat`
+  and `mtmd_helper_support_video` are deprecated in favour of
+  `mtmd_helper_get_capabilities`.
 
 ### Added
 
 - ggml API: `ggml_top_k_mask`, `ggml_backend_tensor_copy_n`,
   `ggml_backend_tensor_set_n`, `ggml_backend_tensor_get_n`,
   `ggml_prec_get_acc` and `ggml_prec_get_src`.
-- The CUDA 13 modules (linux-x64, linux-arm64, win32-x64) carry fabric's
-  CUTLASS MXFP4/NVFP4 matmuls, which run only on Blackwell GPUs (compute
-  capability 12.x); other GPUs and the Jetson module behave as before
+- The CUDA 13 modules (`@qvac/fabric-linux-x64-cuda`, linux-arm64,
+  win32-x64) include CUTLASS MXFP4/NVFP4 matmuls for compute capability 12.x
+  GPUs. Other GPUs and the Jetson module are unchanged
   ([qvac-registry-vcpkg#502](https://github.com/tetherto/qvac-registry-vcpkg/pull/502)).
 
 ### Changed
@@ -34,15 +40,14 @@
   `common_params` themselves call `common_speculative_set_default_n_max` once
   the spec types are final. Other spec types keep 3
   ([qvac-fabric-llm.cpp#557](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/557)).
-- CUDA and Vulkan mat-muls with 9-32 columns are faster: 16-row few-row MMQ
-  tiles on DGX Spark with bit-identical results, and narrow-N coopmat tiles
-  on NVIDIA Vulkan devices, which `GGML_VK_DISABLE_NARROW_MUL_MAT` turns off.
-  Other Vulkan vendors keep the base tiles
+- Faster few-row mat-muls: CUDA on DGX Spark at 9-16 columns (bit-identical
+  results), and Vulkan on NVIDIA at 9-32 columns
+  (`GGML_VK_DISABLE_NARROW_MUL_MAT` turns it off)
   ([qvac-fabric-llm.cpp#555](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/555)).
 
 ### Fixed
 
-- WebGPU: K-quant weights are rebuilt in `f32`, so Intel GPUs that flush
+- WebGPU dequantizes quantized weights in `f32`, so Intel GPUs that flush
   subnormal `f16` values no longer produce corrupted output
   ([qvac-fabric-llm.cpp#567](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/567)).
 - WebGPU browser builds: the logger runs without pthreads, device creation
