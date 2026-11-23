@@ -16,6 +16,22 @@ and this project adheres to
   ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
   automatically; installation and inference configuration remain unchanged.
 
+## [0.41.1] - 2026-11-23
+
+MegaLoc skips OpenCL when choosing a backend automatically. This avoids an
+OpenCL mixed-weight upload crash and an F16 embedding precision mismatch on
+Adreno.
+
+### Breaking Changes
+
+- MegaLoc's `load()` and `assessFit()` reject explicit OpenCL requests for
+  both F16 and mixed GGUF models. Omit `backend` for automatic selection,
+  set `backend: 'CPU'`, or select another supported backend.
+
+### Pull Requests
+
+- [#5912](https://github.com/tetherto/qvac/pull/5912) - Reject OpenCL for MegaLoc.
+
 ## [0.41.0] - 2026-11-19
 
 ### Changed
