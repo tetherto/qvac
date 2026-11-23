@@ -332,10 +332,15 @@ test('integration manifest pins integrity for every model', function (t) {
   )
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
+  // The CI contract's skip, warm and targets fields choose where an entry is fetched; its cache key hashes them too.
+  const contractFields = ['skip', 'targets', 'warm']
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.is(
-      Object.keys(entry).sort().join(','),
-      'bytes,group,sha256,urls',
+      Object.keys(entry)
+        .filter((key) => !contractFields.includes(key))
+        .sort()
+        .join(','),
+      entry.group === 'coreml' ? 'bytes,group,s3Path,sha256' : 'bytes,group,sha256,urls',
       `${name} contains only cache-key-bearing fields`
     )
     const hasImmutableUrls =
@@ -348,8 +353,17 @@ test('integration manifest pins integrity for every model', function (t) {
       )
     const hasBytes = Number.isInteger(entry.bytes) && entry.bytes > 0
     const hasSha = typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)
-    const hasGroup = ['base', 'ideogram', 'ltx', 'wan22'].includes(entry.group)
-    t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
+    const hasGroup = ['base', 'ideogram', 'ltx', 'wan22', 'coreml'].includes(entry.group)
+    if (entry.group === 'coreml') {
+      t.is(
+        entry.s3Path,
+        `qvac_models_compiled/ggml/stable-diffusion/2026-11-19/${name}`,
+        `${name} uses its dated published artifact`
+      )
+      t.ok(entry.skip.includes('darwin-x64'), `${name} is limited to the ARM64 Core ML lane`)
+    } else {
+      t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
+    }
     t.ok(hasBytes, `${name} pins bytes`)
     t.ok(hasSha, `${name} pins sha256`)
     t.ok(hasGroup, `${name} declares a supported cache group`)

@@ -53,9 +53,11 @@ process, so downloads are also coordinated on disk:
   replaces it. Cancelling with `clearCache` deletes only the partial file, or the
   shard or companion-set directory, that the cancelled download was writing
   while it held the lock.
-- `deleteCache` for a registry model takes the same locks without waiting. It is
-  refused while another process downloads the model or a model sharing its files,
-  and downloads in other processes wait while it deletes.
+- `deleteCache` for a registry model takes the same locks without waiting for
+  other processes. It is refused while another process downloads the model or a
+  model sharing its files, and downloads in other processes wait while it
+  deletes. A download this process cancelled keeps its lock until its cleanup
+  ends, so `deleteCache` waits up to 10 seconds for it.
 - Engines released before this layout write in place and take no lock. Sharing a
   models directory with one is safer than before but not fully protected.
 

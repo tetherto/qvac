@@ -299,7 +299,7 @@ class QvacCompletionCancelledException(
 
 class QvacCompletionRun internal constructor(
     val requestId: String,
-    private val client: QvacClient,
+    private val client: QvacCaller,
     internal val eventChannel: Channel<QvacCompletionEvent>,
     internal val tokenChannel: Channel<String>,
     internal val toolCallChannel: Channel<QvacToolCall>,
@@ -537,7 +537,7 @@ private val knownCompletionEventTypes = setOf(
     "completionDone",
 )
 
-private fun QvacClient.parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
+private fun QvacCaller.parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
     val payload = element.jsonObject
     val type = (payload["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     if (type !in knownCompletionEventTypes) {

@@ -2,7 +2,8 @@ import { send } from '@/client/rpc/rpc-client'
 import {
   type CancelClientInput,
   type CancelParams,
-  type CancelRequest
+  type CancelRequest,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { InvalidResponseError, CancelFailedError } from '@/utils/errors-client'
 
@@ -38,14 +39,14 @@ import { InvalidResponseError, CancelFailedError } from '@/utils/errors-client'
  * // Broad-cancel every inference running on a model
  * await cancel({ modelId: "model-123", kind: "completion" });
  */
-export async function cancel(params: CancelClientInput) {
+export async function cancel(params: CancelClientInput, options?: RPCOptions) {
   const wireParams = normalizeCancelParams(params)
   const request: CancelRequest = {
     type: 'cancel',
     ...wireParams
   }
 
-  const response = await send(request)
+  const response = await send(request, options)
   if (response.type !== 'cancel') {
     throw new InvalidResponseError('cancel')
   }

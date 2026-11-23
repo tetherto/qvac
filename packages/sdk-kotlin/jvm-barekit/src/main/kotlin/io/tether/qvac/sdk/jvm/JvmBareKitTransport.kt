@@ -11,10 +11,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -38,6 +40,12 @@ class JvmBareKitTransport private constructor(
 ) : QvacTransport {
     private val closeMutex = Mutex()
     private var closed = false
+
+    // Ends with the worker's ipc: the worker exited, crashed or was killed, or close() stopped it.
+    override val lost: Deferred<Unit> = exitWatch.async {
+        runCatching { ipc.wait() }
+        Unit
+    }
 
     override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 

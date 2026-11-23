@@ -10,20 +10,24 @@ import Corestore from 'corestore'
 import Hyperdrive from 'hyperdrive'
 import {
   acquireDownloadLock,
+  holdsDownloadLockHere,
   partialDownloadPath,
-  tryAcquireDownloadLocks
+  tryAcquireDownloadLocks,
+  waitForDownloadLocksHere
 } from '@/handlers/load-model/download-lock'
 import { downloadModelFromHttp } from '@/handlers/load-model/http'
 import {
   downloadAndValidateFile,
   downloadModelFromHyperdrive
 } from '@/handlers/load-model/hyperdrive'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
 import { validateCachedFile } from '@/handlers/load-model/registry-download-utils'
 import {
   cancelTransfer,
   createHttpDownloadKey,
   createHyperdriveDownloadKey,
-  createRegistryCacheKey
+  createRegistryCacheKey,
+  createRegistryDownloadKey
 } from '@/handlers/load-model/download-manager'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { getShardedModelCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
@@ -648,6 +652,99 @@ test('deleteCache: refused while another process downloads the model, and delete
   t.ok(response.error?.includes('another process'), 'reports the other process download')
   t.ok(fs.existsSync(partialPath), 'the other process partial file is untouched')
   t.absent(cleared, 'no stored blocks were cleared')
+})
+
+// A registry client download that writes a partial file and, once cancelled,
+// takes a moment to clear what it stored, as the real client does.
+function slowCancellingDownload(cleanupMs = 200): {
+  cleanedUp: () => boolean
+  download: (...args: unknown[]) => Promise<void>
+} {
+  let cleanedUp = false
+  return {
+    cleanedUp: () => cleanedUp,
+    download: async (...args: unknown[]) => {
+      const { outputFile, signal } = args[args.length - 1] as {
+        outputFile: string
+        signal: { aborted: boolean; addEventListener(type: 'abort', fn: () => void): void }
+      }
+      fs.writeFileSync(outputFile, 'partial bytes')
+      await new Promise<void>((resolve) => {
+        if (signal.aborted) resolve()
+        else signal.addEventListener('abort', resolve)
+      })
+      await sleep(cleanupMs)
+      cleanedUp = true
+      throw new DownloadCancelledError()
+    }
+  }
+}
+
+async function deleteRightAfterCancel(
+  t: ReturnType<typeof test>,
+  retryBeforeDelete: boolean
+): Promise<void> {
+  useTestCacheDir()
+  const stopping = slowCancellingDownload()
+  let clearedAfterCleanup: boolean | undefined
+  stubClient(t, {
+    downloadModel: stopping.download,
+    downloadBlob: stopping.download,
+    clearBlob: async () => {
+      clearedAfterCleanup ??= stopping.cleanedUp()
+    }
+  })
+  const { registryPath, registrySource } = QWEN3_600M_INST_Q4
+  const key = createRegistryDownloadKey(registrySource, registryPath)
+  const partialPath = partialDownloadPath(getSingleFileCachePath(registryPath))
+  t.teardown(() => fs.rmSync(partialPath, { force: true }))
+
+  const download = downloadModelFromRegistry(registryPath, registrySource).catch(
+    (error: unknown) => error
+  )
+  await waitUntil(() => fs.existsSync(partialPath))
+  cancelTransfer(key)
+  t.ok((await download) instanceof DownloadCancelledError, 'the cancel settles the caller at once')
+
+  if (retryBeforeDelete) {
+    // The retry replaces the cancelled download in this process's transfer list.
+    const retry = downloadModelFromRegistry(registryPath, registrySource).catch(
+      (error: unknown) => error
+    )
+    cancelTransfer(key)
+    t.ok((await retry) instanceof DownloadCancelledError, 'the retry is cancelled too')
+  }
+  t.absent(stopping.cleanedUp(), 'the cancelled download is still cleaning up')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: QWEN3_600M_INST_Q4.src
+  })
+  t.ok(response.success, `deleteCache succeeds ${response.error ?? ''}`)
+  t.is(clearedAfterCleanup, true, 'it deleted only after the cancelled download cleaned up')
+  t.absent(fs.existsSync(partialPath), 'the partial file is deleted')
+}
+
+test('deleteCache: right after a cancel, waits for the cancelled download to clean up', (t) =>
+  deleteRightAfterCancel(t, false))
+
+test('deleteCache: waits for a cancelled download that a cancelled retry replaced', (t) =>
+  deleteRightAfterCancel(t, true))
+
+test('waitForDownloadLocksHere: waits for this process to release a lock, up to a time limit', async (t) => {
+  useTestCacheDir()
+  const key = `held-here:${Math.random()}`
+  const lock = await acquireDownloadLock(key, new AbortController().signal)
+  t.ok(holdsDownloadLockHere([key]), 'the lock is known to be held here')
+  t.absent(await waitForDownloadLocksHere([key], 50), 'gives up while the lock is still held')
+
+  const released = waitForDownloadLocksHere([key], 5_000)
+  await lock[Symbol.asyncDispose]()
+  t.ok(await released, 'returns once the lock is released')
+  t.absent(holdsDownloadLockHere([key]), 'the lock is no longer held here')
+  const again = await tryAcquireDownloadLocks([key])
+  t.ok(again, 'the lock can be taken again')
+  await again?.[Symbol.asyncDispose]()
 })
 
 test('acquireDownloadLock: the OS releases a lock when its holding process exits', async (t) => {

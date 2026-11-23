@@ -49,7 +49,7 @@ const streamSteps = (
       params: {
         modelId: '$model',
         parakeetStreamingConfig: {
-          chunkMs: '$params.chunkMs',
+          chunkMs: '$params.decodeChunkMs?',
           emitPartials: '$params.emitPartials?'
         }
       },
@@ -139,6 +139,7 @@ export const parakeetStreamUnifiedHappy: TestDefinition = {
   params: {
     audioFileName: AUDIO_FIXTURE,
     chunkMs: 1000,
+    decodeChunkMs: 1000,
     emitPartials: true,
     trailingSilenceMs: 1500
   },
@@ -207,6 +208,7 @@ export const parakeetStreamEou: TestDefinition = {
   params: {
     audioFileName: EOU_AUDIO_FIXTURE,
     chunkMs: 1000,
+    decodeChunkMs: 1000,
     emitPartials: true,
     trailingSilenceMs: 1500
   },
@@ -239,7 +241,7 @@ export const parakeetStreamDestroyMidUtterance: TestDefinition = {
         params: {
           modelId: '$model',
           parakeetStreamingConfig: {
-            chunkMs: '$params.chunkMs',
+            chunkMs: '$params.decodeChunkMs?',
             emitPartials: '$params.emitPartials?'
           }
         },
@@ -269,7 +271,7 @@ export const parakeetStreamDestroyMidUtterance: TestDefinition = {
         params: {
           modelId: '$model',
           parakeetStreamingConfig: {
-            chunkMs: '$params.chunkMs',
+            chunkMs: '$params.decodeChunkMs?',
             emitPartials: '$params.emitPartials?'
           }
         },
@@ -334,7 +336,7 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
         params: {
           modelId: '$model',
           parakeetStreamingConfig: {
-            chunkMs: '$params.chunkMs',
+            chunkMs: '$params.decodeChunkMs?',
             emitPartials: '$params.emitPartials?'
           }
         },
@@ -371,7 +373,7 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
         params: {
           modelId: '$model',
           parakeetStreamingConfig: {
-            chunkMs: '$params.chunkMs',
+            chunkMs: '$params.decodeChunkMs?',
             emitPartials: '$params.emitPartials?'
           }
         },

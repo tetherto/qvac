@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.56.1",
+  "version": "0.58.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -92,8 +92,16 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.29.0",
-    "@qvac/fabric-ios": "^0.29.0",
+    "bare": "^1.36.0",
+    "bare-runtime": "^1.36.0",
+    "bare-make": "^2.1.0",
+    "cmake-toolchains": "^2.1.0",
+    "cmake-runtime": "^4.1.1",
+    "llvm-runtime": "^23.1.0",
+    "nasm-runtime": "^3.2.0",
+    "ninja-runtime": "^1.13.1",
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "brittle": "^3.4.0",
@@ -109,27 +117,27 @@
     "typescript-eslint": "^8.63.0",
     "cmake-npm": "^1.1.0",
     "bare-process": "^4.2.2",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-os": "^3.6.2",
     "bare-url": "^2.1.6",
     "bare-fs": "^4.5.1"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.29.0",
+    "@qvac/fabric": "^0.31.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.29.0",
-    "@qvac/fabric-linux-arm64": "^0.29.0",
-    "@qvac/fabric-darwin-arm64": "^0.29.0",
-    "@qvac/fabric-darwin-x64": "^0.29.0",
-    "@qvac/fabric-win32-x64": "^0.29.0"
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.29.0",
-    "@qvac/fabric-ios": "^0.29.0"
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

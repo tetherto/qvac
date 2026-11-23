@@ -42,6 +42,7 @@ import { bciTests } from './bci-tests.js'
 import { visionTests } from './vision-tests.js'
 import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
+import { pathTraversalTests } from './path-traversal-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
 import { worldTests } from './world-tests.js'
 import { audioGenTests } from './audio-gen-tests.js'
@@ -51,6 +52,7 @@ import { configTests } from './config-tests.js'
 import { noLingeringBareTests } from './no-lingering-bare-tests.js'
 import { wrongModelTests } from './wrong-model-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
+import { sessionTests } from './session-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
@@ -667,6 +669,9 @@ const catalog: TestDefinition[] = [
   // Download resilience: survive suspend/resume + network drop (QVAC-21225)
   ...downloadResilienceTests,
 
+  // Sources and names that would resolve outside the cache are refused
+  ...pathTraversalTests,
+
   // Diffusion tests
   ...diffusionTests,
 
@@ -694,6 +699,9 @@ const catalog: TestDefinition[] = [
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
+
+  // Caller sessions: scoped cancel, model leases, owner-only shutdown
+  ...sessionTests,
 
   // VLA (SmolVLA + π₀.₅) — the π₀.₅ GGUF is too large for the Device Farm
   // infra, so the catalog keeps it off mobile; see catalog/platform-skips.ts.

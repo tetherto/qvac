@@ -296,7 +296,7 @@ After success, print the clickable PR URL.
 Validate locally when useful:
 
 ```bash
-node scripts/sdk/validator.cjs --type=commit --msg="feat[mod]: sync model constants from registry"
+node packages/sdk/ci/validator.cjs --type=commit --msg="feat[mod]: sync model constants from registry"
 ```
 
 ## Efficiency rules

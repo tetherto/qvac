@@ -44,7 +44,8 @@ function array(subType, entries) {
  * Builds a GGUF whose tensor data is filler. `vocabSize` tokens are written as
  * real tokenizer tables, and the token embedding is shaped
  * `[embeddingLength, vocabSize]` so a fit blob can recover the count without
- * the `vocab_size` key.
+ * the `vocab_size` key. `vocabTensorName` renames that tensor, for a model
+ * that has no `token_embd.weight`.
  */
 function buildGguf({
   tensorCount = 1,
@@ -56,7 +57,8 @@ function buildGguf({
   tokenTypeCount = null,
   tokenizerModel = 'gpt2',
   architectureTokenizer = false,
-  tensorManifest = false
+  tensorManifest = false,
+  vocabTensorName = 'token_embd.weight'
 } = {}) {
   const tokens = []
   const scores = []
@@ -135,7 +137,7 @@ function buildGguf({
 
   const tensors = [
     Buffer.concat([
-      ggufString('token_embd.weight'),
+      ggufString(vocabTensorName),
       u32(2),
       u64(embeddingLength),
       u64(vocabSize),
@@ -160,7 +162,7 @@ function buildGguf({
     manifestNames,
     manifestSources,
     manifestChecksums,
-    tensorNames: ['token_embd.weight', ...manifestNames]
+    tensorNames: [vocabTensorName, ...manifestNames]
   }
 }
 

@@ -36,6 +36,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
 import { ParakeetStreamExecutor } from '../shared/executors/node/parakeet-stream-executor.js'
 import { ParakeetExecutor } from '../shared/executors/node/parakeet-executor.js'
@@ -53,6 +54,7 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 import * as MODEL_CONSTANTS from '@qvac/sdk'
@@ -156,6 +158,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
 
@@ -194,6 +197,7 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new KvCacheRestartExecutor(resources),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

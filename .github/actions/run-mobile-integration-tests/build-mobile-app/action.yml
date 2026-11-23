@@ -178,6 +178,10 @@ runs:
         # The linker is installed separately from the repository lockfile.
         npm pkg delete devDependencies.bare-link
         npm pkg set dependencies.react-native-bare-kit=^0.16.0
+        # bare-type 1.5+ needs Bare >= 1.37 and fails to load on this app's
+        # runtime (CANNOT_LOAD: missing js_is_detachable_arraybuffer).
+        # bare-inspect and bare-assert pull it in with ^1.x.
+        npm pkg set overrides.bare-type=1.4.0
         npm install
 
     # A leftover tree from an earlier job on the same self-hosted runner must

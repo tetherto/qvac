@@ -1,6 +1,7 @@
 import type { CancelRequest, CancelResponse } from '@/schemas/cancel'
 import { cancel as cancelByModelId } from '@/plugins/ops/cancel'
 import { getRequestRegistry } from '@/runtime/index'
+import { resolveSessionId } from '@/runtime/session-id'
 import { markClearCacheForRequest } from '@/handlers/load-model/download-manager'
 import { getEngineLogger } from '@/logging/index'
 
@@ -12,16 +13,16 @@ const logger = getEngineLogger()
  * surface is two paths that route through the same registry primitive:
  *
  *  - `{ operation: "request", requestId, clearCache? }` — targeted
- *    cancel by caller-generated id. Looks up the registry entry,
- *    fires its abort signal, optionally marks the underlying download
- *    transfer for cache clear. The "stop-button race" case (a cancel
- *    beats its own begin) is handled inside the
- *    registry via the cancel-before-begin tripwire.
+ *    cancel by caller-generated id, resolved within the caller's own
+ *    session. Looks up the registry entry, fires its abort signal,
+ *    optionally marks the underlying download transfer for cache clear.
+ *    The "stop-button race" case (a cancel beats its own begin) is
+ *    handled inside the registry via the cancel-before-begin tripwire.
  *
  *  - `{ operation: "broad", modelId, kind? }` — abort every in-flight
- *    request on a model (optionally narrowed by `kind`). Used for
- *    model unload, app shutdown, and admin sweeps where the caller
- *    has no `requestId`. Delegates to the `cancel` bare op so the
+ *    request the caller's session has on a model (optionally narrowed
+ *    by `kind`). From the owner session it reaches every session's
+ *    requests on the model. Delegates to the `cancel` bare op so the
  *    `ModelNotLoadedError` validation is shared with internal
  *    engine-side broad cancels.
  *
@@ -31,16 +32,19 @@ const logger = getEngineLogger()
  * match still returns `success: true, cancelled: 0`; the
  * cancel-before-begin tripwire ensures the cancel is applied
  * retroactively if a matching begin arrives within the registry's
- * race window.
+ * race window. Another session's request id is such a non-match: the
+ * registry keys requests by `(sessionId, requestId)`, so it is never found.
  */
 export function cancelHandler(request: CancelRequest): CancelResponse {
+  const sessionId = resolveSessionId(request)
   try {
     if (request.operation === 'request') {
       if (request.clearCache) {
-        markClearCacheForRequest(request.requestId)
+        markClearCacheForRequest(request.requestId, sessionId)
       }
       const cancelled = getRequestRegistry().cancel({
-        requestId: request.requestId
+        requestId: request.requestId,
+        sessionId
       })
       if (cancelled === 0) {
         // info-level (not debug) because the decorated-promise pattern
@@ -51,7 +55,9 @@ export function cancelHandler(request: CancelRequest): CancelResponse {
         // matching begin in flight; this log just helps operators
         // debugging "my Stop button isn't working" without lowering
         // the log level.
-        logger.info(`[cancel] no in-flight request matched requestId=${request.requestId}`)
+        logger.info(
+          `[cancel] no in-flight request matched sessionId=${sessionId} requestId=${request.requestId}`
+        )
       }
       return { type: 'cancel', success: true, cancelled }
     }
@@ -59,7 +65,7 @@ export function cancelHandler(request: CancelRequest): CancelResponse {
     // operation === "broad"
     const cancelled = cancelByModelId(
       { modelId: request.modelId },
-      request.kind ? { kind: request.kind } : undefined
+      { ...(request.kind && { kind: request.kind }), sessionId }
     )
     return { type: 'cancel', success: true, cancelled }
   } catch (error) {

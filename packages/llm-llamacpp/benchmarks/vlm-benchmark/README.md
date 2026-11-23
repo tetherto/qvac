@@ -16,29 +16,29 @@ target**; a host-side script collects the per-leg logs and renders one Markdown 
 
 ## 1 · Quick start — the `gh workflow` command
 
-The benchmark is the **Benchmark VLM (model comparison)** workflow
-(`.github/workflows/benchmark-vlm-model-comparison.yml`). Dispatch with `gh workflow run`
-(or the *Run workflow* UI). **`--ref` = the branch hosting the workflow** (not the model);
-**`-f …`** are the inputs — the set below is the complete list; **omit any to use its
-`config.cjs` default** (none are required).
+The benchmark runs through the **Benchmarks** workflow (`.github/workflows/benchmarks.yml`) with
+`suite=vlm` in its `args`. Each desktop leg is one of llm's `benchmark` configurations, picked with
+`configs`: `linux-x64` (Linux CPU), `linux-x64-gpu` (Linux GPU), and `darwin-arm64` and `win32-x64`,
+which run CPU then GPU. The mobile leg is `run_mobile` on one `platform` and its `devices`. Every
+other choice is an `args` word; **omit any to use its `config.cjs` default**:
 
 ```bash
-gh workflow run benchmark-vlm-model-comparison.yml \
-  --ref qvac-19371-vlm-benchmark-improve \    # branch hosting THIS workflow (must be branch/tag, not a bare SHA)
-  -f matrix_mode=two-models \                 # two-models | several-sources
-  -f matrix_preset=full \                     # smoke | cognitive | ocr1page | ocr5pages | full
-  -f matrix_models=qwen3.5-f16,qwen3.5-q8 \   # catalog names | [label=]<llm-url>|<mmproj-url>[@ctx=N] | json:[…]
-  -f matrix_sources=addon \                   # addon | addon@candidate | addon@baseline | fabric[@ref] | upstream[@ref]
-  -f ref=<branch|tag|commit-sha> \            # addon built as addon@candidate; default = the --ref branch
-  -f matrix_desktop=linux-cpu,linux-gpu \     # any subset of {linux,macos,windows}-{cpu,gpu}
-  -f matrix_mobile=s26,iphone17pro \          # any subset of {s26,s25,pixel9,iphone16,iphone17,iphone17pro}[any][-{cpu,gpu}]; plain = exact model, 'any' = any subfamily variant
-  -f matrix_samples=5 \                       # override samples/task (empty = preset default)
-  -f mobile_timeout_min=60                    # mobile per-leg timeout in minutes (≤120)
+gh workflow run benchmarks.yml --ref <branch> \
+  -f packages=llm-llamacpp \
+  -f configs=linux-x64,linux-x64-gpu \
+  -f args="suite=vlm mode=two-models preset=full models=qwen3.5-f16,qwen3.5-q8 sources=addon samples=5 mobile_timeout_min=60" \
+  -f run_mobile=true -f platform=Android -f devices="Samsung Galaxy S26 Ultra"
 ```
+
+`args` words: `mode` (two-models | several-sources), `preset` (smoke | cognitive | ocr1page |
+ocr5pages | full), `models` (catalog names | `[label=]<llm-url>|<mmproj-url>[@ctx=N]` | `json:[…]`),
+`sources` (addon | addon@candidate | addon@baseline | fabric[@ref] | upstream[@ref]; addon@candidate
+is this run's build of `--ref`), `samples`, `baseline_npm`, `mobile_timeout_min`, and `vlm_devices`
+(the mobile backends, cpu,gpu).
 
 **Smallest valid run** (everything from `config.cjs` defaults):
 ```bash
-gh workflow run benchmark-vlm-model-comparison.yml --ref <branch>
+gh workflow run benchmarks.yml --ref <branch> -f packages=llm-llamacpp -f configs=linux-x64 -f args=suite=vlm
 ```
 
 **Preview a several-sources version resolution without running** (no CI):
@@ -58,12 +58,12 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 
 | Feature | Desktop | Mobile | Argument / values | Notes & restrictions |
 |---|---|---|---|---|
-| **two-models** | ✅ | ✅ | `-f matrix_mode=two-models` | `MODEL_1` vs `MODEL_2` (config). Can be two variants of one model (default: same LLM, mmproj F16 vs Q8) or two different models. |
-| **several-sources — build** | ✅ | ✅ | `-f matrix_mode=several-sources -f matrix_sources=addon@candidate,addon@baseline` | Candidate vs published, **same model**. Mobile runs each build as its own Device-Farm session. ⚠️ the candidate mobile leg can be flaky (see §6). |
-| **several-sources — engine** | ✅ | ❌ | `… -f matrix_sources=addon,fabric,upstream` | addon vs native llama.cpp CLIs. **Desktop only** — CLIs are native binaries; mobile runs an addon app. |
-| `addon` source | ✅ | ✅ | `-f matrix_sources=addon` | The published npm prebuild. |
-| `addon@candidate` | ✅ | ✅ | `…@candidate` + `-f ref=<branch\|tag\|sha>` | Built from `ref` (triggers `prebuild-candidate`). Desktop swaps the prebuild; mobile bundles it. |
-| `addon@baseline` | ✅ | ✅ | `…@baseline` | **Latest published npm release, auto-detected** at run time. Pin a specific version with `-f baseline_npm=<ver>`; `config.defaultBaseline.npm` is only an offline fallback. |
+| **two-models** | ✅ | ✅ | `mode=two-models` | `MODEL_1` vs `MODEL_2` (config). Can be two variants of one model (default: same LLM, mmproj F16 vs Q8) or two different models. |
+| **several-sources — build** | ✅ | ✅ | `mode=several-sources sources=addon@candidate,addon@baseline` | Candidate vs published, **same model**. Mobile runs each build as its own Device-Farm session. ⚠️ the candidate mobile leg can be flaky (see §6). |
+| **several-sources — engine** | ✅ | ❌ | `… sources=addon,fabric,upstream` | addon vs native llama.cpp CLIs. **Desktop only** — CLIs are native binaries; mobile runs an addon app. |
+| `addon` source | ✅ | ✅ | `sources=addon` | The published npm prebuild. |
+| `addon@candidate` | ✅ | ✅ | `…@candidate` + `--ref <branch\|tag\|sha>` | Built from `ref` (triggers `prebuild-candidate`). Desktop swaps the prebuild; mobile bundles it. |
+| `addon@baseline` | ✅ | ✅ | `…@baseline` | **Latest published npm release, auto-detected** at run time. Pin a specific version with `baseline_npm=<ver>`; `config.defaultBaseline.npm` is only an offline fallback. |
 | `fabric` / `upstream` CLI | ✅ | ❌ | `fabric[@ref]`, `upstream[@ref]` | Native `llama-mtmd-cli`, built per-OS. `ref` = release **tag**, **branch**, or **full 40-char commit SHA**. |
 | **Auto version parity** | ✅ | n/a | bare `fabric`/`upstream` (no `@ref`) | Auto-picks the **most recent llama.cpp build all requested sources support** (addon's `qvac-fabric` vcpkg pin is the ceiling) and pins everything to it → apples-to-apples by default. |
 | **Manual version** | ✅ | n/a | any explicit `@ref` | Refs used as given (builds may differ). Report's **Engine versions** table labels it *set manually* (no warning). |
@@ -72,7 +72,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 
 | Feature | Desktop | Mobile | Argument | Notes & restrictions |
 |---|---|---|---|---|
-| `smoke` | ✅ | ✅ | `-f matrix_preset=smoke` | 1 task × 1 sample — wiring check. |
+| `smoke` | ✅ | ✅ | `preset=smoke` | 1 task × 1 sample — wiring check. |
 | `cognitive` | ✅ | ✅ | `…=cognitive` | 5 VQA tasks (textvqa/vizwiz/gqa/docvqa/ai2d) × 5. |
 | `ocr1page` | ✅ | ✅ | `…=ocr1page` | 1 light `ocr-page` doc — quick OCR; fits the mobile session. |
 | `ocr5pages` | ✅ | ⚠️ | `…=ocr5pages` | All 5 high-MP OCR docs — desktop-oriented; heavy on mobile (raise `mobile_timeout_min`). |
@@ -85,21 +85,21 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 
 | Feature | Desktop | Mobile | Argument | Notes & restrictions |
 |---|---|---|---|---|
-| Linux CPU/GPU | ✅ | — | `-f matrix_desktop=linux-cpu,linux-gpu` | GPU = Vulkan. |
-| macOS | ✅ | — | `macos-cpu`, `macos-gpu` | Self-hosted `qvac-macos26-arm64-gpu` (Apple-silicon); GPU = Metal. |
-| Windows CPU/GPU | ✅ | — | `windows-cpu`, `windows-gpu` | GPU = Vulkan. CLI builds use pre-installed clang + Ninja (no Visual Studio on the runner). |
-| Android | — | ✅ | `-f matrix_mobile=s26,s25,pixel9` | Each suffixable `-cpu`/`-gpu`; **bare token = CPU **and** GPU in one session**. One phone per leg (AWS Device Farm). |
-| iOS | — | ✅ | `iphone16,iphone17,iphone17pro` | Same suffix rule. |
-| Exact vs any-variant device | — | ✅ | `pixel9` vs `pixel9any` | Plain token = **exact model** (MODEL EQUALS — a `pixel9` run can never land on a Pixel 9 Pro / Pro XL; if the exact model leaves the AWS fleet the leg fails at Schedule, loudly). `any` suffix = any subfamily variant (MODEL CONTAINS, availability-picked — the pre-fix behavior; also the fallback if the exact model is unavailable). |
+| Linux CPU | ✅ | — | `-f configs=linux-x64` | |
+| Linux GPU | ✅ | — | `-f configs=linux-x64-gpu` | GPU = Vulkan. |
+| macOS | ✅ | — | `darwin-arm64` | Apple-silicon GPU runner; runs CPU, then GPU (Metal). |
+| Windows | ✅ | — | `win32-x64` | Runs CPU, then GPU (Vulkan). CLI builds use pre-installed clang + Ninja (no Visual Studio on the runner). |
+| Android | — | ✅ | `-f run_mobile=true -f platform=Android -f devices="Samsung Galaxy S26 Ultra"` | One Device Farm session per device name, matched exactly. `vlm_devices=cpu,gpu` (default) runs both backends in that session; `cpu` or `gpu` runs one. |
+| iOS | — | ✅ | `-f platform=iOS -f devices="Apple iPhone 17 Pro"` | Same rules. |
 
 ### 2.4 Models & knobs
 
 | Feature | Desktop | Mobile | Argument / env | Notes & restrictions |
 |---|---|---|---|---|
-| Catalog model | ✅ | ✅ | `-f matrix_models=qwen3.5-f16,qwen3.5-q8,gemma4-q4` | Direct HF URLs (registry entries' canonical sources). |
-| Ad-hoc URL model | ✅ | ✅ | `-f matrix_models=[label=]<llm-url>\|<mmproj-url>[@ctx=N]` | Any model from two https GGUF URLs; no code change. |
-| `json:[…]` model spec | ✅ | ❌ | `-f matrix_models=json:[…]` | For registry/exotic sources — **desktop only** (P2P registry client not on mobile). |
-| samples / task | ✅ | ✅ | `-f matrix_samples=N` · `QVAC_VLM_SAMPLES` | Empty = preset default (mobile 2 / desktop 5). |
+| Catalog model | ✅ | ✅ | `models=qwen3.5-f16,qwen3.5-q8,gemma4-q4` | Direct HF URLs (registry entries' canonical sources). |
+| Ad-hoc URL model | ✅ | ✅ | `models=[label=]<llm-url>\|<mmproj-url>[@ctx=N]` | Any model from two https GGUF URLs; no code change. |
+| `json:[…]` model spec | ✅ | ❌ | `models=json:[…]` | For registry/exotic sources — **desktop only** (P2P registry client not on mobile). |
+| samples / task | ✅ | ✅ | `samples=N` · `QVAC_VLM_SAMPLES` | Empty = preset default (mobile 2 / desktop 5). |
 | repeats / sample | ✅ | ✅ | `QVAC_VLM_REPEATS` (local only) | Mean reported. Default 3 desktop / 1 mobile. No dispatch input. |
 | task subset | ✅ | ✅ | `QVAC_VLM_TASKS` (local only) | `null` = all preset tasks. No dispatch input. |
 | mobile timeout | — | ✅ | `-f mobile_timeout_min=N` · `config.mobileTimeoutMin` | Raises the Device-Farm Mocha/Android per-test ceiling. ≤120; empty/null = 35/30-min default. |
@@ -141,27 +141,22 @@ validates the config/contract wiring without running a model. Several-sources CL
 built + driven by `cli-fixture-runner.cjs`.
 
 **C. When a config edit is required (a branch)** — only the **model definitions** are
-config-only (everything else is a `-f` flag). To change `MODEL_1`/`MODEL_2`/`SOURCES_MODEL`,
+config-only (everything else is an `args` word). To change `MODEL_1`/`MODEL_2`/`SOURCES_MODEL`,
 the model catalog, the baseline npm version, presets, or methodology tuning: edit
 `config.cjs`, push the branch, and dispatch with `--ref <that-branch>`. (Or avoid the
-edit entirely by passing an ad-hoc model via `-f matrix_models=<llm-url>|<mmproj-url>`.)
+edit entirely by passing an ad-hoc model via `models=<llm-url>|<mmproj-url>`.)
 
 **Two worked examples:**
 
 ```bash
 # two-models, mixed legs, ad-hoc challenger model
-gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
-  -f matrix_mode=two-models -f matrix_preset=full \
-  -f matrix_models="qwen3.5-q8,challenger=https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/NewVLM-Q4_K_M.gguf|https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/mmproj-F16.gguf" \
-  -f matrix_desktop=linux-cpu,linux-gpu,macos-gpu -f matrix_mobile=s25-cpu,iphone17pro
+gh workflow run benchmarks.yml --ref <branch> -f packages=llm-llamacpp \
+  -f configs=linux-x64,linux-x64-gpu,darwin-arm64 \
+  -f args="suite=vlm mode=two-models preset=full models=qwen3.5-q8,challenger=https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/NewVLM-Q4_K_M.gguf|https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/mmproj-F16.gguf"
 
-# candidate-vs-baseline: validate any commit/branch vs the latest published build
-gh workflow run benchmark-vlm-model-comparison.yml \
-  --ref qvac-19371-vlm-benchmark-improve \            # branch hosting the benchmark workflow
-  -f matrix_mode=several-sources \
-  -f matrix_sources=addon@candidate,addon@baseline \
-  -f ref=<branch|tag|commit-sha> \                    # addon@candidate, built from this ref
-  -f matrix_models=qwen3.5-q8 -f matrix_preset=full -f matrix_desktop=linux-cpu
+# candidate-vs-baseline: validate --ref's build against the latest published build
+gh workflow run benchmarks.yml --ref <branch|tag> -f packages=llm-llamacpp -f configs=linux-x64 \
+  -f args="suite=vlm mode=several-sources sources=addon@candidate,addon@baseline models=qwen3.5-q8 preset=full"
 # addon@baseline auto-resolves to the LATEST published npm release — nothing to pin.
 # To compare against a specific older release instead, add: -f baseline_npm=0.22.1
 ```
@@ -260,7 +255,7 @@ env vars, launch grammar); `markers-v2.sample.txt` is its executable sample;
 | `aggregate.js` | parses markers → report (quality scoring, Δ%, RSS, Engine-versions, Summary) |
 | `combine.cjs` | host-side: log discovery, host tagging, provenance, render |
 | `scenarios.cjs` | the task set (VQA + OCR) |
-| `models.cjs` | `matrix_models` grammar → canonical model specs |
+| `models.cjs` | `models` grammar → canonical model specs |
 | `sources.cjs` | source tokens (addon / candidate / baseline / fabric / upstream) |
 | `resolve-versions.cjs` | several-sources llama.cpp version resolver (auto max-common build / manual) |
 | `version-guard.cjs` | helper: derive a source's build (addon vcpkg pin / CLI ref); preview parity locally |
@@ -271,7 +266,7 @@ env vars, launch grammar); `markers-v2.sample.txt` is its executable sample;
 | `stage.cjs` | copies harness + config + fixture into `test/integration/` + `testAssets/` for the mobile build |
 | `run-desktop.cjs` | desktop run driver + `--selfcheck` contract guard |
 | `CONTRACT.md`, `markers-v2.sample.txt` | the frozen runner↔report contract + sample |
-| `.github/workflows/benchmark-vlm-model-comparison.yml` | the dispatch workflow (desktop legs, mobile, combine) |
+| `../../ci/benchmark-vlm.sh`, `../../ci/benchmark-report.mjs`, `../../ci/prepare-mobile.mjs` | desktop legs, combine, and the mobile bootstrap, run by `benchmarks.yml` |
 
 **Reused from the package** (not copied): the addon (`../../index.js`) and `ensureModel`
 (`../../test/integration/utils.js`).

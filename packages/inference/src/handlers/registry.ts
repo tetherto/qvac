@@ -18,6 +18,7 @@ import {
 import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getRequestRegistry } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
 import {
   InferenceCancelledError,
@@ -47,11 +48,15 @@ type RegistryClient = Awaited<ReturnType<typeof acquireRegistryClient>>['client'
 // One query, cancellable by `requestId` while it waits for another process to
 // release the registry.
 async function withRegistryClient<T>(
-  requestId: string | undefined,
+  request: { requestId?: string | undefined; sessionId?: string | undefined },
   query: (client: RegistryClient) => Promise<T>
 ): Promise<T> {
-  const id = requestId ?? generateRandomRequestId()
-  await using ctx = await getRequestRegistry().begin({ requestId: id, kind: 'modelRegistry' })
+  const id = request.requestId ?? generateRandomRequestId()
+  await using ctx = await getRequestRegistry().begin({
+    requestId: id,
+    sessionId: resolveSessionId(request),
+    kind: 'modelRegistry'
+  })
   await using lease = await acquireRegistryClient({
     wait: 'query',
     signal: ctx.signal,
@@ -121,7 +126,7 @@ export async function handleModelRegistryList(
   logger.debug('Handling QVAC model registry list request')
 
   try {
-    const registryModels = await withRegistryClient(request.requestId, (client) => client.findBy())
+    const registryModels = await withRegistryClient(request, (client) => client.findBy())
     const models = registryModels
       .map(processRegistryModel)
       .filter((m): m is ModelRegistryEntry => m !== null)
@@ -151,7 +156,7 @@ export async function handleModelRegistrySearch(
   logger.debug('Handling QVAC model registry search request', request)
 
   try {
-    const registryModels = await withRegistryClient(request.requestId, (client) =>
+    const registryModels = await withRegistryClient(request, (client) =>
       client.findBy({
         ...(request.quantization && { quantization: request.quantization })
       })
@@ -205,7 +210,7 @@ export async function handleModelRegistryGetModel(
   logger.debug('Handling QVAC model registry get model request', request)
 
   try {
-    const rawModel = await withRegistryClient(request.requestId, (client) =>
+    const rawModel = await withRegistryClient(request, (client) =>
       client.getModel(request.registryPath, request.registrySource)
     )
 

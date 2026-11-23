@@ -27,6 +27,15 @@ packages:
 # version doesn't satisfy the range.
 linkWorkspacePackages: true
 
+# Fabric resolves #host-addon from its own directory, so a linked workspace fabric finds the consumers'
+# @qvac/fabric-<host> optional dependencies only at the root, as npm's flat install placed them beside it.
+publicHoistPattern:
+  - "@qvac/fabric-*"
+
+# pnpm's shims and exec/run otherwise export NODE_PATH into its store to every child process, so a package a test
+# removes still resolves; npm never sets it.
+extendNodePath: false
+
 # Keep root-only repository tooling from supplying peers to product packages.
 resolvePeersFromWorkspaceRoot: false
 
@@ -40,6 +49,9 @@ fetchRetryMaxtimeout: 120000
 # doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
+  # 2.2+ builds Android with the LLVM runtime clang instead of the NDK's, which
+  # makes ggml's CPU backend ~20x slower on device; .github/bare-toolchain locks 2.1.2.
+  cmake-toolchains: "2.1.2"
   # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
@@ -63,15 +75,76 @@ overrides:
   "@qvac/audiogen-ggml-darwin-arm64": "-"
   "@qvac/audiogen-ggml-darwin-x64": "-"
   "@qvac/audiogen-ggml-win32-x64": "-"
-  # diffusion-cpp's desktop platform packages are not on npm until the split
-  # release publishes them. The workspace stages a source build with
-  # `npm run link:platform` instead.
-  "@qvac/diffusion-cpp-linux-x64": "-"
-  "@qvac/diffusion-cpp-linux-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-x64": "-"
-  "@qvac/diffusion-cpp-win32-x64": "-"
+  # Only the current workspace diffusion addon stages a source build with
+  # `npm run link:platform`. Older published fallbacks used by workspace
+  # consumers still need their own desktop packages. Update this selector
+  # alongside the workspace addon's version.
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-win32-x64": "-"
+  # bare-make's LLVM resource packages find their own directory (clang's
+  # resource dir) through require-asset, which needs 1.2.4 and a
+  # bare-module-resolve with directory support (1.12.6). Older pins resolve it
+  # to index.js and clang loses its builtin headers; a fresh npm install gets both.
+  "llvm-runtime-resources-darwin>require-asset": "^1.2.4"
+  "llvm-runtime-resources-linux>require-asset": "^1.2.4"
+  "llvm-runtime-resources-win32>require-asset": "^1.2.4"
+  "require-asset>bare-module-resolve": "^1.12.6"
 
+# A clang binary run directly (nvcc's -ccbin) finds its builtin headers and linker through etc/clang/*.cfg, as siblings
+# of the clang package. npm lays them out that way; pnpm links them as siblings only when the clang package depends on
+# them. One entry per clang version in the lockfile, at that version (the llvm-runtime-siblings policy test checks it).
+packageExtensions:
+  llvm-runtime-clang-linux-x64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.5"
+      llvm-runtime-lld-linux-x64: "23.1.5"
+  llvm-runtime-clang-linux-arm64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.5"
+      llvm-runtime-lld-linux-arm64: "23.1.5"
+  llvm-runtime-clang-darwin-x64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.5"
+      llvm-runtime-lld-darwin-x64: "23.1.5"
+  llvm-runtime-clang-darwin-arm64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.5"
+      llvm-runtime-lld-darwin-arm64: "23.1.5"
+  llvm-runtime-clang-win32-x64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.5"
+      llvm-runtime-lld-win32-x64: "23.1.5"
+  llvm-runtime-clang-win32-arm64@23.1.5:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.5"
+      llvm-runtime-lld-win32-arm64: "23.1.5"
+  llvm-runtime-clang-linux-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.6-1"
+      llvm-runtime-lld-linux-x64: "23.1.6-1"
+  llvm-runtime-clang-linux-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.6-1"
+      llvm-runtime-lld-linux-arm64: "23.1.6-1"
+  llvm-runtime-clang-darwin-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.6-1"
+      llvm-runtime-lld-darwin-x64: "23.1.6-1"
+  llvm-runtime-clang-darwin-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.6-1"
+      llvm-runtime-lld-darwin-arm64: "23.1.6-1"
+  llvm-runtime-clang-win32-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.6-1"
+      llvm-runtime-lld-win32-x64: "23.1.6-1"
+  llvm-runtime-clang-win32-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.6-1"
+      llvm-runtime-lld-win32-arm64: "23.1.6-1"
 blockExoticSubdeps: true
 
 allowBuilds:

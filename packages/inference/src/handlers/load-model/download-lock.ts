@@ -17,6 +17,61 @@ interface LockFile extends AsyncDisposable {
 
 const NO_WRITE_ACCESS = new Set(['EACCES', 'EPERM', 'EROFS'])
 
+// The OS grants a lock per open handle, so this process's own holders also make
+// `tryAcquireDownloadLocks` fail. Tracking them tells them apart from other
+// processes. Each entry settles once its lock is released.
+const heldHere = new Map<string, Set<Promise<void>>>()
+
+function trackHeldHere(resourceKey: string, lock: LockFile): LockFile {
+  let markReleased!: () => void
+  const released = new Promise<void>((resolve) => {
+    markReleased = resolve
+  })
+  const holders = heldHere.get(resourceKey) ?? new Set<Promise<void>>()
+  holders.add(released)
+  heldHere.set(resourceKey, holders)
+  return {
+    fd: lock.fd,
+    [Symbol.asyncDispose]: async () => {
+      await lock[Symbol.asyncDispose]()
+      holders.delete(released)
+      if (holders.size === 0 && heldHere.get(resourceKey) === holders) heldHere.delete(resourceKey)
+      markReleased()
+    }
+  }
+}
+
+/** Whether this process holds the lock of any of these keys. */
+export function holdsDownloadLockHere(resourceKeys: string[]): boolean {
+  return resourceKeys.some((key) => heldHere.has(key))
+}
+
+/**
+ * Wait until this process holds none of these keys' locks, such as a cancelled
+ * download still cleaning up. False if one is still held after `timeoutMs`.
+ */
+export async function waitForDownloadLocksHere(
+  resourceKeys: string[],
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const pending = resourceKeys.flatMap((key) => [...(heldHere.get(key) ?? [])])
+    if (pending.length === 0) return true
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = await Promise.race([
+      Promise.all(pending).then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), remaining)
+      })
+    ])
+    clearTimeout(timer)
+    if (timedOut) return false
+  }
+}
+
 // `null` when this process can change nothing in the models directory, such as
 // a prefilled read-only cache: it can then only load cached models. Anywhere it
 // could write, a lock that cannot be created fails instead of running unlocked.
@@ -121,7 +176,7 @@ export async function acquireDownloadLock(
       } while (!tryLock(lock, resourceKey))
       logger.info(`📥 The other download of ${resourceKey} finished; continuing`)
     }
-    return lock
+    return trackHeldHere(resourceKey, lock)
   } catch (error) {
     await lock[Symbol.asyncDispose]()
     throw error
@@ -140,11 +195,12 @@ export async function tryAcquireDownloadLocks(
     for (const resourceKey of resourceKeys) {
       const lock = await openLockFile(resourceKey)
       if (!lock) continue
-      held.push(lock)
       if (!tryLock(lock, resourceKey)) {
+        await lock[Symbol.asyncDispose]()
         await releaseAll()
         return null
       }
+      held.push(trackHeldHere(resourceKey, lock))
     }
   } catch (error) {
     await releaseAll()

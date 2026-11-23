@@ -50,15 +50,15 @@ cd runners/kotlin && ../../../sdk-kotlin/gradlew :app:compileDebugKotlin
 ```
 
 The Gradle build includes `packages/sdk-kotlin` as a composite build, so the app always runs this
-checkout's Kotlin SDK and the worker it bundles. `pr-checks-sdk-kotlin.yml` compiles the app, so an
-SDK change that breaks the app fails the Kotlin SDK's PR checks. The runner has no unit tests: verify a
-runner change by running the affected e2e tests on a device.
+checkout's Kotlin SDK and the worker it bundles. sdk-kotlin's `test:unit` in `sdk-checks.yml` compiles the
+app, so an SDK change that breaks the app fails the Kotlin SDK's PR checks. The runner has no unit tests:
+verify a runner change by running the affected e2e tests on a device.
 
 ## CI
 
-`test-android-sdk.yml` with `app: kotlin` builds the APK with the run and broker baked in and runs it on
-Device Farm under the React Native app's test spec. Dispatch `test-sdk.yml` with **Kotlin Android
-tests**.
+sdk-kotlin's `test:mobile` builds the APK with the run and broker baked in and runs it on Device Farm under
+the React Native app's test spec. Dispatch `sdk-e2e.yml` with `platform: Android` and `packages:
+sdk-kotlin`.
 
 ## Adding coverage
 

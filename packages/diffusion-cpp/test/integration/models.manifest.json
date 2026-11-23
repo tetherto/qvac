@@ -7,7 +7,11 @@
       ],
       "sha256": "7b73fa47b4d1401bdf3a0898827fac94bced6633bf64ef7fe55492b6115cc74b",
       "bytes": 2322705024,
-      "group": "base"
+      "group": "base",
+      "targets": [
+        "test:integration",
+        "cpp:tests"
+      ]
     },
     "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
       "urls": [
@@ -55,7 +59,11 @@
       ],
       "sha256": "08431d93824e56513cccc84a4d10d327df992cff5b5a0dcfdc739f4d50c2cc9e",
       "bytes": 5643820832,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "ideogram4_uncond-Q4_0.gguf": {
       "urls": [
@@ -63,7 +71,11 @@
       ],
       "sha256": "2ac9c57c32dead6953da2985656cadd801991a993bd3d5205d3ac1a96686b45a",
       "bytes": 5643820832,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "Qwen3-VL-8B-Instruct-Q4_K_M.gguf": {
       "urls": [
@@ -71,7 +83,11 @@
       ],
       "sha256": "108e7ff92b78eefd3db4741885104acba514255c11b617d3c7b197a5f46efe89",
       "bytes": 5027785568,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "wan2.1_t2v_1.3B_fp16.safetensors": {
       "urls": [
@@ -95,7 +111,8 @@
       ],
       "sha256": "3024aef1dfa6a474ea76886d67fa6cdf029366d4a934f28ceec217f77b2cfd2d",
       "bytes": 3564739296,
-      "group": "wan22"
+      "group": "wan22",
+      "warm": false
     },
     "wan2.2_vae.safetensors": {
       "urls": [
@@ -103,7 +120,8 @@
       ],
       "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156",
       "bytes": 1409400960,
-      "group": "wan22"
+      "group": "wan22",
+      "warm": false
     },
     "wan_2.1_vae.safetensors": {
       "urls": [
@@ -151,7 +169,13 @@
       ],
       "sha256": "e68d6d8f8a42942ac9b862cc315beb3bc30805a8876c7ad63ba5bf7a2b8e168a",
       "bytes": 1452256522,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "ltx-2.3-22b-distilled_audio_vae.safetensors": {
       "urls": [
@@ -159,7 +183,13 @@
       ],
       "sha256": "3cd6a6eb8cb28f5ecc12f1f3126952b2a3d2b0b42ad3270e63cefafafe0d9b57",
       "bytes": 364853140,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "ltx-2.3-22b-distilled_embeddings_connectors.safetensors": {
       "urls": [
@@ -167,7 +197,13 @@
       ],
       "sha256": "c61cbb396e2a8175d8b2da51f0fdac885a4ccd22c9f64dafa5aa2c455dc8a507",
       "bytes": 2312144712,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "LTX-2.3-22B-distilled-1.1-Q2_K.gguf": {
       "urls": [
@@ -175,7 +211,13 @@
       ],
       "sha256": "af151db26e3b0a87e805d899d3f105aa0a11f9124893d47ca3f39e47b27cfa8f",
       "bytes": 12408656544,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "gemma-3-12b-it-UD-Q2_K_XL.gguf": {
       "urls": [
@@ -183,7 +225,189 @@
       ],
       "sha256": "85e9f7e21c0ef9a13ceeb63ecb1a7015e92ff6bd359a9356e3e9b02d880fe980",
       "bytes": 4860535136,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
+    },
+    "sd21base_unet_p6.mlmodelc/analytics/coremldata.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/analytics/coremldata.bin",
+      "sha256": "844e6dc35c6816a35d16b7ea7470956d0f54eb833fdc4074704516072202baff",
+      "bytes": 243,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "sd21base_unet_p6.mlmodelc/coremldata.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/coremldata.bin",
+      "sha256": "902b5a33e98afac9e4c761f8960f587ca7372c6469116d0848897e9387acb375",
+      "bytes": 519,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "sd21base_unet_p6.mlmodelc/metadata.json": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/metadata.json",
+      "sha256": "0ed9c9d7082758b42779bb7e9a9405c03d9bd534bd81b98dda882cfab775c634",
+      "bytes": 3074,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "sd21base_unet_p6.mlmodelc/model.mil": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/model.mil",
+      "sha256": "680526f6caac71d46dda2b77e4a81667a48b41346e4477c21961c38499d778d3",
+      "bytes": 2084667,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "sd21base_unet_p6.mlmodelc/weights/weight.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/weights/weight.bin",
+      "sha256": "bbb5d639888274a68f6dd6c2fd2b3842c2ef33f62e2d475226c5d35e079159c3",
+      "bytes": 650117760,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd_decoder.mlmodelc/analytics/coremldata.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/analytics/coremldata.bin",
+      "sha256": "98fb83be02cf76b6fd32060600941b6524a0f2743c947a028c6372c5b1571069",
+      "bytes": 243,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd_decoder.mlmodelc/coremldata.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/coremldata.bin",
+      "sha256": "565a24154395296783f105186eac9aab0fd60df7235921761fc277c847f16d25",
+      "bytes": 431,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd_decoder.mlmodelc/metadata.json": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/metadata.json",
+      "sha256": "faea8522825f3c61809a6f8c6710d96ce7aced8abe0eba7b61deb7b9c0ed01fc",
+      "bytes": 1862,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd_decoder.mlmodelc/model.mil": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/model.mil",
+      "sha256": "5f0bb845ca376e5dbe9746b4c1aa0eb7c1631600ef89219a538d07fa868b73f3",
+      "bytes": 65716,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd_decoder.mlmodelc/weights/weight.bin": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/weights/weight.bin",
+      "sha256": "b7265fd9c08ec84bdbe262e773a5c0a754709de3c1b6d230f1befdaff8600f9e",
+      "bytes": 2449344,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
+    },
+    "taesd.safetensors": {
+      "s3Path": "qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd.safetensors",
+      "sha256": "db169d69145ec4ff064e49d99c95fa05d3eb04ee453de35824a6d0f325513549",
+      "bytes": 9793292,
+      "group": "coreml",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64",
+        "darwin-x64",
+        "android-arm64",
+        "ios-arm64",
+        "ios-arm64-simulator",
+        "ios-x64-simulator"
+      ]
     }
   }
 }

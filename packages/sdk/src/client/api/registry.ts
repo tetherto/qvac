@@ -6,7 +6,8 @@ import type {
   ModelRegistryGetModelRequest,
   ModelRegistryGetModelResponse,
   ModelRegistryEntry,
-  ModelRegistryEntryAddon
+  ModelRegistryEntryAddon,
+  RPCOptions
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { ModelRegistryQueryFailedError } from '@/utils/errors-client'
@@ -45,18 +46,18 @@ function validateRegistryResponse(response: RegistryResponse): void {
  * @throws {ModelRegistryBusyError} When another QVAC process kept the registry for longer than the query waits.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
-function modelRegistryList(): RegistryQuery<ModelRegistryEntry[]> {
+function modelRegistryList(options?: RPCOptions): RegistryQuery<ModelRegistryEntry[]> {
   const requestId = generateClientRequestId()
-  return decoratePromise(runList(requestId), { requestId })
+  return decoratePromise(runList(requestId, options), { requestId })
 }
 
-async function runList(requestId: string): Promise<ModelRegistryEntry[]> {
+async function runList(requestId: string, options?: RPCOptions): Promise<ModelRegistryEntry[]> {
   const request: ModelRegistryListRequest = {
     type: 'modelRegistryList',
     requestId
   }
 
-  const response = (await send(request)) as ModelRegistryListResponse
+  const response = (await send(request, options)) as ModelRegistryListResponse
   validateRegistryResponse(response)
 
   return response.models!
@@ -77,15 +78,17 @@ async function runList(requestId: string): Promise<ModelRegistryEntry[]> {
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 function modelRegistrySearch(
-  params: ModelRegistrySearchParams = {}
+  params: ModelRegistrySearchParams = {},
+  options?: RPCOptions
 ): RegistryQuery<ModelRegistryEntry[]> {
   const requestId = generateClientRequestId()
-  return decoratePromise(runSearch(params, requestId), { requestId })
+  return decoratePromise(runSearch(params, requestId, options), { requestId })
 }
 
 async function runSearch(
   params: ModelRegistrySearchParams,
-  requestId: string
+  requestId: string,
+  options?: RPCOptions
 ): Promise<ModelRegistryEntry[]> {
   const { modelType, ...rest } = params
   const request: ModelRegistrySearchRequest = {
@@ -95,7 +98,7 @@ async function runSearch(
     requestId
   }
 
-  const response = (await send(request)) as ModelRegistrySearchResponse
+  const response = (await send(request, options)) as ModelRegistrySearchResponse
   validateRegistryResponse(response)
 
   return response.models!
@@ -114,16 +117,20 @@ async function runSearch(
  */
 function modelRegistryGetModel(
   registryPath: string,
-  registrySource: string
+  registrySource: string,
+  options?: RPCOptions
 ): RegistryQuery<ModelRegistryEntry> {
   const requestId = generateClientRequestId()
-  return decoratePromise(runGetModel(registryPath, registrySource, requestId), { requestId })
+  return decoratePromise(runGetModel(registryPath, registrySource, requestId, options), {
+    requestId
+  })
 }
 
 async function runGetModel(
   registryPath: string,
   registrySource: string,
-  requestId: string
+  requestId: string,
+  options?: RPCOptions
 ): Promise<ModelRegistryEntry> {
   const request: ModelRegistryGetModelRequest = {
     type: 'modelRegistryGetModel',
@@ -132,7 +139,7 @@ async function runGetModel(
     requestId
   }
 
-  const response = (await send(request)) as ModelRegistryGetModelResponse
+  const response = (await send(request, options)) as ModelRegistryGetModelResponse
   validateRegistryResponse(response)
 
   return response.model!

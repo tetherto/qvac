@@ -88,10 +88,15 @@ RGB is not covered. `threads` defaults to 8, as `MegaLoc`
 and `BridgeDepth` do.
 
 Tensor data is not read, so a file whose weights `load()` rejects can still be
-reported as fitting. The verdict covers one input size: BridgeDepth keeps the
-resized position embedding of up to 8 input sizes, so a caller that cycles
-through sizes holds a little more host memory per size. Each call initializes the selected backend, so it costs
-about what a backend init costs.
+reported as fitting. The verdict covers one input size. BridgeDepth keeps a
+slot for each padded input size between calls, up to 4 sizes, least recently
+used out: the memory its graph is built in, about 15 MB, and the size's masks
+and indices, about 13 MB at 1280x720. The host row counts the slot of the
+`workload` size only, so a caller that cycles through k sizes should add one
+slot for each size past the first, up to 3 more, about 29 MB each at 1280x720.
+BridgeDepth also keeps the resized position embedding of up to 8 input sizes,
+a little more host memory per size. Each call initializes the selected backend,
+so it costs about what a backend init costs.
 
 `assessFit` returns a Promise and concurrent calls run one at a time. A request
 with a relative `modelPath`, an option of the wrong type, a string holding a
@@ -279,9 +284,9 @@ to populate `test/mobile/testAssets/` (driven by `scripts/copy-mobile-test-asset
 | iOS arm64           | ✅   |                  |
 
 
-All platforms are produced by the shared `reusable-prebuilds.yml`
-matrix and merged into a single `prebuilds` artifact for downstream
-consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
+All platforms are built by the CI contract's `_build.yml`, one job per
+`build` configuration in `project.json`, and merged into a single
+`prebuilds-classification-ggml` bundle for downstream consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
 
 ## Performance
 

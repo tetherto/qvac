@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 export const classificationConfigSchema = z.object({
   modelPath: z
@@ -31,9 +32,11 @@ export const classifyParamsSchema = z.object({
   channels: z.literal(3).optional()
 })
 
-export const classifyRequestSchema = classifyParamsSchema.extend({
-  type: z.literal('classify')
-})
+export const classifyRequestSchema = classifyParamsSchema
+  .extend({
+    type: z.literal('classify')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const classificationResultSchema = z.object({
   label: z.string(),
@@ -42,6 +45,7 @@ export const classificationResultSchema = z.object({
 
 export const classifyResponseSchema = z.object({
   type: z.literal('classify'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   results: z.array(classificationResultSchema),
   done: z.boolean().optional()
 })

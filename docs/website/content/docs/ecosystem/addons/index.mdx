@@ -11,17 +11,9 @@ Each addon is a JavaScript [Bare module](https://bare.pears.com) that adds suppo
 
 _If you use the SDK, you **don’t need** to use addons directly._ The SDK is the canonical way to build with QVAC: it unifies all addon capabilities under a single interface, enables QVAC to run on JS runtimes beyond Bare, and provides out-of-the-box P2P connectivity.
 
-## Compatibility matrix
+## Supported platforms
 
-All addons support the following platforms:
-
-| Platform | Min Version | Architecture | GPU API/Backend | Notes |
-|----------|-------------|-----|-----|-------|
-| macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
-| iOS | 17.0+ | arm64 | Metal | Requires Expo |
-| Linux | Ubuntu 22+ | arm64, x64 | Vulkan | Vulkan runtime required |
-| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
-| Windows | 10+ | x64 | Vulkan | Vulkan-capable GPU + vendor drivers required |
+For the platforms QVAC supports and what each one requires, see the SDK's [platform requirements](/sdk/system-requirements).
 
 ## Catalog
 
@@ -33,7 +25,7 @@ The following table lists all available addons for QVAC ecosystem:
 | [`@qvac/embed-llamacpp`](/ecosystem/addons/embed-llamacpp) | Text embeddings, RAG, decisions | Vector embeddings for semantic search and retrieval, and typed decisions with Laya checkpoints. | `qvac-fabric-llm.cpp` | stable |
 | [`@qvac/translation-nmtcpp`](/ecosystem/addons/translation-nmtcpp) | Translation | Text-to-text neural machine translation (NMT). | `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt) | stable |
 | [`@qvac/transcription-whispercpp`](/ecosystem/addons/transcription-whispercpp) | Transcription | Automatic speech recognition (ASR) for speech-to-text. | [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) | stable |
-| [`@qvac/transcription-parakeet`](/ecosystem/addons/transcription-parakeet) | Transcription | Automatic speech recognition (ASR) for speech-to-text with speaker diarization. | [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) via [ONNX Runtime](https://onnxruntime.ai) | stable |
+| [`@qvac/asr-ggml`](/ecosystem/addons/asr-ggml) | Transcription | Automatic speech recognition (ASR) for speech-to-text with speaker diarization. | [NVIDIA Parakeet](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2) via GGML (GGUF weights) | stable |
 | [`@qvac/tts-ggml`](/ecosystem/addons/tts-ggml) | Text-to-speech | Speech synthesis for text-to-speech (TTS). | [`qvac-tts.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts) (GGML) | stable |
 | [`@qvac/audiogen-ggml`](/ecosystem/addons/audiogen-ggml) | Music generation | Generate music from text, lyrics, and musical controls. | [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) (GGML) | experimental |
 | [`@qvac/ocr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/ocr-ggml) | OCR | Optical character recognition (OCR) for extracting text from images. | GGML (EasyOCR and docTR pipelines on GGUF weights) | stable |
