@@ -1,9 +1,9 @@
 {
   "fabric": {
-    "version": "temp-12032-f38278b45",
-    "commit": "f38278b45c4d7b5a93de2e02fa276edf61c3cf28",
-    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/f38278b45c4d7b5a93de2e02fa276edf61c3cf28",
-    "sha256": "ddf05297c7139864c04a0a099407b3db22a9e2a3271818ad277b2a9f2737af83"
+    "version": "12032.0.0",
+    "commit": "0b3fe2e8eccb390c6aa80b34939f39b044bbfd2e",
+    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/refs/tags/v12032.0.0",
+    "sha256": "a1c6c0b88ce25d6405ff04a1569551fbde1bec630ddcc9f5a7d5a174c9d37f0a"
   },
   "inferenceAddonCpp": {
     "version": "1.7.0",
