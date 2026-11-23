@@ -73,11 +73,21 @@ test('packed package root bundles for a browser without native Bare bindings', a
     absWorkingDir: packageRoot,
     bundle: true,
     entryPoints: [path.join(extractDir, 'package', 'index.js')],
-    external: ['./prebuilds/web/*'],
     format: 'esm',
     logLevel: 'silent',
     nodePaths: [path.join(packageRoot, 'node_modules')],
     platform: 'browser',
+    plugins: [
+      {
+        name: 'external-web-engines',
+        setup(build) {
+          build.onResolve({ filter: /prebuilds\/web\// }, ({ path: enginePath }) => ({
+            external: true,
+            path: enginePath
+          }))
+        }
+      }
+    ],
     write: false
   })
   const bundle = result.outputFiles.map((file) => file.text).join('\n')
@@ -93,8 +103,24 @@ test('documented esbuild asset copy produces both deployable browser engines', a
   const temp = await mkdtemp(path.join(os.tmpdir(), 'llm-llamacpp-esbuild-assets-'))
   t.after(() => rm(temp, { force: true, recursive: true }))
   const output = path.join(temp, 'dist')
+  const browser = path.join(temp, 'browser')
+  const prebuilds = path.join(temp, 'prebuilds', 'web')
   const entry = path.join(temp, 'worker.js')
-  await writeFile(entry, `import LlmLlamacpp from ${JSON.stringify(packageRoot)}; void LlmLlamacpp`)
+  await mkdir(browser)
+  await mkdir(prebuilds, { recursive: true })
+  await copyFile(
+    path.join(packageRoot, 'browser', 'create-engine.js'),
+    path.join(browser, 'create-engine.js')
+  )
+  await writeFile(entry, "import createEngine from './browser/create-engine.js'; void createEngine")
+
+  for (const variant of ['llm-llamacpp', 'llm-llamacpp-64']) {
+    await writeFile(
+      path.join(prebuilds, `${variant}.mjs`),
+      `new URL('./${variant}.wasm', import.meta.url); export default function createEngine() {}`
+    )
+    await writeFile(path.join(prebuilds, `${variant}.wasm`), variant)
+  }
 
   await build({
     bundle: true,
@@ -107,7 +133,7 @@ test('documented esbuild asset copy produces both deployable browser engines', a
   })
 
   for (const name of ['llm-llamacpp.wasm', 'llm-llamacpp-64.wasm']) {
-    await copyFile(path.join(packageRoot, 'prebuilds', 'web', name), path.join(output, name))
+    await copyFile(path.join(prebuilds, name), path.join(output, name))
   }
 
   const files = await readdir(output)
