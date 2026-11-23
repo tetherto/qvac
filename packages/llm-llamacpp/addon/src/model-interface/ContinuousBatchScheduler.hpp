@@ -291,7 +291,8 @@ using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
 /// In background-thread mode callers enqueue request groups and wait while a
 /// scheduler-owned worker admits requests, decodes chunks and refills free
 /// slots. In cooperative mode the caller drives the same state machine with
-/// `stepCooperative()` and drains completed groups with `takeCooperative()`.
+/// `stepCooperative()` and drains completed groups with
+/// `takeCooperativeResult()`.
 ///
 /// It is also where an admitted request looks for a conversation that serves
 /// more of its prompt than its own sequence (`cache::CacheSourceProvider`):
