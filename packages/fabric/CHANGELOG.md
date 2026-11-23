@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.32.0] - 2026-11-23
+
+This release splits the Linux x64 CUDA backend into its own automatically
+installed package so Fabric can continue to ship all backends within npm's
+package size limit. Installation and inference behavior remain unchanged.
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+- The Fabric meta, platform and CUDA packages move together to 0.32.0.
+  Existing consumers using `^0.31.0` stay on the previous packaging; adopting
+  this layout requires explicitly updating their Fabric dependency ranges.
+
+## Pull Requests
+
+- [#5824](https://github.com/tetherto/qvac/pull/5824) - QVAC-28570: split Fabric Linux x64 GPU backend packages.
+
 ## [0.31.2] - 2026-11-20
 
 ### Changed

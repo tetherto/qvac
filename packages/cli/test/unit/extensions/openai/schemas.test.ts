@@ -1,6 +1,5 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, readdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,19 +82,6 @@ describe('hoistInstructions', () => {
         { role: 'user', content: 'next' }
       ]
     )
-  })
-
-  it('keeps the attachments of every merged instruction', () => {
-    const [system] = hoistInstructions([
-      { role: 'system', content: 'sys', attachments: [{ path: 'a.png' }] },
-      { role: 'user', content: 'hi' },
-      { role: 'developer', content: 'dev', attachments: [{ path: 'b.png' }] }
-    ])
-    assert.deepEqual(system, {
-      role: 'system',
-      content: 'sys\n\ndev',
-      attachments: [{ path: 'a.png' }, { path: 'b.png' }]
-    })
   })
 
   it('turns a lone developer turn into the system turn', () => {
@@ -291,24 +277,33 @@ describe('openaiMessagesToHistory', () => {
     ])
   })
 
-  // The SDK takes content parts on user turns only.
-  it('joins the text and attaches the images on a non-user turn', () => {
+  it('joins the text parts of a non-user turn', () => {
     const messages: OpenAIMessage[] = [
-      { role: 'user', content: 'hello' },
-      { role: 'system', content: interleavedParts() }
-    ]
-    assert.deepEqual(openaiMessagesToHistory(messages), [
       {
         role: 'system',
-        content: 'Image A: \nImage B: \nWhich one is a photo?',
-        attachments: [
-          { ext: 'png', bytes: Buffer.from(PNG_BASE64, 'base64') },
-          { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') }
+        content: [
+          { type: 'text', text: 'Be ' },
+          { type: 'text', text: 'brief.' }
         ]
       },
       { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      { role: 'system', content: 'Be brief.' },
+      { role: 'user', content: 'hello' }
     ])
   })
+
+  // The model reads images on user turns only.
+  for (const role of ['system', 'developer', 'assistant']) {
+    it(`throws on an image in a turn with role ${role}`, () => {
+      const messages: OpenAIMessage[] = [
+        { role, content: interleavedParts() },
+        { role: 'user', content: 'hello' }
+      ]
+      assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
+    })
+  }
 
   // Reviewer ask: an image the server cannot materialize must fail loudly (→ 400) instead of
   // silently dropping to a text-only completion the user never asked for.
@@ -366,22 +361,6 @@ describe('openaiMessagesToHistory', () => {
       assert.ok(tmpPaths[1]!.endsWith('.jpg'))
       assert.deepEqual(await readFile(tmpPaths[0]!), Buffer.from(PNG_BASE64, 'base64'))
       assert.deepEqual(await readFile(tmpPaths[1]!), Buffer.from(JPEG_BASE64, 'base64'))
-    } finally {
-      await Promise.all(tmpPaths.map((path) => unlink(path)))
-    }
-  })
-
-  it('writeChatImages writes the images of a non-user turn as attachments', async () => {
-    const messages: OpenAIMessage[] = [
-      { role: 'system', content: [{ type: 'image_url', image_url: { url: PNG_DATA_URL } }] }
-    ]
-    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
-    try {
-      assert.equal(tmpPaths.length, 1)
-      assert.ok(existsSync(tmpPaths[0]!))
-      assert.deepEqual(history, [
-        { role: 'system', content: '', attachments: [{ path: tmpPaths[0] }] }
-      ])
     } finally {
       await Promise.all(tmpPaths.map((path) => unlink(path)))
     }

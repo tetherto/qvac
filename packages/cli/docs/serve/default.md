@@ -362,14 +362,19 @@ load that `loadModel` would refuse fails the request.
 
 `pools` gives each memory pool the verdict was judged on, with what the set takes from it and the
 lowest free and total figures reported for it. Every device that shares the host's memory joins
-the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single model's
-`verdict` is its own `status`. A set of models does not fit when any pool would use more than 90%
-of its free memory.
+the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single
+model's `verdict` is its own `status`. A set of models does not fit when any model does not fit
+alone or any pool would use more than 90% of its free memory.
 
-`models` carries each entry's engine fit result, in request order: its own `status`, one row per
+`models` carries each entry's engine fit result, in request order: its `status`, the model's
+verdict alone, which is `does-not-fit` when rows sharing one pool, such as a Metal GPU and the
+CPU, would together use more than 90% of its free memory; one row per
 device the load uses (the host last), and its `stats`: the context size and GPU layers for a
-llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
-where the backend reports one, so the same GPU matches across engines.
+llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `reason` saying why
+it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
+is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
+
+`qvac fit` answers the same question from the terminal, with the same answer for the same input.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \

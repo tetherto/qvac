@@ -419,7 +419,7 @@ class ModelFitModelResult(GeneratedBaseModel):
     status: Annotated[
         ModelFitModelResultStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitModelResultStatus",
         ),
     ]
@@ -433,6 +433,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -2439,7 +2445,10 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
@@ -4505,7 +4514,10 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
@@ -5247,7 +5259,10 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionStreamRequestHistoryItemToolCallsItem] | None,
@@ -8651,7 +8666,7 @@ class ModelFitProbeModel(GeneratedBaseModel):
     status: Annotated[
         ModelFitProbeModelStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitProbeModelStatus",
         ),
     ]
@@ -8665,6 +8680,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):
@@ -13191,6 +13212,29 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             alias="tensor-read-lazy",
             description="On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy",
+        ),
+    ] = None
+    coreml_ffn: Annotated[
+        bool | None,
+        Field(
+            alias="coreml-ffn",
+            description="Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+        ),
+    ] = None
+    coreml_ffn_split: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-split",
+            description="Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+            pattern="^[1-9]\\d*x[12]$",
+        ),
+    ] = None
+    coreml_ffn_cache: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-cache",
+            description="Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
+            min_length=1,
         ),
     ] = None
     fit: Annotated[

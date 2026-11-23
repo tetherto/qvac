@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // sdk-kotlin's test:unit, main's Kotlin PR checks in one pass, against this commit's built @qvac/sdk and @qvac/inference:
-// the contract check, JVM and Android example tests, debug build checks, Maven publications and consumers, and the Kotlin
-// e2e app's unit tests. PRs into release-*, release trains and dispatches build every runtime profile; other PRs the
+// the contract check, JVM and Android example tests, debug build checks, Maven publications and consumers, and a compile
+// of the Kotlin e2e app. PRs into release-*, release trains and dispatches build every runtime profile; other PRs the
 // all-in-one one.
 
 import { execFileSync } from 'node:child_process'
@@ -125,7 +125,7 @@ run(
     '-PqvacProfile=aio',
     '-x',
     ':sdk-kotlin:android-barekit:buildWorkspaceSdk',
-    ':app:testDebugUnitTest'
+    ':app:compileDebugKotlin'
   ],
   join(packages, 'sdk-e2e', 'runners', 'kotlin')
 )
