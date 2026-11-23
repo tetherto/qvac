@@ -30,6 +30,7 @@ const cancelKindSchema = z
     'batchCompletion',
     'embeddings',
     'imageEmbedding',
+    'stereoDepth',
     'decision',
     'rerank',
     'transcribe',

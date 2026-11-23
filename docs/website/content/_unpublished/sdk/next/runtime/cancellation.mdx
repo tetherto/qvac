@@ -22,6 +22,8 @@ Use `requestId` to stop a specific call when the operation exposes one. Use `mod
 
 MegaLoc calls through [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](/sdk/reference/api#embedbatch) return a promise with a synchronous `requestId`. Calls queue FIFO per MegaLoc model. Cancelling a queued call removes it before native inference starts. Cancelling an active call discards its result after native work finishes and rejects with `InferenceCancelledError`; a batch stops before starting the next image, and the next queued call waits until native work finishes. Use `cancel({ requestId })` for one call, or `cancel({ modelId, kind: "imageEmbedding" })` for all matching calls. See [Image embeddings](/sdk/ai-capabilities/image-embeddings#cancellation).
 
+[`estimateDisparity()`](/sdk/reference/api#estimatedisparity) behaves the same way per BridgeDepth model, without the batch step. Use `cancel({ modelId, kind: "stereoDepth" })` for all matching calls. See [Stereo depth](/sdk/ai-capabilities/stereo-depth#cancellation).
+
 **Image generation** supports hard cancellation through `cancel({ modelId, kind: "diffusion" })`. It interrupts the active native job and suppresses subsequent output. The run's `outputs` and `stats` promises reject with `InferenceCancelledError`, and `progressStream` throws the same error. Image and video generation admit one request per model; concurrent calls reject with `RequestRejectedByPolicyError`. After cancelling an image generation, await the original run's settlement before starting another call.
 
 **Broad cancel by `modelId`** additionally covers NMT `translate()`, `textToSpeech()`, `ocr()`, and `upscale()`. These accept `cancel({ modelId })`, and `ocr()` and `upscale()` also `cancel({ requestId })`, but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
@@ -34,7 +36,7 @@ MegaLoc calls through [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](
 ## Functions
 
 1. [`completion()`](/sdk/reference/api#completion), [`batchCompletion()`](/sdk/ai-capabilities/batch-processing), [`audioGen()`](/sdk/ai-capabilities/music-generation), [`diffusion()`](/sdk/reference/api#diffusion), [`upscale()`](/sdk/reference/api#upscale), and [`ocr()`](/sdk/reference/api#ocr) — return a run object that exposes a synchronous `requestId` field.
-2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`vla()`](/sdk/reference/api#vla), and [`invokePlugin()`](/sdk/reference/api#invokeplugin) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
+2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`estimateDisparity()`](/sdk/reference/api#estimatedisparity), [`vla()`](/sdk/reference/api#vla), and [`invokePlugin()`](/sdk/reference/api#invokeplugin) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
 3. [`cancel()`](/sdk/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
@@ -46,7 +48,7 @@ Pending `startRpcServer()` and `discoverRpcServers()` calls also return `Promise
 Two shapes show up across the SDK surface:
 
 - **`completion()`, `audioGen()`, `diffusion()`, `upscale()` and `ocr()`** — return run objects with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
-- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `vla()`, and `invokePlugin()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
+- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `estimateDisparity()`, `vla()`, and `invokePlugin()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
 
 ```ts
 // Pattern 1 — completion: requestId is on the returned run

@@ -47,6 +47,7 @@ export {
   audioEdit,
   audioUnderstand,
   classify,
+  estimateDisparity,
   decide,
   rerank,
   video,

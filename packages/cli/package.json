@@ -59,7 +59,7 @@
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^6.1.1",
     "@inquirer/prompts": "8.5.2",
-    "@qvac/rag": "^0.10.0",
+    "@qvac/rag": "^0.11.0",
     "@qvac/sdk": "^0.24.0",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",

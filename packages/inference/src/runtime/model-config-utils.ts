@@ -1,4 +1,5 @@
 import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
+import { stereoDepthConfigSchema } from '@/schemas/stereo-depth'
 import type { ZodSchema } from 'zod'
 import {
   ModelType,
@@ -28,6 +29,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppDecision]: 'llamacpp-decision',
   [ModelType.llamacppRerank]: 'llamacpp-rerank',
   [ModelType.ggmlImageEmbedding]: 'ggml-image-embedding',
+  [ModelType.ggmlStereoDepth]: 'ggml-stereo-depth',
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.parakeetTranscription]: 'parakeet',
@@ -48,6 +50,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
   [ModelType.llamacppDecision]: decisionConfigSchema,
   [ModelType.llamacppRerank]: rerankConfigSchema,
   [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema,
+  [ModelType.ggmlStereoDepth]: stereoDepthConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),

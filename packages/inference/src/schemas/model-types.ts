@@ -23,6 +23,7 @@ export const ModelType = {
   audiogenGgml: 'audiogen-ggml',
   ggmlVla: 'ggml-vla',
   ggmlImageEmbedding: 'ggml-image-embedding',
+  ggmlStereoDepth: 'ggml-stereo-depth',
   ggmlClassification: 'ggml-classification'
 } as const
 

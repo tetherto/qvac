@@ -198,6 +198,15 @@ object QvacMethods {
         progressCondition = null,
         ownerOnly = false,
     )
+    val estimateDisparity = QvacMethodDescriptor(
+        name = "estimateDisparity",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "EstimateDisparityRequest",
+        responseType = "EstimateDisparityResponse",
+        progressResponseType = null,
+        progressCondition = null,
+        ownerOnly = false,
+    )
     val finetune = QvacMethodDescriptor(
         name = "finetune",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -499,6 +508,7 @@ object QvacMethods {
         downloadAsset,
         embed,
         embedBatch,
+        estimateDisparity,
         finetune,
         getLoadedModelInfo,
         getModelInfo,

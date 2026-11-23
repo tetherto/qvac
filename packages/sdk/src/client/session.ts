@@ -80,6 +80,7 @@ export interface QvacSession {
   loadVectorIndex: Api['loadVectorIndex']
   ocr: Api['ocr']
   classify: Api['classify']
+  estimateDisparity: Api['estimateDisparity']
   diffusion: Api['diffusion']
   upscale: Api['upscale']
   video: Api['video']
@@ -248,6 +249,7 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
     loadVectorIndex: vectorIndexes.loadVectorIndex,
     ocr: (params, options) => api.ocr(params, withSession(options)),
     classify: (params, options) => api.classify(params, withSession(options)),
+    estimateDisparity: (params, options) => api.estimateDisparity(params, withSession(options)),
     diffusion: (params, options) => api.diffusion(params, withSession(options)),
     upscale: (params, options) => api.upscale(params, withSession(options)),
     video: (params, options) => api.video(params, withSession(options)),
