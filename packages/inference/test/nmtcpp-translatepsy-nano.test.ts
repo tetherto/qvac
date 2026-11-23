@@ -24,54 +24,41 @@ const BERGAMOT_EN_IT =
 // Detection
 // ---------------------------------------------------------------------------
 
-test('detect: registry names, registry paths and the Hugging Face layout', (t) => {
-  t.alike(detectTranslatePsyNanoPack({ modelName: 'TRANSLATEPSY_EURONANO_XX_EN_TINY' }), {
-    family: 'EuroNano',
-    direction: 'xx-en'
-  })
-  t.alike(detectTranslatePsyNanoPack({ modelSrc: AFRI_EN_XX }), {
-    family: 'AfriNano',
-    direction: 'en-xx'
-  })
+test('detect: registry paths and the Hugging Face layout', (t) => {
+  t.alike(detectTranslatePsyNanoPack(AFRI_EN_XX), { family: 'AfriNano', direction: 'en-xx' })
+  t.alike(detectTranslatePsyNanoPack(EURO_EN_XX), { family: 'EuroNano', direction: 'en-xx' })
   t.alike(
-    detectTranslatePsyNanoPack({
-      modelSrc: `https://huggingface.co/${EURO}/xx-en/Base/intgemm/model.intgemm.alphas.bin`
-    }),
+    detectTranslatePsyNanoPack(
+      `https://huggingface.co/${EURO}/xx-en/Base/intgemm/model.intgemm.alphas.bin`
+    ),
     { family: 'EuroNano', direction: 'xx-en' }
   )
   t.alike(
-    detectTranslatePsyNanoPack({
-      modelSrc:
-        '/home/u/.cache/huggingface/hub/models--qvac--TranslatePsy-AfriNano/snapshots/7a79/en-xx/Tiny/intgemm/model.intgemm.alphas.bin'
-    }),
+    detectTranslatePsyNanoPack(
+      '/home/u/.cache/huggingface/hub/models--qvac--TranslatePsy-AfriNano/snapshots/7a79/en-xx/Tiny/intgemm/model.intgemm.alphas.bin'
+    ),
     { family: 'AfriNano', direction: 'en-xx' },
     'Hub cache snapshot'
   )
   t.alike(
-    detectTranslatePsyNanoPack({
-      modelSrc: 'C:\\models\\TranslatePsy-EuroNano\\en-xx\\Base\\intgemm\\model.intgemm.alphas.bin'
-    }),
+    detectTranslatePsyNanoPack(
+      'C:\\models\\TranslatePsy-EuroNano\\en-xx\\Base\\intgemm\\model.intgemm.alphas.bin'
+    ),
     { family: 'EuroNano', direction: 'en-xx' },
     'Windows path'
   )
   t.alike(
-    detectTranslatePsyNanoPack({
-      modelSrc: './packs/en-xx/BaseMemory/intgemm/model.intgemm.alphas.bin'
-    }),
+    detectTranslatePsyNanoPack('./packs/en-xx/BaseMemory/intgemm/model.intgemm.alphas.bin'),
     { direction: 'en-xx' },
     'layout without the repo directory: direction only'
   )
 })
 
 test('detect: plain Bergamot models and renamed copies are not Nano packs', (t) => {
-  t.is(detectTranslatePsyNanoPack({ modelSrc: BERGAMOT_DE_EN, modelName: 'BERGAMOT_DE_EN' }), null)
-  t.is(detectTranslatePsyNanoPack({ modelSrc: '/models/sw/model.intgemm.alphas.bin' }), null)
-  t.is(detectTranslatePsyNanoPack({ modelSrc: 'pear://abc123/model.intgemm.alphas.bin' }), null)
-  t.is(
-    detectTranslatePsyNanoPack({ modelSrc: `${AFRI}/en-xx/Base/fp32/model.npz.best-chrf.npz` }),
-    null
-  )
-  t.is(detectTranslatePsyNanoPack({ modelName: 'TRANSLATEPSY_AFRISLM_2B_Q8_0_IMAT' }), null)
+  t.is(detectTranslatePsyNanoPack(BERGAMOT_DE_EN), null)
+  t.is(detectTranslatePsyNanoPack('/models/sw/model.intgemm.alphas.bin'), null)
+  t.is(detectTranslatePsyNanoPack('pear://abc123/model.intgemm.alphas.bin'), null)
+  t.is(detectTranslatePsyNanoPack(`${AFRI}/en-xx/Base/fp32/model.npz.best-chrf.npz`), null)
 })
 
 test('resolve: targetTag forces or disables Nano handling', (t) => {
@@ -237,6 +224,17 @@ test('resolveConfig: targetTag true tags a renamed copy', async (t) => {
     srcVocabPath: '/app/assets/afri-en/vocab.spm',
     dstVocabPath: '/app/assets/afri-en/vocab.spm'
   })
+})
+
+test('resolveConfig: a registry name alone does not make a pack (loads share by source)', async (t) => {
+  // Loads with the same modelSrc and modelConfig share one model whatever their
+  // name, so tagging must follow the source: a renamed copy stays plain.
+  const { config } = await resolveConfig(
+    { from: 'en', to: 'de' },
+    '/app/assets/euro-en/model.intgemm.alphas.bin',
+    'TRANSLATEPSY_EURONANO_EN_XX_TINY'
+  )
+  t.absent('targetTag' in config)
 })
 
 test('resolveConfig: plain Bergamot is unchanged', async (t) => {

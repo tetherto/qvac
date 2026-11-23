@@ -16819,7 +16819,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel
         bool | None,
         Field(
             alias="targetTag",
-            description="TranslatePsy Nano English→X (`en-xx`) packs pick their output language from a `##<TO>` tag at the start of the input. When on, QVAC prepends `##<TO> ` (e.g. `##SW `) to every input that doesn't already start with a tag. Omit to detect the pack from its TranslatePsy registry name or path, or from the Hugging Face layout `en-xx/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`; set `true` for a copy that lost that layout (renamed, bundled, `pear://`), or `false` to load the file as a plain Bergamot model.",
+            description="TranslatePsy Nano English→X (`en-xx`) packs pick their output language from a `##<TO>` tag at the start of the input. When on, QVAC prepends `##<TO> ` (e.g. `##SW `) to every input that doesn't already start with a tag. Omit to detect the pack from the Hugging Face layout `en-xx/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin` in its source, which TranslatePsy registry constants, Hub URLs and Hub downloads keep; set `true` for a copy that lost that layout (renamed, bundled, `pear://`), or `false` to load the file as a plain Bergamot model.",
         ),
     ] = None
     pivot_model: Annotated[

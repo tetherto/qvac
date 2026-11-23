@@ -28,10 +28,10 @@ const FAMILIES: Record<string, TranslatePsyNanoFamily> = {
   euronano: 'EuroNano'
 }
 
-// Registry constants: TRANSLATEPSY_<FAMILY>_<EN_XX|XX_EN>_<SIZE>.
-const REGISTRY_NAME_RE = /^TRANSLATEPSY_(AFRINANO|EURONANO)_(EN_XX|XX_EN)_/
-// The Hugging Face repo layout, which registry paths, Hub URLs,
-// `huggingface-cli download` and the Hub cache all keep.
+// The Hugging Face repo layout, which registry paths (and so the registry
+// constants' `src`), Hub URLs, `huggingface-cli download` and the Hub cache all
+// keep. Detection reads the source only, never the registry name: loads that
+// share a source and config share one model, so their tagging must agree.
 const PACK_LAYOUT_RE =
   /(?:^|[/\\])(en-xx|xx-en)[/\\](?:Base|BaseMemory|Tiny)[/\\]intgemm[/\\]model\.intgemm\.alphas\.bin$/i
 // `qvac/TranslatePsy-AfriNano/…`, `models--qvac--TranslatePsy-AfriNano/snapshots/…`.
@@ -39,24 +39,12 @@ const PACK_FAMILY_RE = /TranslatePsy-(AfriNano|EuroNano)(?=[/\\])/i
 
 const TARGET_TAG_RE = /^\s*##[A-Z]{2,3}(?:\s|$)/
 
-/** Detects a TranslatePsy Nano pack from its registry name or source path. */
-export function detectTranslatePsyNanoPack(source: {
-  modelName?: string | undefined
-  modelSrc?: string | undefined
-}): TranslatePsyNanoPack | null {
-  const named = source.modelName?.match(REGISTRY_NAME_RE)
-  if (named?.[1] && named[2]) {
-    return {
-      family: FAMILIES[named[1].toLowerCase()]!,
-      direction: named[2] === 'EN_XX' ? 'en-xx' : 'xx-en'
-    }
-  }
-
-  const src = source.modelSrc ?? ''
-  const layout = src.match(PACK_LAYOUT_RE)
+/** Detects a TranslatePsy Nano pack from its source path. */
+export function detectTranslatePsyNanoPack(modelSrc: string): TranslatePsyNanoPack | null {
+  const layout = modelSrc.match(PACK_LAYOUT_RE)
   if (!layout?.[1]) return null
 
-  const family = src.match(PACK_FAMILY_RE)?.[1]
+  const family = modelSrc.match(PACK_FAMILY_RE)?.[1]
   return {
     ...(family && { family: FAMILIES[family.toLowerCase()]! }),
     direction: layout[1].toLowerCase() as TranslatePsyNanoDirection
@@ -70,16 +58,15 @@ function invalid(details: string): PluginLoadConfigValidationFailedError {
 /**
  * The TranslatePsy Nano pack a Bergamot load runs, or null for a plain
  * Bergamot model. `targetTag: false` opts a detected file out; `true` marks a
- * copy that lost its name and layout as an `en-xx` pack.
+ * copy that lost its layout as an `en-xx` pack.
  */
 export function resolveTranslatePsyNanoPack(input: {
   targetTag?: boolean | undefined
   modelSrc: string
-  modelName?: string | undefined
 }): TranslatePsyNanoPack | null {
   if (input.targetTag === false) return null
 
-  const detected = detectTranslatePsyNanoPack(input)
+  const detected = detectTranslatePsyNanoPack(input.modelSrc)
   if (input.targetTag !== true) return detected
 
   if (detected?.direction === 'xx-en') {
@@ -147,7 +134,7 @@ export function assertTranslatePsyNanoLanguages(
  * receives the first leg's output as-is, so it never sees a target tag.
  */
 export function assertTranslatePsyNanoPivot(pivotModelSrc: string, to: string): void {
-  if (detectTranslatePsyNanoPack({ modelSrc: pivotModelSrc })?.direction !== 'en-xx') return
+  if (detectTranslatePsyNanoPack(pivotModelSrc)?.direction !== 'en-xx') return
   throw invalid(
     `pivotModel ${pivotModelSrc} is a TranslatePsy Nano en-xx pack, which needs a ##${to.toUpperCase()} target tag that the in-model pivot cannot add between legs. Load the two packs separately and translate twice (xx-en, then en-xx).`
   )

@@ -70,14 +70,13 @@ export const nmtPlugin = definePlugin({
       return { config: nmtConfig }
     }
 
-    // TranslatePsy Nano packs are told apart by registry name or source path,
-    // which only this hook sees: the resolved path of a registry download is a
-    // cache set directory. A detected en-xx pack resolves to `targetTag: true`,
-    // which createModel and the translate op read.
+    // TranslatePsy Nano packs are told apart by their source path, which only
+    // this hook sees: the resolved path of a registry download is a cache set
+    // directory. A detected en-xx pack resolves to `targetTag: true`, which
+    // createModel and the translate op read.
     const nanoPack = resolveTranslatePsyNanoPack({
       targetTag: nmtConfig.targetTag,
-      modelSrc: ctx.modelSrc,
-      modelName: ctx.modelName
+      modelSrc: ctx.modelSrc
     })
     if (nanoPack) {
       assertTranslatePsyNanoLanguages(nanoPack, nmtConfig.from, nmtConfig.to, !!pivotModel)

@@ -53,7 +53,7 @@ Load a pack like any Bergamot model, with `engine: "Bergamot"` and the `from`/`t
 - Between two non-English languages, translate twice: with the `xx-en` pack, then with the `en-xx` pack. `pivotModel` cannot pass the target tag to an `en-xx` second leg, so the SDK rejects that load. An `xx-en` pack can still be the first leg of a pivot into a regular Bergamot model.
 - `loadModel()` rejects a `from`/`to` pair that is outside the pack's family or direction.
 
-The SDK recognises a pack by its registry name or path, or by the Hugging Face layout `<en-xx|xx-en>/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`, and uses the `vocab.spm` beside it. For a copy that lost that layout (renamed, bundled with an app, served from `pear://`), set `targetTag: true` on an `en-xx` pack. `targetTag: false` loads a matching file as a plain Bergamot model.
+The SDK recognises a pack by the Hugging Face layout `<en-xx|xx-en>/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin` in its source, which registry models, Hub URLs and Hub downloads keep, and uses the `vocab.spm` beside it. For a copy that lost that layout (renamed, bundled with an app, served from `pear://`), set `targetTag: true` on an `en-xx` pack. `targetTag: false` loads a matching file as a plain Bergamot model.
 
 ```js
 import path from "node:path";
