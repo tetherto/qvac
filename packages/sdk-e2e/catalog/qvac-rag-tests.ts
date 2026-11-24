@@ -801,8 +801,11 @@ const CASES: Case[] = [
       op(d, 'search', { store: 'main', scope: { namespace: NS }, query: 'cats', k: 1 }),
       op(d, 'close', { store: 'main' }),
       op(d, 'snapshotFiles', { store: 'main' }, 'snapshot'),
-      project('$snapshot', 'result.files', 'files'),
-      named('$files', 'lengthAtLeast', { length: 1 }),
+      project('$snapshot', 'result', 'files'),
+      named('$files', 'fieldsMatch', {
+        fields: ['sidecars', 'snapshots'],
+        expected: { sidecars: 1, snapshots: 1 }
+      }),
       op(d, 'open', { store: 'main', embedModelId: '$embed' }),
       op(
         d,

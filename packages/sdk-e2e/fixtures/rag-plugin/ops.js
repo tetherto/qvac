@@ -116,8 +116,18 @@ export function createRagOps(host) {
       return { hits: await rag.search(params) }
     },
 
+    // Snapshots live under `<index>/<core key>/`: a `.json` sidecar per namespace and the
+    // `.tvec` file it names.
     async snapshotFiles({ store }) {
-      return { files: await host.listDir(dirs(store).index) }
+      const { index } = dirs(store)
+      const files = []
+      for (const core of await host.listDir(index)) {
+        files.push(...(await host.listDir(host.join(index, core))))
+      }
+      return {
+        sidecars: files.filter((f) => f.endsWith('.json')).length,
+        snapshots: files.filter((f) => f.endsWith('.tvec')).length
+      }
     },
 
     async createNamespace({ store, name, dimensions, storage }) {
