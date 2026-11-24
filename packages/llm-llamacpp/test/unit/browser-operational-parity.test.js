@@ -481,6 +481,54 @@ test('browser persistence copies to OPFS only when either side changed 20x', asy
   }
 })
 
+test('browser persistence keeps a committed copy and recopies when its metadata is unreadable or fresh 20x', async (t) => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => Promise.resolve(root) } }
+  })
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const path = `/metadata-${iteration}/session.bin`
+      const bytes = Uint8Array.of(4, 5, iteration)
+      const module = { FS: memoryFs() }
+      module.FS.set(path, bytes)
+      const directory = await opfsDirectory(root, `metadata-${iteration}`)
+      const handle = new FileHandle('session.bin')
+      const getFile = handle.getFile.bind(handle)
+      let failReads = 1
+      handle.getFile = () => {
+        if (handle.createWritableCount > 0 && failReads > 0) {
+          failReads--
+          return Promise.reject(fsError('NotReadableError'))
+        }
+        return getFile()
+      }
+      directory.children.set('session.bin', handle)
+
+      await persistFile(module, path)
+      t.alike(handle.bytes, bytes, `committed copy kept ${iteration + 1}`)
+      await persistFile(module, path)
+      t.is(handle.createWritableCount, 2, `unrecorded copy written again ${iteration + 1}`)
+      await persistFile(module, path)
+      t.is(handle.createWritableCount, 2, `recorded copy skipped ${iteration + 1}`)
+
+      const stat = module.FS.stat
+      const fresh = Date.now() + 60_000
+      module.FS.stat = (candidate) => ({ ...stat(candidate), mtime: fresh })
+      module.FS.set(path, Uint8Array.of(6, 6, iteration))
+      await persistFile(module, path)
+      await persistFile(module, path)
+      t.is(handle.createWritableCount, 4, `fresh source not recorded ${iteration + 1}`)
+      module.FS.stat = stat
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})
+
 test('browser persistence uses canonical cross-context Web Locks 20x', async (t) => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
   const root = new DirectoryHandle()
@@ -1416,6 +1464,49 @@ test('unload preserves a resumable pause checkpoint while cancelling active fine
         state,
         `durable pause content retained ${iteration + 1}`
       )
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})
+
+test('public pause keeps the pause checkpoint and a full cancel clears it 20x', async (t) => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => Promise.resolve(root) } }
+  })
+  binding._setEngineFactoryForTest(cancellingFinetuneEngine)
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      for (const [savePauseCheckpoint, retained] of [
+        [1, true],
+        [0, false]
+      ]) {
+        const checkpointRoot = `/public-pause-${savePauseCheckpoint}-${iteration}`
+        const pause = `${checkpointRoot}/pause_checkpoint_step_1`
+        await opfsWrite(root, `${pause}/state.bin`, Uint8Array.of(7, iteration))
+        await opfsWrite(root, `${pause}/${CHECKPOINT_COMPLETE_FILE}`, CHECKPOINT_COMPLETE_BYTES)
+        const handle = binding.createInstance({}, { path: '', config: {} }, () => {})
+        await binding.activate(handle)
+        await binding.finetune(handle, {
+          trainDatasetDir: `/public-pause-train-${iteration}.jsonl`,
+          outputParametersDir: `/public-pause-output-${iteration}`,
+          checkpointSaveDir: checkpointRoot
+        })
+
+        await binding.cancel(handle, savePauseCheckpoint)
+
+        const directory = await opfsDirectory(root, checkpointRoot, false)
+        t.is(
+          !!directory.children.get('pause_checkpoint_step_1'),
+          retained,
+          `cancel(${savePauseCheckpoint}) pause checkpoint retained=${retained} ${iteration + 1}`
+        )
+        await binding.destroyInstance(handle)
+      }
     }
   } finally {
     if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
@@ -2393,6 +2484,67 @@ test('browser unload retries failed native cache materialization 20x', async (t)
         directory.children.get('state.bin').bytes,
         Uint8Array.of(6, iteration),
         `materialized cache persisted ${iteration + 1}`
+      )
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})
+
+function rolledBackKeyEngine(options) {
+  return {
+    FS: memoryFs(),
+    destroyCalls: 0,
+    lastError: '{}',
+    ccall(name, _result, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        // A first request cancelled during prompt evaluation ends without
+        // committing state, so native saveCache finds nothing for the key.
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return Promise.resolve(0)
+      }
+      if (name === 'qvac_web_save_cache') {
+        this.lastError = JSON.stringify({
+          code: 'InvalidArgument',
+          error: `saveCache: no conversation is cached under '${args[1]}'`
+        })
+        return -1
+      }
+      if (name === 'qvac_web_destroy') this.destroyCalls++
+      if (name === 'qvac_web_result') return this.lastError
+      return 0
+    }
+  }
+}
+
+test('unload skips a cache key whose first request committed nothing 20x', async (t) => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => Promise.resolve(root) } }
+  })
+  let engine
+  binding._setEngineFactoryForTest((options) => (engine = rolledBackKeyEngine(options)))
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const handle = binding.createInstance({}, { path: '', config: {} }, () => {})
+      await binding.activate(handle)
+      const key = `/rolled-back-${iteration}/a.bin`
+      await binding.runJob(handle, [{ role: 'user', content: 'hi', cacheKey: key }])
+      await eventually(() => handle.cachePaths.has(key))
+      t.ok(handle.cachePaths.has(key), `key tracked ${iteration + 1}`)
+
+      const destroys = engine.destroyCalls
+      await binding.destroyInstance(handle)
+      t.is(engine.destroyCalls, destroys + 1, `native instance destroyed ${iteration + 1}`)
+      t.is(handle.native, 0, `handle released ${iteration + 1}`)
+      t.is(
+        await opfsDirectory(root, `rolled-back-${iteration}`, false).catch(() => null),
+        null,
+        `no cache file written ${iteration + 1}`
       )
     }
   } finally {

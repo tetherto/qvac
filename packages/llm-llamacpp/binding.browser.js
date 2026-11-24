@@ -755,7 +755,10 @@ function cancel(handle, savePauseCheckpoint = 0, clearPauseCheckpoints = true) {
   const pendingFinetune = handle.pendingFinetuneAdmission
   if (pendingFinetune) pendingFinetune.cancelled = true
   const ids = [...handle.jobs.keys()]
-  const pending = ids.map((id) => cancelJob(handle, id, savePauseCheckpoint, clearPauseCheckpoints))
+  const discardPauseCheckpoint = clearPauseCheckpoints && !savePauseCheckpoint
+  const pending = ids.map((id) =>
+    cancelJob(handle, id, savePauseCheckpoint, discardPauseCheckpoint)
+  )
   if (pendingFinetune) pending.push(pendingFinetune.settled)
   return Promise.all(pending).then(async () => {
     if (clearPauseCheckpoints && !savePauseCheckpoint && handle.checkpointSaveDir) {
@@ -981,6 +984,13 @@ function cacheOperation(handle, cacheKey, discard) {
 }
 
 // Queued behind any running job, so the job still emits its terminal event.
+function nothingCached(error) {
+  return (
+    error?.code === 'InvalidArgument' &&
+    error.message.startsWith('saveCache: no conversation is cached under ')
+  )
+}
+
 function destroyInstance(handle) {
   handle.destroying = true
   return cancel(handle, 0, false).then(() =>
@@ -996,13 +1006,20 @@ function destroyInstance(handle) {
             await retryCheckpointCleanups(handle, engine.module)
             await persistPendingFinetuneState(handle, engine.module)
             for (const path of handle.cachePaths) {
-              await call(
-                handle,
-                'qvac_web_save_cache',
-                ['number', 'string'],
-                [native, path],
-                (module) => ensureParentDirectory(module, path)
-              )
+              try {
+                await call(
+                  handle,
+                  'qvac_web_save_cache',
+                  ['number', 'string'],
+                  [native, path],
+                  (module) => ensureParentDirectory(module, path)
+                )
+              } catch (error) {
+                // Native unload skips a key with nothing cached and no file,
+                // such as a first request rolled back by a cancel.
+                if (!nothingCached(error)) throw error
+                continue
+              }
               await persistTree(engine.module, path)
             }
             callSync(handle, 'qvac_web_destroy', ['number'], [native])

@@ -130,10 +130,13 @@ function copiesFor(module) {
 }
 
 function rememberCopy(module, path, file) {
-  const source = memfsVersion(module.FS.stat(path))
+  const stat = module.FS.stat(path)
+  const source = memfsVersion(stat)
   const copies = copiesFor(module)
   const key = pathParts(path).join('/')
-  if (source && Number.isFinite(file.lastModified)) {
+  // A source written in this millisecond could be rewritten at the same size
+  // and mtime, so it is not recorded and the next persist copies it again.
+  if (source && Number.isFinite(file.lastModified) && Number(stat.mtime) < Date.now()) {
     copies.set(key, { source, size: file.size, lastModified: file.lastModified })
   } else {
     copies.delete(key)
@@ -214,7 +217,7 @@ async function persistFileUnlocked(module, path) {
     }
     await writable.close()
     writable = null
-    committed = await destination.getFile()
+    committed = destination
   } catch (error) {
     failure = error
     if (writable) {
@@ -236,7 +239,11 @@ async function persistFileUnlocked(module, path) {
     }
   }
   if (failure) throw failure
-  rememberCopy(module, path, committed)
+  try {
+    rememberCopy(module, path, await committed.getFile())
+  } catch {
+    copiesFor(module).delete(pathParts(path).join('/'))
+  }
   return true
 }
 
