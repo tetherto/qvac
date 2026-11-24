@@ -1,9 +1,12 @@
 import test from 'brittle'
+import crypto from 'bare-crypto'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import { AbortController } from 'bare-abort-controller'
 import { downloadSingleFileFromRegistry } from '@/handlers/load-model/registry-download-utils'
 import { handleDeleteCache } from '@/handlers/delete-cache'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
+import { getCoremlBundle, getCoremlBundleDir } from '@/handlers/load-model/coreml-bundle'
 import { stubClient } from './fixtures/registry-client-stub'
 import {
   getShardedModelCacheDir,
@@ -102,6 +105,73 @@ test('deleteCache({ modelSrc }): an uncatalogued model resolves its blob from th
 
   t.is(response.success, true)
   t.alike(cleared, [binding], 'cleared the blob the registry reported')
+})
+
+// A compiled Core ML bundle the catalog does not list, as the live registry publishes it.
+const BUNDLE_PATH = 'test/coreml/2026-11-24/unet.mlmodelc'
+const BUNDLE_COMPONENTS = ['coremldata.bin', 'model.mil', 'weights/weight.bin']
+const componentBytes = (component: string) => `bytes of ${component}`
+const bundleListing = BUNDLE_COMPONENTS.map((component, index) => ({
+  path: `${BUNDLE_PATH}/${component}`,
+  source: 's3',
+  blobBinding: {
+    ...binding,
+    blockOffset: index,
+    byteLength: componentBytes(component).length,
+    sha256: crypto.createHash('sha-256').update(componentBytes(component)).digest('hex')
+  }
+}))
+const blockOffsets = (blobs: unknown[]) =>
+  blobs.map((blob) => (blob as { blockOffset: number }).blockOffset).sort((a, b) => a - b)
+
+test('deleteCache({ modelSrc }): a downloaded Core ML bundle leaves no files, listing or blocks', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    findModels: async () => bundleListing,
+    getModel: async () => null,
+    downloadBlob: async (blob: { blockOffset: number }, opts: { outputFile: string }) => {
+      fs.writeFileSync(opts.outputFile, componentBytes(BUNDLE_COMPONENTS[blob.blockOffset]!))
+    },
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+
+  const bundleDir = await downloadModelFromRegistry(BUNDLE_PATH, 's3')
+  t.is(bundleDir, getCoremlBundleDir(getCoremlBundle('s3', BUNDLE_PATH)!))
+  t.ok(fs.existsSync(path.join(bundleDir, 'weights', 'weight.bin')), 'the bundle was staged')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+
+  t.is(response.success, true)
+  t.absent(fs.existsSync(path.dirname(bundleDir)), 'the bundle and its saved listing are gone')
+  t.alike(blockOffsets(cleared), [0, 1, 2], 'cleared every component block')
+})
+
+test('deleteCache({ modelSrc }): an unfinished Core ML bundle download clears the blocks the registry lists', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    findModels: async () => bundleListing,
+    getModel: async () => null,
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+  const bundleDir = getCoremlBundleDir(getCoremlBundle('s3', BUNDLE_PATH)!)
+  fs.mkdirSync(bundleDir, { recursive: true })
+  fs.writeFileSync(path.join(bundleDir, 'coremldata.bin'), 'partial')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+
+  t.is(response.success, true)
+  t.absent(fs.existsSync(path.dirname(bundleDir)), 'the partly staged bundle is gone')
+  t.alike(blockOffsets(cleared), [0, 1, 2], 'cleared the blocks kept for resume')
 })
 
 test('deleteCache({ modelSrc }): rejects a source that is not registry://', async (t) => {
