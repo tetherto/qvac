@@ -102,3 +102,15 @@ void checkLoadOptions(
     }
   }
 }
+
+std::string fabricPortMismatch(const char* loaded, const char* built) {
+  const std::string runtime = loaded != nullptr ? loaded : "";
+  if (runtime == built) {
+    return {};
+  }
+  return "@qvac/decision-ggml was built for qvac-fabric " + std::string(built) +
+         ", but the loaded @qvac/fabric runtime is built from qvac-fabric " +
+         (runtime.empty() ? std::string("(unknown)") : runtime) +
+         ". Install the @qvac/decision-ggml release built for this "
+         "@qvac/fabric, or the @qvac/fabric it was built for.";
+}

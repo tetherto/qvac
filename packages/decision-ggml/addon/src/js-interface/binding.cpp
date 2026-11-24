@@ -1,12 +1,26 @@
+#include <string>
+
 #include <bare.h>
 #include <qvac-addon/fabric-bind.h>
+#include <qvac-fabric.h>
 
 #include "../addon/AddonJs.hpp"
+#include "../model-interface/utils.hpp"
 
 js_value_t*
 qvacLibInferLlamacppDecisionExports(js_env_t* env, js_value_t* exports) {
   if (!qvacAddonBindFabric()) {
     js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
+  // server-context is linked from this addon's own build of the qvac-fabric
+  // port, which must be the one the loaded runtime is built from. Configure
+  // checks the installed @qvac/fabric; a later release in this package's range
+  // may ship another port, so the loaded runtime is checked here.
+  const std::string mismatch = fabricPortMismatch(
+      qvac_fabric_port_version(), QVAC_FABRIC_SERVER_CONTEXT_PORT);
+  if (!mismatch.empty()) {
+    js_throw_error(env, nullptr, mismatch.c_str());
     return nullptr;
   }
 

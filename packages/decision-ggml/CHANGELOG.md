@@ -8,7 +8,8 @@
   llama.cpp decision models (laya, openjev, lev, kev, clef, ...) in-process
   through upstream's `server-context`, which this addon links statically from
   its own build of the `qvac-fabric` port, at the version the installed
-  `@qvac/fabric` runtime records.
+  `@qvac/fabric` runtime records. It refuses to load against an
+  `@qvac/fabric` runtime built from another port.
   - Requests and results use upstream's `/v1/systemone` shapes; `info()`
     reports the model's decision capabilities.
   - `states` answers several states in one run, sent to upstream concurrently

@@ -18,3 +18,10 @@ void checkLoadOptions(
     const std::unordered_map<std::string, std::string>& config,
     const std::unordered_set<std::string>& allowed, const char* caller,
     const char* model, const char* accepted);
+
+/// @brief Empty when @p loaded, the port the loaded @qvac/fabric runtime is
+/// built from (qvac_fabric_port_version()), is @p built, the port this addon's
+/// server-context comes from; otherwise why the addon cannot load. The two are
+/// compared exactly: server-context's inlined libcommon code must match the
+/// runtime's.
+std::string fabricPortMismatch(const char* loaded, const char* built);

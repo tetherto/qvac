@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <qvac-fabric.h>
 
 #include "model-interface/utils.hpp"
 
@@ -70,4 +71,36 @@ TEST(IsThreadsKeyTest, NamesTheThreadCountKeys) {
   EXPECT_TRUE(isThreadsKey("threads-batch"));
   EXPECT_TRUE(isThreadsKey("threads_batch"));
   EXPECT_FALSE(isThreadsKey("parallel"));
+}
+
+TEST(FabricPortTest, AcceptsTheSamePort) {
+  EXPECT_EQ(fabricPortMismatch("12032.0.0", "12032.0.0"), "");
+  EXPECT_EQ(fabricPortMismatch("11739.2.0#1", "11739.2.0#1"), "");
+}
+
+TEST(FabricPortTest, RejectsAnotherPortNamingBoth) {
+  // A recipe-only bump (#1) counts: it may change how the code is built.
+  for (const char* loaded : {"12032.0.1", "12032.0.0#1", "11739.5.0"}) {
+    const std::string message = fabricPortMismatch(loaded, "12032.0.0");
+    EXPECT_NE(
+        message.find("built for qvac-fabric 12032.0.0,"), std::string::npos)
+        << message;
+    EXPECT_NE(
+        message.find(
+            "runtime is built from qvac-fabric " + std::string(loaded) + "."),
+        std::string::npos)
+        << message;
+  }
+  EXPECT_NE(
+      fabricPortMismatch(nullptr, "12032.0.0").find("qvac-fabric (unknown)"),
+      std::string::npos);
+}
+
+TEST(FabricPortTest, TheLoadedRuntimeIsTheServerContextPort) {
+  // What the addon's exports function checks, on the runtime this test loads.
+  EXPECT_STREQ(qvac_fabric_port_version(), QVAC_FABRIC_SERVER_CONTEXT_PORT);
+  EXPECT_EQ(
+      fabricPortMismatch(
+          qvac_fabric_port_version(), QVAC_FABRIC_SERVER_CONTEXT_PORT),
+      "");
 }

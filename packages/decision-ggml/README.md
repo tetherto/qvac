@@ -29,6 +29,11 @@ npm install @qvac/decision-ggml
 Android and iOS apps also add `@qvac/fabric` and `@qvac/fabric-android-arm64`
 or `@qvac/fabric-ios` as direct dependencies, at the same version.
 
+Each release is built for one `qvac-fabric` port, and loading fails with an
+error naming both ports when the `@qvac/fabric` runtime that loads is built
+from another one. Install the `@qvac/decision-ggml` release built for that
+`@qvac/fabric`.
+
 ## Usage
 
 ```js
