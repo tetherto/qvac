@@ -323,6 +323,46 @@ test('publish rows preserve wrapper verification while honoring integration test
 })
 
 // Evaluate workflow code so synthetic opt-ins cover the otherwise unused paths.
+function publishConfig(project) {
+  const expression = read(CONSOLIDATED).match(/onmerge=\$\(git show[^\n]*jq -c '([\s\S]*?)'\)/)?.[1]
+  assert.ok(expression, 'missing publish config extraction')
+  return JSON.parse(execFileSync('jq', ['-c', expression], {
+    input: JSON.stringify(project), encoding: 'utf8',
+  }))
+}
+
+test('current publish metadata enables platform splitting and release naming', () => {
+  const project = {
+    targets: {
+      publish: {
+        metadata: {
+          publish: { platformPackages: true, nameTransform: 'rename-prefix', tagPrefix: 'tts-ggml' },
+        },
+      },
+    },
+  }
+  const row = publishRow('tts-ggml', publishConfig(project))
+  assert.equal(row.slicePlatformPackages, true)
+  assert.equal(row.nameTransform, 'rename-prefix')
+  assert.equal(row.repoName, 'tts-ggml')
+})
+
+test('legacy publish configuration is preserved when current metadata is absent', () => {
+  const config = JSON.parse(read('packages/tts-ggml/project.json')).targets['on-merge'].options.ci
+  assert.deepEqual(publishConfig({ targets: { 'on-merge': { options: { ci: config } } } }), config)
+  assert.deepEqual(publishConfig({ targets: {} }), {})
+})
+
+test('current publish settings override legacy fields without dropping legacy test gates', () => {
+  const config = publishConfig({
+    targets: {
+      'on-merge': { options: { ci: { slicePlatformPackages: true, testGateMode: 'none', repoName: 'tts-ggml' } } },
+      publish: { metadata: { publish: { platformPackages: false } } },
+    },
+  })
+  assert.deepEqual(config, { slicePlatformPackages: false, testGateMode: 'none', repoName: 'tts-ggml' })
+})
+
 function publishRow(name, config, hasCheck = true, hasPrebuilds = true, workdir = `packages/${name}`) {
   const expression = read(CONSOLIDATED).match(/row=\$\(jq -n[\s\S]*?\n\s+'([\s\S]*?)'\)/)?.[1]
   assert.ok(expression, 'missing publish row construction')
