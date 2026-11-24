@@ -2507,7 +2507,7 @@ function rolledBackKeyEngine(options) {
       }
       if (name === 'qvac_web_save_cache') {
         this.lastError = JSON.stringify({
-          code: 'InvalidArgument',
+          code: '[ LLM :: InvalidArgument ]',
           error: `saveCache: no conversation is cached under '${args[1]}'`
         })
         return -1

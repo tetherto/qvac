@@ -129,8 +129,7 @@ function copiesFor(module) {
   return copies
 }
 
-function rememberCopy(module, path, file) {
-  const stat = module.FS.stat(path)
+function rememberCopy(module, path, stat, file) {
   const source = memfsVersion(stat)
   const copies = copiesFor(module)
   const key = pathParts(path).join('/')
@@ -162,7 +161,7 @@ async function hydrateFile(module, path) {
   const source = await opfsFile(path)
   if (!source) return false
   await hydrateSource(module, path, source)
-  if (!mounted) rememberCopy(module, path, source)
+  if (!mounted) rememberCopy(module, path, module.FS.stat(path), source)
   return true
 }
 
@@ -240,7 +239,7 @@ async function persistFileUnlocked(module, path) {
   }
   if (failure) throw failure
   try {
-    rememberCopy(module, path, await committed.getFile())
+    rememberCopy(module, path, stat, await committed.getFile())
   } catch {
     copiesFor(module).delete(pathParts(path).join('/'))
   }

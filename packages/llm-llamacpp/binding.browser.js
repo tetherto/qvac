@@ -983,14 +983,16 @@ function cacheOperation(handle, cacheKey, discard) {
   })
 }
 
-// Queued behind any running job, so the job still emits its terminal event.
+// Engine status codes read `[ <addon> :: <code> ]`.
 function nothingCached(error) {
   return (
-    error?.code === 'InvalidArgument' &&
+    typeof error?.code === 'string' &&
+    error.code.endsWith(':: InvalidArgument ]') &&
     error.message.startsWith('saveCache: no conversation is cached under ')
   )
 }
 
+// Queued behind any running job, so the job still emits its terminal event.
 function destroyInstance(handle) {
   handle.destroying = true
   return cancel(handle, 0, false).then(() =>
