@@ -4107,7 +4107,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
-    "tags": ["generation", "diffusion", "taesd", "vae"],
+    "tags": ["vae", "taesd"],
     "notes": "Optional tiny autoencoder for Stable Diffusion.",
     "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
   },
@@ -4404,6 +4404,17 @@
     "licenseId": "MIT",
     "tags": ["generation", "diffusion", "sdxl", "taesd", "decoder", "coreml"],
     "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout. Needs the TAESDXL weights as taesd.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
+  },
+  {
+    "source": "https://huggingface.co/madebyollin/taesdxl/resolve/b20258aaef75ef61e659c1e0f14f251cf0ad153e/diffusion_pytorch_model.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Tiny AutoEncoder for Stable Diffusion XL (TAESDXL)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["vae", "taesdxl"],
+    "notes": "Optional tiny autoencoder for SDXL. Pass it as taesd; the TAESDXL Core ML decoder requires it.",
     "link": "https://huggingface.co/madebyollin/taesdxl"
   },
   {
