@@ -1,12 +1,11 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { trackedRequestSchema } from '@/schemas/request-base'
-
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+import { base64String } from '@/schemas/base64'
 
 const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 
-const base64StringSchema = z.string().min(1).regex(BASE64_PATTERN)
+const base64StringSchema = base64String().min(1)
 
 const positiveInt32Schema = z.number().int().positive().max(2147483647)
 
@@ -1528,11 +1527,7 @@ export const upscaleRequestSchema = z.object({
       'Identifier of the loaded upscaler model. The model must have been loaded ' +
         "with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`."
     ),
-  image: z
-    .string()
-    .min(1)
-    .regex(BASE64_PATTERN)
-    .describe('Base64-encoded PNG/JPEG bytes of the source image.'),
+  image: base64String().min(1).describe('Base64-encoded PNG/JPEG bytes of the source image.'),
   repeats: z
     .number()
     .int()
@@ -1745,21 +1740,8 @@ export const MAX_SCENE_PIXELS = 1920 * 1088
  * decoder allocates. Those differ by orders of magnitude for a compressed
  * format, so this is not the decompression-bomb guard; the declared-dimension
  * check in `ops/world.ts` is. This one keeps a multi-megabyte base64 string off
- * the worker in the first place.
- *
- * 3 MB is generous for a frame that ends up at most 1920x1088 — and it is also
- * the largest value this can be *enforced* at today. `BASE64_PATTERN` is a
- * starred quad group that both engines give up on a little above this ceiling,
- * but differently, and the difference matters: measured at 4.8M characters, JSC
- * (Bun) returns `false`, while **V8 — which is what Bare runs — THROWS
- * `RangeError: Maximum call stack size exceeded`**. Since Zod runs every string
- * check regardless of order, a larger image reaches the pattern even after
- * `.max()` fails, so `safeParse` throws instead of reporting `too_big`.
- * 3 MB decodes to 4194304 characters, inside the range that still matches on
- * both. The client guards the raw byte length before encoding for the same
- * reason (see `createWorldSceneResult`). The pattern is shared with the
- * diffusion, upscale and VLA image fields, so fixing it belongs in its own
- * change.
+ * the worker in the first place. 3 MB is generous for a frame that ends up at
+ * most 1920x1088.
  */
 export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
 
@@ -1794,10 +1776,6 @@ export function refineWorldSceneBudget(
     })
   }
   // The encoded-size ceiling is a `.max()` on the field rather than a check here.
-  // Note Zod runs every check on a string regardless of order, so an oversized
-  // image collects the `too_big` issue AND whatever BASE64_PATTERN reports — the
-  // ordering only decides which reads first, it does not short-circuit. See
-  // MAX_SCENE_IMAGE_BYTES for why the pattern cannot be relied on at that size.
 }
 
 const worldSceneRequestShape = {
@@ -1818,13 +1796,9 @@ const worldSceneRequestShape = {
       'Scene prompt, encoded verbatim by umT5-XXL. The reference pipeline prefixes ' +
         'prompts with "| unknown | ".'
     ),
-  image: z
-    .string()
+  image: base64String()
     .min(1)
-    // Declared before the pattern so an oversized frame reports its size instead
-    // of failing as malformed base64.
     .max(MAX_SCENE_IMAGE_BASE64_CHARS)
-    .regex(BASE64_PATTERN)
     .describe(
       'Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded and 8192x8192 ' +
         'pixels. It is cover-scaled and center-cropped to width x height, so a ' +
