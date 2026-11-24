@@ -25,6 +25,11 @@ export const SPACE = {
  */
 export function createRagOps(host) {
   const stores = new Map()
+  // One directory per instance, so overlapping runs never delete each other's stores.
+  const base = host.join(
+    host.root,
+    `qvac-rag-e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  )
   // Bare has no AbortController or TextEncoder globals; the plugin passes them in.
   const AbortControllerImpl = host.AbortController ?? globalThis.AbortController
   const encode = host.encode ?? ((text) => new TextEncoder().encode(text))
@@ -66,7 +71,7 @@ export function createRagOps(host) {
 
   // A store's data and its index snapshots live in sibling directories.
   function dirs(name) {
-    const data = host.join(host.root, 'qvac-rag-e2e', name)
+    const data = host.join(base, name)
     return { data, index: data + '-index' }
   }
 
@@ -104,7 +109,7 @@ export function createRagOps(host) {
     async reset() {
       const names = [...stores.keys()]
       for (const name of names) await closeStore(name)
-      await host.removeDir(host.join(host.root, 'qvac-rag-e2e'))
+      await host.removeDir(base)
       return { closed: names.length }
     },
 
