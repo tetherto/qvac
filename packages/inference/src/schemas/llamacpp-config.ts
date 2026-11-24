@@ -115,7 +115,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding. The slots share one KV cache and each request is limited to `ctx_size / parallel` tokens. With `ctx_size` unset, auto-fit sizes the whole pool, so each slot gets the fitted context divided by `parallel`.'
+      'Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding. The slots share one KV cache and each request is limited to `ctx_size / parallel` tokens. With `ctx_size: 0`, auto-fit sizes the whole pool, so each slot gets the fitted context divided by `parallel`.'
     ),
   tools: z
     .boolean()
