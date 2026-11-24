@@ -137,7 +137,11 @@ test('the native module is named after the platform package that ships it', asyn
 
 test('fabric exports its own C API on every platform', () => {
   const header = read('include/qvac-fabric.h')
-  for (const symbol of ['qvac_fabric_load_backends', 'qvac_fabric_backends_dir']) {
+  for (const symbol of [
+    'qvac_fabric_load_backends',
+    'qvac_fabric_backends_dir',
+    'qvac_fabric_port_version'
+  ]) {
     assert.match(header, new RegExp(`QVAC_FABRIC_API [^;(]+\\b${symbol}\\(void\\);`), symbol)
   }
   assert.match(read('symbols.map'), /^\s*qvac_fabric_\*;/m)
@@ -228,6 +232,13 @@ test('the qvac-fabric port the runtime is built from is recorded', () => {
     /qvac_fabric_installed_port_version\("\$\{VCPKG_INSTALLED_PATH\}" QVAC_FABRIC_PORT_VERSION\)/
   )
   assert.match(cmake, /cmake\/qvac-fabric-port\.cmake\s+DESTINATION share\/qvac-fabric\/cmake/)
+  // The runtime reports the same port, for the check when an addon loads.
+  assert.match(cmake, /target_sources\(\$\{qvac-fabric\} PRIVATE [^)]*addon\/port\.cpp/)
+  assert.match(cmake, /QVAC_FABRIC_PORT_VERSION="\$\{QVAC_FABRIC_PORT_VERSION\}"/)
+  assert.match(
+    read('addon/port.cpp'),
+    /qvac_fabric_port_version\(void\) \{\s+return QVAC_FABRIC_PORT_VERSION;/
+  )
   const config = read('cmake/qvac-fabricConfig.cmake.in')
   assert.match(config, /set\(QVAC_FABRIC_PORT_VERSION "@QVAC_FABRIC_PORT_VERSION@"\)/)
   assert.match(config, /include\("\$\{CMAKE_CURRENT_LIST_DIR\}\/qvac-fabric-port\.cmake"\)/)

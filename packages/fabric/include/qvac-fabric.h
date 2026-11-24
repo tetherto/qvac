@@ -46,6 +46,14 @@ QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 // NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API const char* qvac_fabric_backends_dir(void);
 
+// The qvac-fabric vcpkg port this runtime is built from, as vcpkg reports it
+// ("12032.0.0", "11739.2.0#1"): the QVAC_FABRIC_PORT_VERSION its CMake config
+// records. An addon that links code from its own build of the port compares it
+// with the port it was built from when it loads, since a later @qvac/fabric
+// release may ship another port. A static string.
+// NOLINTNEXTLINE(readability-identifier-naming)
+QVAC_FABRIC_API const char* qvac_fabric_port_version(void);
+
 #ifdef __cplusplus
 }
 #endif

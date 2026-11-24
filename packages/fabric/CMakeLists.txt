@@ -85,9 +85,10 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 # The qvac-fabric port this runtime is built from, read from what vcpkg
-# installed. It goes into the CMake config (QVAC_FABRIC_PORT_VERSION), so an
-# addon that links code from its own build of the port can check it is the
-# same. The same on every triplet.
+# installed. It goes into the CMake config (QVAC_FABRIC_PORT_VERSION) and the
+# runtime (qvac_fabric_port_version()), so an addon that links code from its
+# own build of the port can check it is the same when it configures and when it
+# loads. The same on every triplet.
 #
 # package.json records the pinned port (qvac["qvac-fabric"]), which
 # verify-qvac-fabric-lockstep checks against the vcpkg.json pin. A build that
@@ -180,11 +181,12 @@ if(GGML_XDNA_KERNEL_FILES)
   install(FILES ${GGML_XDNA_KERNEL_FILES} DESTINATION ${_fabric_host}/${_fabric_module_name})
 endif()
 
-target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp)
+target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp addon/port.cpp)
 target_include_directories(${qvac-fabric} PRIVATE include)
 target_compile_definitions(${qvac-fabric} PRIVATE
   QVAC_FABRIC_BUILD
-  QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}")
+  QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}"
+  QVAC_FABRIC_PORT_VERSION="${QVAC_FABRIC_PORT_VERSION}")
 
 # Keep CUDA in a separate addon package. Its tiny carrier registers its
 # directory and makes bare-pack/bare-link carry its native files. HIP stays in

@@ -456,8 +456,10 @@ endfunction()
 # with the prebuilds); configure fails here unless this addon's vcpkg build
 # installed the same version. The packages' package.json records
 # (qvac["qvac-fabric"]) are checked against the vcpkg.json pins by
-# verify-qvac-fabric-lockstep. Call after qvac_addon_use_fabric(). Only the
-# decision addon needs this.
+# verify-qvac-fabric-lockstep. <target> gets the port as
+# QVAC_FABRIC_SERVER_CONTEXT_PORT, to compare with the loaded runtime's
+# qvac_fabric_port_version() when it loads. Call after qvac_addon_use_fabric().
+# Only the decision addon needs this.
 # ---------------------------------------------------------------------------
 function(qvac_addon_link_fabric_server_context target)
   if(NOT qvac-fabric_DIR OR NOT TARGET qvac-fabric::headers)
@@ -490,6 +492,12 @@ function(qvac_addon_link_fabric_server_context target)
       "built from ${_port_version}.")
   endif()
   message(STATUS "qvac-addon: server-context from qvac-fabric ${_port_version}, matching @qvac/fabric")
+  # The same check when the addon loads: a later @qvac/fabric release in the
+  # addon's range may ship another port. The addon compares
+  # QVAC_FABRIC_SERVER_CONTEXT_PORT with qvac_fabric_port_version() in its
+  # exports function and refuses to load on a mismatch.
+  target_compile_definitions(${target} PRIVATE
+    QVAC_FABRIC_SERVER_CONTEXT_PORT="${_port_version}")
 
   target_include_directories(${target} PRIVATE
     "${_installed}/include/llama"

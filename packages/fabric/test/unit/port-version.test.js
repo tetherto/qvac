@@ -119,6 +119,9 @@ function configureAddon(t, { addonPort, runtimePort }) {
       'function(target_link_libraries)\n' +
       '  message(STATUS "fixture: link ${ARGN}")\n' +
       'endfunction()\n' +
+      'function(target_compile_definitions)\n' +
+      '  message(STATUS "fixture: define ${ARGN}")\n' +
+      'endfunction()\n' +
       `include("${cmakePath(addonCmake)}")\n` +
       // What qvac_addon_use_fabric() and the runtime's CMake config leave.
       `set(qvac-fabric_DIR "${cmakePath(root)}/fabric")\n` +
@@ -146,19 +149,22 @@ test('an addon links server-context when its port matches the runtime', (t) => {
     /fixture: link addon;PRIVATE;\$<TARGET_LINKER_FILE:llama::server-context>/
   )
   assert.match(result.stdout, /fixture: include addon;PRIVATE;.*\/include\/llama\/server-context/)
+  // For the check when the addon loads, against qvac_fabric_port_version().
+  assert.match(
+    result.stdout,
+    /fixture: define addon;PRIVATE;QVAC_FABRIC_SERVER_CONTEXT_PORT="12032\.0\.0#1"/
+  )
 })
 
 test('an addon whose port differs from the runtime fails to configure', (t) => {
   for (const addonPort of ['11739.4.0', '12032.0.0#1']) {
     const result = configureAddon(t, { addonPort, runtimePort: '12032.0.0' })
     assert.notEqual(result.status, 0, addonPort)
-    assert.match(
-      result.stderr.replace(/\s+/g, ' '),
-      new RegExp(
-        `server-context comes from qvac-fabric ${addonPort.replace(/[.#]/g, '\\$&')}, but the ` +
-          'installed @qvac/fabric runtime was built from qvac-fabric 12032\\.0\\.0\\.'
-      )
-    )
+    const message = result.stderr.replace(/\s+/g, ' ')
+    const expected =
+      `server-context comes from qvac-fabric ${addonPort}, but the installed ` +
+      '@qvac/fabric runtime was built from qvac-fabric 12032.0.0.'
+    assert.ok(message.includes(expected), message)
   }
 })
 

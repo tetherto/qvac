@@ -24,7 +24,8 @@ build against the forked llama.cpp + ggml runtime:
   mtmd_*` C API plus their C++-linkage variants (the qvac-fabric fork adds C++
   extensions such as `llama_model_meta_from_file`), the `common_*` /
   `string_*` / `json_schema_to_grammar` / cpu-params libcommon helpers, and
-  `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()`
+  `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()` /
+  `qvac_fabric_port_version()`
 - **ggml compute backends** — on **Linux, Android, and Windows**, shipped as
   shared libraries under `prebuilds/<host>/<module>/` in the platform package,
   or the CUDA backend package on Linux x64
@@ -278,6 +279,11 @@ The archive and the runtime must come from the same port version:
   (`QVAC_FABRIC_PORT_VERSION`), so the value travels with the prebuilds. The
   helper fails configure when the addon's own vcpkg build installed another
   version.
+- The runtime reports the same port from `qvac_fabric_port_version()`. The
+  helper gives the addon its own port as `QVAC_FABRIC_SERVER_CONTEXT_PORT`, and
+  the addon compares the two in its exports function, after
+  `qvacAddonBindFabric()`, refusing to load on a mismatch: a later
+  `@qvac/fabric` release in the addon's range may ship another port.
 - `package.json` records the pinned port as `qvac["qvac-fabric"]`, and the
   addon records the same. `verify-qvac-fabric-lockstep`, run by `pr-checks.yml`
   on every pull request, checks both records against the `vcpkg.json` pins.
