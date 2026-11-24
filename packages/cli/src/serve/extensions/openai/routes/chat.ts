@@ -5,7 +5,12 @@ import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
-import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
+import {
+  accumulateUsage,
+  cachedTokensFromStats,
+  formatToolErrors,
+  inputTokensFromStats
+} from '@/serve/core/completion'
 import {
   drainCompletion,
   type DrainedOpenAICompletion,
@@ -118,6 +123,19 @@ function formatStats(stats: CompletionStats | undefined): string {
     parts.push(`backend=${stats.backendDevice}`)
   }
   return parts.length > 0 ? ` ${parts.join(' ')}` : ''
+}
+
+// The last round's prompt is what the context holds: a tool_search round's
+// prompt is part of it, so summing rounds would count it twice.
+function promptUsage(lastRound: CompletionStats | undefined): {
+  promptTokens?: number
+  cachedTokens?: number
+} {
+  if (lastRound?.promptTokens === undefined) return {}
+  return {
+    promptTokens: inputTokensFromStats(lastRound),
+    cachedTokens: cachedTokensFromStats(lastRound)
+  }
 }
 
 // What the named cache holds after the last turn; unkeyed requests report nothing.
@@ -300,7 +318,7 @@ async function runBlocking(
         ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(drained.stats),
         ...cacheOccupancy(p, drained),
         finishReason
       })
@@ -403,7 +421,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(drained.stats),
         ...cacheOccupancy(p, drained)
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))

@@ -21,8 +21,7 @@ import {
   InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError as InferenceKvCacheSeedSourceNotFoundError,
   KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError,
-  ModelReconfiguredError as InferenceModelReconfiguredError,
-  RAGWorkspaceBusyError as InferenceRAGWorkspaceBusyError
+  ModelReconfiguredError as InferenceModelReconfiguredError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
@@ -37,8 +36,7 @@ import {
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
   KvCacheSeedSharingDisabledError,
-  ModelReconfiguredError,
-  RAGWorkspaceBusyError
+  ModelReconfiguredError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -359,11 +357,4 @@ test('reconstructError: the session refusals keep their typed fields', (t) => {
   t.ok(reconfigured instanceof ModelReconfiguredError)
   t.is((reconfigured as ModelReconfiguredError).modelId, 'm-1')
   t.is((reconfigured as ModelReconfiguredError).code, 53624)
-
-  const busy = reconstructError(
-    JSON.parse(JSON.stringify(createErrorResponse(new InferenceRAGWorkspaceBusyError('default'))))
-  )
-  t.ok(busy instanceof RAGWorkspaceBusyError)
-  t.is((busy as RAGWorkspaceBusyError).workspace, 'default')
-  t.is((busy as RAGWorkspaceBusyError).code, 52812)
 })

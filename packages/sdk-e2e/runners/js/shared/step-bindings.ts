@@ -33,9 +33,6 @@ import {
   modelRegistryList,
   modelRegistrySearch,
   ocr,
-  ragCloseWorkspace,
-  ragDeleteWorkspace,
-  ragIngest,
   rerank,
   resume,
   state,
@@ -140,16 +137,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     return { closed: true }
   },
 
-  // --- rag and vector index ------------------------------------------------
-  ragIngest: (params) => ragIngest(params),
-  ragCloseWorkspace: async (params) => {
-    await ragCloseWorkspace(params)
-    return { closed: true }
-  },
-  ragDeleteWorkspace: async (params) => {
-    await ragDeleteWorkspace(params)
-    return { deleted: true }
-  },
+  // --- vector index ------------------------------------------------------
   // The vector index is a handle API: `createVectorIndex` hands back an object with methods on it,
   // and a step can only name a method and pass data.
   createVectorIndex: async (params) => describeIndex(await createVectorIndex(params)),

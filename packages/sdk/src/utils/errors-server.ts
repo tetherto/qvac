@@ -589,56 +589,6 @@ export class AudioEncodeFailedError extends QvacErrorBase {
   }
 }
 
-// ============== RAG Operation Errors ==============
-
-export class RAGSaveFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGSearchFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.RAG_SEARCH_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGDeleteFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.RAG_DELETE_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGUnknownOperationError extends QvacErrorBase {
-  constructor(operation: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_UNKNOWN_OPERATION, [operation], cause))
-  }
-}
-
-export class RAGHyperDBFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_HYPERDB_FAILED, [details], cause))
-  }
-}
-
 // ============== Vector Index Errors ==============
 
 export class VectorIndexProviderUnavailableError extends QvacErrorBase {
@@ -888,52 +838,6 @@ export class AudioPlayerFailedError extends QvacErrorBase {
 export class InvalidAudioChunkError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(SDK_SERVER_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE, undefined, cause))
-  }
-}
-
-// ============== RAG Workspace Errors ==============
-
-export class RAGWorkspaceModelMismatchError extends QvacErrorBase {
-  constructor(workspace: string, existingModelId: string, newModelId: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH,
-        [workspace, existingModelId, newModelId],
-        cause
-      )
-    )
-  }
-}
-
-export class RAGWorkspaceNotFoundError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_FOUND, [workspace], cause))
-  }
-}
-
-export class RAGWorkspaceInUseError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_IN_USE, [workspace], cause))
-  }
-}
-
-export class RAGWorkspaceNotOpenError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN, [workspace], cause))
-  }
-}
-
-/** A RAG operation on a workspace that another session's operation is using. */
-export class RAGWorkspaceBusyError extends QvacErrorBase {
-  readonly workspace: string
-
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_BUSY, [workspace], cause))
-    this.workspace = workspace
-  }
-
-  toErrorResponseFields(): Record<string, unknown> {
-    return { workspace: this.workspace }
   }
 }
 

@@ -5,6 +5,7 @@ import { normalizeCorsOrigin } from '@/serve/core/cors'
 import { normalizeAllowedHost } from '@/serve/core/host-check'
 
 interface RawServeConfig {
+  cacheDirectory?: unknown
   serve?: {
     models?: Record<string, RawModelEntry>
     publicBaseUrl?: string
@@ -67,7 +68,10 @@ export function parseServeConfig(
     enableAdmin:
       cliOptions.enableAdmin === true ||
       (asBoolean(serve.enableAdmin, 'serve.enableAdmin') ?? false),
-    extensions: parseExtensionConfigs(serve, extensions)
+    extensions: parseExtensionConfigs(serve, extensions),
+    ...(typeof rawConfig.cacheDirectory === 'string' && {
+      cacheDirectory: rawConfig.cacheDirectory
+    })
   }
 }
 

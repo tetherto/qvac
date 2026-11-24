@@ -23,5 +23,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   Music:
     'Music generation, editing and description via SDK `audioGen()`, `audioEdit()` and `audioUnderstand()`, backed by an `audiogen` model. Generations and edits run as async jobs, like `/v1/videos`.',
   World:
-    'Experimental. Interactive world generation via SDK `worldCreateScene()` and `worldStep()`, backed by an ABot-World model loaded with `config.mode: "world"`. A model holds one live scene; creating one replaces the last.'
+    'Experimental. Interactive world generation via SDK `worldCreateScene()` and `worldStep()`, backed by an ABot-World model loaded with `config.mode: "world"`. A model holds one live scene; creating one replaces the last.',
+  Plugins:
+    'Handlers of custom plugins registered in the worker, via SDK `invokePlugin()` and `invokePluginStream()`. Admin-only: needs `--enable-admin`.'
 }

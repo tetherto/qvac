@@ -248,6 +248,14 @@ const modelPath = path.join('./model/indictrans', getIndicTransFileName())
 await ensureIndicTransModelFile(modelPath) // downloads if not already present
 ```
 
+Both IndicTrans2 helpers take an optional model key, `{direction}-{size}-{quantization}`, which defaults to `en-indic-200M-q4_0`. For example, `ensureIndicTransModelFile(path.join('./model/indictrans', getIndicTransFileName('en-indic-1B-q4_0')), 'en-indic-1B-q4_0')` fetches the 1B English → Indic model.
+
+| Direction | Sizes | Quantizations |
+|-----------|-------|---------------|
+| `en-indic` | `200M`, `1B` | `q4_0`, `f16` |
+| `indic-en` | `200M`, `1B` | `q4_0`, `f16` |
+| `indic-indic` | `320M`, `1B` | `q4_0`, `f16` |
+
 ```javascript
 // Bergamot — fetch from the Firefox Remote Settings CDN
 const {
