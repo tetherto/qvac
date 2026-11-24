@@ -1,6 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Same-repo PRs are trusted.
+  Security gate for pull_request workflows that hold secrets. Same-repo PRs are trusted.
   Every external fork PR requires a SHA-bound qvac/fork-verified commit status
   (recorded by fork-approval after fork-ci environment approval) — write-or-higher
   permission on the actor does NOT exempt a fork, because the actor who triggers a
@@ -38,9 +38,7 @@ runs:
 
     - name: Resolve approved-SHA commit status
       id: approved
-      if: >-
-        github.event_name == 'pull_request_target' ||
-        github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
@@ -73,7 +71,7 @@ runs:
         LABEL_NAME: ${{ inputs.label }}
         LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       run: |
-        if [ "$EVENT" != "pull_request_target" ] && [ "$EVENT" != "pull_request" ]; then
+        if [ "$EVENT" != "pull_request" ]; then
           echo "::notice::Non-PR event ($EVENT) — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
           exit 0

@@ -284,9 +284,10 @@ function constValueOf(arm: JsonSchema, key: string): string | undefined {
  *
  * Also deliberately not a fixed guess-list of names (`type`/`operation`/...):
  * the wire method discriminator (`type`) is IDENTICAL across every arm of a
- * single method's own operation union (e.g. every `rag` arm has
- * `type: 'rag'`), so guessing by name picked the one field that never
- * discriminates anything and produced `RagRequestRag`, `RagRequestRag2`, ...
+ * single method's own operation union (e.g. every `vectorIndex` arm has
+ * `type: 'vectorIndex'`), so guessing by name picked the one field that never
+ * discriminates anything and produced `VectorIndexRequestVectorIndex`,
+ * `VectorIndexRequestVectorIndex2`, ...
  * A key where every arm lands in one single group is rejected outright —
  * it's exactly this "same value everywhere" (or "no arm has it") case.
  */
@@ -553,26 +554,21 @@ function classTitleFor(name: string, suffix: 'Request' | 'Response'): string {
 }
 
 /**
- * The 4 methods that can switch from a plain unary reply to a stream of
+ * The 3 methods that can switch from a plain unary reply to a stream of
  * responses when the caller opts in (`request.withProgress === true`):
  * progress events and the final reply both arrive as stream frames,
  * distinguished only by each payload's own `type` — see
  * `server/rpc/handler-selection.ts` (`handlerSupportsProgress`) and
  * `server/rpc/handler-registry.ts` for the source of truth this mirrors.
  *
- * `rag` and `finetune` gate progress further on the request's `operation`
- * (see `ragSupportsProgress`/`finetuneSupportsProgress` in
- * `handler-registry.ts`) — `condition` spells out that extra check so a
- * contract consumer doesn't have to special-case it separately.
+ * `finetune` gates progress further on the request's `operation` (see
+ * `finetuneSupportsProgress` in `handler-registry.ts`) — `condition` spells
+ * out that extra check so a contract consumer doesn't have to special-case it
+ * separately.
  */
 const progressByMethod: Partial<Record<MethodName, { condition: string; responseType: string }>> = {
   loadModel: { condition: 'request.withProgress === true', responseType: 'modelProgress' },
   downloadAsset: { condition: 'request.withProgress === true', responseType: 'modelProgress' },
-  rag: {
-    condition:
-      "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
-    responseType: 'rag:progress'
-  },
   finetune: {
     condition:
       "request.withProgress === true && ['start', 'resume', undefined].includes(request.operation)",

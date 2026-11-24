@@ -14,7 +14,7 @@ import { InvalidResponseError, CancelFailedError } from '@/utils/errors-client'
  *  - **By `requestId`** (primary) — pass the `requestId` exposed on
  *    the result of a long-running call (`completion(...)`,
  *    `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,
- *    `transcribe(...)`, `ragIngest(...)`, etc.) to cancel exactly
+ *    `transcribe(...)`, etc.) to cancel exactly
  *    that request. A cancel that races the originating call is
  *    recorded and applied retroactively when the begin arrives.
  *  - **Broad by `modelId`** (escape hatch) — `{ modelId, kind? }`
