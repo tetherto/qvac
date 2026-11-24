@@ -4,13 +4,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import io.tether.qvac.sdk.generated.schema.CapabilityId
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class QvacCapabilitiesTest {
     @Test
@@ -104,6 +109,29 @@ class QvacCapabilitiesTest {
         ).toList()
 
         assertEquals(listOf("hello"), values)
+    }
+
+    @Test
+    fun declaresMatchesTheWireIdAndMajor() = runTest {
+        val transport = CapabilityRecordingTransport(
+            unaryResponse = buildJsonObject {
+                put("type", "getRuntimeCapabilities")
+                put("capabilities", buildJsonArray {
+                    add(buildJsonObject {
+                        put("id", "fine-tuning")
+                        put("version", 1)
+                        put("operations", buildJsonArray { add("finetune") })
+                        put("partialOperations", buildJsonArray {})
+                    })
+                })
+            },
+        )
+        val response = QvacClient(transport).system.runtimeCapabilities()
+
+        assertEquals("fine-tuning", CapabilityId.FINE_TUNING.wireId)
+        assertTrue(response.declares(CapabilityId.FINE_TUNING, 1L))
+        assertFalse(response.declares(CapabilityId.FINE_TUNING, 2L))
+        assertFalse(response.declares(CapabilityId.TRANSCRIPTION, 1L))
     }
 
     private class CapabilityRecordingTransport(

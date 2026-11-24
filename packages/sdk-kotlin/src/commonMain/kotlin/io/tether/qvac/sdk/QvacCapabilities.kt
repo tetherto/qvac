@@ -5,6 +5,7 @@ import io.tether.qvac.sdk.generated.schema.AssessModelFitRequest
 import io.tether.qvac.sdk.generated.schema.AssessModelFitResponse
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponse
+import io.tether.qvac.sdk.generated.schema.CapabilityId
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponse
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
@@ -205,10 +206,18 @@ class QvacSystem internal constructor(
         return client.getSystemResources(GetSystemResourcesRequest(sample = includeUsageSnapshot))
     }
 
-    /** The capability contracts the runtime's registered plugins provide, with the major version of each. */
+    /** The capability contracts the runtime's registered plugins declare, with the major version of each. */
     suspend fun runtimeCapabilities(): GetRuntimeCapabilitiesResponse =
         client.getRuntimeCapabilities(GetRuntimeCapabilitiesRequest())
 }
+
+/** The contract ID as the runtime reports it, such as `fine-tuning`: the entry's serial name. */
+val CapabilityId.wireId: String
+    get() = CapabilityId.serializer().descriptor.getElementName(ordinal)
+
+/** Whether a registered plugin declares the QVAC contract [id] at major [version]. */
+fun GetRuntimeCapabilitiesResponse.declares(id: CapabilityId, version: Long): Boolean =
+    capabilities.any { it.id == id.wireId && it.version == version }
 
 class QvacRaw internal constructor(
     private val client: QvacCaller,

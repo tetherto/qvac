@@ -1,10 +1,7 @@
-import { getRuntimeCapabilities, type RuntimeCapability } from '@qvac/sdk'
+import { CAPABILITY_CONTRACTS, getRuntimeCapabilities, type RuntimeCapability } from '@qvac/sdk'
 
 // The contracts and majors this app was built against.
-const REQUIRED = [
-  { id: 'completion', version: 1 },
-  { id: 'transcription', version: 1 }
-]
+const REQUIRED = [CAPABILITY_CONTRACTS.completion, CAPABILITY_CONTRACTS.transcription]
 
 function describe(capability: RuntimeCapability) {
   const partial = capability.partialOperations.length
