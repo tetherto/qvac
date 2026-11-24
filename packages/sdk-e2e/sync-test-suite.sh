@@ -8,9 +8,6 @@
 #
 # CI has its own switch for the same thing, `test-suite-source: branch`, which
 # builds the package from the branch under test.
-#
-# The copied templates replace a local @qvac/inference pin in the mobile
-# consumer template; run `npm run pin:consumer-inference` after this to restore it.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 src="$here/../test-suite"
@@ -50,4 +47,10 @@ done
 echo "synced @qvac/test-suite from $src"
 if [ "$synced_consumers" -gt 0 ]; then
   echo "  and $synced_consumers packaged consumer bundle(s)"
+fi
+
+# The template copy drops the local @qvac/inference pin; without it mobile
+# builds use the published inference. Restore it if a local tarball exists.
+if compgen -G "$here/.sdk-e2e/inference/*.tgz" >/dev/null; then
+  node "$here/scripts/pin-consumer-inference.mjs"
 fi
