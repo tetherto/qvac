@@ -12,7 +12,7 @@
 const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, expectCuda, forceVulkanLeg } = require('./utils')
+const { ensureModel, getExpectedLinuxGpuBackend } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -201,6 +201,7 @@ async function runBenchmark(cfg, modelInfo) {
 
 async function runHeadDimSmoke(t, modelInfo, label) {
   const results = []
+  const expectedLinuxBackend = getExpectedLinuxGpuBackend()
   let tbqpqSkipped = false
 
   for (const cfg of CACHE_CONFIGS) {
@@ -220,9 +221,9 @@ async function runHeadDimSmoke(t, modelInfo, label) {
         // did. Without it a silent fallback is invisible: both integration legs
         // pass either way, and the pinned rows above only prove the override
         // path. The two legs expect opposite answers.
-        if (expectCuda) {
+        if (expectedLinuxBackend === 'cuda') {
           t.ok(result.choseCuda, `${cfg.label}: CUDA is preferred on linux x64 and was chosen`)
-        } else if (forceVulkanLeg) {
+        } else if (expectedLinuxBackend === 'vulkan') {
           t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
         } else {
           t.absent(result.choseCuda, `${cfg.label}: no NVIDIA device, so CUDA was not chosen`)

@@ -689,24 +689,21 @@ function makeOutputCollector(t, logger = console) {
   }
 }
 
-// Which of the two same-runner linux x64 legs are we on. The -vulkan leg hides
-// the CUDA devices, and CUDA_VISIBLE_DEVICES is the mechanism rather than a
-// label, so it is the signal to trust. FORCE_VULKAN is checked too because llm
-// sets it at job level, while embed only exports the CUDA_VISIBLE_DEVICES it
-// turns into.
-const forceVulkanLeg =
-  process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
+function getExpectedLinuxGpuBackend() {
+  if (os.platform() !== 'linux' || os.arch() !== 'x64') return
+  if (process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1') {
+    return 'vulkan'
+  }
+  if (process.env.QVAC_EXPECT_GPU === '1') return 'cuda'
 
-// Expect CUDA only with an NVIDIA driver present, detected outside the addon
-// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia<N>
-// (a container may get only /dev/nvidia1); WSL2 exposes only /dev/dxg, with
-// libcuda under /usr/lib/wsl/lib.
-const hasNvidiaGpu =
-  os.platform() === 'linux' &&
-  os.arch() === 'x64' &&
-  (fs.readdirSync('/dev').some((d) => /^nvidia\d+$/.test(d)) ||
-    fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
-const expectCuda = hasNvidiaGpu && !forceVulkanLeg
+  // Detect NVIDIA outside the addon so a local CUDA host also rejects a Vulkan fallback.
+  try {
+    if (fs.readdirSync('/dev').some((device) => /^nvidia\d+$/.test(device))) return 'cuda'
+  } catch {
+    // Continue to the WSL driver check if /dev cannot be listed.
+  }
+  if (fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1')) return 'cuda'
+}
 
 function getDefaultTextModel() {
   return {
@@ -1148,6 +1145,5 @@ module.exports = {
   runLoraInference,
   safeTest,
   downloadFileWithRetries,
-  forceVulkanLeg,
-  expectCuda
+  getExpectedLinuxGpuBackend
 }

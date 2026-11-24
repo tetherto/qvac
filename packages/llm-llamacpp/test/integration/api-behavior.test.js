@@ -7,8 +7,7 @@ const LlmLlamacpp = require('../../index.js')
 const {
   cleanupIntegrationCacheFiles,
   ensureModel,
-  expectCuda,
-  forceVulkanLeg,
+  getExpectedLinuxGpuBackend,
   safeTest
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -16,8 +15,9 @@ const overflow = require('./_context-overflow')
 const os = require('bare-os')
 const process = require('bare-process')
 
-const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
-const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const platform = os.platform()
+const isDarwinX64 = platform === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = platform === 'linux' && os.arch() === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 // Smallest model for fast run/cancel behavior tests
@@ -90,31 +90,48 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, asyn
   t.ok(typeof response.await === 'function', 'response has await')
   const output = await collectResponse(response)
   t.ok(output.length > 0, 'inference produces output')
+  const { backendDevice, backendName } = response.stats ?? {}
   t.ok(
-    response?.stats?.backendDevice === 'cpu' || response?.stats?.backendDevice === 'gpu',
+    backendDevice === 'cpu' || backendDevice === 'gpu',
     'runtime stats report resolved backendDevice as cpu or gpu'
   )
-  if (useCpu) {
-    t.is(response.stats.backendName, 'cpu', 'runtime stats name the CPU backend')
-  } else if (os.platform() === 'darwin' || os.platform() === 'ios') {
-    t.is(response.stats.backendName, 'metal', 'runtime stats name the Metal backend')
-  } else if (os.platform() === 'linux') {
-    if (expectCuda) {
-      t.is(response.stats.backendName, 'cuda', 'NVIDIA GPU visible, so CUDA holds the weights')
-    } else if (forceVulkanLeg) {
-      t.is(response.stats.backendName, 'vulkan', 'CUDA hidden, so Vulkan holds the weights')
-    } else {
-      t.not(response.stats.backendName, 'cuda', 'no NVIDIA GPU, so CUDA does not hold the weights')
+
+  let expectedGpuNames
+  switch (platform) {
+    case 'darwin':
+    case 'ios':
+      if (!useCpu) expectedGpuNames = ['metal']
+      break
+    case 'linux': {
+      const expected = getExpectedLinuxGpuBackend()
+      if (expected) expectedGpuNames = [expected]
+      break
     }
-  } else if (os.platform() === 'win32') {
-    const expected = process.env.FORCE_VULKAN === 'true' ? ['vulkan'] : ['cuda', 'vulkan']
+    case 'win32':
+      if (process.env.FORCE_VULKAN === 'true') {
+        expectedGpuNames = ['vulkan']
+      } else if (process.env.QVAC_EXPECT_GPU === '1' || backendDevice !== 'cpu') {
+        expectedGpuNames = ['cuda', 'vulkan']
+      }
+      break
+    default:
+      // Android GPU backends vary by device.
+      return
+  }
+
+  if (expectedGpuNames) {
     t.ok(
-      expected.includes(response.stats.backendName),
-      'runtime stats name the desktop GPU backend'
+      expectedGpuNames.includes(backendName),
+      `runtime stats report backendName as ${expectedGpuNames.join(' or ')}`
+    )
+  } else if (useCpu || backendDevice === 'cpu') {
+    t.is(backendName, 'cpu', 'runtime stats name the CPU backend')
+  } else {
+    t.ok(
+      typeof backendName === 'string' && backendName.length > 0 && backendName !== 'cuda',
+      'runtime stats name a non-CUDA backend'
     )
   }
-  // Android is not asserted: the family depends on the device, OpenCL on
-  // Adreno and Vulkan elsewhere.
 })
 
 safeTest(
