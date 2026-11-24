@@ -187,13 +187,29 @@ function parseScalar(text: string, types: ReadonlySet<string>): unknown {
   if (!JSON_NUMBER.test(text)) return undefined
 
   const number = Number(text)
-  // A non-zero mantissa that came out as 0 underflowed, as "1e-400" does.
-  if (number === 0 && /[1-9]/.test(text.split(/e/i)[0]!)) return undefined
+  // Rounding, overflow and underflow all change the written value.
+  if (decimalValue(String(number)) !== decimalValue(text)) return undefined
   if (Number.isInteger(number)) {
     const numeric = types.has('integer') || types.has('number')
     return numeric && Number.isSafeInteger(number) ? number : undefined
   }
-  return types.has('number') && Number.isFinite(number) ? number : undefined
+  return types.has('number') ? number : undefined
+}
+
+// A decimal number reduced to sign, significant digits and exponent, so two
+// spellings of one value compare equal: "3.0", "3" and "0.3e1" all give "3e0".
+// Null for anything that is not a finite decimal.
+function decimalValue(text: string): string | null {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text)
+  if (!match) return null
+  const [, sign, whole, fraction = '', exponent = '0'] = match
+  let digits = (whole! + fraction).replace(/^0+/, '')
+  if (!digits) return '0'
+  let power = Number(exponent) - fraction.length
+  const trailing = digits.length - digits.replace(/0+$/, '').length
+  digits = digits.slice(0, digits.length - trailing)
+  power += trailing
+  return `${sign}${digits}e${power}`
 }
 
 function foldEnum(value: string, values: unknown): string | undefined {
