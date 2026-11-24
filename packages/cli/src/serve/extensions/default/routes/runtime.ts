@@ -10,17 +10,12 @@ import {
 } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { isLifecycleBlockedError } from '@/serve/core/lifecycle'
-import { errorResponses } from '@/serve/lib/error-responses'
+import { ADMIN_REFUSED, errorResponses } from '@/serve/lib/error-responses'
 import {
   runtimeModelsResult,
   runtimeState,
   type RuntimeModel
 } from '@/serve/extensions/default/schemas/runtime'
-
-const ADMIN_REFUSED = {
-  admin_disabled: 'The server was started without `--enable-admin`',
-  origin_not_allowed: 'A browser request from an origin outside the CORS allowlist'
-}
 
 const SUSPENDED = {
   runtime_suspended: 'The runtime is not active; resume it first'
