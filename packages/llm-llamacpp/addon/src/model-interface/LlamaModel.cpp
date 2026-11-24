@@ -406,7 +406,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  // The slot limit, not n_ctx_seq, which is the whole pool when unified.
+  const uint32_t nCtxSeq =
+      batching::perSeqCeiling(llama_n_ctx(ctx), llama_n_seq_max(ctx));
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -1337,14 +1339,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
         "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
-        resolved.tools.empty()
-            ? state_->llmContext_->evalMessage(
-                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-            : state_->llmContext_->evalMessageWithTools(
-                  resolved.chatMsgs,
-                  resolved.tools,
-                  resolved.isCacheLoaded,
-                  prompt.prefill);
+        resolved.tools.empty() ? state_->llmContext_->evalMessage(
+                                     resolved.chatMsgs,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested)
+                               : state_->llmContext_->evalMessageWithTools(
+                                     resolved.chatMsgs,
+                                     resolved.tools,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested);
     // Eval owns the media from here: `tokenizeChat` has drained it, or has
     // thrown past this line and left the guard to.
     mediaGuard.dismiss();
