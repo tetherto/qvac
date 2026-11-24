@@ -118,6 +118,33 @@ for (const operation of ['create', 'load'] as const) {
   })
 }
 
+test('vectorIndex: an index opened after a cancel stays registered when its dispose fails', async (t) => {
+  await withProvider(async (calls, failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const open = deferred()
+    gates.load = () => open.promise
+    const requestId = 'vi-cancel-load-dispose-fails'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'load',
+      path: tempSnapshotPath('cancelled-load-dispose-fails'),
+      requestId
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+    t.is(getRequestRegistry().cancel({ requestId }), 1)
+    await expectRejects(t, () => pending, InferenceCancelledError, 'the load reports the cancel')
+    failures.dispose = true
+    open.resolve()
+    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+    t.is(calls.dispose, 1, 'the index that opened after the cancel was disposed')
+    t.is(getOpenVectorIndexCount(), 1, 'the index stays registered after the failed dispose')
+
+    failures.dispose = false
+    await disposeAllVectorIndexes()
+    t.is(calls.dispose, 2, 'shutdown disposes the index again')
+    t.is(getOpenVectorIndexCount(), 0)
+  })
+})
+
 test('vectorIndex: a search cancelled while the provider runs reports the cancel', async (t) => {
   await withProvider(async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
     const index = await createVectorIndex({ dim: 2 })
