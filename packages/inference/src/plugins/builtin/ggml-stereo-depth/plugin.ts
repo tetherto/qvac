@@ -1,4 +1,5 @@
 import { BridgeDepth } from '@qvac/classification-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -29,6 +30,7 @@ export const stereoDepthPlugin = definePlugin({
     })
     return { model }
   },
+  provides: [CAPABILITY_CONTRACTS.stereoDepthEstimation],
   handlers: {
     estimateDisparity: defineHandler({
       requestSchema: estimateDisparityRequestSchema,

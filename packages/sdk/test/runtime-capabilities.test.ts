@@ -23,7 +23,7 @@ test('the default worker reports every QVAC contract, to the owner and to a sess
   })
 
   const capabilities = await getRuntimeCapabilities()
-  t.is(capabilities.length, 18, 'one entry per QVAC contract')
+  t.is(capabilities.length, 19, 'one entry per QVAC contract')
   t.ok(
     capabilities.every((capability) => capability.version === 1),
     'every contract is at major 1'
