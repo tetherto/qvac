@@ -1,11 +1,13 @@
 import type { ClassificationFitRequest } from '@qvac/classification-ggml'
+import path from 'bare-path'
 
 import type { StereoDepthConfig } from '@/schemas/index'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
 /**
  * The BridgeDepth fit request for a load, with the device, threads and
- * backends directory the load would run with.
+ * backends directory the load would run with. The fitter takes an absolute
+ * path only, while the load also takes one relative to the working directory.
  *
  * The request sets no `workload`, so the addon sizes a 1280x720 pair. That is
  * the largest size BridgeDepth runs the model at: a larger pair is downsampled
@@ -17,7 +19,7 @@ import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 export function stereoDepthFitRequest(load: FitLoad): FitRequestPlan {
   const config = (load.modelConfig ?? {}) as StereoDepthConfig
   const request: ClassificationFitRequest = {
-    modelPath: load.modelPath,
+    modelPath: load.modelPath && path.resolve(load.modelPath),
     ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.threads !== undefined && { threads: config.threads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })

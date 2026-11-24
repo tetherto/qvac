@@ -61,6 +61,12 @@ test('image embedding: an empty config leaves placement to the addon', (t) => {
   })
 })
 
+test('image embedding: a relative load model path is made absolute', (t) => {
+  const plan = imageEmbeddingFitRequest(load('models/megaloc.gguf', undefined))
+
+  t.is(requestOf(plan)?.['modelPath'], path.resolve('models/megaloc.gguf'))
+})
+
 test('stereo depth: carries the model and the load placement', (t) => {
   const plan = stereoDepthFitRequest(
     load('/models/bridgedepth.gguf', { backend: 'MTL0', threads: 4, backendsDir: '/backends' })
@@ -78,6 +84,12 @@ test('stereo depth: an empty config leaves placement and input size to the addon
   t.alike(requestOf(stereoDepthFitRequest(load('/models/bridgedepth.gguf', undefined))), {
     modelPath: '/models/bridgedepth.gguf'
   })
+})
+
+test('stereo depth: a relative load model path is made absolute', (t) => {
+  const plan = stereoDepthFitRequest(load('models/bridgedepth.gguf', undefined))
+
+  t.is(requestOf(plan)?.['modelPath'], path.resolve('models/bridgedepth.gguf'))
 })
 
 test('stereo depth: the plugin sizes loads with the classification fitter', (t) => {
