@@ -109,7 +109,7 @@ describe('responses: instructions across stored turns', () => {
       ]
     })
     assert.equal(second.statusCode, 200, second.body)
-    assert.equal((second.json() as any).status, 'requires_action')
+    assert.equal((second.json() as any).status, 'completed')
 
     const history = histories[1]!
     assert.deepEqual(
