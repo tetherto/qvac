@@ -16,10 +16,8 @@ export interface TurboVecIndexSearchResult {
   k: number
 }
 
-// `@qvac/turbovec-ggml` returns a promise from every method. A read or load
-// given a `signal` rejects with the abort reason once it aborts. Another
-// provider may return the value directly and ignore the options. Callers
-// await either way.
+// Providers may return values or promises. Those that honor `signal`
+// reject with the signal's abort reason.
 export interface TurboVecIndex {
   readonly length: number
   readonly dim: number

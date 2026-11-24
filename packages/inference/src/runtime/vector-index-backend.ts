@@ -6,16 +6,6 @@ import type {
   VectorIndexStorage
 } from '@/schemas/index'
 
-/**
- * An open index as the vector index feature sees it. Row-major vectors and
- * unsigned 64-bit ids go in; finished hit rows come out. Anything specific
- * to a native engine (warm-up, result padding, how the storage mode is
- * reported) is handled by the backend that implements this, not by callers.
- * Calls on one index run in call order. A queued call skips native work when
- * its signal aborts. An active read can reject before native work ends if the
- * provider supports cancellation; an active mutation runs to the end and
- * reports its result.
- */
 export interface VectorIndexState {
   readonly length: number
   readonly calibrated: boolean | undefined
@@ -24,6 +14,12 @@ export interface VectorIndexState {
   readonly ivf: VectorIndexIvfState | null | undefined
 }
 
+/**
+ * The backend accepts row-major vectors and unsigned 64-bit IDs.
+ * Calls on one index run in order. Cancelling a queued call skips native work.
+ * An active read can reject early if the provider supports cancellation.
+ * An active mutation runs to completion even if its signal aborts.
+ */
 export interface OpenVectorIndex extends VectorIndexState {
   readonly dim: number
   readonly storage: VectorIndexStorage | undefined

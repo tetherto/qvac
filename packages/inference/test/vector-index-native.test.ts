@@ -175,9 +175,6 @@ test('vector index: native IVF builds with fewer entries than lists', async (t) 
   }
 })
 
-// Only the addon can stop a call it is already running, so this checks that
-// it accepts the request signal the adapter passes for a read and that the
-// index stays usable after the abort.
 test('vector index: a native search cancelled while it runs rejects at once', async (t) => {
   const { IdMapIndex } = await import('@qvac/turbovec-ggml')
   clearPlugins()
@@ -235,8 +232,6 @@ test('vector index: a native search cancelled while it runs rejects at once', as
   }
 })
 
-// A mutation gets no signal once it has started, so a cancel cannot report a
-// failure for a change the addon applies anyway.
 test('vector index: a native IVF build cancelled while it runs finishes', async (t) => {
   const { IdMapIndex } = await import('@qvac/turbovec-ggml')
   clearPlugins()

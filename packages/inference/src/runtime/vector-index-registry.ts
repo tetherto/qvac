@@ -73,11 +73,9 @@ function failBackend(
   throw new VectorIndexFailedError(describe ? describe(detail) : detail, error)
 }
 
-// Keep pending opens reachable by shutdown until their indexes are registered.
-// A caller whose `signal` aborts stops waiting at once, but the native open
-// runs on, so it stays reachable until it ends and its index is freed: nothing
-// will hold the id of an index opened for a caller that has gone. If that
-// dispose fails, the index stays registered and is released at shutdown.
+// Shutdown waits for pending opens to register or finish cleanup. After a
+// cancelled load, dispose the index when it opens. If disposal fails, keep
+// the index registered so shutdown can retry.
 function openVectorIndex(
   sessionId: string,
   action: () => OpenVectorIndex | Promise<OpenVectorIndex>,
@@ -96,8 +94,6 @@ function openVectorIndex(
       abandoned = true
       reject(signal?.reason)
     }
-    // Registers the index in the same step that settles this entry, so a
-    // shutdown waiting on it sees the index.
     const settled = opening.then(
       async (index) => {
         if (abandoned) {

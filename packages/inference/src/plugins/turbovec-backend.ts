@@ -122,11 +122,7 @@ function openIndex(
   }
   // One call at a time per index: each one reads and updates the prepare and
   // IVF flags around its native await, and an interleaved add or remove would
-  // leave IVF marked built over lists the native index has dropped. A call
-  // whose signal aborts while it waits leaves the queue without running.
-  // Only reads pass the signal on: the native index finishes a mutation it
-  // has started even after an abort, so a started mutation runs to the end
-  // and reports its result.
+  // leave IVF marked built over lists the native index has dropped.
   let tail: Promise<unknown> = Promise.resolve()
   function exclusive<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
     const previous = tail

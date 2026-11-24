@@ -58,8 +58,7 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
   try {
     return await runOperation(request, ctx.requestId, ctx.signal)
   } catch (error) {
-    // An aborted index call rejects at once with the abort reason. Report it
-    // as the cancel it is; a failure that races the cancel keeps its own error.
+    // Preserve provider failures that race with cancellation.
     if (ctx.signal.aborted && error === ctx.signal.reason) {
       throw new InferenceCancelledError(ctx.requestId)
     }
@@ -73,13 +72,6 @@ async function runOperation(
   signal: AbortSignal
 ): Promise<VectorIndexResponse> {
   const base = { type: 'vectorIndex' as const, requestId }
-  // Index calls take the request's signal: a cancel skips a call still
-  // waiting for its turn and stops waiting for a running read or load. A
-  // running mutation finishes and reports its result, since the native index
-  // applies it anyway. The operations below that check the signal afterwards
-  // also catch a cancel the provider ignored: it is reported as a cancel, not
-  // a success, and an index opened for a cancelled caller is released, since
-  // nothing holds its id.
   switch (request.operation) {
     case 'create': {
       const opened = await createVectorIndex(request)
