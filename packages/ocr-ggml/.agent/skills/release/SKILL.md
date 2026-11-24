@@ -84,7 +84,9 @@ dispatch `publish-npm.yml` yourself.
    - Waiting for a `@qvac/*` dependency: report it and stop. It starts on its own once the
      dependency publishes.
    - Any other reason, for example a branch cut by hand: if the branch is at `<merge-commit>`,
-     recover it with the commands in item 4. Otherwise report the reason and stop.
+     recover it with the commands in item 4. Otherwise report the reason and stop. A reused
+     hand-cut branch never starts on its own: if the recovery waits for a dependency, run it
+     again once the dependency publishes.
 4. If there is no branch, the bump merged before the automation existed or its run failed.
    Show the plan, then start it. A branch already at `<merge-commit>` is reused:
    ```bash
