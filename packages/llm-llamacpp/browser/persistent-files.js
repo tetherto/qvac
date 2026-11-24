@@ -6,6 +6,9 @@ const CHECKPOINT_COMPLETE_BYTES = Uint8Array.of(81, 86, 65, 67, 1)
 const CHECKPOINT_GENERATION_PREFIX = '.qvac-data-'
 const CHECKPOINT_GENERATION_VERSION = Uint8Array.of(81, 86, 65, 67, 2)
 const pathWrites = new Map()
+// Per engine module: what each OPFS path last received, so a copy whose MEMFS
+// source and OPFS destination are both unchanged is skipped.
+const persistedCopies = new WeakMap()
 let nextCheckpointGeneration = 1
 
 function hasOpfs() {
@@ -114,10 +117,50 @@ async function hydrateSource(module, path, source) {
   return true
 }
 
+function memfsVersion(stat) {
+  const mtime = Number(stat.mtime)
+  if (!Number.isFinite(stat.ino) || !Number.isFinite(mtime)) return null
+  return `${stat.ino}:${mtime}:${stat.size}`
+}
+
+function copiesFor(module) {
+  let copies = persistedCopies.get(module)
+  if (!copies) persistedCopies.set(module, (copies = new Map()))
+  return copies
+}
+
+function rememberCopy(module, path, file) {
+  const source = memfsVersion(module.FS.stat(path))
+  const copies = copiesFor(module)
+  const key = pathParts(path).join('/')
+  if (source && Number.isFinite(file.lastModified)) {
+    copies.set(key, { source, size: file.size, lastModified: file.lastModified })
+  } else {
+    copies.delete(key)
+  }
+}
+
+async function copyIsCurrent(module, path, stat) {
+  const copy = persistedCopies.get(module)?.get(pathParts(path).join('/'))
+  if (!copy || copy.source !== memfsVersion(stat)) return false
+  let file
+  try {
+    const { directory, name } = await parentDirectory(path, false)
+    file = await (await directory.getFileHandle(name)).getFile()
+  } catch (error) {
+    if (error?.name === 'NotFoundError' || error?.name === 'TypeMismatchError') return false
+    throw error
+  }
+  return file.size === copy.size && file.lastModified === copy.lastModified
+}
+
 async function hydrateFile(module, path) {
+  const mounted = globalThis[Symbol.for('qvac.browser.mountedFiles')]?.has(path)
   const source = await opfsFile(path)
   if (!source) return false
-  return hydrateSource(module, path, source)
+  await hydrateSource(module, path, source)
+  if (!mounted) rememberCopy(module, path, source)
+  return true
 }
 
 async function hydrateDirectory(module, directory, root, skipInternal = false) {
@@ -139,6 +182,9 @@ async function persistFileUnlocked(module, path) {
   if (!hasOpfs()) return false
   const stat = module.FS.stat(path)
   if (!module.FS.isFile(stat.mode)) throw new Error(`Expected a file at ${path}`)
+  if (await copyIsCurrent(module, path, stat)) return true
+  copiesFor(module).delete(pathParts(path).join('/'))
+  let committed = null
   let source = null
   let writable = null
   let chunk
@@ -168,6 +214,7 @@ async function persistFileUnlocked(module, path) {
     }
     await writable.close()
     writable = null
+    committed = await destination.getFile()
   } catch (error) {
     failure = error
     if (writable) {
@@ -189,6 +236,7 @@ async function persistFileUnlocked(module, path) {
     }
   }
   if (failure) throw failure
+  rememberCopy(module, path, committed)
   return true
 }
 

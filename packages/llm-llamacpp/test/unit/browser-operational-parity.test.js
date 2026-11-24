@@ -15,9 +15,13 @@ const {
   removeMatchingDirectories
 } = require('../../browser/persistent-files.js')
 
-function fileBytes(name, bytes) {
+let fakeClock = 0
+const tick = () => ++fakeClock
+
+function fileBytes(name, bytes, lastModified = tick()) {
   return {
     name,
+    lastModified,
     size: bytes.byteLength,
     slice(start, end) {
       const part = bytes.slice(start, end)
@@ -108,6 +112,7 @@ class FileHandle {
     this.kind = 'file'
     this.name = name
     this.bytes = bytes
+    this.lastModified = tick()
     this.abortCount = 0
     this.activeWritables = 0
     this.maxActiveWritables = 0
@@ -119,7 +124,7 @@ class FileHandle {
   }
 
   getFile() {
-    return Promise.resolve(fileBytes(this.name, this.bytes))
+    return Promise.resolve(fileBytes(this.name, this.bytes, this.lastModified))
   }
 
   createWritable() {
@@ -149,6 +154,7 @@ class FileHandle {
           this.bytes.set(chunk, offset)
           offset += chunk.byteLength
         }
+        this.lastModified = tick()
         settle()
         return Promise.resolve()
       },
@@ -245,6 +251,8 @@ function generationMarkerBytes(name) {
 
 function memoryFs() {
   const entries = new Map([['/', { kind: 'directory' }]])
+  let nextIno = 1
+  const fileEntry = (bytes) => ({ kind: 'file', bytes, ino: nextIno++, mtime: tick() })
   function mkdirTree(path) {
     let current = ''
     for (const part of path.split('/').filter(Boolean)) {
@@ -255,7 +263,7 @@ function memoryFs() {
   return {
     mkdirTree,
     open(path, mode) {
-      if (mode === 'w') entries.set(path, { kind: 'file', bytes: new Uint8Array() })
+      if (mode === 'w') entries.set(path, fileEntry(new Uint8Array()))
       if (!entries.has(path)) throw Object.assign(new Error('missing'), { errno: 44 })
       return { path }
     },
@@ -266,6 +274,7 @@ function memoryFs() {
       next.set(entry.bytes)
       next.set(source.subarray(offset, offset + length), position)
       entry.bytes = next
+      entry.mtime = tick()
       return length
     },
     read(handle, target, offset, length, position) {
@@ -277,7 +286,12 @@ function memoryFs() {
     stat(path) {
       const entry = entries.get(path)
       if (!entry) throw Object.assign(new Error('missing'), { errno: 44 })
-      return { mode: entry.kind === 'file' ? 1 : 2, size: entry.bytes?.byteLength ?? 0 }
+      return {
+        mode: entry.kind === 'file' ? 1 : 2,
+        size: entry.bytes?.byteLength ?? 0,
+        ino: entry.ino,
+        mtime: entry.mtime
+      }
     },
     isFile: (mode) => mode === 1,
     isDir: (mode) => mode === 2,
@@ -305,7 +319,7 @@ function memoryFs() {
     set(path, bytes) {
       const slash = path.lastIndexOf('/')
       if (slash > 0) mkdirTree(path.slice(0, slash))
-      entries.set(path, { kind: 'file', bytes: new Uint8Array(bytes) })
+      entries.set(path, fileEntry(new Uint8Array(bytes)))
     }
   }
 }
@@ -398,6 +412,68 @@ test('browser persistence maps relative and absolute paths safely 20x', async (t
         error = cause
       }
       t.ok(error instanceof TypeError && /Invalid OPFS path/.test(error.message), invalid)
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})
+
+test('browser persistence copies to OPFS only when either side changed 20x', async (t) => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => Promise.resolve(root) } }
+  })
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const path = `/unchanged-${iteration}/session.bin`
+      const module = { FS: memoryFs() }
+      module.FS.set(path, Uint8Array.of(1, 2, iteration))
+      await persistFile(module, path)
+      const directory = await opfsDirectory(root, `unchanged-${iteration}`, false)
+      const handle = directory.children.get('session.bin')
+      t.is(handle.createWritableCount, 1, `first copy written ${iteration + 1}`)
+
+      await persistFile(module, path)
+      await persistTree(module, path)
+      t.is(handle.createWritableCount, 1, `unchanged copy skipped ${iteration + 1}`)
+
+      const source = module.FS.open(path, 'r')
+      module.FS.write(source, Uint8Array.of(9), 0, 1, 0)
+      module.FS.close(source)
+      await persistFile(module, path)
+      t.is(handle.createWritableCount, 2, `in-place MEMFS write copied ${iteration + 1}`)
+      t.alike(handle.bytes, Uint8Array.of(9, 2, iteration), `new bytes copied ${iteration + 1}`)
+
+      module.FS.set(path, Uint8Array.of(9, 2, iteration))
+      await persistFile(module, path)
+      t.is(handle.createWritableCount, 3, `replaced MEMFS file copied ${iteration + 1}`)
+
+      await opfsWrite(root, path, Uint8Array.of(7, 7, 7))
+      await persistFile(module, path)
+      const replaced = directory.children.get('session.bin')
+      t.alike(
+        replaced.bytes,
+        Uint8Array.of(9, 2, iteration),
+        `external OPFS change overwritten ${iteration + 1}`
+      )
+
+      await directory.removeEntry('session.bin')
+      await persistFile(module, path)
+      t.alike(
+        directory.children.get('session.bin')?.bytes,
+        Uint8Array.of(9, 2, iteration),
+        `deleted OPFS file rewritten ${iteration + 1}`
+      )
+
+      const restored = { FS: memoryFs() }
+      t.ok(await hydrateFile(restored, path), `hydrated ${iteration + 1}`)
+      const hydratedHandle = directory.children.get('session.bin')
+      const writes = hydratedHandle.createWritableCount
+      await persistFile(restored, path)
+      t.is(hydratedHandle.createWritableCount, writes, `hydrated copy skipped ${iteration + 1}`)
     }
   } finally {
     if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
