@@ -311,9 +311,11 @@ async def main() -> int:
             # than pausing the ffmpeg pipe) keeps the pipe drained so we never
             # accumulate stale audio, and the VAD starts fresh on the next turn.
             is_speaking = False
+            mic = ffmpeg.stdout
+            assert mic is not None
 
             async def pump_mic() -> None:
-                while chunk := await ffmpeg.stdout.read(4096):
+                while chunk := await mic.read(4096):
                     if not is_speaking:
                         session.write(chunk)
 

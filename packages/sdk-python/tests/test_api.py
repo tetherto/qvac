@@ -1,7 +1,6 @@
 """Unit tests for tetherto.qvac_sdk.api's hand-written wrappers: pure request-shaping and
-response-validation logic, so these run against a fake transport rather than
-a spawned worker (see test_bare_rpc_transport.py / test_conformance.py for the
-real end-to-end coverage)."""
+response-validation logic, so these run against a fake transport. The
+shared e2e catalog in packages/sdk-e2e covers them against a real worker."""
 
 from __future__ import annotations
 

@@ -1,16 +1,23 @@
-import { readFileSync } from 'node:fs'
 import Ajv2020 from 'ajv/dist/2020'
+import { buildContract } from '../../scripts/contract/build-contract'
+
+type JsonSchema = Record<string, unknown>
+
+const contract = buildContract()
 
 /**
- * Validates payloads against the committed contract/schema.json, so tests
- * exercise exactly what generated clients consume — not the live Zod schemas.
+ * The contract as `contract:export` writes it and the generated clients read it. The JSON round trip drops undefined
+ * values the same way the written files do.
  */
-const schemaDocument = JSON.parse(
-  readFileSync(new URL('../../contract/schema.json', import.meta.url), 'utf8')
-) as Record<string, unknown>
+export const contractSchema = JSON.parse(JSON.stringify(contract.schemaDocument)) as {
+  $defs: Record<string, JsonSchema>
+}
+export const contractManifest = JSON.parse(JSON.stringify(contract.manifest)) as {
+  methods: { name: string; requestSchema: string }[]
+}
 
 const ajv = new Ajv2020({ strict: false })
-ajv.addSchema(schemaDocument, 'contract')
+ajv.addSchema(contractSchema, 'contract')
 
 export function contractValidate(defName: string, payload: unknown) {
   const validate = ajv.getSchema(`contract#/$defs/${defName}`)

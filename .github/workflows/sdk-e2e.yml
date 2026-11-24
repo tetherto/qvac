@@ -9,19 +9,14 @@ on:
     types: [requested]
   workflow_dispatch:
     inputs:
-      packages:
-        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+      languages:
+        description: "Comma-separated languages: js, python, kotlin"
         type: string
-        default: ""
-      labels:
-        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        default: js,python,kotlin
+      platforms:
+        description: "Comma-separated platforms: linux, mac, windows, android, ios, electron, snap"
         type: string
-        default: ""
-      platform:
-        description: Device Farm platform; none runs the desktop configurations only
-        type: choice
-        options: [none, Android, iOS, both]
-        default: none
+        default: linux,mac,windows,android,ios
       suite:
         description: Test suite for every leg
         type: choice
@@ -109,12 +104,11 @@ jobs:
             case "$LABEL" in
               test-e2e-rerun-failed) kind=rerun ;;
               test-e2e-smoke | test-e2e-full) kind=base ;;
-              test-e2e-python) kind=probe ;;
               *) kind="ignored-$LABEL" ;;
             esac
           fi
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
-      # Only a PR's base or rerun run reports qvac/sdk-e2e, so a probe, an ignored label or a dispatch never replaces
+      # Only a PR's base or rerun run reports qvac/sdk-e2e, so an ignored label or a dispatch never replaces
       # its result; report, which finishes the status, also needs the PR.
       - if: >-
           steps.pr.outputs.refused != '' ||
@@ -141,8 +135,9 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: test:integration,test:mobile
-      packages: ${{ inputs.packages }}
-      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
+      # Every language's e2e configurations; plan keeps the languages and platforms the label or dispatch names.
+      packages: sdk,sdk-python,sdk-kotlin
+      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,electron,snap' || '' }}
       tags: ci:sdk
       event: ${{ needs.context.outputs.event }}
 
@@ -209,7 +204,7 @@ jobs:
     needs: [context, route, trust]
     if: >-
       needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
-      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), needs.context.outputs.label)
+      && needs.context.outputs.label == 'test-e2e-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -227,8 +222,8 @@ jobs:
           allow-unsafe-pr-checkout: ${{ needs.context.outputs.fork == 'true' }}
           sparse-checkout: |
             packages/sdk-e2e
-            packages/sdk/contract
             packages/sdk/src/client/api
+            packages/inference/src/models/registry/models.ts
             packages/inference/src/registry.ts
           sparse-checkout-cone-mode: "false"
           persist-credentials: "false"
@@ -280,8 +275,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
-          PACKAGES: ${{ inputs.packages }}
-          PLATFORM: ${{ inputs.platform }}
+          LANGUAGES: ${{ inputs.languages }}
+          PLATFORMS: ${{ inputs.platforms }}
           SUITE: ${{ inputs.suite }}
           FILTER: ${{ inputs.filter }}
           EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
@@ -299,7 +294,7 @@ jobs:
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
     # A newer run of the same kind cancels this one; a dispatch's group is its own run.
     concurrency:
-      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-desktop
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-desktop
       cancel-in-progress: true
     cache-mode: read
     permissions:
@@ -324,7 +319,7 @@ jobs:
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
     concurrency:
-      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
       cancel-in-progress: true
     runs-on: ${{ matrix.row.runner }}
     environment: release
@@ -399,7 +394,8 @@ jobs:
       - if: env.PLATFORM == 'iOS'
         uses: tetherto/qvac-actions/setup-xcode@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          xcode-versions: "26.3"
+          # Expo 58's expo-modules-jsi does not compile with the Swift in Xcode 26.3.
+          xcode-versions: "26.6"
           brew-packages: ninja
           gems: cocoapods
           require-tools: xcodebuild pod ninja
@@ -510,7 +506,7 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      REPORTED: ${{ contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode) }}
+      REPORTED: ${{ contains(fromJSON('["base","rerun"]'), needs.plan.outputs.mode) }}
     steps:
       - name: Checkout actions and the report script
         uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0

@@ -90,6 +90,7 @@ jobs:
       WORKDIR: src/${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
+      pnpm_config_verify_deps_before_run: "false"
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0

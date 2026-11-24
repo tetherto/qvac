@@ -19,9 +19,10 @@ await model.unload()
 await model.destroy()
 ```
 
-Omit `backend` to select a registered GPU, then an integrated GPU, then CPU.
-An explicitly requested backend must exist; it does not silently select another
-device. Metal accepts `Metal`, `Metal0` and GGML's native `MTL0` name.
+Omit `backend` to select a supported GPU, then a supported integrated GPU, then
+CPU. MegaLoc excludes OpenCL for both GGUF formats. An explicit OpenCL request
+makes `load()` and `assessFit()` reject. Set `backend: 'CPU'` or pick another
+available device. Metal accepts `Metal`, `Metal0` and GGML's native `MTL0` name.
 `backendsDir` optionally overrides Fabric's module directory. Backend
 availability depends on the platform's Fabric build. GPU masks set before
 starting the process also apply to this addon.
@@ -38,7 +39,7 @@ instance can load again.
 `destroy()` releases resources permanently. Runtime statistics describe the last
 successful embedding and include time, allocated weight bytes, backend ID and
 the number of graph nodes assigned to CPU fallback. Backend IDs are CPU=0,
-Metal=1, CUDA=2, Vulkan=3, OpenCL=4 and other=99. Fallback allows portable graph
+Metal=1, CUDA=2, Vulkan=3 and other=99. Fallback allows portable graph
 operations to execute on CPU when a GPU backend does not support them.
 
 ## Local GGUF conversion
@@ -126,7 +127,7 @@ Convert both files into `test/fixtures/` using the commands above before
 `npm run test:integration`. Alternatively, set `QVAC_MEGALOC_F16_MODEL_PATH` and
 `QVAC_MEGALOC_MIXED_MODEL_PATH` to your manually converted files elsewhere.
 The tests require both formats and report missing files as errors.
-`QVAC_MEGALOC_BACKEND` selects the explicit test device and defaults to CPU.
+`QVAC_MEGALOC_BACKEND` selects a supported test device and defaults to CPU.
 Separate tests compare both formats against PyTorch using automatic device
 selection, exercising GPU inference when available. Set
 `QVAC_MEGALOC_EXPECT_GPU=1` to require GPU selection in those tests.

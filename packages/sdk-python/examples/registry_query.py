@@ -61,15 +61,15 @@ async def main() -> int:
             print("▸ Searching by engine (llamacpp-embedding)...")
             embed_models = await model_registry_search(t, engine="llamacpp-embedding")
             print(f"▸ Found {len(embed_models)} embedding models")
-            for m in embed_models[:3]:
-                print(f"   - {m.name} ({m.quantization})")
+            for hit in embed_models[:3]:
+                print(f"   - {hit.name} ({hit.quantization})")
             print()
 
             print("▸ Searching for Q4 quantized models...")
             q4 = await model_registry_search(t, quantization="q4")
             print(f"▸ Found {len(q4)} Q4 quantized models")
-            for m in q4[:3]:
-                print(f"   - {m.name}")
+            for hit in q4[:3]:
+                print(f"   - {hit.name}")
             print()
 
             if all_models:

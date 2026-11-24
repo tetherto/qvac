@@ -111,14 +111,19 @@ jobs:
       - uses: tetherto/qvac-actions/setup-python@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           python-version: "3.10"
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          node-version: lts/*
       - name: Install build tooling
         run: |
           python3 -m venv .venv
           .venv/bin/pip install --quiet -U pip
           .venv/bin/pip install --quiet build twine
           .venv/bin/pip install --quiet -e ".[gen]"
-      - name: Contract check
-        run: .venv/bin/python3 scripts/generate.py --check
+      - name: Generate the client
+        run: |
+          node ../sdk/ci/clients.mjs prepare-sdk
+          .venv/bin/python3 scripts/generate.py
       - name: Build
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
       - name: Check metadata
@@ -195,11 +200,15 @@ jobs:
       - run: python -m pip install --upgrade pip build
       # All-public @qvac deps, no auth: npm install in ../sdk fetches the addons with their published prebuilds.
       - run: python scripts/build_worker.py
+      # The worker build installed and built the SDK the generator exports the contract from.
+      - run: |
+          python -m pip install -e ".[gen]"
+          python scripts/generate.py
       - env:
           WHEEL_PLATFORM: ${{ matrix.platform }}
         run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
       # A wheel records no commit and a rebuild is not byte-identical, so a re-run replaces the assets. A release push
-      # waits for publish-npm.yml's release; the version check above ties the tag to this commit.
+      # waits for publish-npm.yml's release; the version check in setup ties the tag to this commit.
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.setup.outputs.tag }}

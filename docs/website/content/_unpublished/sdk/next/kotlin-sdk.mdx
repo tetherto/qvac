@@ -209,8 +209,10 @@ val run = client.completion.run(
     history = listOf(
         QvacMessage.system("Be concise."),
         QvacMessage.user(
-            "What is in this image?",
-            attachments = listOf(QvacAttachment("/data/user/0/app/files/photo.jpg")),
+            listOf(
+                QvacContentPart.Media("/data/user/0/app/files/photo.jpg"),
+                QvacContentPart.Text("What is in this image?"),
+            ),
         ),
     ),
 )
@@ -219,6 +221,9 @@ run.tokens.collect(::print)
 val answer = run.final.await()
 println("${answer.stopReason}: ${answer.stats?.tokensPerSecond} tok/s")
 ```
+
+A user message passes text and media as ordered `QvacContentPart` values, so
+each image stays where the text refers to it. `QvacAttachment` is deprecated.
 
 Generation defaults to `predict = -1`, so chat does not stop at an arbitrary
 token count. A run exposes `events`, `tokens`, `toolCallEvents`, accumulated

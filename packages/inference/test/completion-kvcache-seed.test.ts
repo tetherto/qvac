@@ -31,18 +31,18 @@ type RecordedCall = {
   baseCacheKey: string | undefined
 }
 
-type HistoryEntry = { role: string; content: string; attachments: never[] }
+type HistoryEntry = { role: string; content: string }
 
 function user(content: string): HistoryEntry {
-  return { role: 'user', content, attachments: [] }
+  return { role: 'user', content }
 }
 
 function assistant(content: string): HistoryEntry {
-  return { role: 'assistant', content, attachments: [] }
+  return { role: 'assistant', content }
 }
 
 function system(content: string): HistoryEntry {
-  return { role: 'system', content, attachments: [] }
+  return { role: 'system', content }
 }
 
 async function setIsolatedHome(): Promise<void> {

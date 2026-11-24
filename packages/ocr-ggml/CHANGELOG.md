@@ -6,6 +6,37 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Native OpenCV moves from `opencv4` 4.11.0 to 4.14.0. The PNG decoder in
+  4.11.0 does not bounds-check animated PNG (APNG) frames, so a crafted image
+  passed to OCR can overflow the heap. The fixes ship from OpenCV 4.12.0
+  ([opencv#26739](https://github.com/opencv/opencv/pull/26739),
+  [opencv#26782](https://github.com/opencv/opencv/pull/26782),
+  [opencv#26854](https://github.com/opencv/opencv/pull/26854),
+  [opencv#27138](https://github.com/opencv/opencv/pull/27138)), and
+  `vcpkg.json` now requires `opencv4` `>= 4.12.0`. Existing binaries require a
+  rebuild.
+- The `microsoft/vcpkg` registry block that owns OpenCV moves from
+  `16c71a39` (June 2025) to the `2026.10.16` release, which also updates the
+  image codecs OpenCV links: libpng 1.6.47 -> 1.6.59, libjpeg-turbo 3.1.0 ->
+  3.2.0, libwebp 1.5.0 -> 1.6.0, tiff 4.7.0 -> 4.7.2, liblzma 5.8.1 -> 5.8.4
+  and zlib 1.3.1 -> 1.3.2. libjpeg-turbo 3.2 depends on `libspng` and OpenCV
+  4.14 on `cpu-features` (Android), so both now resolve from that block. Brotli
+  keeps its own baseline.
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+- The image-decode FuzzTest seeds a two-frame animated PNG, so bounded fuzzing
+  reaches the APNG frame-control path.
+
+## [0.35.0] - 2026-11-19
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries

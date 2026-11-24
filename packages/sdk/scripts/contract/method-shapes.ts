@@ -28,6 +28,7 @@ export const methodShapes = {
   downloadAsset: 'reply',
   embed: 'reply',
   embedBatch: 'reply',
+  estimateDisparity: 'reply',
   decide: 'reply',
   rerank: 'reply',
   finetune: 'reply',

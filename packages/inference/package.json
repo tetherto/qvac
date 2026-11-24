@@ -157,6 +157,10 @@
     "./ggml-image-embedding/plugin": {
       "types": "./dist/plugins/builtin/ggml-image-embedding/plugin.d.ts",
       "import": "./dist/plugins/builtin/ggml-image-embedding/plugin.js"
+    },
+    "./ggml-stereo-depth/plugin": {
+      "types": "./dist/plugins/builtin/ggml-stereo-depth/plugin.d.ts",
+      "import": "./dist/plugins/builtin/ggml-stereo-depth/plugin.js"
     }
   },
   "files": [
@@ -197,7 +201,7 @@
     "bare-fs": "^4.8.4",
     "bare-gpu-info": "^0.1.3",
     "bare-http1": "^4.6.2",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-net": "^2.3.2",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
@@ -219,7 +223,7 @@
     "@qvac/asr-ggml": "^0.12.0",
     "@qvac/audiogen-ggml": "^0.10.1",
     "@qvac/bci-whispercpp": "^0.15.0",
-    "@qvac/classification-ggml": "^0.36.0",
+    "@qvac/classification-ggml": "^0.39.0",
     "@qvac/decoder-audio": "^0.9.0",
     "@qvac/diffusion-cpp": "^0.35.0",
     "@qvac/embed-llamacpp": "^0.56.0",
@@ -283,7 +287,7 @@
     "@qvac/asr-ggml": "^0.12.0",
     "@qvac/audiogen-ggml": "^0.10.1",
     "@qvac/bci-whispercpp": "^0.15.0",
-    "@qvac/classification-ggml": "^0.36.0",
+    "@qvac/classification-ggml": "^0.39.0",
     "@qvac/decoder-audio": "^0.9.0",
     "@qvac/diffusion-cpp": "^0.35.0",
     "@qvac/embed-llamacpp": "^0.56.0",

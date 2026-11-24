@@ -169,6 +169,33 @@ jobs:
         run: |
           dirs=$(printf "%s\n" packages/*/prebuilds | sed "s|/prebuilds$||" | paste -sd, -)
           pnpm exec nx run-many -t link:platform -p "$dirs" --exclude-task-dependencies --outputStyle=stream
+      # metadata.modelCache.plan: the target plans the models its tests need; a failed plan downloads them all.
+      - if: steps.models.outputs.plan == 'true'
+        id: models-plan
+        name: ${{ matrix.row.target }} plan
+        continue-on-error: true
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          TARGET: ${{ matrix.row.target }}
+          CONFIG: ${{ matrix.row.config }}
+          CI_RUNNER_LABEL: ${{ matrix.row.runner }}
+          CI_MODELS_PHASE: plan
+          CI_LABEL: ${{ matrix.row.label }}
+          CI_SUITE: ${{ matrix.row.suite }}
+          CI_TESTS: ${{ matrix.row.tests }}
+          GH: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+        run: |
+          if [ -n "$GH" ]; then export GITHUB_TOKEN="$GH"; fi
+          pnpm exec nx run-many -t "$TARGET" -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+      - if: steps.models-plan.outputs.plan != '' && runner.environment != 'github-hosted'
+        id: models-planned
+        continue-on-error: true
+        uses: ./.github/actions/sdk-e2e-model-cache
+        with:
+          mode: restore
+          plan: ${{ steps.models-plan.outputs.plan }}
       - name: ${{ matrix.row.target }}
         shell: bash
         working-directory: src
@@ -200,6 +227,11 @@ jobs:
           CI_TESTS: ${{ matrix.row.tests }}
           # true when the model restore hit its exact key, so a package that downloads its own models can skip it.
           MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit }}
+          MODELS_PLAN: ${{ steps.models-plan.outputs.plan }}
+          MODELS_COMPLETE: ${{ steps.models-planned.outputs.complete }}
+          MODELS_MISSING: ${{ steps.models-planned.outputs.missing-models }}
+          # The plan phase rewrites the package's manifest; pnpm must not reinstall.
+          PNPM_FLAGS: ${{ steps.models.outputs.plan == 'true' && '--config.verify-deps-before-run=false' || '' }}
           PERF_RUNS: ${{ inputs.perf_runs }}
           CI_BASE_REF: ${{ inputs.base-ref }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
@@ -217,7 +249,7 @@ jobs:
             value_var="${name}_S"
             if [ -n "${!value_var}" ]; then export "$name=${!value_var}"; fi
           done
-          pnpm exec nx run-many -t "$TARGET" -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+          pnpm ${PNPM_FLAGS:+"$PNPM_FLAGS"} exec nx run-many -t "$TARGET" -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
       # Diagnostic: the addon's DLL imports, for when LoadLibrary misses one.
       - if: failure() && runner.os == 'Windows'
         shell: powershell
@@ -248,3 +280,21 @@ jobs:
           path: ${{ env.WORKDIR }}/benchmarks/results/
           if-no-files-found: warn
           retention-days: "30"
+      # A cancelled or timed-out run can orphan a worker (bare.exe) that keeps the workspace busy for later jobs.
+      # Inline, not a local action: it must also run when a locked workspace failed the checkout.
+      - name: Stop processes left in the workspace
+        if: always() && runner.os == 'Windows'
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: powershell
+        run: |
+          $ws = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+          Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and (
+              ("$($_.ExecutablePath)" -replace '/', '\').StartsWith($ws, [StringComparison]::OrdinalIgnoreCase) -or
+              ("$($_.CommandLine)" -replace '/', '\').IndexOf($ws, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            )
+          } | ForEach-Object {
+            Write-Host "::warning::Stopping leftover $($_.Name) (PID $($_.ProcessId)): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
