@@ -229,7 +229,9 @@ use a custom plugin rather than calling `invokePlugin` directly.
 `qvac-rag-*` tests. Its `ops.js` is the one place the suite calls `@qvac/rag`. The plugin serves those ops on Bare,
 embedding in-process on the model the client loaded. The `ragLocal` step binding serves the same ops in the
 desktop and Electron consumers on Node, with an embeddings port over `embed()`. Each case runs on both
-(`qvac-rag-<case>-bare` and `-node`).
+(`qvac-rag-<case>-bare` and `-node`). `@qvac/rag` installs from `packages/rag` (`file:../rag`), which
+`npm run prepare:rag` builds first; `install:build` runs it. The mobile config leaves this plugin out, since
+mobile skips every `qvac-rag-*` case.
 
 Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
@@ -247,10 +249,11 @@ Each platform bundles the worker with the plugin included through its normal bui
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
   `electron-forge package`. Snap reuses this packaged Linux application and plugin set.
-- **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.json`.
+- **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.mobile.json`,
+  the desktop config without `rag-e2e-plugin`.
   `qvac-test build:consumer:mobile` copies that file into the generated Expo project root as `qvac.config.json`
   before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
-  set as desktop.
+  set as desktop, minus the rag plugin.
 
 **Local sequencing:** desktop and Electron share `qvac/` (the worker entry and bundle) and `qvac.config.json` at
 the project root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
