@@ -57,7 +57,7 @@ import {
   type CanonicalModelType,
   type ModelTypeInput
 } from './model-types'
-import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
+import { refineSdcppPerformanceLimits, sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
 import { decisionConfigBaseSchema } from './decision'
 import { rerankConfigBaseSchema } from './rerank'
@@ -258,7 +258,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: diffusionModelTypeSchema,
-      modelConfig: sdcppConfigSchema.strict().optional()
+      modelConfig: sdcppConfigSchema.strict().superRefine(refineSdcppPerformanceLimits).optional()
     })
     .strict(),
   z
@@ -513,7 +513,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .object({
       ...loadModelRequestCommonFields,
       modelType: diffusionModelTypeSchema,
-      modelConfig: sdcppConfigSchema.strict().optional()
+      modelConfig: sdcppConfigSchema.strict().superRefine(refineSdcppPerformanceLimits).optional()
     })
     .strict()
     .transform((data) => ({
@@ -793,7 +793,7 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema
 export const loadDiffusionModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.sdcppGeneration),
-    modelConfig: sdcppConfigSchema.optional()
+    modelConfig: sdcppConfigSchema.superRefine(refineSdcppPerformanceLimits).optional()
   })
   .strict()
 
