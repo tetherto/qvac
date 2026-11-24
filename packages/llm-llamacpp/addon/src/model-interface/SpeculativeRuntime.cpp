@@ -168,11 +168,14 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
         std::string("spec-draft-* options require spec-type ") +
         SPEC_TYPES_WITH_DRAFT);
   }
-  const int32_t nMax = result.draftNMax.value_or(defaults.n_max);
-  if (result.draftNMin.value_or(defaults.n_min) > nMax) {
+  // Without spec-draft-n-max the default depends on the type, which `auto`
+  // only knows once the draft model is read; applySpeculativeConfig checks
+  // n-min against it.
+  if (result.draftNMax.has_value() &&
+      result.draftNMin.value_or(defaults.n_min) > *result.draftNMax) {
     throw std::invalid_argument(
         "spec-draft-n-min must not exceed spec-draft-n-max (" +
-        std::to_string(nMax) + ")");
+        std::to_string(*result.draftNMax) + ")");
   }
   return result;
 }
@@ -222,8 +225,17 @@ void applySpeculativeConfig(
   params.speculative.types = {config.type};
   if (config.draftNMax.has_value()) {
     params.speculative.draft.n_max = *config.draftNMax;
+    params.speculative.draft.n_max_explicit = true;
   }
+  // As fabric's argument parser does once the types are final: draft-dflash
+  // drafts n_max_dflash tokens unless spec-draft-n-max is set.
+  common_speculative_set_default_n_max(params.speculative);
   if (config.draftNMin.has_value()) {
+    if (*config.draftNMin > params.speculative.draft.n_max) {
+      throw std::invalid_argument(
+          "spec-draft-n-min must not exceed spec-draft-n-max (" +
+          std::to_string(params.speculative.draft.n_max) + ")");
+    }
     params.speculative.draft.n_min = *config.draftNMin;
   }
   if (config.draftPMin.has_value()) {
