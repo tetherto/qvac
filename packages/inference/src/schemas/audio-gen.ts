@@ -147,7 +147,7 @@ const commonAudioGenRuntimeConfigShape = {
     .min(1)
     .optional()
     .describe(
-      'Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+      'Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     )
 }
 
