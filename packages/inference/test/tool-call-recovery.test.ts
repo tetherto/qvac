@@ -578,3 +578,20 @@ test('a string value full of escaped quotes stays linear to scan', (t) => {
   t.is((r.payload as { b: number }).b, 1)
   t.ok(elapsed < BUDGET_MS, `${value.length} chars in ${elapsed}ms`)
 })
+
+test('whitespace after a bare opener is not held without limit', (t) => {
+  const text = `<function=login>${' \n'.repeat(512 * 1024)}`
+  const started = Date.now()
+  const r = run(chunks(text, 16), [LOGIN])
+  const elapsed = Date.now() - started
+  t.is(r.calls.length, 0)
+  t.is(r.content, text)
+  t.ok(elapsed < BUDGET_MS, `${text.length} chars in ${elapsed}ms`)
+
+  const spaced = `<function=login>\n\n<parameter=password>s</parameter>\n</function>`
+  t.alike(
+    argsOf(run(chunks(spaced, 3), [LOGIN])),
+    [['login', { password: 's' }]],
+    'a short gap is a call'
+  )
+})

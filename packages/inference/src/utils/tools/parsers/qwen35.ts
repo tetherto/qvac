@@ -157,6 +157,9 @@ const BARE_NAME_WINDOW = MAX_FUNCTION_NAME_LENGTH + 6
 // What a call body starts with; anything else after `NAME>` is prose. A nested
 // opener is held too, so the wrapper is rejected as ambiguous, not streamed.
 const BARE_BODY_OPENERS = ['<parameter=', BARE_FUNCTION_CLOSE, BARE_FUNCTION_OPEN]
+const BARE_BODY_OPENER_LENGTH = Math.max(...BARE_BODY_OPENERS.map((opener) => opener.length))
+// Whitespace a template puts between `NAME>` and the body; more than this is prose.
+const MAX_BODY_GAP = 64
 
 /**
  * Length of the `NAME>` that follows a bare `<function=` opener in `rest`;
@@ -176,7 +179,10 @@ export function bareFunctionNameLength(rest: string): number {
  * does, 0 while it may still, -1 when it is prose.
  */
 export function bareFunctionBodyStart(body: string): number {
-  const start = body.trimStart()
+  // Bounded, so a run of whitespace is neither held nor rescanned without end.
+  const head = body.slice(0, MAX_BODY_GAP + BARE_BODY_OPENER_LENGTH)
+  const start = head.trimStart()
+  if (head.length - start.length > MAX_BODY_GAP) return -1
   if (BARE_BODY_OPENERS.some((opener) => start.startsWith(opener))) return 1
   return BARE_BODY_OPENERS.some((opener) => opener.startsWith(start)) ? 0 : -1
 }
