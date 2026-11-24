@@ -71,8 +71,8 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.system_prompt`); cannot force tool_choice. Await final before sending the question with the same prefix.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelFolder}/{configHash}.bin`
- *   - `modelFolder` hashes the model and its load config, leaving out settings that do not change the cache contents
- *     (`cache_share_across_keys`, `openclCacheDir`, `verbosity`, `cache_ram_mib`)
+ *   - `modelFolder` hashes the model and its load config, ignoring settings that do not change the cache contents:
+ *     `cache_share_across_keys` and `verbosity` count as their defaults when sent, `openclCacheDir` and `cache_ram_mib` are left out
  *   - `configHash` hashes the system prompt
  *   - `true`: Auto-generate cache key based on conversation history
  *   - `"custom-key"`: Use provided string as cache key for manual session management
