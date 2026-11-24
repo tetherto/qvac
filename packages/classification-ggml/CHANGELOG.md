@@ -7,7 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.43.0] - 2026-11-24
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.32.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.32.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.33.0` together.
+- This package needed no code change for the new fabric.
 
 ## [0.42.0] - 2026-11-23
 
