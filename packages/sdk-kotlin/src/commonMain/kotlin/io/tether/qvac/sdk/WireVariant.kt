@@ -1,4 +1,4 @@
-package io.tether.qvac.sdk.generated.schema
+package io.tether.qvac.sdk
 
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*

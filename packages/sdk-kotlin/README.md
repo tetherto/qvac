@@ -145,26 +145,6 @@ To consume a checkout's artifacts the same way, publish locally with
 `./gradlew publishSdkToBuildRepository` and add
 `packages/sdk-kotlin/build/maven-repository` as the Maven repository.
 
-### Build from a standalone checkout
-
-`scripts/install-local.sh` makes a sparse clone of `packages/sdk-kotlin` at a
-release tag or branch, builds every Android runtime profile against the
-`@qvac/sdk` version the checkout pins, and prints the local Maven repository
-path with the Gradle snippet that consumes it:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tetherto/qvac/sdk-v<version>/packages/sdk-kotlin/scripts/install-local.sh -o install-local.sh
-bash install-local.sh sdk-v<version>
-```
-
-Releases before `sdk-v0.23.0` do not build from a standalone checkout. The
-script checks for git, JDK 17, Node.js 22 and an Android SDK with NDK
-29.0.14206865 at `ANDROID_HOME` before cloning, names what is missing, and
-refuses a target directory that already exists. Without `packages/sdk` beside
-it the build skips the workspace worker build and bundles the installed
-`@qvac/sdk`, so the result matches the release assets built from the full
-monorepo.
-
 ### Consume the source checkout
 
 For SDK development, add the composite build:
@@ -469,18 +449,22 @@ Lab is an executable example for the eight phone-sized capabilities; Media and
 VLA have API/packaging tests because their current catalog packs are too large
 for the Pixel 8a matrix.
 
-Regenerate and verify the checked-in contract surface with:
+The contract surface is generated at build time and never committed:
+`generateContract` exports the SDK contract from the sibling `packages/sdk` and
+writes `build/generated/contract/kotlin`, which `commonMain` compiles. It needs
+`packages/sdk` installed and `@qvac/inference` built, and every compile runs it
+when its inputs changed. To run it, or the generator and wire-vocabulary checks,
+on their own:
 
 ```bash
 ./gradlew generateContract
-./gradlew checkContract
+./gradlew testContractGenerator checkWireLiterals
 ```
 
-Generation is deterministic and CI checks the checked-in output, Python
-generator tests, handwritten wire vocabulary (including the upstream VLA Zod
-schema), and Kotlin compilation. Unsupported schema constructs fail generation
-instead of silently degrading to an empty DTO. The generated schema namespace
-is large by design; edit the exporter/generator, never generated DTOs.
+`checkWireLiterals` checks the handwritten wire vocabulary, including the
+upstream VLA Zod schema. Unsupported schema constructs fail generation instead
+of silently degrading to an empty DTO. The generated schema namespace is large
+by design; edit the exporter/generator, never generated DTOs.
 
 ## Bare-RPC
 
