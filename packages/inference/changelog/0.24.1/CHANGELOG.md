@@ -5,6 +5,7 @@ Release Date: 2026-11-24
 ## 🐞 Fixes
 
 - Keep KV cache folders when `cache_share_across_keys` is turned on. (see PR [#5919](https://github.com/tetherto/qvac/pull/5919))
+- Keep KV cache folders for loads that send `verbosity`. (see PR [#5950](https://github.com/tetherto/qvac/pull/5950))
 
 ## 🧹 Chores
 

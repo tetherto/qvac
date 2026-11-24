@@ -10,9 +10,15 @@ QVAC Inference 0.24.1 keeps existing chats on their KV cache when prompt-cache s
 
 Turning on `cache_share_across_keys`, which `seedFrom` requires, used to move every chat to a new cache folder. The next turn of each existing chat missed its cache and reprocessed its whole history. The cache folder name no longer depends on that setting, so existing cache files are found with no migration.
 
-The folder name also leaves out `openclCacheDir`, `verbosity` and `cache_ram_mib`, which do not change what a cache file holds. On Android `openclCacheDir` carries the SDK version, so before this every SDK upgrade replayed every chat once.
+The folder name also ignores other settings that do not change what a cache file holds. A `verbosity` sent at load counts as its default `0`, and `openclCacheDir` and `cache_ram_mib` are left out, so changing any of them later keeps the folder. A caller that puts a versioned path in `openclCacheDir` no longer replays every chat on each upgrade. A load that omits `verbosity` and one that sends it still get different folders, as in 0.24.0.
 
 `deleteCache({ kvCacheKey, modelId })` still removes the right folder, including from a process that never loaded the model. The engine records the folder for a model under `~/.qvac/kv-cache-dir-ids/`.
+
+### Which loads keep their folder from 0.24.0
+
+A load with sharing off, `verbosity` omitted or `0`, and neither `openclCacheDir` nor `cache_ram_mib` keeps the folder it had on 0.24.0. That covers the SDK defaults and callers that send `verbosity: 0` on every load.
+
+A load that already had `cache_share_across_keys` on, sent a non-zero `verbosity`, or sent `openclCacheDir` or `cache_ram_mib` moves to a new folder once. The next turn of each of its chats reprocesses the history once, and the old folder stays on disk: `deleteCache` by model id no longer reaches it.
 
 ## Dependencies
 
