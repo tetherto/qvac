@@ -5,7 +5,7 @@ import path from 'bare-path'
 import { z } from 'zod'
 import { send, close } from '@/dispatch'
 import { registry } from '@/registry'
-import { clearPlugins, registerPlugin } from '@/plugins'
+import { clearPlugins, getProvidedCapabilities, registerPlugin } from '@/plugins'
 import * as builtin from '@/plugins/builtin/index'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { PluginDefinitionInvalidError } from '@/errors'
@@ -178,7 +178,29 @@ test('registerPlugin rejects a third-party provider that serves a shared operati
   }
 })
 
-test('a third-party shape conflict on an optional operation is rejected in either registration order', function (t) {
+test('registerPlugin rejects a shape conflict on an optional operation both providers declare', function (t) {
+  clearPlugins()
+  try {
+    registerPlugin(
+      plugin('first', { run: handler('reply'), extra: handler('stream') }, [
+        { id: 'acme.x', version: 1, operations: ['run'], optionalOperations: ['extra'] }
+      ])
+    )
+    t.ok(
+      /"extra" of capability "acme.x@1" is a reply handler, but plugin "first" serves it as a stream handler/.test(
+        rejectionReason(
+          plugin('second', { run: handler('reply'), extra: handler('reply') }, [
+            { id: 'acme.x', version: 1, operations: ['run'], optionalOperations: ['extra'] }
+          ])
+        ) ?? ''
+      )
+    )
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('an undeclared handler with an optional operation name is neither compared nor counted, in either registration order', function (t) {
   const newer = () =>
     plugin('newer', { run: handler('reply'), extra: handler('stream') }, [
       { id: 'acme.x', version: 1, operations: ['run'], optionalOperations: ['extra'] }
@@ -194,13 +216,75 @@ test('a third-party shape conflict on an optional operation is rejected in eithe
     clearPlugins()
     try {
       registerPlugin(first())
-      t.ok(
-        /handler "extra" of capability "acme.x@1"/.test(rejectionReason(second()) ?? ''),
-        `${second().modelType} after ${first().modelType} is rejected`
+      t.absent(rejectionReason(second()), `${second().modelType} after ${first().modelType}`)
+      t.alike(
+        getProvidedCapabilities(),
+        [{ id: 'acme.x', version: 1, operations: ['run'], partialOperations: ['extra'] }],
+        'only the provider that declares extra counts for it'
       )
     } finally {
       clearPlugins()
     }
+  }
+})
+
+test('a handler that belongs to another contract does not count for an optional operation', function (t) {
+  clearPlugins()
+  try {
+    registerPlugin(
+      plugin('a', { reset: handler('reply'), run: handler('reply') }, [
+        { id: 'acme.maint', version: 1, operations: ['reset'] },
+        { id: 'acme.x', version: 1, operations: ['run'] }
+      ])
+    )
+    registerPlugin(
+      plugin('b', { reset: handler('reply'), run: handler('reply') }, [
+        { id: 'acme.x', version: 1, operations: ['run'], optionalOperations: ['reset'] }
+      ])
+    )
+    t.alike(
+      getProvidedCapabilities().find((capability) => capability.id === 'acme.x'),
+      { id: 'acme.x', version: 1, operations: ['run'], partialOperations: ['reset'] }
+    )
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin rejects a duplex handler in a third-party contract', function (t) {
+  clearPlugins()
+  try {
+    t.ok(
+      /"caption" of capability "acme.live-caption@1" is a duplex handler, but third-party operations are called through pluginInvoke, which has no input stream/.test(
+        rejectionReason(
+          plugin('live', { caption: handler('duplex') }, [
+            { id: 'acme.live-caption', version: 1, operations: ['caption'] }
+          ])
+        ) ?? ''
+      ),
+      'a required operation'
+    )
+    t.ok(
+      /"push" of capability "acme.live-caption@1" is a duplex handler/.test(
+        rejectionReason(
+          plugin('live-optional', { caption: handler('stream'), push: handler('duplex') }, [
+            {
+              id: 'acme.live-caption',
+              version: 1,
+              operations: ['caption'],
+              optionalOperations: ['push']
+            }
+          ])
+        ) ?? ''
+      ),
+      'an optional operation'
+    )
+    t.absent(
+      rejectionReason(plugin('undeclared', { listen: handler('duplex') }, [])),
+      'a duplex handler outside every contract is left alone'
+    )
+  } finally {
+    clearPlugins()
   }
 })
 

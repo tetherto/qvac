@@ -1,5 +1,6 @@
 import type { PluginHandlerDefinition, QvacPlugin } from '@/schemas/plugin'
 import {
+  CAPABILITY_CONTRACTS,
   findQvacCapabilityContract,
   type CapabilityContract,
   type CapabilityDeclaration,
@@ -85,10 +86,17 @@ export function resolveCapabilityDeclaration(
 ): CapabilityContract | string {
   const key = contractKey(declaration)
   if (isQvacId(declaration.id)) {
+    const found = findQvacCapabilityContract(declaration.id, declaration.version)
+    if (found) return found
+    const defined = Object.values(CAPABILITY_CONTRACTS)
+      .filter((entry) => entry.id === declaration.id)
+      .map(contractKey)
+    if (defined.length > 0) {
+      return `capability "${key}" is not defined by this runtime, which defines ${defined.join(', ')}`
+    }
     return (
-      findQvacCapabilityContract(declaration.id, declaration.version) ??
       `capability "${key}" is not a QVAC capability contract; ` +
-        'a contract QVAC does not define needs a dotted ID such as "acme.diarization"'
+      'a contract QVAC does not define needs a dotted ID such as "acme.diarization"'
     )
   }
   if (!declaration.operations) {
@@ -136,7 +144,8 @@ export function findProvidesProblem(
 
     const problem = isQvacId(contract.id)
       ? findQvacCallShapeProblem(plugin, contract)
-      : findThirdPartyConflict(plugin, contract, others)
+      : (findThirdPartyDuplexHandler(plugin, contract) ??
+        findThirdPartyConflict(plugin, contract, others))
     if (problem) return problem
 
     for (const operation of operations) {
@@ -170,13 +179,32 @@ function findQvacCallShapeProblem(
   return undefined
 }
 
+// A third-party operation has no typed request, so it is called through
+// `pluginInvoke` or `pluginInvokeStream`, and neither passes an input stream.
+// A duplex handler declared in a third-party contract would be reported but
+// could not be called as declared.
+function findThirdPartyDuplexHandler(
+  plugin: QvacPlugin,
+  contract: CapabilityContract
+): string | undefined {
+  for (const operation of [...contract.operations, ...contract.optionalOperations]) {
+    const handler = getHandler(plugin, operation)
+    if (handler && handlerCallShape(handler) === 'duplex') {
+      return (
+        `handler "${operation}" of capability "${contractKey(contract)}" is a duplex handler, ` +
+        'but third-party operations are called through pluginInvoke, which has no input stream'
+      )
+    }
+  }
+  return undefined
+}
+
 // Providers of one third-party contract must agree on its required operations
-// and on how each shared operation is called, or a consumer written against
-// one provider fails on another. Optional operations may differ, so a newer
-// provider can add one under the same major. Call shapes are compared over
-// both providers' lists: the report counts any handler with an optional
-// operation's name, whichever provider listed it, so checking only the
-// incoming provider's lists would make the result depend on registration order.
+// and on how each operation both of them declare is called, or a consumer
+// written against one provider fails on another. Optional operations may
+// differ, so a newer provider can add one under the same major. A handler a
+// provider does not declare in this contract is not compared: the report does
+// not count it for this contract either.
 function findThirdPartyConflict(
   plugin: QvacPlugin,
   contract: CapabilityContract,
@@ -195,13 +223,11 @@ function findThirdPartyConflict(
         `but plugin "${other.modelType}" requires ${list(otherRequired)}`
       )
     }
-    const operations = new Set([
-      ...contract.operations,
-      ...contract.optionalOperations,
-      ...otherRequired,
-      ...(match.optionalOperations ?? [])
-    ])
-    for (const operation of operations) {
+    const otherDeclared = new Set([...otherRequired, ...(match.optionalOperations ?? [])])
+    const shared = [...contract.operations, ...contract.optionalOperations].filter((operation) =>
+      otherDeclared.has(operation)
+    )
+    for (const operation of shared) {
       const handler = getHandler(plugin, operation)
       const otherHandler = getHandler(other, operation)
       if (!handler || !otherHandler) continue
@@ -222,29 +248,36 @@ function findThirdPartyConflict(
  * The capability contracts the given plugins declare, one entry per ID and
  * major, sorted by ID and then version. A QVAC contract's operations come
  * from the runtime's table; a third-party contract's optional operations are
- * those any provider lists. An optional operation is in `operations` when
- * every provider of the contract has a handler for it, and in
+ * those any provider lists. A provider counts for an optional operation when
+ * its own contract lists the operation and it has a handler for it, so a
+ * handler that belongs to another contract is not counted. An optional
+ * operation is in `operations` when every provider counts, and in
  * `partialOperations` when only some do.
  */
 export function collectRuntimeCapabilities(plugins: Iterable<QvacPlugin>): RuntimeCapability[] {
+  interface Provider {
+    plugin: QvacPlugin
+    declared: ReadonlySet<string>
+  }
   const groups = new Map<
     string,
-    { contract: CapabilityContract; optional: Set<string>; providers: QvacPlugin[] }
+    { contract: CapabilityContract; optional: Set<string>; providers: Provider[] }
   >()
   for (const plugin of plugins) {
     for (const declaration of plugin.provides ?? []) {
       const contract = resolveCapabilityDeclaration(declaration)
       if (typeof contract === 'string') continue
       const key = contractKey(contract)
+      const provider = { plugin, declared: new Set(contract.optionalOperations) }
       const group = groups.get(key)
       if (group) {
-        group.providers.push(plugin)
+        group.providers.push(provider)
         for (const operation of contract.optionalOperations) group.optional.add(operation)
       } else {
         groups.set(key, {
           contract,
           optional: new Set(contract.optionalOperations),
-          providers: [plugin]
+          providers: [provider]
         })
       }
     }
@@ -254,7 +287,9 @@ export function collectRuntimeCapabilities(plugins: Iterable<QvacPlugin>): Runti
     const operations = [...contract.operations]
     const partialOperations: string[] = []
     for (const operation of optional) {
-      const count = providers.filter((plugin) => getHandler(plugin, operation)).length
+      const count = providers.filter(
+        ({ plugin, declared }) => declared.has(operation) && getHandler(plugin, operation)
+      ).length
       if (count === providers.length) operations.push(operation)
       else if (count > 0) partialOperations.push(operation)
     }
