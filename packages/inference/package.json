@@ -218,21 +218,21 @@
     "zod": "4.6.5"
   },
   "peerDependencies": {
-    "@qvac/asr-ggml": "^0.12.0",
-    "@qvac/audiogen-ggml": "^0.10.1",
-    "@qvac/bci-whispercpp": "^0.15.0",
-    "@qvac/classification-ggml": "^0.39.0",
+    "@qvac/asr-ggml": "^0.13.2",
+    "@qvac/audiogen-ggml": "^0.11.1",
+    "@qvac/bci-whispercpp": "^0.16.0",
+    "@qvac/classification-ggml": "^0.41.0",
     "@qvac/decoder-audio": "^0.9.0",
     "@qvac/diffusion-cpp": "^0.38.0",
-    "@qvac/embed-llamacpp": "^0.56.0",
+    "@qvac/embed-llamacpp": "^0.58.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.70.0",
-    "@qvac/ocr-ggml": "^0.33.0",
-    "@qvac/translation-nmtcpp": "^0.25.0",
-    "@qvac/tts-ggml": "^0.15.0",
-    "@qvac/turbovec-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.36.0",
-    "@qvac/ggml-rpc-server": "^0.9.0"
+    "@qvac/llm-llamacpp": "^0.72.1",
+    "@qvac/ocr-ggml": "^0.35.0",
+    "@qvac/translation-nmtcpp": "^0.27.0",
+    "@qvac/tts-ggml": "^0.16.1",
+    "@qvac/turbovec-ggml": "^0.7.0",
+    "@qvac/vla-ggml": "^0.38.0",
+    "@qvac/ggml-rpc-server": "^0.11.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -282,20 +282,20 @@
     }
   },
   "devDependencies": {
-    "@qvac/asr-ggml": "^0.12.0",
-    "@qvac/audiogen-ggml": "^0.10.1",
-    "@qvac/bci-whispercpp": "^0.15.0",
-    "@qvac/classification-ggml": "^0.39.0",
+    "@qvac/asr-ggml": "^0.13.2",
+    "@qvac/audiogen-ggml": "^0.11.1",
+    "@qvac/bci-whispercpp": "^0.16.0",
+    "@qvac/classification-ggml": "^0.41.0",
     "@qvac/decoder-audio": "^0.9.0",
     "@qvac/diffusion-cpp": "^0.38.0",
-    "@qvac/embed-llamacpp": "^0.56.0",
+    "@qvac/embed-llamacpp": "^0.58.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.70.0",
-    "@qvac/ocr-ggml": "^0.33.0",
-    "@qvac/translation-nmtcpp": "^0.25.0",
-    "@qvac/tts-ggml": "^0.15.0",
-    "@qvac/turbovec-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.36.0",
+    "@qvac/llm-llamacpp": "^0.72.1",
+    "@qvac/ocr-ggml": "^0.35.0",
+    "@qvac/translation-nmtcpp": "^0.27.0",
+    "@qvac/tts-ggml": "^0.16.1",
+    "@qvac/turbovec-ggml": "^0.7.0",
+    "@qvac/vla-ggml": "^0.38.0",
     "@types/brittle": "^3.5.0",
     "bare": "1.34.1 || >=1.35.1",
     "bare-console": "*",
@@ -310,7 +310,7 @@
     "prettier-config-holepunch": "^2.0.0",
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3",
-    "@qvac/ggml-rpc-server": "^0.9.0"
+    "@qvac/ggml-rpc-server": "^0.11.0"
   },
   "nx": {
     "includedScripts": [
