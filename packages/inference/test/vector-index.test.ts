@@ -226,6 +226,39 @@ for (const operation of ['search', 'load'] as const) {
   })
 }
 
+test('vector index: a search cancelled during the warm-up prepares again next time', async (t) => {
+  await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+    const started = deferred()
+    gates.prepare = (options) => {
+      const signal = options?.signal
+      if (!signal) return Promise.reject(new Error('the warm-up got no signal'))
+      return new Promise<void>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        started.resolve()
+      })
+    }
+    const requestId = 'vi-cancel-prepare'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'search',
+      indexId: index.indexId,
+      queries: [[1, 0]],
+      k: 1,
+      requestId
+    })
+    await Promise.race([started.promise, pending])
+    t.is(getRequestRegistry().cancel({ requestId }), 1)
+    await expectRejects(t, () => pending, InferenceCancelledError, 'the search reports the cancel')
+    t.is(calls.prepare, 0, 'the aborted warm-up never reached the index')
+    gates.prepare = null
+    const [nearest] = await index.search({ query: [1, 0], k: 1 })
+    t.is(nearest?.id, '1')
+    t.is(calls.prepare, 1, 'the next search runs the warm-up again')
+  })
+})
+
 test('vector index: a removal cancelled while it runs finishes the batch', async (t) => {
   await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
     const index = await createVectorIndex({ dim: 2 })

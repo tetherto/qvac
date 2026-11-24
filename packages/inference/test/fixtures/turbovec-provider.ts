@@ -70,12 +70,14 @@ export function observableIndexProvider({
     create: (() => Promise<void>) | null
     load: ((options?: TurboVecCallOptions) => Promise<void>) | null
     search: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    prepare: ((options?: TurboVecCallOptions) => Promise<void>) | null
     remove: ((id: bigint) => Promise<void>) | null
     buildIvf: (() => Promise<void>) | null
   } = {
     create: null,
     load: null,
     search: null,
+    prepare: null,
     remove: null,
     buildIvf: null
   }
@@ -175,6 +177,11 @@ export function observableIndexProvider({
     asyncIndex.search = async (queries, k, options) => {
       if (gates.search) await gates.search(options)
       return search(queries, k)
+    }
+    const prepare = asyncIndex.prepare
+    asyncIndex.prepare = async (options) => {
+      if (gates.prepare) await gates.prepare(options)
+      return prepare()
     }
     const remove = asyncIndex.remove
     asyncIndex.remove = async (id) => {
