@@ -51,7 +51,7 @@ async function readFromTarball(url: string, path: string): Promise<string | unde
 }
 
 async function publishedBaseline(): Promise<{ label: string; content: string | undefined }> {
-  const response = await fetch(`https://registry.npmjs.org/${PACKAGE.replace('/', '%2f')}/latest`)
+  const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(PACKAGE)}/latest`)
   if (!response.ok) throw new Error(`npm registry answered ${response.status} for ${PACKAGE}`)
   const manifest = (await response.json()) as { version: string; dist: { tarball: string } }
   return {

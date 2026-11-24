@@ -198,13 +198,11 @@ export function findIncompatibility(
 
     if (canonical(a, { defs: subDefs }) === canonical(b, { defs: supDefs })) return undefined
 
-    if (
-      options.direction === 'request' &&
-      'default' in a &&
-      'default' in b &&
-      JSON.stringify(a['default']) !== JSON.stringify(b['default'])
-    ) {
-      return `the default of ${show(path)} changed`
+    if (options.direction === 'request' && 'default' in a) {
+      if (!('default' in b)) return `the default of ${show(path)} was removed`
+      if (JSON.stringify(a['default']) !== JSON.stringify(b['default'])) {
+        return `the default of ${show(path)} changed`
+      }
     }
 
     const unknownKeyword = [...Object.keys(a), ...Object.keys(b)].find(
@@ -350,10 +348,23 @@ export function findIncompatibility(
       }
     }
 
-    // An object that leaves extra fields unconstrained only tolerates fields it
-    // does not declare; clients send and read the declared ones. Only a typed
-    // map (`additionalProperties` with a schema, as `z.record` produces) makes
-    // its entries part of the contract.
+    // An object without `additionalProperties` only tolerates fields it does
+    // not declare; clients send and read the declared ones. A typed map
+    // (`additionalProperties` with a schema, as `z.record` produces) makes its
+    // entries part of the contract, and so does an explicit
+    // `additionalProperties: {}` (`z.looseObject`, or `z.record` of unknown
+    // values), which promises entries of any value.
+    if ('additionalProperties' in a && isAnything(subExtra)) {
+      if (isNode(supExtra) && !isAnything(supExtra)) {
+        const problem = check(subExtra, supExtra, at(path, '<extra>'), seen)
+        if (problem) return problem
+      } else if (
+        supExtra === false &&
+        (options.direction === 'request' || b['x-strict'] === true)
+      ) {
+        return `${show(path)} no longer accepts fields it does not declare`
+      }
+    }
     if (isNode(subExtra) && !isAnything(subExtra)) {
       if (supExtra === false) return `${show(path)} no longer accepts map entries`
       for (const [key, supProp] of Object.entries(supProps)) {

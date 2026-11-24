@@ -92,7 +92,8 @@ export function findMajorProblems(
     for (const operation of kept) {
       const old = publishedMethods.get(operation)
       const now = currentMethods.get(operation)
-      // Operations reached through pluginInvoke have no typed request in the contract.
+      // buildCapabilityBaseline records every operation, so a missing entry is
+      // a baseline written before the operation's schemas were recorded.
       if (!old || !now) continue
       if (old.callShape !== now.callShape) {
         problems.push(`${key}: ${operation} changed from ${old.callShape} to ${now.callShape}`)
