@@ -129,9 +129,12 @@ fi
 # at the copy installed above; that is the one whose versions are reported.
 QVAC_PLUGIN_DIR="$SMOKE_DIR/node_modules/@qvac/opencode-plugin"
 
+# Deny every tool: with 13 advertised, qwen3.5-0.8b sometimes answers the
+# one-word prompt with a tool call and repeats it until the job times out.
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
+  "permissions": [{ "action": "*", "resource": "*", "effect": "deny" }],
   "plugins": [
     {
       "package": "${QVAC_PLUGIN_DIR}",

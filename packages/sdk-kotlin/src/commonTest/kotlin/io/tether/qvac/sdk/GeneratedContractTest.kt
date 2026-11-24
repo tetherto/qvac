@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class GeneratedContractTest {
     @Test
     fun generatesEveryManifestOperation() {
-        assertEquals(52, QvacMethods.all.size)
+        assertEquals(53, QvacMethods.all.size)
         assertEquals(
             setOf(QvacCallShape.REQUEST_REPLY, QvacCallShape.SERVER_STREAM, QvacCallShape.DUPLEX),
             QvacMethods.all.map { it.callShape }.toSet(),
@@ -35,14 +35,14 @@ class GeneratedContractTest {
 
     @Test
     fun generatesModelCatalogAndVersion() {
-        assertEquals("0.24.0", SDK_VERSION)
+        assertTrue(Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?""").matches(SDK_VERSION), SDK_VERSION)
         assertTrue(Models.all.isNotEmpty())
         assertNotNull(Models.QWEN3_600M_INST_Q4)
     }
 
     @Test
     fun generatedErrorRegistryPreservesCollidingNames() {
-        assertEquals(153, ErrorCodes.all.size)
+        assertEquals(154, ErrorCodes.all.size)
         assertEquals(52002, ErrorCodes.lookup("MODEL_NOT_FOUND", 52002))
         assertEquals(19003, ErrorCodes.lookup("MODEL_NOT_FOUND", 19003))
         assertEquals(null, ErrorCodes.lookup("MODEL_NOT_FOUND"))

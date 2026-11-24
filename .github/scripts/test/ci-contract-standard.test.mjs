@@ -110,3 +110,22 @@ test('the groups request only standard targets', () => {
     }
   }
 })
+
+test('metadata.modelCache takes keyFiles or plan: true, never both', () => {
+  const withCache = (modelCache) => ({
+    name: 'pkg',
+    targets: { 'test:integration': { metadata: { modelCache } } }
+  })
+  const check = (modelCache) => () => checkMetadata(withCache(modelCache), 'test:integration')
+  assert.doesNotThrow(check({ path: '.cache', keyFiles: ['models.ts'] }))
+  assert.doesNotThrow(check({ path: '.cache', plan: true }))
+  for (const bad of [
+    { path: '.cache' },
+    { path: '.cache', keyFiles: [] },
+    { path: '.cache', plan: false },
+    { path: '.cache', keyFiles: ['models.ts'], plan: true },
+    { keyFiles: ['models.ts'] },
+    { path: '.cache', plan: true, extra: 1 }
+  ])
+    assert.throws(check(bad), /metadata\.modelCache takes path/, JSON.stringify(bad))
+})

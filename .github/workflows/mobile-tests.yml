@@ -56,23 +56,27 @@ on:
         type: string
         default: ""
       packages:
-        description: The one package to test, by name or directory
-        required: true
+        description: The one package to test, by name or directory; ignored with weekly
         type: string
+        default: ""
+      weekly:
+        description: Run the Sunday weekly job instead (both platforms, its devices, a report issue); ignores the other inputs
+        type: boolean
+        default: false
 
 permissions: {}
 
 # One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
 # one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
-  group: mobile-tests-${{ github.ref }}-${{ inputs.packages || github.event.schedule }}-${{ inputs.platform }}
+  group: mobile-tests-${{ github.ref }}-${{ inputs.weekly && 'weekly' || inputs.packages || github.event.schedule }}-${{ inputs.weekly && 'both' || inputs.platform }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
   # devicefarm-check-devices caps the whole dispatch.
   one-package:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.weekly
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -117,7 +121,7 @@ jobs:
       dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
 
   weekly:
-    if: github.event.schedule == '0 6 * * 0'
+    if: github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.weekly)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -126,7 +130,7 @@ jobs:
       android: ${{ steps.find.outputs.android }}
       ios: ${{ steps.find.outputs.ios }}
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions/mobile-weekly
@@ -195,7 +199,7 @@ jobs:
   # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
   weekly-report:
     needs: [weekly-select-android, weekly-select-ios, weekly-android, weekly-ios]
-    if: always() && github.event.schedule == '0 6 * * 0'
+    if: always() && (github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.weekly))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -203,11 +207,11 @@ jobs:
       actions: read
       issues: write
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions/mobile-weekly
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: console-logs-*
           path: logs
@@ -226,7 +230,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions/mobile-weekly-report-gc
           persist-credentials: "false"

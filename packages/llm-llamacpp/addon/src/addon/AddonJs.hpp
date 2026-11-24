@@ -41,6 +41,7 @@
 #include "addon/PayloadHandler.hpp"
 #include "handlers/FinetuneParamHandlers.hpp"
 #include "handlers/GenerationParamHandlers.hpp"
+#include "model-interface/ImagePixelLimit.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SpeculativeRuntime.hpp"
@@ -264,7 +265,21 @@ inline void parseGenerationParams(
   if (!configObj.has_value()) {
     return;
   }
-  applyGenerationParamHandlers(env, *configObj, prompt.generationParams);
+  js::Object& obj = *configObj;
+  const GenerationParamSource source{
+      .number =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Number, double>(env, key);
+          },
+      .string =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::String, std::string>(env, key);
+          },
+      .boolean =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
+          }};
+  applyGenerationParamHandlers(source, prompt.generationParams);
 }
 
 inline std::vector<std::pair<std::string, js::Object>>
@@ -713,7 +728,10 @@ inline FitResult runFit(FitRequest request) {
 
   common_params loadParams;
   try {
-    // Addon-only key, consumed before llama.cpp's parser sees it, as at load.
+    // Addon-only keys, consumed before llama.cpp's parser sees them, as at
+    // load. image-max-megapixels only bounds decoding, so the fit just
+    // validates it.
+    static_cast<void>(image_pixel_limit::takeMaxPixels(configFilemap));
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);

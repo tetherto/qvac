@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { generateExportName } from '../models/update-models/naming.ts'
@@ -9,6 +8,10 @@ import { generateModelsFileContent } from '../models/update-models/codegen.ts'
 import { synthesizeServeConfig } from '../src/managed/config-synthesizer.ts'
 
 const { allModels } = modelConstants
+
+const inferenceModels: Record<string, unknown> = await import(
+  new URL('../../inference/src/models/registry/models.ts', import.meta.url).href
+)
 
 const cases = [
   {
@@ -119,13 +122,27 @@ for (const { path, quantization, expected } of cases) {
   })
 }
 
+test('diffusion naming: a tokenizer.json is named after its model', () => {
+  assert.equal(
+    generateExportName({
+      path: 'OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json',
+      engine: 'sdcpp-generation',
+      name: 'MOSS-Image-SFT',
+      quantization: '',
+      params: '',
+      tags: ['tokenizer'],
+      usedNames: new Set()
+    }),
+    'MOSS_IMAGE_SFT_TOKENIZER'
+  )
+})
+
 test('generated Parakeet names match the SDK and work in managed config', () => {
-  const sdkModels: Record<string, { registryPath: string; name: string }> = JSON.parse(
-    readFileSync(new URL('../../sdk/contract/models.json', import.meta.url), 'utf8')
-  )
-  const namesByPath = new Map(
-    Object.values(sdkModels).map((model) => [model.registryPath, model.name])
-  )
+  const sdkModels = Object.entries(inferenceModels)
+    .filter(([, value]) => typeof (value as { src?: unknown } | null)?.src === 'string')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, value]) => value as { registryPath: string; name: string })
+  const namesByPath = new Map(sdkModels.map((model) => [model.registryPath, model.name]))
   const parakeetModels = allModels.filter((model) => model.addon === 'parakeet')
   assert.ok(parakeetModels.length > 0)
 

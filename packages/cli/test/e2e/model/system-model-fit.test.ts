@@ -2,6 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useModelServer } from '../helpers/server.js'
 import { assertStatusAndError } from '../helpers/http.js'
+import { runCli } from '../helpers/cli.js'
+import { writeConfigDir } from '../helpers/config.js'
 
 const ALIAS = 'fit-llm'
 const VERDICTS = ['fits', 'does-not-fit', 'unknown']
@@ -35,7 +37,26 @@ interface FitResult {
     status: string
     devices: Array<{ id: string; name: string; unified: boolean; usedBytes: number }>
     stats: Record<string, unknown>
+    reason?: string
   }>
+}
+
+const FIT_EXIT_CODES: Record<string, number> = { fits: 0, 'does-not-fit': 2, unknown: 3 }
+
+// Free and total memory move between two calls, so the answer is compared
+// without them.
+function answer(result: FitResult) {
+  return {
+    verdict: result.verdict,
+    pools: result.pools.map(({ id, unified, usedBytes }) => ({ id, unified, usedBytes })),
+    models: result.models.map(({ model, status, stats, reason, devices }) => ({
+      model,
+      status,
+      stats,
+      reason,
+      devices: devices.map(({ id, name, unified, usedBytes }) => ({ id, name, unified, usedBytes }))
+    }))
+  }
 }
 
 describe('qvac system and models/fit: real host', () => {
@@ -112,5 +133,25 @@ describe('qvac system and models/fit: real host', () => {
     for (const model of body.models) {
       assert.ok(VERDICTS.includes(model.status), `unexpected status ${model.status}`)
     }
+  })
+
+  it('gives the same answer as qvac fit for the same input', async (t) => {
+    const res = await fit({
+      models: [
+        { model: ALIAS, modelConfig: { ctx_size: 4096 } },
+        { model: 'EMBEDDINGGEMMA_300M_Q4_0' }
+      ]
+    })
+    assert.equal(res.statusCode, 200, res.payload)
+    const fromRoute = res.json() as FitResult
+
+    const cli = await runCli(
+      ['fit', ALIAS, 'EMBEDDINGGEMMA_300M_Q4_0', '--set', `${ALIAS}:ctx_size=4096`, '--json'],
+      { cwd: await writeConfigDir(t, FIT_CONFIG), timeoutMs: 120_000 }
+    )
+    const fromCli = JSON.parse(cli.stdout) as FitResult
+
+    assert.deepEqual(answer(fromCli), answer(fromRoute))
+    assert.equal(cli.code, FIT_EXIT_CODES[fromCli.verdict], cli.stderr)
   })
 })

@@ -46,6 +46,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
 import { ParakeetStreamExecutor } from '../shared/executors/node/parakeet-stream-executor.js'
 import { ParakeetExecutor } from '../shared/executors/node/parakeet-executor.js'
@@ -99,7 +100,7 @@ function resolveElectronRuntimeDir() {
   return snapCommon ? path.join(snapCommon, 'qvac-test-runtime') : process.cwd()
 }
 
-function resolveBatchAttachmentPath(inputPath: string) {
+function resolveBatchMediaPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
   return path.resolve(process.cwd(), 'assets/images', fileName)
@@ -169,7 +170,7 @@ export const executor = createExecutor({
     // catalog/platform-skips.ts.
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
@@ -181,6 +182,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
 

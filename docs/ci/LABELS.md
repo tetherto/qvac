@@ -12,24 +12,23 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 
 | | |
 |---|---|
-| **Mechanism** | The `fork-approval` job in `pr-build-test.yml` and `sdk-e2e.yml`, which run on `workflow_run`, pauses for a fork PR, as the API reports it, until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
-| **Per-commit** | Each new push starts a fresh workflow run, pinned to that head SHA, that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA, which its `trust` job reads. |
-| **Before approving** | The run summary lists the PR's changed files. A fork PR that changes anything under `.github/` is refused without asking for approval. |
+| **Mechanism** | The `fork-approval` job in each privileged `pull_request_target` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
+| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (read by unprivileged `pull_request` jobs before they run fork code). |
 | **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
-| **Implementation** | The `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) with the `context` job's fork flag and head SHA. The `trust` job runs **after** `fork-approval`, from the default branch's actions, and reads the `qvac/fork-verified` status on that SHA. |
+| **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
 | **Ops verification** | Run `node .github/scripts/verify-fork-ci-environment.mjs` (requires `gh` auth with environments read) to confirm required reviewers are configured on the `fork-ci` environment. |
 
 There is **no self-service path** for external contributors — a merge/release team member must approve the workflow run.
 
 ### Native stages on a fork PR
 
-The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml). It runs on `workflow_run` when `PR checks` starts on the PR, loads from the default branch, and checks out the PR head that its `context` job finds through the API. Every run goes through the same three gates before a stage job starts:
+The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml), a `pull_request_target` workflow that loads from the default branch and checks out the PR head. Every run goes through the same three gates before a stage job starts:
 
 1. `fork-approval` pauses on the `fork-ci` environment for a fork PR, and records `qvac/fork-verified` on the head SHA once a merge or release team member approves.
 2. `trust` ([`pr-check-trust`](../../.github/actions/pr-check-trust)) allows a same-repo PR, blocks a draft, and allows a fork PR only with that SHA-bound approval.
-3. `route` ([`ci-route-stages`](../../.github/actions/ci-route-stages)) reads the PR's labels, from the API, and turns each stage on or off.
+3. `route` ([`ci-route-stages`](../../.github/actions/ci-route-stages)) reads the PR's labels and turns each stage on or off.
 
-A label event starts `PR checks`, whose jobs skip, and so a new `pr-build-test` run, and that run waits on `fork-approval` itself, so the label and the approval can come in either order. A new push needs a new approval: `qvac/fork-verified` is bound to one head SHA. The checks in [`pr-checks.yml`](../../.github/workflows/pr-checks.yml) (lint, typecheck, unit tests) run on `pull_request`, with no secrets, so they need no approval.
+A label event starts a new `pr-build-test` run, and that run waits on `fork-approval` itself, so the label and the approval can come in either order. A new push needs a new approval: `qvac/fork-verified` is bound to one head SHA. The checks in [`pr-checks.yml`](../../.github/workflows/pr-checks.yml) (lint, typecheck, unit tests) run on `pull_request`, with no secrets, so they need no approval.
 
 ---
 
@@ -47,11 +46,11 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
 | `docs-deploy` | Marks docs as ready for production deploy. | Docs deploy workflows | Set when the docs changes are ready to go live alongside PR merge. |
 | `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. |
-| `test-e2e-smoke` | Runs the sdk's smoke suite on its three desktop GPU hosts and its Android and iOS apps on Device Farm, the `sdk-python` package's fast real-worker suite and the Kotlin SDK's worker conformance run. | `sdk-e2e.yml`, through the `test:integration` configurations that name it in `ci.labels` | Faster subset; prefer for PR feedback. The catalog on the Python client is `test-e2e-python`. |
-| `test-e2e-full` | Runs the sdk's full suite on its three desktop GPU hosts and its Android and iOS apps, and `sdk-python`'s GPU suite. | `sdk-e2e.yml` (`ci.labels`) | Long-running; use for major changes. A PR into `release-*` that changes the sdk runs the sdk's full suite without the label. |
+| `test-e2e-smoke` | Runs the smoke suite, plus the tests the PR touched, on Linux, Mac, Windows, Android and iOS. JS runs, and so does each client (Python, Kotlin) whose own folder the PR changed. A change to what the clients are generated from or talk to (the contract's sources, the worker and its RPC, the SDK and engine versions) runs every client. | `sdk-e2e.yml`, through the `test:integration` configurations that name it in `ci.labels` | Faster subset; prefer for PR feedback. For any other change that should reach the clients, add `test-e2e-clients`. |
+| `test-e2e-clients` | Makes a `test-e2e-smoke` run take every client (Python, Kotlin), whatever the PR changed. Starts nothing on its own. | `sdk-e2e.yml`'s `plan` job | Add it before `test-e2e-smoke`. When the smoke label is already on the PR, remove and re-apply it. |
+| `test-e2e-full` | Runs the full suite on Linux, Mac, Windows, Android and iOS, in every language. | `sdk-e2e.yml` (`ci.labels`) | Long-running; use for major changes. A PR into `release-*` that changes the SDK or a client runs it without the label. Electron and Snap run only from a dispatch. |
 | `test-e2e-rerun-failed` | Reruns only the tests that failed on the last `test-e2e-smoke` or `test-e2e-full` run, on the legs where they failed. | `sdk-e2e.yml`'s `plan` job | Removes itself, so add it again for each attempt. A green base run, or one still running, starts nothing; the PR comment says why. |
-| `e2e-tested` | Set by `sdk-e2e.yml` when a `test-e2e-smoke` or `test-e2e-full` run passes on every leg. | `sdk-e2e.yml`'s `report` job | A rerun or `test-e2e-python` never sets it. |
-| `test-e2e-python` | Runs the smoke suite on the **Python client only**, on the sdk's three desktop GPU hosts. | `sdk-e2e.yml` (`ci.labels`) | The shared catalog on the Python leg, not the `sdk-python` package suite that `test-e2e-smoke` starts. Apply it after a `test-e2e-smoke` run finishes when you want the JS legs to answer the same tests: the producer hands the queue to the first registrant, so each client is its own run, and any label applied to a PR cancels its SDK e2e run in progress. |
+| `e2e-tested` | Set by `sdk-e2e.yml` when a `test-e2e-smoke` or `test-e2e-full` run passes on every leg, in every language it ran. | `sdk-e2e.yml`'s `report` job | A rerun never sets it. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
 | `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-route-stages` composite in `pr-build-test.yml` | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. A package can opt its C++ tests out of the label with `metadata.baseline: true` on its `cpp:tests` target (`docs/ci/workflow-standard.md`); `pr-build-test.yml` then runs them on every PR that affects it, and `run-cpp-addon-tests` widens the run to every affected package. |
 
@@ -107,11 +106,11 @@ Six relations connect a changed file to testIds:
 | `catalog/*-tests.ts`, `catalog/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
 | `runners/js/**/executors/*.ts` | the executor's `pattern` regex |
 | anything else under `catalog/` or `runners/js/` | the import graph, via the executors that reach it |
-| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the inference model registry → the resource constants naming those models → the tests depending on those resources |
 | `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
 | a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
 
-The last three relations are the only ones that reach outside `packages/sdk-e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+The last three relations are the only ones that reach outside `packages/sdk-e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the model registry is the one the SDK loads from, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
 
 Deliberate limits:
 

@@ -5,13 +5,13 @@ import type { completion, CompletionRun, CompletionStats, ToolCall } from '@qvac
 import { createServer } from '../helpers/server.js'
 import { JSON_HEADERS, assertStatusAndError, collectSSE } from '../helpers/http.js'
 import { openaiState } from '@/serve/extensions/openai/state'
-import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
+import { namedKvCacheRetention } from '@/serve/lib/named-kv-cache'
 
 function server(t: Parameters<typeof createServer>[0]) {
   // The real retention works in the user's cache folder: it would leave lease
   // files there and could delete their expired caches.
-  t.mock.method(responsesKvCacheRetention, 'acquire', () => Promise.resolve(() => {}))
-  t.mock.method(responsesKvCacheRetention, 'maybeSweep', () => {})
+  t.mock.method(namedKvCacheRetention, 'acquire', () => Promise.resolve(() => {}))
+  t.mock.method(namedKvCacheRetention, 'maybeSweep', () => {})
   return createServer(t, {
     cors: true,
     corsOrigins: ['http://localhost:3000'],
@@ -228,7 +228,7 @@ describe('serve: Responses KV cache', () => {
       const waitStarted = new Promise<void>((resolve) => {
         waiting = resolve
       })
-      t.mock.method(responsesKvCacheRetention, 'acquire', async () => {
+      t.mock.method(namedKvCacheRetention, 'acquire', async () => {
         waiting()
         await deletion
         return () => {}

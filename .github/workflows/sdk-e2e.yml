@@ -9,19 +9,14 @@ on:
     types: [requested]
   workflow_dispatch:
     inputs:
-      packages:
-        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+      languages:
+        description: "Comma-separated languages: js, python, kotlin"
         type: string
-        default: ""
-      labels:
-        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        default: js,python,kotlin
+      platforms:
+        description: "Comma-separated platforms: linux, mac, windows, android, ios, electron, snap"
         type: string
-        default: ""
-      platform:
-        description: Device Farm platform; none runs the desktop configurations only
-        type: choice
-        options: [none, Android, iOS, both]
-        default: none
+        default: linux,mac,windows,android,ios
       suite:
         description: Test suite for every leg
         type: choice
@@ -86,7 +81,7 @@ jobs:
       kind: ${{ steps.kind.outputs.kind }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
@@ -109,12 +104,11 @@ jobs:
             case "$LABEL" in
               test-e2e-rerun-failed) kind=rerun ;;
               test-e2e-smoke | test-e2e-full) kind=base ;;
-              test-e2e-python) kind=probe ;;
               *) kind="ignored-$LABEL" ;;
             esac
           fi
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
-      # Only a PR's base or rerun run reports qvac/sdk-e2e, so a probe, an ignored label or a dispatch never replaces
+      # Only a PR's base or rerun run reports qvac/sdk-e2e, so an ignored label or a dispatch never replaces
       # its result; report, which finishes the status, also needs the PR.
       - if: >-
           steps.pr.outputs.refused != '' ||
@@ -141,8 +135,9 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: test:integration,test:mobile
-      packages: ${{ inputs.packages }}
-      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
+      # Every language's e2e configurations; plan keeps the languages and platforms the label or dispatch names.
+      packages: sdk,sdk-python,sdk-kotlin
+      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,electron,snap' || '' }}
       tags: ci:sdk
       event: ${{ needs.context.outputs.event }}
 
@@ -167,7 +162,7 @@ jobs:
       run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
@@ -190,7 +185,7 @@ jobs:
       allowed: ${{ steps.trust.outputs.allowed }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
@@ -209,7 +204,7 @@ jobs:
     needs: [context, route, trust]
     if: >-
       needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
-      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), needs.context.outputs.label)
+      && needs.context.outputs.label == 'test-e2e-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -220,19 +215,19 @@ jobs:
       json: ${{ steps.impacted.outputs.impacted-json }}
     steps:
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.sha }}
           allow-unsafe-pr-checkout: ${{ needs.context.outputs.fork == 'true' }}
           sparse-checkout: |
             packages/sdk-e2e
-            packages/sdk/contract
             packages/sdk/src/client/api
+            packages/inference/src/models/registry/models.ts
             packages/inference/src/registry.ts
           sparse-checkout-cone-mode: "false"
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: "22"
       - id: impacted
@@ -267,21 +262,21 @@ jobs:
       comments: ${{ steps.plan.outputs.comments }}
     steps:
       - name: Checkout actions and the report script
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             packages/sdk/ci
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
-          PACKAGES: ${{ inputs.packages }}
-          PLATFORM: ${{ inputs.platform }}
+          LANGUAGES: ${{ inputs.languages }}
+          PLATFORMS: ${{ inputs.platforms }}
           SUITE: ${{ inputs.suite }}
           FILTER: ${{ inputs.filter }}
           EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
@@ -299,7 +294,7 @@ jobs:
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
     # A newer run of the same kind cancels this one; a dispatch's group is its own run.
     concurrency:
-      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-desktop
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-desktop
       cancel-in-progress: true
     cache-mode: read
     permissions:
@@ -324,7 +319,7 @@ jobs:
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
     concurrency:
-      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
       cancel-in-progress: true
     runs-on: ${{ matrix.row.runner }}
     environment: release
@@ -362,51 +357,52 @@ jobs:
       CI_BASE_REF: ${{ needs.context.outputs.base-ref }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             .github/scripts
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: ${{ needs.context.outputs.repository || github.repository }}
           ref: ${{ needs.context.outputs.sha }}
           allow-unsafe-pr-checkout: ${{ needs.context.outputs.fork == 'true' }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: "22"
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       - name: Install
         working-directory: src
         run: pnpm install --frozen-lockfile --ignore-scripts --filter .
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: "7200"
       - if: env.PLATFORM == 'Android'
-        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-java@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           java-version: "17"
       - if: env.PLATFORM == 'Android'
-        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-android@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - if: env.PLATFORM == 'iOS'
-        uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-xcode@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          xcode-versions: "26.3"
+          # Expo 58's expo-modules-jsi does not compile with the Swift in Xcode 26.3.
+          xcode-versions: "26.6"
           brew-packages: ninja
           gems: cocoapods
           require-tools: xcodebuild pod ninja
           sdk: iphoneos
       - id: signing
         if: env.PLATFORM == 'iOS'
-        uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/ios-import-signing@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
@@ -422,7 +418,7 @@ jobs:
           IOS_SIGNING: ${{ env.PLATFORM == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
         run: pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       - id: app
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: ${{ steps.prepare.outputs.app-type }}
@@ -430,13 +426,13 @@ jobs:
           name: ${{ steps.prepare.outputs.app-name }}
           max-wait-seconds: "600"
       - id: package
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_PACKAGE
           files: ${{ steps.prepare.outputs.test-package }}
       - id: spec
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_SPEC
@@ -458,12 +454,12 @@ jobs:
           pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       # Fresh credentials before the cancel: an expired session fails the run step and would leave the run billing.
       - if: always() && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
       - if: (failure() || cancelled()) && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           run-arns: ${{ steps.pool.outputs.run-arns }}
       - if: always() && steps.pool.outputs.run-count == '1'
@@ -472,7 +468,7 @@ jobs:
         run: node .github/scripts/devicefarm-pool-run.mjs stop
       - id: logs
         if: always() && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-download-logs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           platform: ${{ env.PLATFORM }}
           run-arns: ${{ steps.pool.outputs.run-arns }}
@@ -484,14 +480,14 @@ jobs:
             appium.log
           skip-extensions: ${{ env.PLATFORM == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: console-logs-${{ matrix.row.slug }}-${{ env.PLATFORM }}
           path: ${{ steps.logs.outputs.console-dir }}
           retention-days: "30"
           if-no-files-found: ignore
       - if: always()
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/test/results/e2e/
@@ -510,10 +506,10 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      REPORTED: ${{ contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode) }}
+      REPORTED: ${{ contains(fromJSON('["base","rerun"]'), needs.plan.outputs.mode) }}
     steps:
       - name: Checkout actions and the report script
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
@@ -533,11 +529,11 @@ jobs:
           [ "$current" = true ] || echo "::notice::PR moved from $SHA to $head; not reporting this run on it"
           echo "current=$current" >> "$GITHUB_OUTPUT"
       - if: "!cancelled() && steps.head.outputs.current == 'true'"
-        uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - if: "!cancelled() && steps.head.outputs.current == 'true'"
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: "*-results-*"
           path: results

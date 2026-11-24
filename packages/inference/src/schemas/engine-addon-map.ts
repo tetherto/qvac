@@ -40,6 +40,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.ggmlVla]: 'vla',
   [ModelType.ggmlClassification]: 'classification',
   [ModelType.ggmlImageEmbedding]: 'classification',
+  [ModelType.ggmlStereoDepth]: 'classification',
   'onnx-vad': 'vad'
 } as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>
 

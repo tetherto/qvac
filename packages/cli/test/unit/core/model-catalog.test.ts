@@ -63,6 +63,7 @@ describe('model-catalog', () => {
       'ggml-vla': 'vla',
       'ggml-classification': 'classification',
       'ggml-image-embedding': 'image-embedding',
+      'ggml-stereo-depth': 'stereo-depth',
       'onnx-vad': 'vad'
     } satisfies Record<ModelConstant['engine'], string>
     const constants = new Map<string, ModelConstant>()

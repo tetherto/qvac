@@ -17,8 +17,8 @@ that object, so this example does the grouping itself:
  - the final frame carries `stats`, one aggregate for the whole batch (e.g.
    `avg_concurrent_seq`), not one per prompt.
 
-Each prompt may also carry `tools`, `attachments` or `responseFormat`, as in
-the JS example; they are left out here to keep the run fast.
+Each prompt may also carry `tools`, media `content` parts or `responseFormat`,
+as in the JS example; they are left out here to keep the run fast.
 
 RUN: python examples/batch_completion.py
 """
@@ -91,7 +91,7 @@ async def main() -> int:
 
             # Prompt order to start with; replaced by the addon-assigned ids
             # once the frame that carries them arrives.
-            ids = [prompt["id"] for prompt in PROMPTS]
+            ids = [str(prompt["id"]) for prompt in PROMPTS]
             texts: dict[str, str] = {}
             stats = None
 
