@@ -543,6 +543,19 @@ test('scalars written as strings are coerced only when lossless', (t) => {
   t.is(coerced('true', { oneOf: [{ type: 'string' }, { type: 'boolean' }] }), 'true')
 })
 
+test('a string an enum-only branch accepts is never changed or dropped', (t) => {
+  const props = { limit: { anyOf: [{ type: 'integer' }, { enum: ['null', 'auto', '3'] }] } }
+  const schema = { type: 'object', properties: props }
+  for (const value of ['null', 'auto', '3']) {
+    t.alike(repairToolArguments({ limit: value }, schema), { limit: value }, value)
+  }
+  const constant = {
+    type: 'object',
+    properties: { n: { anyOf: [{ type: 'number' }, { const: '7' }] } }
+  }
+  t.alike(repairToolArguments({ n: '7' }, constant), { n: '7' }, 'const')
+})
+
 test('enum casing is folded only when exactly one value matches', (t) => {
   t.is(coerced('post', { type: 'string', enum: ['GET', 'POST'] }), 'POST')
   t.is(coerced('ab', { type: 'string', enum: ['aB', 'AB'] }), 'ab')

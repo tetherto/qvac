@@ -24,6 +24,12 @@ function isSchema(value: unknown): value is JsonSchema {
   return isPlainObject(value)
 }
 
+function jsonType(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'array'
+  return typeof value === 'object' ? 'object' : typeof value
+}
+
 function schemaTypes(schema: unknown): Set<string> {
   const found = new Set<string>()
   if (!isSchema(schema)) return found
@@ -31,6 +37,10 @@ function schemaTypes(schema: unknown): Set<string> {
   for (const type of declared) {
     if (typeof type === 'string') found.add(type)
   }
+  // Values an `enum` or `const` accepts count as types too, typed or not.
+  const values = Array.isArray(schema.enum) ? [...schema.enum] : []
+  if (Object.hasOwn(schema, 'const')) values.push(schema['const'])
+  for (const value of values) found.add(jsonType(value))
   for (const key of ['oneOf', 'anyOf']) {
     const branches = schema[key]
     if (!Array.isArray(branches)) continue
