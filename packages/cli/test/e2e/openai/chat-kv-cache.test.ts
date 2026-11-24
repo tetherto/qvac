@@ -335,7 +335,7 @@ describe('serve: chat completions KV cache', () => {
   )
 
   for (const stream of [false, true]) {
-    it(`counts each tool_search round by its own concurrency (stream=${stream})`, async (t) => {
+    it(`reports the last tool_search round's prompt (stream=${stream})`, async (t) => {
       const app = await server(t)
       await app.ready()
       const rounds = [
@@ -373,9 +373,9 @@ describe('serve: chat completions KV cache', () => {
       })
       assert.equal(res.statusCode, 200, res.payload)
       assert.equal(round, 2)
-      // 100 (overlapped: its own promptTokens) + 218 - 10 (alone: the full prompt).
+      // 218 - 10: the last round's full prompt, not the sum over rounds.
       const usage = usageOf(res.payload, stream)
-      assert.equal(usage['prompt_tokens'], 308)
+      assert.equal(usage['prompt_tokens'], 208)
       assert.deepEqual(usage['prompt_tokens_details'], { cached_tokens: 188 })
     })
   }

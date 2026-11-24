@@ -92,16 +92,7 @@ describe('buildResponseObject', () => {
     assert.equal(out.length, 2)
     assert.equal(out[0]!.type, 'message')
     assert.equal(out[1]!.type, 'function_call')
-    const ra = o['required_action'] as {
-      type: string
-      submit_tool_outputs: {
-        tool_calls: Array<{ id: string; function: { name: string; arguments: string } }>
-      }
-    }
-    assert.equal(ra.type, 'submit_tool_outputs')
-    assert.equal(ra.submit_tool_outputs.tool_calls.length, 1)
-    assert.equal(ra.submit_tool_outputs.tool_calls[0]!.id, 'call_1')
-    assert.equal(ra.submit_tool_outputs.tool_calls[0]!.function.name, 'fn')
+    assert.equal('required_action' in o, false)
   })
 
   it('reuses messageItemId and functionCallItemIds when provided', () => {
@@ -438,7 +429,7 @@ describe('writeBlockingResponse', () => {
     assert.equal(parsed.usage.output_tokens, 1)
   })
 
-  it('includes required_action when tool calls present', async () => {
+  it('returns tool calls as function_call items on a completed response', async () => {
     let bodyStr = ''
     let sent = false
     const res = {
@@ -463,11 +454,13 @@ describe('writeBlockingResponse', () => {
 
     const obj = await writeBlockingResponse(res, p, () => result)
     assert.equal(obj['status'], 'completed')
-    assert.ok((obj['required_action'] as { submit_tool_outputs: unknown }).submit_tool_outputs)
-    const parsed = JSON.parse(bodyStr) as {
-      required_action: { submit_tool_outputs: { tool_calls: unknown[] } }
-    }
-    assert.equal(parsed.required_action.submit_tool_outputs.tool_calls.length, 1)
+    const parsed = JSON.parse(bodyStr) as { output: Array<{ type: string; call_id?: string }> }
+    const calls = parsed.output.filter((item) => item.type === 'function_call')
+    assert.deepEqual(
+      calls.map((call) => call.call_id),
+      ['call_x']
+    )
+    assert.equal('required_action' in parsed, false)
   })
 
   it('returns reasoning separately from the answer and reports input tokens', async () => {

@@ -1,7 +1,12 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool, ToolCall } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
-import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
+import {
+  accumulateUsage,
+  cachedTokensFromStats,
+  formatToolErrors,
+  inputTokensFromStats
+} from '@/serve/core/completion'
 import {
   drainCompletion,
   type DrainedOpenAICompletion
@@ -20,11 +25,9 @@ import type {
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
-  cachedTokensFromStats,
   functionCallItem,
   clientToolName,
   functionCallOutputItemId,
-  inputTokensFromStats,
   messageId,
   outputItem,
   reasoningItemId,

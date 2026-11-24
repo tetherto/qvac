@@ -1,7 +1,11 @@
 import crypto from 'node:crypto'
 import type { ToolCall, CompletionStats } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
-import { completionTokensFromStats } from '@/serve/core/completion'
+import {
+  cachedTokensFromStats,
+  completionTokensFromStats,
+  inputTokensFromStats
+} from '@/serve/core/completion'
 import type { ToolNamespaces } from '@/serve/extensions/openai/schemas/responses'
 
 export function responseId(): string {
@@ -91,7 +95,7 @@ export interface BuildResponseObjectParams {
   cacheOccupancy?: number
 }
 
-// Every tool-call field (output items, status, required_action) comes from this
+// Every tool-call field (output items, status) comes from this
 // one list: the ordered items when given, otherwise `toolCalls`.
 function responseToolCalls(params: BuildResponseObjectParams): FunctionCallSegment[] {
   if (params.items) {
@@ -104,23 +108,6 @@ function responseToolCalls(params: BuildResponseObjectParams): FunctionCallSegme
     ...clientToolName(tc.function.name, params.toolNamespaces),
     arguments: tc.function.arguments
   }))
-}
-
-function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
-  return {
-    type: 'submit_tool_outputs',
-    submit_tool_outputs: {
-      tool_calls: calls.map((call) => ({
-        id: call.callId,
-        type: 'function',
-        function: {
-          name: call.name,
-          ...(call.namespace !== undefined && { namespace: call.namespace }),
-          arguments: call.arguments
-        }
-      }))
-    }
-  }
 }
 
 export function responseUsage(
@@ -207,8 +194,6 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     base['incomplete_details'] = { reason: 'max_output_tokens' }
   }
 
-  if (hasToolCalls) base['required_action'] = requiredAction(calls)
-
   Object.assign(base, requestEcho(params))
 
   return base
@@ -232,24 +217,6 @@ export function messageItem(id: string, text: string): Record<string, unknown> {
     role: 'assistant',
     content: [{ type: 'output_text', text, annotations: [] }]
   }
-}
-
-// On a KV-cache hit the SDK's promptTokens counts only the newly evaluated
-// tail. cacheTokens is what the context holds after the run (the whole prompt
-// plus what was generated), so the full input is that minus the generated part.
-// cacheTokens is scheduler-wide, though: when other requests overlapped this
-// one it includes theirs, so promptTokens, this request's own, is used instead.
-export function inputTokensFromStats(stats: CompletionStats | undefined): number {
-  const prompt = stats?.promptTokens ?? 0
-  const held = stats?.cacheTokens
-  const generated = stats?.generatedTokens
-  if (typeof held !== 'number' || typeof generated !== 'number') return prompt
-  if ((stats?.avgConcurrentSeq ?? 1) > 1) return prompt
-  return Math.max(prompt, held - generated)
-}
-
-export function cachedTokensFromStats(stats: CompletionStats | undefined): number {
-  return Math.max(0, inputTokensFromStats(stats) - (stats?.promptTokens ?? 0))
 }
 
 export function functionCallItem(

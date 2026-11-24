@@ -5,7 +5,12 @@ import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
-import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
+import {
+  accumulateUsage,
+  cachedTokensFromStats,
+  formatToolErrors,
+  inputTokensFromStats
+} from '@/serve/core/completion'
 import {
   drainCompletion,
   type DrainedOpenAICompletion,
@@ -33,10 +38,6 @@ import {
 } from '@/serve/extensions/openai/schemas/common'
 import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
 import { openaiState } from '@/serve/extensions/openai/state'
-import {
-  cachedTokensFromStats,
-  inputTokensFromStats
-} from '@/serve/extensions/openai/adapters/responses-shape'
 import {
   buildUsage,
   chatCompletionChunk,
@@ -124,17 +125,16 @@ function formatStats(stats: CompletionStats | undefined): string {
   return parts.length > 0 ? ` ${parts.join(' ')}` : ''
 }
 
-interface PromptUsage {
+// The last round's prompt is what the context holds: a tool_search round's
+// prompt is part of it, so summing rounds would count it twice.
+function promptUsage(lastRound: CompletionStats | undefined): {
   promptTokens?: number
   cachedTokens?: number
-}
-
-// Added per round: the overlap guard needs each round's own concurrency.
-function addPromptUsage(sum: PromptUsage, round: CompletionStats | undefined): PromptUsage {
-  if (round?.promptTokens === undefined) return sum
+} {
+  if (lastRound?.promptTokens === undefined) return {}
   return {
-    promptTokens: (sum.promptTokens ?? 0) + inputTokensFromStats(round),
-    cachedTokens: (sum.cachedTokens ?? 0) + cachedTokensFromStats(round)
+    promptTokens: inputTokensFromStats(lastRound),
+    cachedTokens: cachedTokensFromStats(lastRound)
   }
 }
 
@@ -270,7 +270,6 @@ async function runBlocking(
     let turnHistory = history
     let drained
     let total: DrainedOpenAICompletion | undefined
-    let promptUsage: PromptUsage = {}
     for (let round = 0; ; round++) {
       const result = completionFn({
         modelId: p.sdkModelId,
@@ -290,7 +289,6 @@ async function runBlocking(
       req.bindCancel(result.requestId)
       drained = await drainCompletion(result)
       total = accumulateUsage(total, drained)
-      promptUsage = addPromptUsage(promptUsage, drained.stats)
 
       if (round >= MAX_TOOL_SEARCH_ROUNDS) break
       const extended = foldToolSearch(
@@ -320,7 +318,7 @@ async function runBlocking(
         ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
-        ...promptUsage,
+        ...promptUsage(drained.stats),
         ...cacheOccupancy(p, drained),
         finishReason
       })
@@ -364,7 +362,6 @@ async function runStreaming(
     let turnHistory = history
     let drained
     let total: DrainedOpenAICompletion | undefined
-    let promptUsage: PromptUsage = {}
     for (let round = 0; ; round++) {
       const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
 
@@ -387,7 +384,6 @@ async function runStreaming(
         (token) => emit({ reasoning_content: token })
       )
       total = accumulateUsage(total, drained)
-      promptUsage = addPromptUsage(promptUsage, drained.stats)
 
       const extended =
         round >= MAX_TOOL_SEARCH_ROUNDS
@@ -425,7 +421,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...promptUsage,
+        ...promptUsage(drained.stats),
         ...cacheOccupancy(p, drained)
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))
