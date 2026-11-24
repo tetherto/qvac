@@ -74,7 +74,7 @@ async function loadThroughDispatch(
   return response.modelId
 }
 
-test('kvCacheIdentityConfig pins cache_share_across_keys and drops runtime-only keys', (t) => {
+test('kvCacheIdentityConfig pins sent policy keys to their defaults and drops runtime-only keys', (t) => {
   t.alike(
     kvCacheIdentityConfig({
       ctx_size: 4096,
@@ -83,9 +83,13 @@ test('kvCacheIdentityConfig pins cache_share_across_keys and drops runtime-only 
       verbosity: 2,
       cache_ram_mib: 256
     }),
-    { ctx_size: 4096, cache_share_across_keys: false }
+    { ctx_size: 4096, cache_share_across_keys: false, verbosity: 0 }
   )
-  t.alike(kvCacheIdentityConfig({ ctx_size: 4096 }), { ctx_size: 4096 })
+  t.alike(
+    kvCacheIdentityConfig({ ctx_size: 4096 }),
+    { ctx_size: 4096 },
+    'an absent key stays absent'
+  )
   t.is(kvCacheIdentityConfig(undefined), undefined)
 })
 
@@ -110,6 +114,50 @@ test('kv cache folder: a real load that omits cache_share_across_keys shares its
   t.not(sharingId, defaultId, 'sharing stays part of the loaded model identity')
   t.is(kvCacheDirIdFor(defaultId), defaultId, 'a default load keeps its folder of today')
   t.is(kvCacheDirIdFor(sharingId), defaultId, 'turning sharing on reads the same folder')
+})
+
+test('kv cache folder: a real load keeps its folder of today with or without verbosity', async (t) => {
+  useTestCacheDir()
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  t.teardown(async () => {
+    await close()
+    clearPlugins()
+  })
+  const modelSrc = writeModelFile()
+
+  const quietId = await loadThroughDispatch(modelSrc, { ctx_size: 2560, verbosity: 0 })
+  t.teardown(() => unregisterModel(quietId))
+  const unsetId = await loadThroughDispatch(modelSrc, { ctx_size: 2560 })
+  t.teardown(() => unregisterModel(unsetId))
+
+  t.is(kvCacheDirIdFor(quietId), quietId, 'a load that sends verbosity 0 keeps its folder')
+  t.is(kvCacheDirIdFor(unsetId), unsetId, 'a load without verbosity keeps its folder')
+})
+
+test('kv cache folder: turning on sharing and raising verbosity keeps the folder a verbosity 0 chat wrote', async (t) => {
+  registerFakePlugin(t)
+  const modelSrc = writeModelFile()
+
+  const quietId = await load(modelSrc, {
+    ctx_size: 2304,
+    cache_share_across_keys: false,
+    verbosity: 0
+  })
+  t.teardown(() => unregisterModel(quietId))
+  const savedPath = await getCacheFilePath(quietId, CONFIG_HASH, 'chat-v')
+  fs.writeFileSync(savedPath, 'kv')
+  t.is(path.basename(path.dirname(savedPath)), quietId)
+
+  const verboseId = await load(modelSrc, {
+    ctx_size: 2304,
+    cache_share_across_keys: true,
+    verbosity: 2
+  })
+  t.teardown(() => unregisterModel(verboseId))
+
+  t.not(verboseId, quietId)
+  t.is(resolveCacheFilePath(verboseId, CONFIG_HASH, 'chat-v'), savedPath)
 })
 
 test('kv cache folder: turning on cache_share_across_keys keeps the folder an existing chat wrote', async (t) => {
@@ -150,7 +198,6 @@ test('kv cache folder: runtime-only settings do not move the folder', async (t) 
     ctx_size: 3072,
     cache_share_across_keys: true,
     openclCacheDir: '/data/app/opencl-cache/sdk-0.25.0',
-    verbosity: 2,
     cache_ram_mib: 256
   })
   t.teardown(() => unregisterModel(afterId))
