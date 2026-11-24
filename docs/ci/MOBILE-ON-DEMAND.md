@@ -4,11 +4,12 @@ Per-addon mobile integration tests run on **AWS Device Farm**, which is expensiv
 They **never run automatically on PRs**. You start them by hand, choosing exactly
 one platform, the device(s) to run on, and, where supported, a subset of tests.
 
-All 16 mobile addons are on the CI contract and run through one workflow,
+All 17 mobile addons are on the CI contract and run through one workflow,
 `mobile-tests.yml`: `asr-ggml`, `audiogen-ggml`, `bci-whispercpp`,
-`classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`,
-`ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`, `model-fit`,
-`ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml` and `vla-ggml`.
+`classification-ggml`, `decision-ggml`, `decoder-audio`, `diffusion-cpp`,
+`embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
+`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml` and
+`vla-ggml`.
 The SDK runs there too, with its own consumer app: `@qvac/sdk` on Android and
 iOS, and `sdk-kotlin` (the Kotlin SDK's app) on Android. See
 [The SDK's e2e apps](#the-sdks-e2e-apps).
