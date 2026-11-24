@@ -17,8 +17,11 @@ const UNSUPPORTED_BROWSER_KEYS = [
   'backendsDir',
   'openclCacheDir',
   'lora-scaled',
+  'lora_scaled',
   'control-vector',
-  'control-vector-scaled'
+  'control_vector',
+  'control-vector-scaled',
+  'control_vector_scaled'
 ]
 const FILE_KEYS = ['lora', 'spec-draft-model', 'spec_draft_model']
 
@@ -47,6 +50,8 @@ function browserLoadConfig(config = {}) {
   }
 
   const { load_mode: underscore, 'load-mode': hyphen, ...rest } = config
+  // An empty lora means none; native would read the next key as its path.
+  if (rest.lora === '') delete rest.lora
   for (const [key, value] of [
     ['load_mode', underscore],
     ['load-mode', hyphen]
