@@ -92,6 +92,26 @@ export const stallPlugin = {
         }
       }
     },
+    // A duplex session that asks for its next chunk as soon as it has handled
+    // one. It echoes each chunk; a chunk `stall` parks on the gate of that name
+    // instead, the way native work stalls on input it has received.
+    transcribeStream: {
+      requestSchema: z.looseObject({}),
+      responseSchema: z.object({ text: z.string() }),
+      streaming: true,
+      duplex: true,
+      handler: async function* (
+        _params: unknown,
+        input: AsyncIterable<{ toString(): string }>,
+        context?: PluginHandlerContext
+      ) {
+        for await (const chunk of input) {
+          const text = chunk.toString()
+          if (text === 'stall') await untilAbortedOr(gate('stall').opened, context)
+          else yield { text }
+        }
+      }
+    },
     // Holds the model's one `transcribe` slot until the gate opens, the way a
     // native job that ignores its cancel keeps the model busy.
     occupy: {

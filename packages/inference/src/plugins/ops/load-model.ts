@@ -52,6 +52,12 @@ export interface LoadModelOptions {
   sessionId?: string
 }
 
+// Read through a call: the compiler narrows `signal.aborted` to `false` after
+// the checks before the native load and keeps that across the `await`.
+function abortedDuringLoad(signal: AbortSignal): boolean {
+  return signal.aborted
+}
+
 export async function loadModel(
   params: LoadModelServerParams,
   options?: LoadModelOptions
@@ -184,6 +190,15 @@ async function loadModelLocked(
       'completionStream' in plugin.handlers
         ? await resolveToolDialect(modelName, modelPath)
         : undefined
+
+    // The native load takes no abort signal, so a cancel or a deadline that
+    // landed during it is honored here. The caller's call has already failed
+    // without a model id, so a model registered now could never be unloaded
+    // by the caller.
+    if (request !== undefined && abortedDuringLoad(request.signal)) {
+      await result.model.unload?.()
+      throw new InferenceCancelledError(request.requestId)
+    }
 
     registerModel(
       modelId,

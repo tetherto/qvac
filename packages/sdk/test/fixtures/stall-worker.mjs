@@ -33,14 +33,53 @@ function untilAborted(context) {
 const stallParams = z.object({ key: z.string() })
 const chunk = z.object({ n: z.number() })
 
+// Per `loadGate` key: how many loads have started and how many models were unloaded.
+const loadCounts = new Map()
+
+function countsFor(key) {
+  let counts = loadCounts.get(key)
+  if (!counts) {
+    counts = { started: 0, unloaded: 0 }
+    loadCounts.set(key, counts)
+  }
+  return counts
+}
+
+// A model loaded with `modelConfig.loadGate` parks in `load()` until `release`
+// names that key, which stands in for a native load that cannot be stopped.
+function createModel({ modelConfig }) {
+  const key = modelConfig?.loadGate
+  if (typeof key !== 'string') {
+    return { model: { load: async () => {}, unload: async () => {} } }
+  }
+  const counts = countsFor(key)
+  return {
+    model: {
+      load: async () => {
+        counts.started++
+        await gate(key).opened
+      },
+      unload: async () => {
+        counts.unloaded++
+      }
+    }
+  }
+}
+
 const stallPlugin = {
   modelType: 'deadline-stall-test',
   displayName: 'Deadline stall',
   addonPackage: '@qvac/deadline-stall-test',
   loadConfigSchema: z.looseObject({}),
   skipPrimaryModelPathValidation: true,
-  createModel: () => ({ model: { load: async () => {}, unload: async () => {} } }),
+  createModel,
   handlers: {
+    loadCounts: {
+      requestSchema: stallParams,
+      responseSchema: z.object({ started: z.number(), unloaded: z.number() }),
+      streaming: false,
+      handler: async (params) => ({ ...countsFor(params.key) })
+    },
     // Yields one chunk, then waits. Stops when aborted.
     stall: {
       requestSchema: z.object({}),

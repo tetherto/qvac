@@ -77,4 +77,37 @@ test('the worker fails a stalled call at its deadline and reports the boundary',
   for (const key of ['stream', 'reply']) {
     await invokePlugin({ modelId, handler: 'release', params: { key } })
   }
+
+  const loadCounts = () =>
+    invokePlugin<{ started: number; unloaded: number }>({
+      modelId,
+      handler: 'loadCounts',
+      params: { key: 'load' }
+    })
+
+  const load = await failure(
+    loadModel(
+      {
+        modelType: 'deadline-stall-test',
+        modelSrc: modelPath,
+        modelConfig: { loadGate: 'load' }
+      },
+      { deadline: { loadMs: 300 } }
+    )
+  )
+  t.is(load.boundary, 'load')
+  t.alike(
+    await loadCounts(),
+    { started: 1, unloaded: 0 },
+    'the deadline passed while the native load was running'
+  )
+
+  await invokePlugin({ modelId, handler: 'release', params: { key: 'load' } })
+  const waitUntil = Date.now() + 5_000
+  let counts = await loadCounts()
+  while (counts.unloaded === 0 && Date.now() < waitUntil) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    counts = await loadCounts()
+  }
+  t.is(counts.unloaded, 1, 'the model the abandoned load produced is unloaded')
 })

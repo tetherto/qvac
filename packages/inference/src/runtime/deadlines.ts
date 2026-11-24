@@ -160,6 +160,7 @@ export class DeadlineClock {
   #rejectExpired: (error: DeadlineExceededError) => void = () => {}
   #queueListener: ExpiryListener | undefined
   #running = false
+  #awaitingInput = false
   #startedByDispatch = false
   #closed = false
 
@@ -261,13 +262,35 @@ export class DeadlineClock {
     if (this.#limits.runMs !== undefined && !this.#timers.has('run')) {
       this.#arm('run', this.#limits.runMs)
     }
-    if (this.#idleFromAdmission && this.#limits.idleMs !== undefined && !this.#timers.has('idle')) {
+    if (
+      this.#idleFromAdmission &&
+      !this.#awaitingInput &&
+      this.#limits.idleMs !== undefined &&
+      !this.#timers.has('idle')
+    ) {
       this.#arm('idle', this.#limits.idleMs)
     }
   }
 
   /** The request made progress: the idle timer restarts. */
   touch(): void {
+    if (!this.#running || this.#awaitingInput || this.#limits.idleMs === undefined) return
+    this.#arm('idle', this.#limits.idleMs)
+  }
+
+  /**
+   * The handler asked for the caller's next input and has none: the idle timer
+   * stops until `inputArrived()`. The run timer keeps counting, so the session
+   * as a whole stays bounded.
+   */
+  awaitInput(): void {
+    this.#awaitingInput = true
+    this.#disarm('idle')
+  }
+
+  /** The caller's input arrived, or ended: the idle timer starts afresh. */
+  inputArrived(): void {
+    this.#awaitingInput = false
     if (!this.#running || this.#limits.idleMs === undefined) return
     this.#arm('idle', this.#limits.idleMs)
   }

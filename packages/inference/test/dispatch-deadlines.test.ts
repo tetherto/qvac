@@ -4,9 +4,16 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 import { z } from 'zod'
-import { send, stream, close } from '@/dispatch'
+import Buffer from 'bare-buffer'
+import { send, stream, duplex, close } from '@/dispatch'
+import { transcribe } from '@/plugins/ops/transcribe'
 import { registerPlugin, clearPlugins } from '@/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import {
+  getAllModelIds,
+  registerModel,
+  unregisterModel,
+  type AnyModel
+} from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
 import { clearSessions, openSession } from '@/runtime/session-registry'
 import { startFinetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
@@ -253,13 +260,25 @@ test('loadModel fails with boundary "load" when the native load outlasts loadMs'
   const loading = new Promise<void>((resolve) => {
     finishLoad = resolve
   })
+  let loadStarted = false
+  let unloads = 0
   clearPlugins()
   registerPlugin({
     modelType: ModelType.llamacppCompletion,
     displayName: 'Slow load',
     addonPackage: '@qvac/llm-llamacpp',
     loadConfigSchema: z.looseObject({}),
-    createModel: () => ({ model: { load: () => loading, unload: async () => {} } }),
+    createModel: () => ({
+      model: {
+        load: () => {
+          loadStarted = true
+          return loading
+        },
+        unload: async () => {
+          unloads++
+        }
+      }
+    }),
     handlers: {}
   } as unknown as QvacPlugin)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-load-deadline-'))
@@ -277,12 +296,124 @@ test('loadModel fails with boundary "load" when the native load outlasts loadMs'
     )
     t.is(error.boundary, 'load', 'runMs on a load is not read')
     t.is(error.capability, undefined)
+    t.ok(loadStarted, 'the deadline passed while the native load was running')
     finishLoad()
     await sleep(50)
+    t.is(unloads, 1, 'the model the abandoned load produced is unloaded')
+    t.alike(getAllModelIds(), [], 'no model is registered under an id the caller never received')
   } finally {
     await close()
     clearPlugins()
     fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+interface DuplexLine {
+  type?: string
+  text?: string
+  typedFields?: { boundary?: string }
+}
+
+async function openTranscribeStream(deadline: Record<string, number>) {
+  const session = await duplex({
+    type: 'transcribeStream',
+    modelId: STALL_MODEL_ID,
+    deadline
+  } as unknown as Request)
+  const lines: DuplexLine[] = []
+  const ended = (async () => {
+    for await (const chunk of session.responseStream) {
+      for (const line of chunk.toString().split('\n')) {
+        if (line) lines.push(JSON.parse(line) as DuplexLine)
+      }
+    }
+  })()
+  return { input: session.requestStream, lines, ended }
+}
+
+test('a duplex session does not fail on its idle deadline while the caller sends nothing', async (t) => {
+  setUp()
+  try {
+    const { input, lines, ended } = await openTranscribeStream({ idleMs: 60 })
+    await sleep(200)
+    t.alike(lines, [], 'no error after more than three idle deadlines without input')
+    input.write(Buffer.from('a'))
+    input.end()
+    await ended
+    t.alike(
+      lines.map((line) => line.text),
+      ['a'],
+      'the session answers the input and ends without an error'
+    )
+  } finally {
+    await tearDown()
+  }
+})
+
+test('a duplex session fails on its idle deadline when its work stalls on input it received', async (t) => {
+  setUp()
+  try {
+    const { input, lines, ended } = await openTranscribeStream({ idleMs: 60 })
+    await sleep(100)
+    input.write(Buffer.from('stall'))
+    await ended
+    t.is(lines.length, 1)
+    t.is(lines[0]?.type, 'error')
+    t.is(lines[0]?.typedFields?.boundary, 'idle')
+  } finally {
+    releaseStall('stall')
+    await tearDown()
+  }
+})
+
+test('a duplex session waiting for input still fails on its run deadline', async (t) => {
+  setUp()
+  try {
+    const { lines, ended } = await openTranscribeStream({ idleMs: 30, runMs: 120 })
+    await ended
+    t.is(lines.length, 1)
+    t.is(lines[0]?.typedFields?.boundary, 'run')
+  } finally {
+    await tearDown()
+  }
+})
+
+test('transcription counts a native update that carries only silence as progress', async (t) => {
+  const modelId = 'silent-transcription-idle'
+  registerModel(modelId, {
+    model: {
+      run: async () => ({
+        iterate: async function* () {
+          for (let n = 0; n < 10; n++) {
+            await sleep(20)
+            yield [{ text: '[BLANK_AUDIO]' }]
+          }
+        },
+        stats: {}
+      }),
+      reload: async () => {},
+      addon: { cancel: () => Promise.resolve() }
+    } as unknown as AnyModel,
+    path: '/tmp/whisper.gguf',
+    config: { audio_format: 's16le' },
+    modelType: ModelType.whispercppTranscription
+  })
+  const clock = new DeadlineClock(
+    { idleMs: 70 },
+    { requestId: 'silent', capability: 'transcription', modelId },
+    { idleFromAdmission: true }
+  )
+  const unbind = getRequestRegistry().bindDeadline('silent', undefined, clock)
+  try {
+    const yielded: unknown[] = []
+    const request = { modelId, audioChunk: { type: 'base64', value: '' } } as never
+    for await (const text of transcribe(request, 'silent')) yielded.push(text)
+    t.alike(yielded, [], 'silence yields nothing to the caller')
+    t.is(clock.error, undefined, 'updates every 20ms keep a 70ms idle deadline from passing')
+  } finally {
+    unbind()
+    clock.close()
+    unregisterModel(modelId)
   }
 })
 

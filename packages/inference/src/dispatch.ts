@@ -19,7 +19,7 @@ import { z } from 'zod'
 import { formatZodError } from '@/utils/zod-error'
 import os from 'bare-os'
 import Buffer from 'bare-buffer'
-import { PassThrough, type Readable } from 'bare-stream'
+import { PassThrough } from 'bare-stream'
 import { registry } from '@/registry'
 import type { HandlerEntry, StreamHandler, StreamHandlerContext } from '@/handlers/types'
 import { handlerSupportsProgress, selectHandler } from '@/selection'
@@ -335,6 +335,32 @@ async function* streamWithinDeadline<T>(
   }
 }
 
+/**
+ * The caller's input, with the idle deadline stopped for as long as the handler
+ * waits for the next chunk. A caller that pauses between chunks is not a stall.
+ */
+async function* inputWithinDeadline(
+  input: AsyncIterable<Buffer>,
+  clock: DeadlineClock
+): AsyncGenerator<Buffer> {
+  const chunks = input[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      clock.awaitInput()
+      let next: IteratorResult<Buffer>
+      try {
+        next = await chunks.next()
+      } finally {
+        clock.inputArrived()
+      }
+      if (next.done) return
+      yield next.value
+    }
+  } finally {
+    await chunks.return?.()
+  }
+}
+
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {
   const directHandler = handler as Handler
   return directHandler(request)
@@ -510,14 +536,22 @@ export async function duplex<T extends Request>(
 
   const duplexHandler = entry.handler as (
     req: Request,
-    stream: Readable
+    input: AsyncIterable<Buffer>
   ) => AsyncGenerator<Response>
 
   const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
   const deadline = openDeadline(processed, true)
+  // `completionOrchestrate` reads tool results ahead of its model turns and
+  // registers each wait for one on its own, so only a plugin's input is wrapped.
+  const callerInput = inputStream as unknown as AsyncIterable<Buffer>
+  const handlerInput =
+    deadline && entry.pluginOp ? inputWithinDeadline(callerInput, deadline.clock) : callerInput
   void (async () => {
     try {
-      const responses = streamWithinDeadline(duplexHandler(processed, inputStream), deadline?.clock)
+      const responses = streamWithinDeadline(
+        duplexHandler(processed, handlerInput),
+        deadline?.clock
+      )
       for await (const response of responses) {
         outputStream.write(JSON.stringify(response) + '\n', 'utf-8')
       }
