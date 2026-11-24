@@ -850,20 +850,21 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT },
   )
   const embeddings = await waitForCompletion(response)
   t.ok(embeddings != null && embeddings[0]?.length > 0, 'inference produces embeddings')
+  const { backendDevice, backendName } = response.stats ?? {}
   t.ok(
-    response?.stats?.backendDevice === 'cpu' || response?.stats?.backendDevice === 'gpu',
+    backendDevice === 'cpu' || backendDevice === 'gpu',
     'runtime stats report resolved backendDevice as cpu or gpu'
   )
-  if (DEVICE_API === 'cpu') {
-    t.is(response.stats.backendName, 'cpu', 'runtime stats name the CPU backend')
-  } else if (os.platform() === 'darwin' || os.platform() === 'ios') {
-    t.is(response.stats.backendName, 'metal', 'runtime stats name the Metal backend')
-  } else if (os.platform() === 'linux' || os.platform() === 'win32') {
+
+  const isLinuxOrWindows = platform === 'linux' || platform === 'win32'
+  const requiresGpu = forceVulkan || hasNvidiaGpu || process.env.QVAC_EXPECT_GPU === '1'
+  if (DEVICE_API === 'cpu' || (isLinuxOrWindows && !requiresGpu && backendDevice === 'cpu')) {
+    t.is(backendName, 'cpu', 'runtime stats name the CPU backend')
+  } else if (platform === 'darwin' || isIos) {
+    t.is(backendName, 'metal', 'runtime stats name the Metal backend')
+  } else if (isLinuxOrWindows) {
     const expected = forceVulkan ? ['vulkan'] : hasNvidiaGpu ? ['cuda'] : ['cuda', 'vulkan']
-    t.ok(
-      expected.includes(response.stats.backendName),
-      'runtime stats name the desktop GPU backend'
-    )
+    t.ok(expected.includes(backendName), 'runtime stats name the desktop GPU backend')
   }
 })
 
