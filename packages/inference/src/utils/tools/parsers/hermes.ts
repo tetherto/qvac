@@ -1,5 +1,10 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import { acceptToolCall, isValidToolCall, type ParserResult } from '@/utils/tools/shared'
+import {
+  acceptToolCall,
+  isValidToolCall,
+  withObjectArguments,
+  type ParserResult
+} from '@/utils/tools/shared'
 
 // Qwen3.5/3.6 can fuse its two tool templates into one frame, embedding the
 // XML `<function=NAME>` token as a bare string key inside the JSON envelope:
@@ -48,7 +53,7 @@ export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
 
     let callItem: unknown
     try {
-      callItem = parseHermesJson(trimmedJson)
+      callItem = withObjectArguments(parseHermesJson(trimmedJson))
     } catch (error) {
       errors.push({
         code: 'PARSE_ERROR',
@@ -89,7 +94,7 @@ function recoverIncompleteHermesFrame(text: string, tools: Tool[]): ParserResult
 
   let parsed: unknown
   try {
-    parsed = parseHermesJson(candidate)
+    parsed = withObjectArguments(parseHermesJson(candidate))
   } catch {
     return { matched: false, toolCalls: [], errors: [] }
   }

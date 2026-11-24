@@ -1,5 +1,10 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import { acceptToolCall, isValidToolCall, type ParserResult } from '@/utils/tools/shared'
+import {
+  acceptToolCall,
+  isValidToolCall,
+  withObjectArguments,
+  type ParserResult
+} from '@/utils/tools/shared'
 
 export function parseGemmaFormat(text: string, tools: Tool[]): ParserResult {
   const toolCalls: ToolCall[] = []
@@ -21,7 +26,8 @@ export function parseGemmaFormat(text: string, tools: Tool[]): ParserResult {
     return { matched: false, toolCalls, errors }
   }
 
-  for (const callItem of (parsed as { tool_calls: unknown[] }).tool_calls) {
+  for (const entry of (parsed as { tool_calls: unknown[] }).tool_calls) {
+    const callItem = withObjectArguments(entry)
     if (!isValidToolCall(callItem)) {
       errors.push({
         code: 'PARSE_ERROR',
@@ -45,7 +51,7 @@ export function parseLlamacppFormat(text: string, tools: Tool[]): ParserResult {
 
   let parsedItem: unknown
   try {
-    parsedItem = JSON.parse(text)
+    parsedItem = withObjectArguments(JSON.parse(text))
   } catch {
     return { matched: false, toolCalls, errors }
   }
@@ -77,7 +83,7 @@ export function parseGenericFormat(text: string, tools: Tool[]): ParserResult {
     if (text.slice(end, matches[i + 1]?.index ?? text.length).trim()) continue
     matched = true
     try {
-      const objItem = JSON.parse(match[0]) as unknown
+      const objItem = withObjectArguments(JSON.parse(match[0]))
       if (isValidToolCall(objItem)) {
         const accepted = acceptToolCall(objItem, tools, match[0])
         if (accepted.error) errors.push(accepted.error)

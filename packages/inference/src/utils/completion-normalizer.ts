@@ -10,6 +10,7 @@ import { parseToolCalls } from '@/utils/tools/index'
 import {
   BARE_FUNCTION_CLOSE,
   BARE_FUNCTION_OPEN,
+  bareFunctionBodyStart,
   bareFunctionNameLength
 } from '@/utils/tools/parsers/qwen35'
 
@@ -58,6 +59,8 @@ type DialectSpec = {
   dropTokens?: readonly string[]
   // Markers too short to register without stealing longer split markers.
   contentDropTokens?: readonly string[]
+  // The template ends the turn at a call, so text after one makes it an example.
+  callEndsTurn?: boolean
 }
 
 type Dialect = NonNullable<NormalizerConfig['toolDialect']>
@@ -100,22 +103,26 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
       '<|start|>user',
       '<|return|>'
     ],
-    contentDropTokens: ['<|channel|>']
+    contentDropTokens: ['<|channel|>'],
+    callEndsTurn: true
   },
   qwen35: {
     // Same <tool_call>…</tool_call> framing as hermes; inner content is XML.
-    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }, BARE_FUNCTION_FRAME]
+    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }, BARE_FUNCTION_FRAME],
+    callEndsTurn: true
   },
   gemma4: {
     toolFrames: [{ open: '<|tool_call>', close: '<tool_call|>' }],
-    thinkingFrames: [{ open: '<|channel>thought', close: '<channel|>' }]
+    thinkingFrames: [{ open: '<|channel>thought', close: '<channel|>' }],
+    callEndsTurn: true
   },
   dsml: {
     toolFrames: [
       { open: '<｜DSML｜tool_calls>', close: '</｜DSML｜tool_calls>' },
       { open: '<｜DSML｜function_calls>', close: '</｜DSML｜function_calls>' },
       ...DSML_INVOKE_FRAMES
-    ]
+    ],
+    callEndsTurn: true
   }
 }
 
@@ -140,7 +147,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // `parseToolCalls` can match its own dialect markers.
   let toolCallBuffer = ''
   let activeToolFrame: FrameSpec | null = null
-  let bareNameSeen = false
+  let bareBodySeen = false
 
   // Only calls at the end of the turn are made: frames followed by more prose
   // were examples. Closed frames separated only by whitespace or protocol
@@ -332,7 +339,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     toolCallBuffer = marker
     activeToolFrame = spec
     toolFrameOpenedInThinking = fromThinking
-    bareNameSeen = false
+    bareBodySeen = false
     state = 'toolFraming'
   }
 
@@ -364,14 +371,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     if (!frame) return
 
-    // The reasoning only mentioned the marker: still inside `<think>`.
-    function returnToThinking() {
-      trimThinkingStart = false
-      emitThinking(events, raw)
-      activeThinkingFrame = BUILTIN_THINKING
-      if (closed) state = 'thinkingFraming'
-    }
-
     // Empty-payload guard. Strip frame markers and check the inner is
     // non-empty; surface a toolError on empty payloads so the literal
     // markers don't leak into contentDelta.
@@ -381,7 +380,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       inner = inner.slice(0, inner.length - frame.close.length)
     }
     if (inner.trim().length === 0) {
-      if (openedInThinking) return returnToThinking()
+      if (openedInThinking) return returnToThinking(events, raw)
       releaseTrailingCalls(events)
       events.push({
         type: 'toolError',
@@ -394,7 +393,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     const { toolCalls, errors } = parseToolCalls(raw, config.tools, dialect)
 
     if (openedInThinking) {
-      if (toolCalls.length === 0) return returnToThinking()
+      if (toolCalls.length === 0) return returnToThinking(events, raw)
       if (closed) {
         heldThinkingCalls = { raw, calls: toolCalls }
         state = 'afterThinkingTool'
@@ -408,7 +407,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       return
     }
 
-    if (closed && toolCalls.length > 0 && !openedInThinking) {
+    // Where the template does not end the turn at a call, a wrapped call is made
+    // as soon as it closes. A bare block is always held: it may be an example.
+    const holdCalls = frame.bare || dialectSpec.callEndsTurn
+    if (closed && toolCalls.length > 0 && !openedInThinking && holdCalls) {
       if (trailingCalls) {
         trailingCalls.raw += raw
         trailingCalls.calls.push(...toolCalls)
@@ -448,12 +450,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   function abandonToolFrame(events: CompletionEvent[]) {
     const { raw, frame, openedInThinking } = takeToolFrame()
     state = 'content'
-    if (frame?.bare && openedInThinking) {
-      emitThinking(events, raw)
-      activeThinkingFrame = BUILTIN_THINKING
-      state = 'thinkingFraming'
-      return
-    }
+    if (frame?.bare && openedInThinking) return returnToThinking(events, raw)
     if (frame?.bare) {
       if (namesDeclaredTool(raw, frame)) releaseTrailingCalls(events)
       return emitContent(events, raw)
@@ -489,14 +486,19 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   // A bare opener not followed by `NAME>` was text; `rest` is what came after it.
+  // The reasoning only mentioned a tool marker: the text goes back to `<think>`.
+  function returnToThinking(events: CompletionEvent[], text: string) {
+    trimThinkingStart = false
+    emitThinking(events, text)
+    activeThinkingFrame = BUILTIN_THINKING
+    state = 'thinkingFraming'
+  }
+
   function releaseBareOpener(events: CompletionEvent[], rest: string) {
     const { frame, openedInThinking } = takeToolFrame()
     const opener = frame?.open ?? ''
     if (openedInThinking) {
-      trimThinkingStart = false
-      emitThinking(events, opener)
-      activeThinkingFrame = BUILTIN_THINKING
-      state = 'thinkingFraming'
+      returnToThinking(events, opener)
     } else {
       state = 'content'
       emitContent(events, opener)
@@ -574,15 +576,20 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       state = 'content'
       return buf
     }
-    if (activeToolFrame.bare && !bareNameSeen) {
+    // A bare opener frames a call only once `NAME>` and the start of a body
+    // follow; until then it is held, and anything else streams as text.
+    if (activeToolFrame.bare && !bareBodySeen) {
       const rest = toolCallBuffer.slice(activeToolFrame.open.length) + buf
       const nameLength = bareFunctionNameLength(rest)
-      if (nameLength < 0) return releaseBareOpener(events, rest)
-      if (nameLength === 0) {
+      const bodyStart = nameLength > 0 ? bareFunctionBodyStart(rest.slice(nameLength)) : 0
+      if (nameLength < 0 || bodyStart < 0) return releaseBareOpener(events, rest)
+      if (nameLength === 0 || bodyStart === 0) {
         toolCallBuffer += buf
         return ''
       }
-      bareNameSeen = true
+      bareBodySeen = true
+      toolCallBuffer = activeToolFrame.open
+      buf = rest
     }
 
     const close = activeToolFrame.close

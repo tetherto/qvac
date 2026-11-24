@@ -1,5 +1,5 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import { repairToolArguments } from '@/utils/tools/repair'
+import { readStructured, repairToolArguments } from '@/utils/tools/repair'
 
 export type ParserResult = {
   matched: boolean
@@ -93,6 +93,14 @@ export function generateStableToolCallId(name: string, args: Record<string, unkn
   }
   const sequence = toolCallSequence++
   return `call_${Math.abs(hash).toString(36)}_${sequence}`
+}
+
+// OpenAI-style calls carry `arguments` as a JSON string.
+export function withObjectArguments(obj: unknown): unknown {
+  if (!obj || typeof obj !== 'object' || !('arguments' in obj)) return obj
+  if (typeof obj.arguments !== 'string') return obj
+  const parsed = readStructured(obj.arguments, new Set(['object']))
+  return parsed === null ? obj : { ...obj, arguments: parsed }
 }
 
 export function isValidToolCall(obj: unknown): obj is {

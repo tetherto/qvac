@@ -74,7 +74,12 @@ function argsOf(r: Run) {
   return r.calls.map((c) => [c.name, c.arguments])
 }
 
-type Shape = { label: string; text: string; expected: [string, Record<string, unknown>][] }
+type Shape = {
+  label: string
+  text: string
+  expected: [string, Record<string, unknown>][]
+  dialects?: readonly ToolDialect[]
+}
 
 const recovered: Shape[] = [
   {
@@ -156,7 +161,8 @@ const notCalls: Shape[] = [
   {
     label: 'a wrapped call followed by more prose is an example',
     text: 'For example <tool_call>{"name":"login","arguments":{"password":"x"}}</tool_call> works.',
-    expected: []
+    expected: [],
+    dialects: ['qwen35']
   },
   {
     label: 'a call only quoted inside reasoning',
@@ -168,7 +174,7 @@ const notCalls: Shape[] = [
 test('unknown, ambiguous, truncated and quoted markup does not become a call', (t) => {
   for (const shape of notCalls) {
     for (const size of [1, 5, shape.text.length]) {
-      for (const dialect of ['qwen35', 'hermes'] as const) {
+      for (const dialect of shape.dialects ?? (['qwen35', 'hermes'] as const)) {
         const r = run(chunks(shape.text, size), [LOGIN], dialect)
         const where = `${shape.label} (${dialect}, ${size}-char tokens)`
         t.alike(r.calls, [], `${where}: no streamed call`)
@@ -278,6 +284,80 @@ test('a call cut off after a complete one keeps the complete one made', (t) => {
 
   const prose = run([block, '\n<function=unknown> is how it looks'], [LOGIN])
   t.is(prose.calls.length + prose.finalCalls.length, 0, 'an undeclared name is still prose')
+})
+
+test('where the template does not end the turn at a call, text after it keeps the call', (t) => {
+  const status: Tool = {
+    type: 'function',
+    name: 'get_candidate_status',
+    description: 'status',
+    parameters: {
+      type: 'object',
+      properties: { candidate_id: { type: 'string' } },
+      required: ['candidate_id']
+    }
+  }
+  const lfm2 =
+    '<|tool_call_start|>[get_candidate_status(candidate_id="12345")]<|tool_call_end|>' +
+    'Checking the current status of candidate ID 12345.'
+  for (let split = 0; split <= lfm2.length; split++) {
+    const r = run([lfm2.slice(0, split), lfm2.slice(split)], [status], 'pythonic')
+    t.alike(argsOf(r), [['get_candidate_status', { candidate_id: '12345' }]], `split ${split}`)
+    t.is(r.content, 'Checking the current status of candidate ID 12345.', `split ${split}`)
+  }
+
+  const call = (p: string) =>
+    `<tool_call>{"name":"login","arguments":{"password":"${p}"}}</tool_call>`
+  const hermes = run(
+    chunks(`First Paris. ${call('a')} And Rome. ${call('b')} Done.`, 5),
+    [LOGIN],
+    'hermes'
+  )
+  t.alike(argsOf(hermes), [
+    ['login', { password: 'a' }],
+    ['login', { password: 'b' }]
+  ])
+  t.is(hermes.content, 'First Paris.  And Rome.  Done.')
+})
+
+test('a <function=NAME> in prose does not hold back the text after it', (t) => {
+  for (const name of ['name', 'login']) {
+    const text = `Qwen writes calls as <function=${name}> blocks, then closes them. More prose follows.`
+    const n = createCompletionNormalizer({
+      capabilities: { toolCalling: 'textParse', thinkingFraming: 'thinkTags' },
+      tools: [LOGIN],
+      captureThinking: true,
+      emitRawDeltas: false,
+      toolDialect: 'qwen35'
+    })
+    const streamed = chunks(text, 3)
+      .flatMap((c) => n.push(c))
+      .flatMap((e) => (e.type === 'contentDelta' ? [e.text] : []))
+      .join('')
+    t.is(streamed, text.slice(0, streamed.length), `${name}: streamed in order`)
+    t.ok(
+      streamed.length >= text.length - 3,
+      `${name}: ${streamed.length} of ${text.length} streamed`
+    )
+  }
+})
+
+test('OpenAI-style string arguments are read as an object', (t) => {
+  const frame = `<tool_call>{"name":"login","arguments":${JSON.stringify(JSON.stringify({ password: 's' }))}}</tool_call>`
+  for (const dialect of ['hermes', 'qwen35'] as const) {
+    const r = run(chunks(frame, 9), [LOGIN], dialect)
+    t.alike(argsOf(r), [['login', { password: 's' }]], dialect)
+    t.is(r.errors, 0, dialect)
+  }
+  const bareJson = parseToolCalls(
+    JSON.stringify({ name: 'login', arguments: '{"password":"s"}' }),
+    [LOGIN],
+    'json'
+  )
+  t.alike(
+    bareJson.toolCalls.map((c) => c.arguments),
+    [{ password: 's' }]
+  )
 })
 
 test('an optional non-null qwen35 parameter written as null is left out', (t) => {
@@ -485,4 +565,16 @@ test('repairing an object with many keys stays linear', (t) => {
   const elapsed = Date.now() - started
   t.is(Object.keys(r.payload as object).length, 50_000)
   t.ok(elapsed < BUDGET_MS, `${keys.length} chars in ${elapsed}ms`)
+})
+
+test('a string value full of escaped quotes stays linear to scan', (t) => {
+  const value = '\\"'.repeat(256 * 1024)
+  const started = Date.now()
+  const r = repairToolArguments(
+    { payload: `{"a": "${value}", "b": 1,}` },
+    { type: 'object', properties: { payload: { type: 'object' } } }
+  )
+  const elapsed = Date.now() - started
+  t.is((r.payload as { b: number }).b, 1)
+  t.ok(elapsed < BUDGET_MS, `${value.length} chars in ${elapsed}ms`)
 })

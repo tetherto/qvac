@@ -245,16 +245,16 @@ test('valid framed tool call: emits toolCall, no content for markup', (t) => {
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
   )
   const toolJson = JSON.stringify({ name: 'echo', arguments: { msg: 'hi' } })
-  const events = [...pushAll(n, [`Before <tool_call>${toolJson}</tool_call>\n`]), ...n.finish()]
+  const events = [...pushAll(n, [`Before <tool_call>${toolJson}</tool_call> After`]), ...n.finish()]
 
   const toolEvents = events.filter((e) => e.type === 'toolCall')
   t.is(toolEvents.length, 1)
-  t.alike(texts(events, 'contentDelta'), ['Before '])
+  t.alike(texts(events, 'contentDelta'), ['Before ', ' After'])
 })
 
-test('a framed call followed by more prose is an example: shown, not made', (t) => {
+test('a framed call followed by more prose is an example where the call ends the turn', (t) => {
   const n = createCompletionNormalizer(
-    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL], toolDialect: 'qwen35' })
   )
   const frame = `<tool_call>${JSON.stringify({ name: 'echo', arguments: { msg: 'hi' } })}</tool_call>`
   const events = [...pushAll(n, [`Call it like ${frame} and wait.`]), ...n.finish()]
@@ -266,7 +266,7 @@ test('a framed call followed by more prose is an example: shown, not made', (t) 
 
 test('a demoted example is not made again from the final parse', (t) => {
   const n = createCompletionNormalizer(
-    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL], toolDialect: 'qwen35' })
   )
   const call = { name: 'echo', arguments: { msg: 'hi' } }
   const events = [
@@ -278,7 +278,7 @@ test('a demoted example is not made again from the final parse', (t) => {
 
 test('calls separated by whitespace and protocol tokens are all made', (t) => {
   const n = createCompletionNormalizer(
-    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL], toolDialect: 'qwen35' })
   )
   const frame = (msg: string) =>
     `<tool_call>${JSON.stringify({ name: 'echo', arguments: { msg } })}</tool_call>`

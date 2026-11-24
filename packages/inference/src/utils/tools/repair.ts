@@ -43,17 +43,50 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Keys as they appear in the text: quoted or bare, followed by a colon.
-const WRITTEN_KEY =
-  /"((?:[^"\\\n]|\\.)*)"\s*:|'((?:[^'\\\n]|\\.)*)'\s*:|(?<![\w$-])([A-Za-z_$][\w$-]*)\s*:/g
+const KEY_START = /[A-Za-z_$]/
+const KEY_CHAR = /[\w$-]/
+
+function colonAt(text: string, from: number): boolean {
+  let i = from
+  while (i < text.length && /\s/.test(text[i]!)) i++
+  return text[i] === ':'
+}
+
+// Keys as they appear in the text, quoted or bare, followed by a colon. One
+// pass: a quoted string is skipped whole, so its escaped quotes are never rescanned.
+function writtenKeys(text: string): Set<string> {
+  const keys = new Set<string>()
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]!
+    if (ch === '"' || ch === "'") {
+      let j = i + 1
+      while (j < text.length && text[j] !== ch && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1
+      if (text[j] !== ch) {
+        i = j
+        continue
+      }
+      if (colonAt(text, j + 1)) keys.add(text.slice(i + 1, j))
+      i = j + 1
+    } else if (KEY_START.test(ch)) {
+      let j = i + 1
+      while (j < text.length && KEY_CHAR.test(text[j]!)) j++
+      if (colonAt(text, j)) keys.add(text.slice(i, j))
+      i = j
+    } else {
+      i++
+    }
+  }
+  return keys
+}
+
 // Keys the one-pass scan can miss (spaces, odd quoting) get a regex search each, up to this many.
 const MAX_LOOSE_KEY_CHECKS = 32
 
 // jsonrepair turns stray words into keys (`{bad json` -> `{"bad json":null}`);
 // a repair is kept only when every key it produced was written as a key.
 function keysWritten(value: unknown, text: string): boolean {
-  const written = new Set<string>()
-  for (const match of text.matchAll(WRITTEN_KEY)) written.add(match[1] ?? match[2] ?? match[3]!)
+  const written = writtenKeys(text)
   let looseChecks = 0
 
   function writtenLoosely(key: string): boolean {

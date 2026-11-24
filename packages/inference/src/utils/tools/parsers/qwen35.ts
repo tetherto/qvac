@@ -67,7 +67,7 @@ export function parseQwen35Format(text: string, tools: Tool[]): ParserResult {
   const toolCalls: ToolCall[] = []
   const errors: ToolCallError[] = []
 
-  if (!text.includes('<tool_call>')) return parseBareFunctionFormat(text, tools)
+  if (!text.includes('<tool_call>')) return { matched: false, toolCalls, errors }
 
   const outerRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
   const outerMatches = Array.from(text.matchAll(outerRegex))
@@ -148,8 +148,15 @@ function decodeFunctionCall(
  */
 export const BARE_FUNCTION_OPEN = '<function='
 export const BARE_FUNCTION_CLOSE = '</function>'
-const BARE_FUNCTION_NAME = /^[A-Za-z_][\w.-]{0,63}\s*>/
-const BARE_FUNCTION_NAME_PREFIX = /^[A-Za-z_][\w.-]{0,63}\s*$|^$/
+const MAX_FUNCTION_NAME_LENGTH = 64
+const NAME = `[A-Za-z_][\\w.-]{0,${MAX_FUNCTION_NAME_LENGTH - 1}}`
+const BARE_FUNCTION_NAME = new RegExp(`^${NAME}\\s*>`)
+const BARE_FUNCTION_NAME_PREFIX = new RegExp(`^${NAME}\\s*$|^$`)
+// Longest `NAME>` worth waiting for: the name, a few spaces and `>`.
+const BARE_NAME_WINDOW = MAX_FUNCTION_NAME_LENGTH + 6
+// What a call body starts with; anything else after `NAME>` is prose. A nested
+// opener is held too, so the wrapper is rejected as ambiguous, not streamed.
+const BARE_BODY_OPENERS = ['<parameter=', BARE_FUNCTION_CLOSE, BARE_FUNCTION_OPEN]
 
 /**
  * Length of the `NAME>` that follows a bare `<function=` opener in `rest`;
@@ -158,7 +165,20 @@ const BARE_FUNCTION_NAME_PREFIX = /^[A-Za-z_][\w.-]{0,63}\s*$|^$/
 export function bareFunctionNameLength(rest: string): number {
   const match = BARE_FUNCTION_NAME.exec(rest)
   if (match) return match[0].length
-  return BARE_FUNCTION_NAME_PREFIX.test(rest.slice(0, 70)) && rest.length < 70 ? 0 : -1
+  return BARE_FUNCTION_NAME_PREFIX.test(rest.slice(0, BARE_NAME_WINDOW)) &&
+    rest.length < BARE_NAME_WINDOW
+    ? 0
+    : -1
+}
+
+/**
+ * Whether the text after a bare block's `NAME>` starts a call body: 1 when it
+ * does, 0 while it may still, -1 when it is prose.
+ */
+export function bareFunctionBodyStart(body: string): number {
+  const start = body.trimStart()
+  if (BARE_BODY_OPENERS.some((opener) => start.startsWith(opener))) return 1
+  return BARE_BODY_OPENERS.some((opener) => opener.startsWith(start)) ? 0 : -1
 }
 
 // A `<function=` left outside the parameter values means one call wraps another.
@@ -177,7 +197,7 @@ export function parseBareFunctionFormat(text: string, tools: Tool[]): ParserResu
     const start = text.indexOf(BARE_FUNCTION_OPEN, cursor)
     if (start === -1) break
     const nameStart = start + BARE_FUNCTION_OPEN.length
-    const nameLength = bareFunctionNameLength(text.slice(nameStart, nameStart + 70))
+    const nameLength = bareFunctionNameLength(text.slice(nameStart, nameStart + BARE_NAME_WINDOW))
     if (nameLength <= 0) {
       cursor = nameStart
       continue
@@ -189,7 +209,8 @@ export function parseBareFunctionFormat(text: string, tools: Tool[]): ParserResu
     cursor = end
     const name = text.slice(nameStart, bodyStart - 1).trim()
     const body = text.slice(bodyStart, close)
-    if (!tools.some((t) => t.name === name) || hasNestedOpener(body)) continue
+    if (!tools.some((t) => t.name === name)) continue
+    if (bareFunctionBodyStart(body + BARE_FUNCTION_CLOSE) < 1 || hasNestedOpener(body)) continue
     matched = true
     const raw = text.slice(start, end)
     const result = decodeFunctionCall(name, body, tools, raw)

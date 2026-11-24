@@ -43,7 +43,7 @@ function pickFormatParsers(
     case 'qwen35':
       // Hermes fallback: Qwen3.5 templates sometimes emit OpenAI-style JSON
       // when the native XML format fails; Hermes chain recovers those.
-      return [parseQwen35Format, parseHermesFormat]
+      return [parseQwen35Format, parseHermesFormat, parseBareFunctionFormat]
     case 'gemma4':
       // No JSON fallback: Gemma4 emits only its native channel-thought dialect
       // and never falls back to JSON-envelope formats.
@@ -68,6 +68,7 @@ function pickFormatParsers(
         parseHarmonyFormat,
         parseQwen35Format,
         parseHermesFormat,
+        parseBareFunctionFormat,
         parseGemmaFormat,
         parseLlamacppFormat,
         parsePythonicFormat
