@@ -14,7 +14,6 @@ from tetherto.qvac_sdk import methods
 from tetherto.qvac_sdk._generated.models import (
     CancelRequestBroad,
     LoadModelSrcRequestLlamacppEmbedding,
-    RagRequestSearch,
     TranscribeRequestAudioChunkFilePath,
     VectorIndexRequestDispose,
 )
@@ -22,7 +21,6 @@ from tetherto.qvac_sdk._generated_base import GeneratedBaseModel, constant_field
 from tetherto.qvac_sdk.schemas import (
     CancelRequest,
     EmbedRequest,
-    RagRequest,
     TranscribeRequest,
     TranscribeStreamRequest,
     VectorIndexRequest,
@@ -145,12 +143,6 @@ async def test_cancel_sends_variant_labels_and_only_set_fields():
     request = CancelRequest(root=CancelRequestBroad(model_id="m"))
     sent = await send(methods.cancel, request)
     assert sent == {"type": "cancel", "operation": "broad", "modelId": "m"}
-
-
-async def test_rag_sends_variant_labels_and_only_set_fields():
-    request = RagRequest(root=RagRequestSearch(model_id="m", query="q"))
-    sent = await send(methods.rag, request)
-    assert sent == {"type": "rag", "operation": "search", "modelId": "m", "query": "q"}
 
 
 async def test_vector_index_sends_variant_labels_and_only_set_fields():

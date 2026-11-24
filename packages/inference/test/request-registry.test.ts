@@ -193,7 +193,7 @@ test('registry: cancelAll fires every signal', async (t) => {
   })
   await using c = await r.begin({
     requestId: 'r-c',
-    kind: 'rag'
+    kind: 'vectorIndex'
   })
 
   await r.cancelAll('shutdown')

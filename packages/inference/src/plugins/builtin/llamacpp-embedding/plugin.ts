@@ -1,5 +1,5 @@
 import EmbedLlamacpp, { assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import {
   definePlugin,
   defineHandler,
