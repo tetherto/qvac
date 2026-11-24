@@ -13,6 +13,7 @@ import {
   bareFunctionBodyStart,
   bareFunctionNameLength
 } from '@/utils/tools/parsers/qwen35'
+import { createHeldToolCalls } from '@/utils/held-tool-calls'
 
 type NormalizerState =
   | 'content'
@@ -136,6 +137,22 @@ type FrameKind = 'tool' | 'thinking' | 'content'
 
 export type CompletionNormalizer = ReturnType<typeof createCompletionNormalizer>
 
+// An unfinished bare block naming a declared tool is a cut-off call, not prose.
+function namesDeclaredTool(raw: string, frame: FrameSpec, tools: readonly { name: string }[]) {
+  const rest = raw.slice(frame.open.length)
+  const nameLength = bareFunctionNameLength(rest)
+  if (nameLength <= 0) return false
+  const name = rest.slice(0, nameLength - 1).trim()
+  return tools.some((tool) => tool.name === name)
+}
+
+// What a turn can end on after a call without making it an example: nothing,
+// a special token, or the start of another call.
+function isMarkupTail(tail: string, toolOpeners: readonly string[]) {
+  const trimmed = tail.trim()
+  return !trimmed || /^<[|｜]/.test(trimmed) || toolOpeners.some((m) => m.startsWith(trimmed))
+}
+
 export function createCompletionNormalizer(config: NormalizerConfig) {
   let seq = 0
   let state: NormalizerState = 'content'
@@ -153,7 +170,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // were examples. Closed frames separated only by whitespace or protocol
   // tokens wait here together; visible text demotes them all, the turn end
   // or a frame that fails to parse makes them.
-  let trailingCalls: { raw: string; calls: ToolCall[] } | null = null
+  const trailingCalls = createHeldToolCalls()
   const demotedToolCallKeys = new Set<string>()
 
   // Thinking frame: tracks which frame's close marker we're scanning for
@@ -244,7 +261,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return seq++
   }
 
-  function emitContent(events: CompletionEvent[], text: string) {
+  function normalizeContent(text: string) {
     let normalized = text
     for (const token of contentDropTokens) {
       normalized = normalized.split(token).join('')
@@ -253,16 +270,24 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       normalized = normalized.trimStart()
       if (normalized) trimAfterThinking = false
     }
+    return normalized
+  }
+
+  function pushContent(events: CompletionEvent[], text: string) {
+    if (!text) return
+    contentParts.push(text)
+    events.push({ type: 'contentDelta', seq: nextSeq(), text })
+  }
+
+  // Whitespace after held calls stays with them; any other text makes them examples.
+  function emitContent(events: CompletionEvent[], text: string) {
+    const normalized = normalizeContent(text)
     if (!normalized) return
-    if (trailingCalls) {
-      if (!normalized.trim()) {
-        trailingCalls.raw += normalized
-        return
-      }
+    if (trailingCalls.active) {
+      if (!normalized.trim()) return trailingCalls.pad(normalized)
       demoteTrailingCalls(events)
     }
-    contentParts.push(normalized)
-    events.push({ type: 'contentDelta', seq: nextSeq(), text: normalized })
+    pushContent(events, normalized)
   }
 
   // Capture-gated: thinking frames may register even when `captureThinking`
@@ -300,7 +325,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
   // A made call waits behind earlier undecided ones so the order is kept.
   function emitMadeCall(events: CompletionEvent[], call: ToolCall) {
-    releaseTrailingCalls(events)
     if (deferredCalls.length > 0) deferredCalls.push({ call, made: true })
     else emitStreamedToolCall(events, call)
   }
@@ -357,15 +381,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return taken
   }
 
-  // An unfinished bare block naming a declared tool is a cut-off call, not prose.
-  function namesDeclaredTool(raw: string, frame: FrameSpec) {
-    const rest = raw.slice(frame.open.length)
-    const nameLength = bareFunctionNameLength(rest)
-    if (nameLength <= 0) return false
-    const name = rest.slice(0, nameLength - 1).trim()
-    return config.tools.some((tool) => tool.name === name)
-  }
-
   function flushToolBuffer(events: CompletionEvent[], closed: boolean) {
     const { raw, frame, openedInThinking } = takeToolFrame()
 
@@ -402,7 +417,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
 
     if (frame.bare && toolCalls.length === 0 && errors.length === 0) {
-      if (!closed && namesDeclaredTool(raw, frame)) releaseTrailingCalls(events)
+      if (!closed && namesDeclaredTool(raw, frame, config.tools)) releaseTrailingCalls(events)
       emitContent(events, raw)
       return
     }
@@ -411,12 +426,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     // as soon as it closes. A bare block is always held: it may be an example.
     const holdCalls = frame.bare || dialectSpec.callEndsTurn
     if (closed && toolCalls.length > 0 && !openedInThinking && holdCalls) {
-      if (trailingCalls) {
-        trailingCalls.raw += raw
-        trailingCalls.calls.push(...toolCalls)
-      } else {
-        trailingCalls = { raw, calls: toolCalls }
-      }
+      trailingCalls.hold(raw, toolCalls)
       state = 'afterTool'
       return
     }
@@ -452,7 +462,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     state = 'content'
     if (frame?.bare && openedInThinking) return returnToThinking(events, raw)
     if (frame?.bare) {
-      if (namesDeclaredTool(raw, frame)) releaseTrailingCalls(events)
+      if (namesDeclaredTool(raw, frame, config.tools)) releaseTrailingCalls(events)
       return emitContent(events, raw)
     }
 
@@ -507,17 +517,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function releaseTrailingCalls(events: CompletionEvent[]) {
-    const held = trailingCalls
-    trailingCalls = null
-    for (const call of held?.calls ?? []) emitMadeCall(events, call)
+    for (const call of trailingCalls.take().calls) emitMadeCall(events, call)
   }
 
   function demoteTrailingCalls(events: CompletionEvent[]) {
-    const held = trailingCalls
-    trailingCalls = null
-    if (!held) return
-    for (const call of held.calls) demotedToolCallKeys.add(getToolCallKey(call))
-    emitContent(events, held.raw)
+    const { raw, calls } = trailingCalls.take()
+    for (const call of calls) demotedToolCallKeys.add(getToolCallKey(call))
+    pushContent(events, normalizeContent(raw))
   }
 
   function stepAfterTool(events: CompletionEvent[], buf: string) {
@@ -525,7 +531,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     for (;;) {
       // Whitespace joins the held group as it arrives, so it is never rescanned.
       const trimmed = rest.trimStart()
-      trailingCalls!.raw += rest.slice(0, rest.length - trimmed.length)
+      trailingCalls.pad(rest.slice(0, rest.length - trimmed.length))
       rest = trimmed
       if (!trimmed) return ''
       const opener = toolOpeners.find((m) => trimmed.startsWith(m))
@@ -838,9 +844,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       const tail = afterToolTail
       afterToolTail = ''
       state = 'content'
-      const trimmed = tail.trim()
-      const markup =
-        !trimmed || /^<[|｜]/.test(trimmed) || toolOpeners.some((m) => m.startsWith(trimmed))
+      const markup = isMarkupTail(tail, toolOpeners)
       if (failed || !markup) demoteTrailingCalls(events)
       if (!markup) emitContent(events, tail)
     }
