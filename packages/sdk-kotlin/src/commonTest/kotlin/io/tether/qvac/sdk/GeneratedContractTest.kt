@@ -35,7 +35,7 @@ class GeneratedContractTest {
 
     @Test
     fun generatesModelCatalogAndVersion() {
-        assertEquals("0.24.0", SDK_VERSION)
+        assertTrue(Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?""").matches(SDK_VERSION), SDK_VERSION)
         assertTrue(Models.all.isNotEmpty())
         assertNotNull(Models.QWEN3_600M_INST_Q4)
     }

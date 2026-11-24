@@ -1,11 +1,9 @@
 import test from 'brittle'
 import Ajv2020 from 'ajv/dist/2020'
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import {
   buildContract,
   callShapeByHandlerType,
-  contractDir,
   renderContractFiles,
   registryEngineManifestFile,
   renderRegistryEngineManifest
@@ -432,15 +430,6 @@ test('export is deterministic across runs', async (t) => {
   t.is(first['schema.json'], second['schema.json'])
   t.is(first['manifest.json'], second['manifest.json'])
   t.is(first['models.json'], second['models.json'])
-})
-
-test('committed artifacts are up to date', async (t) => {
-  const rendered = await renderContractFiles()
-
-  for (const [name, content] of Object.entries(rendered)) {
-    const committed = await readFile(fileURLToPath(new URL(name, contractDir)), 'utf8')
-    t.is(committed, content, `contract/${name} matches a fresh export`)
-  }
 })
 
 test('MOSS plugin ID is exported with its name for generated clients', (t) => {

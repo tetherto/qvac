@@ -71,7 +71,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-kotlin/package.json` repin `qv-sdk-inference-version` Step 3 makes). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
