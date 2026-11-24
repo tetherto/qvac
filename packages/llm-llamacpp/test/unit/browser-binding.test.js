@@ -40,7 +40,12 @@ function cooperativeEngine(options) {
   let nextHandle = 1
   const handles = new Map()
   return {
-    FS: { mkdirTree() {} },
+    FS: {
+      mkdirTree() {},
+      stat() {
+        throw Object.assign(new Error('missing'), { errno: 44 })
+      }
+    },
     ccall(name, _returnType, _types, args) {
       if (name === 'qvac_web_create') {
         const handle = nextHandle++
@@ -604,7 +609,7 @@ test('cooperative cache operation does not wait for an unrelated live job', asyn
     const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
     await isolated.activate(handle)
     await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
-    await isolated.saveCache(handle, `/cache/unrelated-${iteration}.bin`)
+    await isolated.discardCache(handle, `/cache/unrelated-${iteration}.bin`)
     t.is(isolated.activeJobs(handle), 1, `job still live, iteration ${iteration + 1}`)
     while (isolated.activeJobs(handle) !== 0) await delay()
     await isolated.destroyInstance(handle)

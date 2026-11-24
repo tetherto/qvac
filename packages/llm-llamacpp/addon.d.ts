@@ -75,6 +75,7 @@ export interface LlamaBinding {
     cancel(handle: unknown, savePauseCheckpoint: number): Promise<void> | void;
     cancelJob(handle: unknown, id: number): Promise<void> | void;
     finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
+    clearsPauseCheckpoints?: boolean;
     saveCache(handle: unknown, cacheKey: string): Promise<void>;
     discardCache(handle: unknown, cacheKey: string): Promise<void>;
     calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
@@ -147,6 +148,7 @@ export declare class LlamaInterface {
      * Run finetuning when the selected binding provides support.
      */
     finetune(finetuningParams: FinetuneOptions): Promise<number | false>;
+    get clearsPauseCheckpoints(): boolean;
     /**
      * Run one inference job with an array of message objects, or a batch of
      * jobs with an array of `{id?, messages}` items. The binding mints

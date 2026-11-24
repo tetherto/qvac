@@ -87,6 +87,8 @@ struct TrainingCheckpointState {
   bool finetuningStartedEmitted = false;
   bool suppressProgressBar = false;
   std::function<void(const FinetuneProgressStats&)> progressCallback;
+  std::function<void()> controlCallback;
+  std::function<void(const std::filesystem::path&)> checkpointCallback;
 
   std::mutex pauseDoneMutex;
   std::condition_variable pauseDoneCv;

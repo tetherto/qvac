@@ -77,6 +77,24 @@ await response.await()
 await model.unload()
 ```
 
+## Finetuning files
+
+Browser finetuning dataset, chat-template, output, and checkpoint paths may be
+safe relative or absolute OPFS paths. SDK-mounted input paths are also
+accepted. Path segments must not be `.` or `..`; for example, use
+`checkpoints/run-1` or `/checkpoints/run-1`, not `./checkpoints/run-1`.
+NUL characters are rejected. SDK-mounted dataset and template files are
+accepted. Outputs and completed checkpoints are persisted in OPFS, so
+finetuning requires OPFS support.
+
+Non-ephemeral `cacheKey` runs and `saveCache()` also require OPFS because their
+contract promises durable files. Inference without a cache key, an ephemeral
+cache, and a read-only `baseCacheKey` can still run from SDK-mounted files when
+OPFS is unavailable. Exact cache and checkpoint file commits use the browser's
+cross-context Web Locks API when available. Writable cache,
+output, and checkpoint paths must not be shared by simultaneous model workers;
+without Web Locks, even file-commit serialization is limited to one worker.
+
 ## Current browser binding scope
 
 Supported:
@@ -89,8 +107,16 @@ Supported:
 - Generation parameters
 - Per-job cancel during generation; a queued job can also be cancelled before it starts
 - Runtime stats
-- `saveCache`/`discardCache` (cache files live in memory)
+- `saveCache`/`discardCache`; saved cache files are persisted in OPFS and restored after reload
 - `calcTokens` while the engine is idle
+- `finetune()`, including progress events, pause/resume checkpoints, cancellation,
+  and final adapter output persisted in OPFS. Browser training may use CPU
+  fallback for operations the WebGPU backend does not implement; GPU training
+  acceleration is not guaranteed.
+- `assessFit()` validates the request, complete GGUF metadata, and normalized
+  load configuration, then returns `unknown`.
+  WebGPU does not expose current free or total device memory, so the browser
+  cannot produce an honest native-style fit verdict.
 - Single-file and sharded GGUF models
 - Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
@@ -99,8 +125,6 @@ Supported:
 | ------------------------------------------------ | ------------------------------------------------------- |
 | `load_mode` other than `auto`/`none`             | Rejected at load; weights are read, never memory-mapped |
 | RPC servers and native backend/cache directories | Rejected at load                                        |
-| `finetune()`                                     | Throws: not exposed by the browser binding              |
-| `assessFit()`                                    | Rejects                                                 |
 
 With `parallel: 1`, one request runs at a time in the Worker. With
 `parallel >= 2`, Fabric's continuous-batching scheduler advances multiple

@@ -100,7 +100,9 @@ static bool gpuSupportsOutProdF16() {
 std::string LlamaFinetuner::finetune(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
     FinetuneTerminalResult::Stats* outStats,
-    LlamaFinetuner::ProgressCallback progressCallback) {
+    LlamaFinetuner::ProgressCallback progressCallback,
+    LlamaFinetuner::ControlCallback controlCallback,
+    LlamaFinetuner::CheckpointCallback checkpointCallback) {
   using namespace llama_finetuning_helpers;
 
   validateModelForFinetuning();
@@ -346,6 +348,8 @@ std::string LlamaFinetuner::finetune(
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       checkpointState->progressCallback = progressCallback;
+      checkpointState->controlCallback = controlCallback;
+      checkpointState->checkpointCallback = checkpointCallback;
       if (progressCallback) {
         checkpointState->suppressProgressBar = true;
       }

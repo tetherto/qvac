@@ -135,6 +135,18 @@ TEST(LlamaFinetuningHelpers, SchedulerLrForStep_WarmupPhase) {
   EXPECT_LT(lr, state.lrInit);
 }
 
+TEST(LlamaFinetuningHelpers, SchedulerLrForStep_FirstWarmupStepIsPositive) {
+  llama_finetuning_helpers::LoraLrSchedulerState state;
+  state.lrInit = 1e-4f;
+  state.totalSteps = 10;
+  state.warmupSteps = 5;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Cosine;
+
+  float lr = llama_finetuning_helpers::schedulerLrForStep(state, 0);
+  EXPECT_GT(lr, 0.0f);
+  EXPECT_NEAR(lr, state.lrInit / 5.0f, 1e-7f);
+}
+
 TEST(LlamaFinetuningHelpers, SchedulerLrForStep_CosineInRange) {
   llama_finetuning_helpers::LoraLrSchedulerState state;
   state.lrInit = 1e-4f;
@@ -460,6 +472,45 @@ TEST(
 
   llama_finetuning_helpers::schedulerOptimizerParams(&state);
   EXPECT_EQ(state.currentStep, 5);
+}
+
+TEST(
+    LlamaFinetuningHelpers,
+    SchedulerOptimizerParams_DefaultCosineStaysPositiveAtFinalStep) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.lrMin = 0.0f;
+  state.totalSteps = 1;
+  state.currentStep = 0;
+  state.warmupSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Cosine;
+
+  auto params = llama_finetuning_helpers::schedulerOptimizerParams(&state);
+
+  EXPECT_EQ(state.currentStep, 1);
+  EXPECT_GT(params.adamw.alpha, 0.0f);
+  EXPECT_NEAR(params.adamw.alpha, state.lrInit, 1e-7f);
+}
+
+TEST(
+    LlamaFinetuningHelpers,
+    SchedulerOptimizerParams_UsesEachZeroBasedCosineStep) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.lrMin = 0.0f;
+  state.totalSteps = 4;
+  state.currentStep = 0;
+  state.warmupSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Cosine;
+
+  for (int64_t step = 0; step < state.totalSteps; ++step) {
+    const float expected =
+        llama_finetuning_helpers::schedulerLrForStep(state, step);
+    auto params = llama_finetuning_helpers::schedulerOptimizerParams(&state);
+    EXPECT_GT(params.adamw.alpha, 0.0f);
+    EXPECT_NEAR(params.adamw.alpha, expected, 1e-7f);
+  }
+  EXPECT_EQ(state.currentStep, state.totalSteps);
 }
 
 TEST(LlamaFinetuningHelpers, SchedulerLrForStep_ZeroTotalStepsReturnsLrInit) {

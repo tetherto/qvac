@@ -174,6 +174,9 @@ class LlamaInterface {
         }
         return Promise.resolve(this._binding.finetune(this._handle, finetuningParams));
     }
+    get clearsPauseCheckpoints() {
+        return this._binding.clearsPauseCheckpoints === true;
+    }
     runJob(data, rejectWhenBusy) {
         return Promise.resolve(this._binding.runJob(this._handle, data, rejectWhenBusy));
     }

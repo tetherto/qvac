@@ -1001,7 +1001,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     if (this.addon?.cancel) {
       await this.addon.cancel(0);
     }
-    this._clearPauseCheckpoints();
+    if (!this.addon?.clearsPauseCheckpoints) this._clearPauseCheckpoints();
   }
 
   private _clearPauseCheckpoints(): void {

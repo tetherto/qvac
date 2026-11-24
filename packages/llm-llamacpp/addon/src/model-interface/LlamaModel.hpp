@@ -100,6 +100,8 @@ public:
     std::function<void(const std::string&)> outputCallback;
     LlmContext::CancelRequested cancelRequested;
     LlamaFinetuner::ProgressCallback progressCallback;
+    LlamaFinetuner::ControlCallback controlCallback;
+    LlamaFinetuner::CheckpointCallback checkpointCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
 

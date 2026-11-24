@@ -104,6 +104,7 @@ export interface LlamaBinding {
   cancel(handle: unknown, savePauseCheckpoint: number): Promise<void> | void;
   cancelJob(handle: unknown, id: number): Promise<void> | void;
   finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
+  clearsPauseCheckpoints?: boolean;
   saveCache(handle: unknown, cacheKey: string): Promise<void>;
   discardCache(handle: unknown, cacheKey: string): Promise<void>;
   calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
@@ -309,6 +310,10 @@ export class LlamaInterface {
       throw new Error("Finetuning parameters are required");
     }
     return Promise.resolve(this._binding.finetune(this._handle, finetuningParams));
+  }
+
+  get clearsPauseCheckpoints(): boolean {
+    return this._binding.clearsPauseCheckpoints === true;
   }
 
   /**
