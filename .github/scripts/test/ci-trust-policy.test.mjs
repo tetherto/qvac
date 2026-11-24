@@ -851,10 +851,16 @@ function privilegedPrWorkflows() {
   return workflowPaths().filter((p) => /^\s{2}workflow_run:/m.test(onBlock(read(p))));
 }
 
+// GitHub blocks pull_request_target in public repositories, and we never re-allow it: privileged PR work starts from
+// workflow_run. The trigger is read from the parsed `on:`, so a string, a list or a quoted key counts too.
 test("no workflow triggers on pull_request_target", () => {
-  const offenders = workflowPaths().filter((p) =>
-    /^\s{2}pull_request_target:/m.test(onBlock(read(p))),
-  );
+  const offenders = workflowPaths().filter((p) => {
+    const out = spawnSync("yq", ["-o=json", ".on", join(root, p)], { encoding: "utf8" });
+    assert.equal(out.status, 0, out.stderr);
+    const on = JSON.parse(out.stdout);
+    const events = typeof on === "string" ? [on] : Array.isArray(on) ? on : Object.keys(on ?? {});
+    return events.includes("pull_request_target");
+  });
   assert.deepEqual(offenders, []);
 });
 
