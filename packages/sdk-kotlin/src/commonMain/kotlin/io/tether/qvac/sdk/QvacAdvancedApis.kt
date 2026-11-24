@@ -17,7 +17,6 @@ fun QvacCaller.subscribeServerLogs(scope: CoroutineScope, handler: suspend (Logg
 
 val QvacCaller.registry: QvacRegistry get() = QvacRegistry(this)
 val QvacCaller.plugins: QvacPlugins get() = QvacPlugins(this)
-val QvacCaller.retrieval: QvacRetrieval get() = QvacRetrieval(this)
 val QvacCaller.training: QvacTraining get() = QvacTraining(this)
 
 class QvacRegistry internal constructor(private val client: QvacCaller) {
@@ -31,11 +30,6 @@ class QvacRegistry internal constructor(private val client: QvacCaller) {
 class QvacPlugins internal constructor(private val client: QvacCaller) {
     suspend fun invoke(request: PluginInvokeRequest): PluginInvokeResponse = client.pluginInvoke(request)
     fun stream(request: PluginInvokeStreamRequest): Flow<PluginInvokeStreamResponse> = client.pluginInvokeStream(request)
-}
-
-class QvacRetrieval internal constructor(private val client: QvacCaller) {
-    suspend fun execute(request: RagRequest): RagResponse = client.rag(request)
-    fun progress(request: RagRequest): Flow<QvacProgressEvent<RagProgressResponse, RagResponse>> = client.ragWithProgress(request)
 }
 
 class QvacTraining internal constructor(private val client: QvacCaller) {

@@ -1,8 +1,9 @@
 # Integration model manifest
 
 `models.manifest.json` is the single source of truth for Diffusion integration
-model URLs and integrity pins. Every model must use an immutable source revision
-and pin both `sha256` and `bytes`.
+model sources and integrity pins. URL models use immutable source revisions;
+Core ML assets use dated, bucketless S3 objects. Every file pins both `sha256`
+and `bytes`, including each component of a compiled `.mlmodelc` directory.
 
 The CI model-cache key hashes the manifest. Keep rationale and operational
 documentation in this file so prose-only edits do not invalidate the multi-GB
@@ -13,11 +14,12 @@ after a manifest update. The warm step and runtime verify every restored file
 and replace it when either pin does not match. Cache hits are never treated as
 integrity provenance; every restored file is checked.
 
-Every model declares a non-overlapping cache `group`: `base`, `ideogram`, or
-`ltx`. CI restores and warms `base` on every self-hosted integration runner,
-adds `ideogram` only where the Ideogram test runs, and adds `ltx` only on the
-LTX runner. Each cache archives exact manifest-declared file paths, so generated
-outputs and platform-specific files are excluded.
+Every model declares a non-overlapping cache `group`: `base`, `ideogram`,
+`ltx`, `wan22`, or `coreml`. The `coreml` group contains the Apple sidecars.
+CI restores and warms `base` on every self-hosted integration runner, adds
+`ideogram` only where the Ideogram test runs, and adds `ltx` only on the
+LTX runner. Each cache archives exact manifest-declared file paths, so
+generated outputs and platform-specific files are excluded.
 
 To refresh pins from fresh downloads, run:
 
@@ -46,3 +48,10 @@ The manifest content hash changes the cache key when any of these values change.
 The FLUX.2 VAE uses the Black Forest Labs source. The previously listed Comfy
 file is a different artifact: its SHA-256 and byte size do not match the model
 expected by the integration tests, so it must not be used as a mirror.
+
+The Core ML integration lane runs on macOS ARM64. Its `coreml` entries are
+individual objects from the published 2026-11-19 artifacts, preserving the
+UNet and TAESD decoder bundle layout. CI's manifest downloader checks every
+object's SHA-256 and size, and the runtime test verifies them again before
+loading. Other hosts skip these assets. The URL pin generator leaves S3
+entries unchanged; regenerate their pins when publishing a new artifact set.

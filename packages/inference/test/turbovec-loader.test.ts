@@ -1,5 +1,5 @@
 import test from 'brittle'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'

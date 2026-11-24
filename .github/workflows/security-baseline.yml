@@ -94,6 +94,7 @@ jobs:
           .github/scripts/test/install-scripts-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
           .github/scripts/test/publish-gate-policy.test.mjs
+          .github/scripts/test/platform-package-publish.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/publish-branch-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
@@ -124,10 +125,11 @@ jobs:
         run: >-
           node --test
           .github/scripts/test/sdk-e2e-local-tarball-spec.test.mjs
+          .github/scripts/test/sdk-speech-preflight.test.mjs
 
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
-      # PR, and pull_request_target workflows load from the base branch, so this
+      # PR, and workflow_run workflows load from the default branch, so this
       # is the only place a PR parses its own edited workflows. Only files this PR
       # changes are linted — no repo-wide baseline file.
       - name: Collect changed workflow files

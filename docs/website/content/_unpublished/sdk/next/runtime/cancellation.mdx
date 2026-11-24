@@ -7,12 +7,12 @@ schemaType: HowTo
 
 ## Overview
 
-Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). Cancellation behavior depends on the model and operation. See the coverage callout below.
+Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`) and resource-acquisition calls (`loadModel()`, `downloadAsset()`). Cancellation behavior depends on the model and operation. See the coverage callout below.
 
 Use `requestId` to stop a specific call when the operation exposes one. Use `modelId` for model unload, app shutdown, or admin sweeps. Whether cancellation interrupts native computation depends on the operation's addon.
 
 <Callout title="Coverage" type="info">
-**Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, `startRpcServer()`, `discoverRpcServers()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+**Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, `startRpcServer()`, and `discoverRpcServers()`.
 
 **Accepted by `requestId` but also aborts other in-flight calls on the same model**: `embed()` and `embedBatch()` with llama.cpp embedding models, and `transcribe()`.
 
@@ -21,6 +21,8 @@ Use `requestId` to stop a specific call when the operation exposes one. Use `mod
 `decide()` supports hard cancellation by `requestId`. Each model runs one decision request at a time and queues concurrent calls FIFO. Cancelling an active call interrupts its native job; cancelling a queued call removes it before native work starts and leaves the active job running. `rerank()` behaves the same way, with its own queue per reranker model.
 
 MegaLoc calls through [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](/sdk/reference/api#embedbatch) return a promise with a synchronous `requestId`. Calls queue FIFO per MegaLoc model. Cancelling a queued call removes it before native inference starts. Cancelling an active call discards its result after native work finishes and rejects with `InferenceCancelledError`; a batch stops before starting the next image, and the next queued call waits until native work finishes. Use `cancel({ requestId })` for one call, or `cancel({ modelId, kind: "imageEmbedding" })` for all matching calls. See [Image embeddings](/sdk/ai-capabilities/image-embeddings#cancellation).
+
+[`estimateDisparity()`](/sdk/reference/api#estimatedisparity) behaves the same way per BridgeDepth model, without the batch step. Use `cancel({ modelId, kind: "stereoDepth" })` for all matching calls. See [Stereo depth](/sdk/ai-capabilities/stereo-depth#cancellation).
 
 **Image generation** supports hard cancellation through `cancel({ modelId, kind: "diffusion" })`. It interrupts the active native job and suppresses subsequent output. The run's `outputs` and `stats` promises reject with `InferenceCancelledError`, and `progressStream` throws the same error. Image and video generation admit one request per model; concurrent calls reject with `RequestRejectedByPolicyError`. After cancelling an image generation, await the original run's settlement before starting another call.
 
@@ -34,7 +36,7 @@ MegaLoc calls through [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](
 ## Functions
 
 1. [`completion()`](/sdk/reference/api#completion), [`batchCompletion()`](/sdk/ai-capabilities/batch-processing), [`audioGen()`](/sdk/ai-capabilities/music-generation), [`diffusion()`](/sdk/reference/api#diffusion), [`upscale()`](/sdk/reference/api#upscale), and [`ocr()`](/sdk/reference/api#ocr) — return a run object that exposes a synchronous `requestId` field.
-2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`vla()`](/sdk/reference/api#vla), [`invokePlugin()`](/sdk/reference/api#invokeplugin), and the [`rag*()`](/sdk/ai-capabilities/rag) workspace operations (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
+2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`estimateDisparity()`](/sdk/reference/api#estimatedisparity), [`vla()`](/sdk/reference/api#vla), and [`invokePlugin()`](/sdk/reference/api#invokeplugin) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
 3. [`cancel()`](/sdk/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
@@ -46,7 +48,7 @@ Pending `startRpcServer()` and `discoverRpcServers()` calls also return `Promise
 Two shapes show up across the SDK surface:
 
 - **`completion()`, `audioGen()`, `diffusion()`, `upscale()` and `ocr()`** — return run objects with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
-- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `vla()`, `invokePlugin()`, `ragIngest()`, `ragSaveEmbeddings()`, and `ragReindex()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
+- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `estimateDisparity()`, `vla()`, and `invokePlugin()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
 
 ```ts
 // Pattern 1 — completion: requestId is on the returned run
@@ -86,7 +88,7 @@ Outcome on the consumer side:
 - The `final` promise rejects with [`InferenceCancelledError`](/sdk/reference/api#errors) (code `52419`).
 - For `audioGen()`, the progress stream closes, the terminal frame carries `stopReason: "cancelled"`, and both `audio` and `stats` reject with `InferenceCancelledError`.
 
-Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `startRpcServer`, `discoverRpcServers`, `embed`, `decide`, `rerank`, `transcribe`, `rag*`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
+Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `startRpcServer`, `discoverRpcServers`, `embed`, `decide`, `rerank`, `transcribe`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
 
 Only the cancelled call stops — other in-flight `completion()`, `batchCompletion()` and LLM `translate()` calls on the same `modelId` keep running. Use this form when you want a per-request stop button that doesn't disturb the rest of your workload.
 

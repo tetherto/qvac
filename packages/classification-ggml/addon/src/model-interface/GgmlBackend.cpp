@@ -1,7 +1,9 @@
 #include "GgmlBackend.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -205,9 +207,39 @@ bool measureSchedulerBuffers(
   return true;
 }
 
+namespace {
+
+bool isOpenClName(std::string_view name) {
+  const auto matches = [name](std::string_view lower) {
+    return std::ranges::equal(name, lower, [](unsigned char c, char expected) {
+      return std::tolower(c) == expected;
+    });
+  };
+  return matches("opencl") || matches("gpuopencl");
+}
+
+bool isOpenClDevice(ggml_backend_dev_t device) {
+  const auto registry = ggml_backend_dev_backend_reg(device);
+  return registry != nullptr &&
+         std::string_view(ggml_backend_reg_name(registry)) == "OpenCL";
+}
+
+[[noreturn]] void rejectOpenCl(const std::string& who) {
+  throw StatusError(
+      InvalidArgument,
+      who + " does not support OpenCL. Set backend to 'CPU' or choose another "
+            "available backend.");
+}
+
+} // namespace
+
 GgmlBackends::GgmlBackends(
     const std::string& backend, const std::string& backendsDir, int threads,
-    const std::string& who) {
+    const std::string& who, OpenClPolicy openClPolicy) {
+  const bool disallowOpenCl = openClPolicy == OpenClPolicy::Disallow;
+  if (disallowOpenCl && isOpenClName(backend))
+    rejectOpenCl(who);
+
   ggml_backend_dev_t selected = nullptr;
   ggml_backend_dev_t cpuDevice = nullptr;
   {
@@ -223,19 +255,30 @@ GgmlBackends::GgmlBackends(
 #else
     (void)backendsDir;
 #endif
-    selected = backend.empty()
-                   ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)
-                   : ggml_backend_dev_by_name(backend.c_str());
+    const auto selectGpu = [disallowOpenCl](enum ggml_backend_dev_type type) {
+      if (!disallowOpenCl)
+        return ggml_backend_dev_by_type(type);
+      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        auto device = ggml_backend_dev_get(i);
+        if (ggml_backend_dev_type(device) == type && !isOpenClDevice(device))
+          return device;
+      }
+      return ggml_backend_dev_t{nullptr};
+    };
+    selected = backend.empty() ? selectGpu(GGML_BACKEND_DEVICE_TYPE_GPU)
+                               : ggml_backend_dev_by_name(backend.c_str());
     if (!selected && backend.starts_with("Metal")) {
       const auto name = "MTL" + backend.substr(5);
       selected =
           ggml_backend_dev_by_name(name == "MTL" ? "MTL0" : name.c_str());
     }
     if (!selected && backend.empty())
-      selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_IGPU);
-    if (!selected && backend.empty())
-      selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+      selected = selectGpu(GGML_BACKEND_DEVICE_TYPE_IGPU);
     cpuDevice = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    if (!selected && backend.empty())
+      selected = cpuDevice;
+    if (disallowOpenCl && selected && isOpenClDevice(selected))
+      rejectOpenCl(who);
   }
   if (selected == nullptr)
     throw StatusError(

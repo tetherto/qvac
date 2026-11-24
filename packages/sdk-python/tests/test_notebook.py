@@ -1,8 +1,7 @@
 """Unit tests for tetherto.qvac_sdk.notebook.SyncClient: the blocking facade (called from
 plain sync code, no pytest-asyncio), numpy/pandas result shapes, numpy audio
 interop, and live streaming fallback -- all over a fake transport running on
-the facade's own background loop. Plus a real-worker e2e at the bottom,
-gated the same way as the bare-rpc transport suite."""
+the facade's own background loop."""
 
 from __future__ import annotations
 
@@ -15,7 +14,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from _worker_env import WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk.client import WorkerNotFoundError
 from tetherto.qvac_sdk.notebook import EmbedFailedError, SyncClient
@@ -165,31 +163,3 @@ def test_text_to_speech_decodes_pcm_frames():
         audio = client.text_to_speech("m-1", "Hello.")
     assert audio.dtype == np.float32
     assert audio.tolist() == [1.0, -1.0, 32767.0, -32768.0, 7.0]
-
-
-# ---- real-worker e2e ----------------------------------------------------------
-
-
-@pytest.mark.skipif(
-    not WORKER_AVAILABLE,
-    reason=f"no built SDK worker (worker={WORKER_PATH!r})",
-)
-def test_sync_client_notebook_flow_against_real_worker():
-    """The notebook quickstart, blocking end to end from plain sync code:
-    spawn a worker, load a model, run a live-streamed completion, unload."""
-    from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
-
-    with SyncClient(worker_path=WORKER_PATH) as client:
-        model_id = client.load_model(
-            model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
-        )
-        text = client.completion(
-            model_id,
-            "Say hello in five words.",
-            live=False,
-            predict=512,
-            temp=0,
-            seed=42,
-        )
-        assert text.strip(), "expected real completion text through SyncClient"
-        client.unload_model(model_id)

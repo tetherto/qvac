@@ -2,7 +2,8 @@
 
 // How calls run: off the JS thread, in call order per index, with inputs
 // copied at call time, and cancellable with an AbortSignal. What each call
-// computes is covered by id-map-index.test.js.
+// computes is covered by id-map-index.test.js. Cases that need modules the
+// mobile test app cannot bundle live in id-map-index-desktop.test.js.
 
 const test = require('brittle')
 const fs = require('bare-fs')
@@ -618,40 +619,6 @@ test(
   }
 )
 
-// A job still waiting for a worker thread when its Bare environment shuts down
-// is dropped, so the shutdown waits only for the job that is running.
-test(
-  'IdMapIndex async: a job still waiting at env shutdown never runs',
-  { skip: IS_MOBILE },
-  async (t) => {
-    t.timeout(120_000)
-    const Thread = require('bare-thread')
-    const base = path.join(os.tmpdir(), `turbovec-ggml-teardown-${os.pid()}`)
-    const ready = `${base}.ready`
-    const written = `${base}.tvim`
-    removeFile(ready)
-    removeFile(written)
-
-    const thread = new Thread(require.resolve('./teardown-worker.js'))
-    let terminated = false
-    try {
-      for (let i = 0; i < 6000 && !fs.existsSync(ready); i++) {
-        await new Promise((resolve) => setTimeout(resolve, 5))
-      }
-      t.ok(fs.existsSync(ready), 'the worker started a build and queued a write behind it')
-      thread.terminate()
-      terminated = true
-    } finally {
-      if (!terminated) thread.terminate()
-      // Waits for the running build, which the shutdown lets finish.
-      thread.join()
-    }
-    t.absent(fs.existsSync(written), 'the queued write never ran')
-    removeFile(ready)
-    removeFile(written)
-  }
-)
-
 test('IdMapIndex async: inputs are copied when the call is made', async (t) => {
   const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
   const { vectors, ids } = unitBatch()
@@ -840,29 +807,6 @@ test('IdMapIndex abort: a call waiting on a worker thread is skipped', async (t)
     await busy.dispose()
   }
 })
-
-test(
-  'IdMapIndex abort: works with a bare-abort-controller signal',
-  { skip: IS_MOBILE },
-  async (t) => {
-    const { AbortController } = require('bare-abort-controller')
-    const idx = await busyIndex()
-    try {
-      const build = idx.buildIvf(BUSY_LISTS, BUSY_ITERS)
-      const controller = new AbortController()
-      const search = rejection(idx.search(unitVec(0, BUSY_DIM), 1, { signal: controller.signal }))
-      controller.abort()
-      t.is((await search)?.name, 'AbortError', 'the queued search rejects with an AbortError')
-      await build
-      const again = await rejection(
-        idx.search(unitVec(0, BUSY_DIM), 1, { signal: controller.signal })
-      )
-      t.is(again?.name, 'AbortError', 'an already aborted signal rejects a new call')
-    } finally {
-      await idx.dispose()
-    }
-  }
-)
 
 test('IdMapIndex abort: a running build rejects at once but still finishes', async (t) => {
   const idx = await busyIndex()

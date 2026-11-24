@@ -25,7 +25,17 @@ test('CUDA is opt-in for source builds and enabled for Linux and Windows release
   const manifest = JSON.parse(fs.readFileSync(new URL('../vcpkg.json', import.meta.url), 'utf8'))
   const project = JSON.parse(fs.readFileSync(new URL('../project.json', import.meta.url), 'utf8'))
   const dependency = manifest.dependencies.find((entry) => entry.name === 'stable-diffusion-cpp')
-  assert.equal(dependency.features, undefined, 'ordinary source builds must not request CUDA')
+  assert.ok(
+    !(dependency.features || []).some(
+      (feature) => (typeof feature === 'string' ? feature : feature.name) === 'cuda'
+    ),
+    'ordinary source builds must not request CUDA'
+  )
+  assert.deepEqual(
+    dependency.features,
+    [{ name: 'coreml', platform: 'osx | ios' }],
+    'Core ML is enabled only for Apple targets'
+  )
   assert.ok(
     manifest.features.cuda.dependencies.some(
       (entry) => entry.name === 'stable-diffusion-cpp' && entry.features.includes('cuda')

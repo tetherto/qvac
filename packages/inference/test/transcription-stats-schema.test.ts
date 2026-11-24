@@ -121,11 +121,13 @@ test('transcribeStatsSchema: the newly surfaced fields survive a parse', (t) => 
     totalTranscriptions: 2,
     modelLoadMs: 250,
     totalEncodedFrames: 120,
-    encoderOnCoreml: 1
+    encoderOnCoreml: 1,
+    encoderUsedCoreml: 0
   })
   t.is(parsed.totalWallMs, 950, 'totalWallMs round-trips')
   t.is(parsed.modelLoadMs, 250, 'modelLoadMs round-trips')
   t.is(parsed.encoderOnCoreml, 1, 'encoderOnCoreml round-trips')
+  t.is(parsed.encoderUsedCoreml, 0, 'a loaded Core ML sidecar can fall back to ggml')
   t.is(parsed.totalEncodedFrames, 120, 'totalEncodedFrames round-trips')
 })
 

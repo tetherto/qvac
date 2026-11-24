@@ -188,6 +188,10 @@ because they can drop phrases. Keep the default 10,000 ms left context and
 lookahead. You can still write small PCM chunks, and closing the stream flushes
 the remaining audio. Full TranscribePsy EU uses its own streaming defaults.
 
+The standard TDT ggml encoder masks right-padding in attention and convolution
+so padded tails cannot alter valid encoder frames. Offline TDT push streaming
+still re-encodes windows, so transcript accuracy can vary with window context.
+
 ## Supported Platforms
 
 | Platform | Architecture | Min Version | Status | GPU Support |

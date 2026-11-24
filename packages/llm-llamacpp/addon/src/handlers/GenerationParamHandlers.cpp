@@ -11,17 +11,17 @@ namespace qvac_lib_inference_addon_llama {
 
 template <typename Opt>
 static void
-readNumInto(js_env_t* env, js::Object& obj, const char* key, Opt& out) {
-  auto value = obj.getOptionalPropertyAs<js::Number, double>(env, key);
+readNumInto(const GenerationParamSource& src, const char* key, Opt& out) {
+  auto value = src.number(key);
   if (value.has_value()) {
     out = static_cast<typename Opt::value_type>(*value);
   }
 }
 
 static void readNonEmptyStrInto(
-    js_env_t* env, js::Object& obj, const char* key,
+    const GenerationParamSource& src, const char* key,
     std::optional<std::string>& out) {
-  auto value = obj.getOptionalPropertyAs<js::String, std::string>(env, key);
+  auto value = src.string(key);
   if (value.has_value() && !value->empty()) {
     out = std::move(*value);
   }
@@ -29,61 +29,59 @@ static void readNonEmptyStrInto(
 
 const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
     {"temp",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "temp", p.temp);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "temp", p.temp);
      }},
     {"top_p",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "top_p", p.top_p);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "top_p", p.top_p);
      }},
     {"top_k",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "top_k", p.top_k);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "top_k", p.top_k);
      }},
     {"predict",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "predict", p.n_predict);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "predict", p.n_predict);
      }},
     {"seed",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "seed", p.seed);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "seed", p.seed);
      }},
     {"frequency_penalty",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "frequency_penalty", p.frequency_penalty);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "frequency_penalty", p.frequency_penalty);
      }},
     {"presence_penalty",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "presence_penalty", p.presence_penalty);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "presence_penalty", p.presence_penalty);
      }},
     {"repeat_penalty",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNumInto(env, obj, "repeat_penalty", p.repeat_penalty);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNumInto(src, "repeat_penalty", p.repeat_penalty);
      }},
     {"grammar",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNonEmptyStrInto(env, obj, "grammar", p.grammar);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNonEmptyStrInto(src, "grammar", p.grammar);
      }},
     {"json_schema",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNonEmptyStrInto(env, obj, "json_schema", p.json_schema);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNonEmptyStrInto(src, "json_schema", p.json_schema);
      }},
     {"tool_choice",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       readNonEmptyStrInto(env, obj, "tool_choice", p.tool_choice);
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       readNonEmptyStrInto(src, "tool_choice", p.tool_choice);
      }},
     {"parallel_tool_calls",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(
-           env, "parallel_tool_calls");
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       auto value = src.boolean("parallel_tool_calls");
        if (value.has_value()) {
          p.parallel_tool_calls = *value;
        }
      }},
     {"reasoning_budget",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       auto value = obj.getOptionalPropertyAs<js::Number, double>(
-           env, "reasoning_budget");
+     [](const GenerationParamSource& src, GenerationParams& p) {
+       auto value = src.number("reasoning_budget");
        if (value.has_value()) {
          p.reasoning_budget = parsers::validateReasoningBudgetOverride(*value);
        }
@@ -91,9 +89,9 @@ const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
 };
 
 void applyGenerationParamHandlers(
-    js_env_t* env, js::Object& obj, GenerationParams& params) {
+    const GenerationParamSource& source, GenerationParams& params) {
   for (const auto& [key, handler] : GENERATION_PARAM_HANDLERS) {
-    handler(env, obj, params);
+    handler(source, params);
   }
   if (params.grammar && params.json_schema) {
     throw qvac_errors::StatusError(

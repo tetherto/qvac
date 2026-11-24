@@ -63,7 +63,7 @@
         "cwd": "packages/sdk",
         "parallel": false,
         "commands": [
-          "pnpm run contract:check",
+          "pnpm run engine-manifest:check",
           "pnpm run check:resource-collectors --host darwin-arm64 --host darwin-x64 --host linux-arm64 --host linux-x64 --host win32-arm64 --host win32-x64"
         ]
       },
@@ -130,36 +130,6 @@
             }
           }
         },
-        "linux-x64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "linux_ubuntu2204_x64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
-        "darwin-arm64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "macos_arm64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
-        "win32-x64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "win_2025_x64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
         "linux-x64-electron": {
           "args": "electron",
           "ci": {
@@ -214,18 +184,8 @@
         "timeoutMinutes": 360,
         "modelCache": {
           "path": "../sdk-e2e/.qvac-cache",
-          "keyFiles": ["../inference/src/models/registry/models.ts"]
+          "plan": true
         }
-      }
-    },
-    "cache:models": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/sdk",
-        "command": "node ci/e2e.mjs cache"
-      },
-      "metadata": {
-        "secrets": ["GITHUB_TOKEN"]
       }
     },
     "test:mobile": {

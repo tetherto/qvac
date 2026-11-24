@@ -90,6 +90,49 @@ test('transcribe stream session rejects stats when the response stream fails', a
   }
 })
 
+for (const chunkMs of [1000, 5000, 10000]) {
+  test(`TDT window rejection at ${chunkMs} ms reaches the stream and terminal promises`, async (t) => {
+    const message = 'Offline TDT push streams require at least 30000 ms'
+    const session = await createTranscribeStreamSession(
+      { modelId: 'parakeet', parakeetStreamingConfig: { chunkMs, emitPartials: false } },
+      undefined,
+      processLine,
+      'TranscribeStreamSession',
+      createDuplexFactory([JSON.stringify({ type: 'error', message })]) as never
+    )
+
+    const outcomes = await Promise.allSettled([
+      collect(session),
+      session.stats,
+      session.diagnostics
+    ])
+    for (const outcome of outcomes) {
+      t.is(outcome.status, 'rejected')
+      if (outcome.status === 'rejected') {
+        t.ok(outcome.reason instanceof TranscriptionFailedError)
+        t.ok(outcome.reason.message.includes(message), 'the minimum window reaches the caller')
+      }
+    }
+  })
+}
+
+test('transcribe stream session preserves Core ML fallback statistics', async (t) => {
+  const stats = { encoderOnCoreml: 1, encoderUsedCoreml: 0 }
+  const session = await createTranscribeStreamSession(
+    { modelId: 'parakeet' },
+    undefined,
+    processLine,
+    'TranscribeStreamSession',
+    createDuplexFactory([
+      JSON.stringify({ type: 'transcribeStream', text: 'complete transcript' }),
+      JSON.stringify({ type: 'transcribeStream', done: true, stats })
+    ]) as never
+  )
+
+  t.alike(await collect(session), ['complete transcript'])
+  t.alike(await session.stats, stats)
+})
+
 test('transcribe stream session resolves undefined stats after a premature close', async (t) => {
   const session = await createTranscribeStreamSession(
     { modelId: 'model' },

@@ -65,8 +65,7 @@ def test_ergonomic_wrappers_shadow_generated_stubs():
 
 def test_js_client_api_capabilities_have_python_equivalents():
     # The runtime exports of @qvac/sdk's client/api (index.ts), mapped to their
-    # Python names. rag* is JS's 9 helper functions over the single `rag`
-    # method; the capability, not each helper, is what's guarded here.
+    # Python names.
     js_to_python = {
         "audioGen": "audio_gen_stream",
         "audioEdit": "audio_edit_stream",
@@ -110,7 +109,6 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "vlaHparams": "vla_hparams",
         "vlaPreprocessImage": "vla_preprocess_image",
         "vlaPadState": "vla_pad_state",
-        "rag*": "rag",
         # createVectorIndex/loadVectorIndex return a handle object in JS; Python
         # reaches the same worker operations through the generated stub.
         "createVectorIndex": "vector_index",

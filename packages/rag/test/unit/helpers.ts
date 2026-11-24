@@ -185,7 +185,7 @@ export async function countNativeCalls(t: Test): Promise<NativeCalls> {
     const compact = native.compact.bind(native)
     native.compact = () => {
       calls.compacts++
-      compact()
+      return compact()
     }
     return native
   }
@@ -195,9 +195,9 @@ export async function countNativeCalls(t: Test): Promise<NativeCalls> {
         calls.creates++
         return counted(real.create(dim, storage))
       },
-      load(path) {
+      async load(path) {
         calls.loads++
-        return counted(real.load(path))
+        return counted(await real.load(path))
       }
     })
   )
