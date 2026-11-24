@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Generate the Kotlin client contract from the shared QVAC artifacts.
+"""Generate the Kotlin client contract into build/generated/contract/kotlin,
+the source directory Gradle's generateContract task adds to commonMain, from
+the SDK contract that `npm run contract:export` writes to ../sdk/contract/.
+Exporting the contract needs the SDK's dependencies installed and
+@qvac/inference built.
 
 Usage:
-  python3 scripts/generate-contract.py
-  python3 scripts/generate-contract.py --check
+  python3 scripts/generate-contract.py    # export the contract, then write the client
 
 The generated Kotlin source is intentionally boring: it contains only
 serialization models, constants, registries, and method metadata. Runtime
@@ -12,9 +15,10 @@ behavior remains in hand-written common Kotlin code.
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from contract_types import TypeGraph, render_schema_methods
@@ -22,7 +26,8 @@ from contract_types import TypeGraph, render_schema_methods
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_ROOT = PACKAGE_ROOT.parent / "sdk" / "contract"
-OUTPUT_ROOT = PACKAGE_ROOT / "src/commonMain/kotlin/io/tether/qvac/sdk/generated"
+SOURCE_ROOT = PACKAGE_ROOT / "build/generated/contract/kotlin"
+OUTPUT_ROOT = SOURCE_ROOT / "io/tether/qvac/sdk/generated"
 TYPE_NAMES = PACKAGE_ROOT / "scripts/schema-type-names.json"
 
 
@@ -264,26 +269,20 @@ def generated_files() -> dict[str, str]:
     }
 
 
+def export_contract() -> None:
+    npm = shutil.which("npm")
+    if npm is None:
+        raise SystemExit("npm is not on PATH; the SDK contract is exported with it")
+    subprocess.run([npm, "run", "contract:export"], cwd=CONTRACT_ROOT.parent, check=True)
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    export_contract()
     files = generated_files()
-    mismatches: list[str] = []
-    if not args.check:
-        OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-        for name, content in files.items():
-            (OUTPUT_ROOT / name).parent.mkdir(parents=True, exist_ok=True)
-            (OUTPUT_ROOT / name).write_text(content, encoding="utf-8")
-        return 0
+    shutil.rmtree(SOURCE_ROOT, ignore_errors=True)
     for name, content in files.items():
-        path = OUTPUT_ROOT / name
-        if not path.exists() or path.read_text(encoding="utf-8") != content:
-            mismatches.append(str(path))
-    if mismatches:
-        print("Generated Kotlin contract is stale:")
-        print("\n".join(mismatches))
-        return 1
+        (OUTPUT_ROOT / name).parent.mkdir(parents=True, exist_ok=True)
+        (OUTPUT_ROOT / name).write_text(content, encoding="utf-8")
     return 0
 
 
