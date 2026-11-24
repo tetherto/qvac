@@ -71,8 +71,63 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-hyperdb/ingest.js title="rag-managed.js" lineNumbers
-
+```js title="rag-managed.js" lineNumbers
+import { loadModel, unloadModel, GTE_LARGE_FP16, ragIngest, ragSearch, ragCloseWorkspace } from '@qvac/sdk';
+try {
+    // Get query from command line or use default
+    const query = process.argv[2] || 'machine learning algorithms';
+    const workspace = 'ingest-example';
+    console.log(`▸ Query: "${query}"`);
+    const modelId = await loadModel({
+        modelSrc: GTE_LARGE_FP16,
+        onProgress: (p) => {
+            const mb = (n) => (n / 1e6).toFixed(1);
+            const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+            process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+            if (p.percentage >= 100)
+                process.stderr.write('\n');
+        }
+    });
+    const samples = [
+        'Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and make predictions from data without being explicitly programmed for every task.',
+        'Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, enabling breakthroughs in image recognition and natural language processing.',
+        'Natural language processing combines computational linguistics with machine learning to help computers understand, interpret, and generate human language in a meaningful way.',
+        'Computer vision enables machines to interpret and understand visual information from the world, using techniques like image classification, object detection, and facial recognition.',
+        'Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers, potentially solving certain problems exponentially faster.',
+        'Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions without requiring a central authority or intermediary.',
+        'Cloud computing delivers computing services over the internet, allowing users to access resources like storage, processing power, and applications on-demand from anywhere.',
+        'Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.'
+    ];
+    console.log('▸ Ingesting documents...');
+    const result = await ragIngest({
+        modelId,
+        workspace,
+        documents: samples,
+        chunk: false
+    });
+    console.log(`▸ Ingested ${result.processed.length} documents`);
+    console.log('▸ Searching for similar documents...');
+    const results = await ragSearch({
+        modelId,
+        workspace,
+        query,
+        topK: 3
+    });
+    console.log('▸ Top 3 most similar documents:');
+    results.forEach((result, index) => {
+        console.log(`${index + 1}. (Score: ${result.score})`);
+        console.log(`   ${result.content}`);
+        console.log();
+    });
+    // Cleanup: close and delete workspace
+    await ragCloseWorkspace({ workspace, deleteOnClose: true });
+    console.log(`▸ Deleted '${workspace}' workspace`);
+    await unloadModel({ modelId });
+}
+catch (error) {
+    console.error('✖', error);
+    process.exit(1);
+}
 ```
 
 </WrapCode>
@@ -81,8 +136,76 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=<rootDir>/packages/sdk/examples/rag/rag-hyperdb/ingest.ts title="rag-managed.ts" lineNumbers
+```ts title="rag-managed.ts" lineNumbers
+import {
+  loadModel,
+  unloadModel,
+  GTE_LARGE_FP16,
+  ragIngest,
+  ragSearch,
+  ragCloseWorkspace
+} from '@qvac/sdk'
 
+try {
+  // Get query from command line or use default
+  const query = process.argv[2] || 'machine learning algorithms'
+  const workspace = 'ingest-example'
+
+  console.log(`▸ Query: "${query}"`)
+  const modelId = await loadModel({
+    modelSrc: GTE_LARGE_FP16,
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+
+  const samples = [
+    'Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and make predictions from data without being explicitly programmed for every task.',
+    'Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, enabling breakthroughs in image recognition and natural language processing.',
+    'Natural language processing combines computational linguistics with machine learning to help computers understand, interpret, and generate human language in a meaningful way.',
+    'Computer vision enables machines to interpret and understand visual information from the world, using techniques like image classification, object detection, and facial recognition.',
+    'Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers, potentially solving certain problems exponentially faster.',
+    'Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions without requiring a central authority or intermediary.',
+    'Cloud computing delivers computing services over the internet, allowing users to access resources like storage, processing power, and applications on-demand from anywhere.',
+    'Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.'
+  ]
+
+  console.log('▸ Ingesting documents...')
+  const result = await ragIngest({
+    modelId,
+    workspace,
+    documents: samples,
+    chunk: false
+  })
+  console.log(`▸ Ingested ${result.processed.length} documents`)
+
+  console.log('▸ Searching for similar documents...')
+  const results = await ragSearch({
+    modelId,
+    workspace,
+    query,
+    topK: 3
+  })
+
+  console.log('▸ Top 3 most similar documents:')
+  results.forEach((result, index) => {
+    console.log(`${index + 1}. (Score: ${result.score})`)
+    console.log(`   ${result.content}`)
+    console.log()
+  })
+
+  // Cleanup: close and delete workspace
+  await ragCloseWorkspace({ workspace, deleteOnClose: true })
+  console.log(`▸ Deleted '${workspace}' workspace`)
+
+  await unloadModel({ modelId })
+} catch (error) {
+  console.error('✖', error)
+  process.exit(1)
+}
 ```
 
 </WrapCode>
@@ -91,8 +214,131 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <Tab value="python" label="Python">
 <WrapCode>
 
-```python file=<rootDir>/packages/sdk-python/examples/rag_managed.py title="rag_managed.py" lineNumbers
+```python title="rag_managed.py" lineNumbers
+"""Python port of packages/sdk/examples/rag/rag-hyperdb/ingest.ts.
 
+Ingest documents into a built-in RAG workspace and query them with similarity
+search, without setting up an external vector DB.
+
+`rag` is a generated request-reply method covering every RAG operation: it
+takes a `RagRequest` discriminated by `operation` and returns a `RagResponse`
+(there are no flat `rag_ingest()` / `rag_search()` wrappers like the JS SDK's).
+Both models are re-exported from the flat surface, and each is a union, so the
+operation's own payload sits on the response's `.root`.
+
+RUN: python examples/rag_managed.py [query]
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+
+from tetherto.qvac_sdk import Client, RagRequest, load_model, rag, unload_model
+from tetherto.qvac_sdk.models import GTE_LARGE_FP16
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
+
+
+async def main() -> int:
+    async with Client() as client:
+        t = client.transport
+        try:
+            # Get query from command line or use default
+            query = sys.argv[1] if len(sys.argv) > 1 else "machine learning algorithms"
+            workspace = "ingest-example"
+
+            print(f'▸ Query: "{query}"')
+            model_id = await load_model(
+                t, model_src=GTE_LARGE_FP16, on_progress=print_progress
+            )
+
+            samples = [
+                "Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and make predictions from data without being explicitly programmed for every task.",
+                "Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, enabling breakthroughs in image recognition and natural language processing.",
+                "Natural language processing combines computational linguistics with machine learning to help computers understand, interpret, and generate human language in a meaningful way.",
+                "Computer vision enables machines to interpret and understand visual information from the world, using techniques like image classification, object detection, and facial recognition.",
+                "Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers, potentially solving certain problems exponentially faster.",
+                "Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions without requiring a central authority or intermediary.",
+                "Cloud computing delivers computing services over the internet, allowing users to access resources like storage, processing power, and applications on-demand from anywhere.",
+                "Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.",
+            ]
+
+            print("▸ Ingesting documents...")
+            ingest = await rag(
+                t,
+                RagRequest.model_validate(
+                    {
+                        "type": "rag",
+                        "operation": "ingest",
+                        "modelId": model_id,
+                        "workspace": workspace,
+                        "documents": samples,
+                        "chunk": False,
+                    }
+                ),
+            )
+            if not ingest.root.success:
+                raise RuntimeError(ingest.root.error)
+            print(f"▸ Ingested {len(ingest.root.processed)} documents")
+
+            print("▸ Searching for similar documents...")
+            search = await rag(
+                t,
+                RagRequest.model_validate(
+                    {
+                        "type": "rag",
+                        "operation": "search",
+                        "modelId": model_id,
+                        "workspace": workspace,
+                        "query": query,
+                        "topK": 3,
+                    }
+                ),
+            )
+            if not search.root.success:
+                raise RuntimeError(search.root.error)
+
+            print("▸ Top 3 most similar documents:")
+            for index, result in enumerate(search.root.results, start=1):
+                print(f"{index}. (Score: {result.score})")
+                print(f"   {result.content}")
+                print()
+
+            # Cleanup: close and delete workspace
+            close = await rag(
+                t,
+                RagRequest.model_validate(
+                    {
+                        "type": "rag",
+                        "operation": "closeWorkspace",
+                        "workspace": workspace,
+                        "deleteOnClose": True,
+                    }
+                ),
+            )
+            if not close.root.success:
+                raise RuntimeError(close.root.error)
+            print(f"▸ Deleted '{workspace}' workspace")
+
+            await unload_model(t, model_id)
+        except Exception as error:
+            print(f"✖ {error}", file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))
 ```
 
 </WrapCode>
@@ -101,7 +347,131 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <Tab value="kotlin" label="Kotlin">
 <WrapCode>
 
-```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagManaged.kt title="RagManaged.kt" lineNumbers
+```kotlin title="RagManaged.kt" lineNumbers
+// Kotlin port of packages/sdk/examples/rag/rag-hyperdb/ingest.ts.
+//
+// Ingest documents into a built-in RAG workspace and query them with similarity
+// search, without setting up an external vector DB.
+//
+// `client.retrieval.execute()` covers every RAG operation. `RagRequest` and
+// `RagResponse` are sealed classes with one variant per operation, so each
+// request names its operation in the type (`RagRequest.Ingest(...)`) and each
+// response is read off the matching variant (`as RagResponse.Ingest`), where
+// the JS SDK has flat `ragIngest()` / `ragSearch()` wrappers.
+//
+// RUN: ./gradlew -p examples run -Pexample=RagManaged --args="[query]"
+
+import io.tether.qvac.sdk.QvacClient
+import io.tether.qvac.sdk.QvacProgressEvent
+import io.tether.qvac.sdk.generated.ModelConstant
+import io.tether.qvac.sdk.generated.Models
+import io.tether.qvac.sdk.generated.schema.LoadModelResponse
+import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.generated.schema.RagRequest
+import io.tether.qvac.sdk.generated.schema.RagRequestCloseWorkspace
+import io.tether.qvac.sdk.generated.schema.RagRequestIngest
+import io.tether.qvac.sdk.generated.schema.RagRequestIngestDocuments
+import io.tether.qvac.sdk.generated.schema.RagRequestSearch
+import io.tether.qvac.sdk.generated.schema.RagResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
+import io.tether.qvac.sdk.models
+import io.tether.qvac.sdk.retrieval
+import kotlinx.coroutines.runBlocking
+
+private val SAMPLES = listOf(
+    "Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and " +
+        "make predictions from data without being explicitly programmed for every task.",
+    "Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, " +
+        "enabling breakthroughs in image recognition and natural language processing.",
+    "Natural language processing combines computational linguistics with machine learning to help computers " +
+        "understand, interpret, and generate human language in a meaningful way.",
+    "Computer vision enables machines to interpret and understand visual information from the world, using " +
+        "techniques like image classification, object detection, and facial recognition.",
+    "Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different " +
+        "ways than classical computers, potentially solving certain problems exponentially faster.",
+    "Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions " +
+        "without requiring a central authority or intermediary.",
+    "Cloud computing delivers computing services over the internet, allowing users to access resources like " +
+        "storage, processing power, and applications on-demand from anywhere.",
+    "Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and " +
+        "various forms of cyber threats through multiple layers of defense.",
+)
+
+fun main(args: Array<String>): Unit = runBlocking {
+    // Get query from command line or use default
+    val query = args.getOrNull(0) ?: "machine learning algorithms"
+    val workspace = "ingest-example"
+
+    val client = QvacClient(JvmBareKitTransport.connect())
+    try {
+        println("▸ Query: \"$query\"")
+        val modelId = client.loadWithProgress(Models.GTE_LARGE_FP16)
+
+        println("▸ Ingesting documents...")
+        val ingest = client.retrieval.execute(
+            RagRequest.Ingest(
+                RagRequestIngest(
+                    modelId = modelId,
+                    workspace = workspace,
+                    documents = RagRequestIngestDocuments.Variant2(SAMPLES),
+                    chunk = false,
+                ),
+            ),
+        ) as RagResponse.Ingest
+        if (!ingest.value.success) error(ingest.value.error ?: "RAG ingest failed")
+        println("▸ Ingested ${ingest.value.processed.size} documents")
+
+        println("▸ Searching for similar documents...")
+        val search = client.retrieval.execute(
+            RagRequest.Search(
+                RagRequestSearch(
+                    modelId = modelId,
+                    workspace = workspace,
+                    query = query,
+                    topK = 3.0,
+                ),
+            ),
+        ) as RagResponse.Search
+        if (!search.value.success) error(search.value.error ?: "RAG search failed")
+
+        println("▸ Top 3 most similar documents:")
+        search.value.results.forEachIndexed { index, result ->
+            println("${index + 1}. (Score: ${result.score})")
+            println("   ${result.content}")
+            println()
+        }
+
+        // Cleanup: close and delete workspace
+        val close = client.retrieval.execute(
+            RagRequest.CloseWorkspace(RagRequestCloseWorkspace(workspace = workspace, deleteOnClose = true)),
+        ) as RagResponse.CloseWorkspace
+        if (!close.value.success) error(close.value.error ?: "RAG closeWorkspace failed")
+        println("▸ Deleted '$workspace' workspace")
+
+        client.models.unload(modelId)
+    } finally {
+        client.close()
+    }
+}
+
+/** Load [model], printing download progress, and return its model id. */
+private suspend fun QvacClient.loadWithProgress(model: ModelConstant): String {
+    var result: LoadModelResponse? = null
+    models.loadWithProgress(model.src, model.engine, model.name).collect { event ->
+        when (event) {
+            is QvacProgressEvent.Progress -> printProgress(event.value)
+            is QvacProgressEvent.Result -> result = event.value
+        }
+    }
+    val loaded = checkNotNull(result) { "loadModel ended without a result" }
+    return loaded.modelId ?: error(loaded.error ?: "loadModel failed")
+}
+
+private fun printProgress(p: ModelProgressResponse) {
+    val line = "▸ Downloading %.0f%% (%.1f/%.1f MB)".format(p.percentage, p.downloaded / 1e6, p.total / 1e6)
+    if (System.console() != null) System.err.print("\r$line") else System.err.println(line)
+    if (p.percentage >= 100) System.err.println()
+}
 ```
 </WrapCode>
 </Tab>

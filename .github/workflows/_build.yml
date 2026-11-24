@@ -10,9 +10,21 @@ on:
         type: string
         required: true
       reuse:
-        description: Take a leg from an earlier run on this branch when its native code and build inputs are unchanged
+        description: Take a leg from an earlier run on this branch or PR when its native code and build inputs are unchanged
         type: boolean
         default: false
+      repository:
+        description: Repository of the commit to build, a PR's head; empty builds this run's own commit
+        type: string
+        default: ""
+      ref:
+        description: Commit to build, a PR's head SHA; empty builds this run's own commit
+        type: string
+        default: ""
+      pr:
+        description: PR number whose own earlier legs reuse may take; empty for a branch build
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -24,20 +36,23 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # prebuild-reuse.mjs checks a PR artifact's built commit belongs to that PR.
+      pull-requests: read
     outputs:
       build: ${{ steps.plan.outputs.build }}
       reused: ${{ steps.plan.outputs.reused }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/scripts
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
           path: src
           persist-credentials: "false"
       - id: plan
@@ -49,8 +64,9 @@ jobs:
           RUNNERS: ${{ toJSON(fromJSON(inputs.rows).*.runner) }}
           PROVIDERS: ${{ toJSON(fromJSON(inputs.rows).*.providers) }}
           SRC: src
-          REUSE: ${{ inputs.reuse && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          REUSE: ${{ inputs.reuse && (inputs.repository || github.repository) == github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PR: ${{ inputs.pr }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/prebuild-reuse.mjs
@@ -74,45 +90,47 @@ jobs:
       WORKDIR: src/${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
+      pnpm_config_verify_deps_before_run: "false"
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             .github/config
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
           path: src
           persist-credentials: "false"
       - if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac-actions/runner-free-disk@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/runner-free-disk@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           keep-android: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform == 'android' }}
       # Toolchain versions are the workspace's, from nx.json; a package's own system packages come from its ci:system target.
       - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
-        uses: tetherto/qvac-actions/runner-apt-install@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/runner-apt-install@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           packages: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.aptPackages }}
       - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
-        uses: tetherto/qvac-actions/setup-android-ndk@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-android-ndk@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           ndk-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.ndk }}
           api-level: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.apiLevel }}
       - if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac-actions/setup-clang@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-clang@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.linux }}
           windows-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.windows }}
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
-      - uses: tetherto/qvac-actions/setup-aws-cli@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-aws-cli@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - uses: ./.github/actions/vcpkg-bootstrap
       - uses: ./.github/actions/vcpkg-cache-setup
         with:
@@ -123,10 +141,10 @@ jobs:
       - uses: ./.github/actions/setup-windows-host
         with:
           arch: ${{ fromJSON(inputs.rows)[matrix.leg.i].arch }}
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       # main's locked bare toolchain: bare-make, clang, clang-format and llvm tools from the checkout's lock, first on PATH.
@@ -193,7 +211,7 @@ jobs:
         run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
       # The providers' prebuilds for this configuration, from their jobs in this run.
       - if: fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: prebuild-@(${{ join(fromJSON(inputs.rows)[matrix.leg.i].providers, '|') }})-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
           path: ${{ runner.temp }}/providers
@@ -242,14 +260,14 @@ jobs:
           workdir: ${{ env.WORKDIR }}
       # Every package this job built, its native dependencies too, as packages/<dir>/prebuilds; package.json keeps
       # that root when only one package built. Consumers take the <dir>/prebuilds they need.
-      - uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: prebuild-${{ fromJSON(inputs.rows)[matrix.leg.i].slug }}-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
           path: |
             src/package.json
             src/packages/*/prebuilds
       # The same files under the leg's key, for a later run on this branch to reuse.
-      - uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.leg.cacheName }}
           retention-days: "14"
@@ -272,17 +290,17 @@ jobs:
         row: ${{ fromJSON(needs.plan.outputs.reused) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.name }}
           run-id: ${{ matrix.row.runId }}
           github-token: ${{ github.token }}
           path: leg
-      - uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.config }}
           path: leg/

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { syntheticFromWorkspace } from '@/serve/extensions/openai/routes/vector-stores'
 
 describe('syntheticFromWorkspace', () => {
-  const workspaces = [{ name: 'vs_known', open: false }]
+  const workspaces = [{ name: 'vs_known' }]
 
   it('returns null when the workspace is not present', () => {
     assert.equal(syntheticFromWorkspace('vs_missing', workspaces), null)

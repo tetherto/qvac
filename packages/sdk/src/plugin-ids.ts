@@ -4,6 +4,7 @@ export const PLUGIN_LLM = '@qvac/sdk/llamacpp-completion/plugin' as const
 export const PLUGIN_DECISION = '@qvac/sdk/llamacpp-decision/plugin' as const
 export const PLUGIN_RERANK = '@qvac/sdk/llamacpp-rerank/plugin' as const
 export const PLUGIN_IMAGE_EMBEDDING = '@qvac/sdk/ggml-image-embedding/plugin' as const
+export const PLUGIN_STEREO_DEPTH = '@qvac/sdk/ggml-stereo-depth/plugin' as const
 
 export const PLUGIN_EMBEDDING = '@qvac/sdk/llamacpp-embedding/plugin' as const
 export const PLUGIN_WHISPER = '@qvac/sdk/whispercpp-transcription/plugin' as const
@@ -22,6 +23,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_IMAGE_EMBEDDING,
+  PLUGIN_STEREO_DEPTH,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,

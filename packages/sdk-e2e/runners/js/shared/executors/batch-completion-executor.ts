@@ -19,10 +19,10 @@ interface BatchCompletionTestParams {
   }
 }
 
-type BatchAttachmentResolver = (path: string) => string | Promise<string>
+type BatchMediaResolver = (path: string) => string | Promise<string>
 
 interface BatchCompletionExecutorOptions {
-  resolveAttachmentPath?: BatchAttachmentResolver
+  resolveMediaPath?: BatchMediaResolver
 }
 
 export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchCompletionTests> {
@@ -42,7 +42,7 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
   async generic(params: BatchCompletionTestParams, expectation: Expectation): Promise<TestResult> {
     try {
       const llmModelId = await this.resources.ensureLoaded(params.resourceKey ?? 'llm-batch')
-      const prompts = await this.resolvePromptAttachments(params.prompts)
+      const prompts = await this.resolvePromptMedia(params.prompts)
       const run = batchCompletion({
         modelId: llmModelId,
         prompts,
@@ -123,25 +123,25 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
     }
   }
 
-  private async resolvePromptAttachments(prompts: BatchCompletionTestParams['prompts']) {
-    const resolveAttachmentPath = this.options.resolveAttachmentPath
-    if (!resolveAttachmentPath) return prompts
+  private async resolvePromptMedia(prompts: BatchCompletionTestParams['prompts']) {
+    const resolveMediaPath = this.options.resolveMediaPath
+    if (!resolveMediaPath) return prompts
 
     const resolved: BatchCompletionTestParams['prompts'] = []
     for (const prompt of prompts) {
       const history: typeof prompt.history = []
       for (const message of prompt.history) {
-        if (!message.attachments?.length) {
+        if (!Array.isArray(message.content)) {
           history.push(message)
           continue
         }
-        const attachments: NonNullable<typeof message.attachments> = []
-        for (const attachment of message.attachments) {
-          attachments.push({
-            path: await resolveAttachmentPath(attachment.path)
-          })
+        const content: typeof message.content = []
+        for (const part of message.content) {
+          content.push(
+            part.type === 'media' ? { ...part, path: await resolveMediaPath(part.path) } : part
+          )
         }
-        history.push({ ...message, attachments })
+        history.push({ ...message, content })
       }
       resolved.push({ ...prompt, history })
     }

@@ -64,10 +64,19 @@ export function startDeadline(ms: number): { expired: Promise<never>; clear: () 
   return { expired, clear: () => clearTimeout(timer) }
 }
 
+/**
+ * The startup failure for `cause`, the error a worker's start rejected with.
+ * Its message carries the cause's own: a mobile worklet has no stderr to read
+ * back, so the reason the worker gave, such as an exception thrown while its
+ * entry loaded, would otherwise only be found on `cause`.
+ */
 export function workerStartupFailed(cause: unknown, stderrTail?: string): WorkerStartupError {
   const timedOut = (cause as ExitReport)?.code === 'WORKER_TIMEOUT'
+  const reason = cause instanceof Error && cause.message ? `: ${cause.message}` : ''
   return new WorkerStartupError(
-    timedOut ? 'Worker did not signal ready in time' : 'Worker failed before signalling ready',
+    timedOut
+      ? 'Worker did not signal ready in time'
+      : `Worker failed before signalling ready${reason}`,
     { ...exitOf(cause), timedOut, ...(stderrTail ? { stderrTail } : {}) },
     cause
   )

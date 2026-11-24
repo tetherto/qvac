@@ -5,6 +5,7 @@ import { Command } from 'commander'
 import { registerBundleCommand } from '@/bundle-sdk/command'
 import { registerConfigureCommand } from '@/configure/command'
 import { registerDoctorCommand } from '@/doctor/command'
+import { registerFitCommand } from '@/fit/command'
 import { registerOpenAiCommand } from '@/openai/command'
 import { registerServeCommand } from '@/serve/command'
 import { registerVerifyCommand } from '@/verify/command'
@@ -22,6 +23,7 @@ function setupCli(): void {
 
   registerBundleCommand(program)
   registerDoctorCommand(program)
+  registerFitCommand(program)
   registerConfigureCommand(program)
   registerVerifyCommand(program)
   registerOpenAiCommand(program)

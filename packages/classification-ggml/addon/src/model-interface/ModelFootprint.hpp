@@ -38,6 +38,9 @@ struct MeasuredBuffers {
   BufferFootprint buffers;
   // See ModelFootprint::hostStagingBytes.
   uint64_t hostStagingBytes = 0;
+  // BridgeDepth: the part of hostStagingBytes the measured input size keeps
+  // between runs, see bridgedepth::SIZE_SLOT_LIMIT. 0 for the other models.
+  uint64_t sizeSlotBytes = 0;
   // ggml name of the device the weights are on, and whether it is the CPU.
   std::string deviceName;
   bool deviceIsCpu = true;
@@ -63,14 +66,19 @@ struct ModelFootprint {
   uint64_t hostWorkBytes = 0;
   // Largest host memory the addon allocates itself at one time, the larger of
   // the load and the inference phase plus what stays allocated between them.
-  // It does not count ggml's tensor and graph metadata or allocations inside
-  // a backend. MobileNet and MegaLoc do not count the caller's input image.
+  // It does not count allocations inside a backend, or ggml's tensor and
+  // graph metadata apart from the BridgeDepth graph memory below. MobileNet
+  // and MegaLoc do not count the caller's input image.
   //   MobileNet: the GGUF data section (the loader reads it whole), or the
   //     [224, 224, 3] float input.
   //   MegaLoc: the 8 MiB read chunk, or the patch input plus the descriptor.
   //   BridgeDepth: the host copies of pos_embed, its copy resized for the
   //     size the model runs at and the relative position indices, plus the
-  //     larger of the read buffer (the largest tensor) and one job. A job
+  //     larger of the read buffer (the largest tensor) and the size's slot
+  //     plus one job. The slot stays allocated after the run: the memory the
+  //     graph is built in, reserved whole, and the masks and indices that
+  //     depend only on the size. Up to bridgedepth::SIZE_SLOT_LIMIT sizes
+  //     keep a slot at once; this counts the measured size's only. A job
   //     holds both views copied from JS, counted as raw RGB, through its
   //     largest phase: decoding one view (16 B/px, a 16-bit RGBA PNG in
   //     stb_image) next to the other planar view; the run (both planar views,

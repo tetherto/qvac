@@ -5,8 +5,10 @@ import { ModelAssetExecutor } from './model-asset-executor.js'
 import { visionTests } from '../../../../catalog/vision-tests.js'
 import { callWhenAddonIdle } from '../../shared/utils/addon-idle.js'
 
+type ContentPart = { type: 'text'; text: string } | { type: 'media'; path: string }
+
 type VisionParams = {
-  history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>
+  history: Array<{ role: string; content: string | ContentPart[] }>
   stream?: boolean
   generationParams?: Record<string, unknown>
 }
@@ -37,7 +39,7 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
   }
 
   private async getPromptTokens(modelId: string, params: VisionParams) {
-    const history = await this.resolveAttachments(params.history)
+    const history = await this.resolveMedia(params.history)
     return callWhenAddonIdle(async () => {
       const result = completion({
         modelId,
@@ -94,28 +96,31 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
     return this.imageAssets!
   }
 
-  private async resolveAttachments(history: VisionParams['history']) {
+  private async resolveMedia(history: VisionParams['history']) {
     const images = await this.loadImageAssets()
     const resolved = []
 
     for (const msg of history) {
-      if (!msg.attachments?.length) {
+      if (typeof msg.content === 'string') {
         resolved.push(msg)
         continue
       }
 
-      const resolvedAttachments = []
-      for (const att of msg.attachments) {
-        const fileName = att.path.split('/').pop()!
+      const content: ContentPart[] = []
+      for (const part of msg.content) {
+        if (part.type !== 'media') {
+          content.push(part)
+          continue
+        }
+        const fileName = part.path.split('/').pop()!
         const assetModule = images[fileName]
         if (!assetModule) {
           throw new Error(`Image file not found in assets: ${fileName}`)
         }
-        const imageUri = await this.resolveAsset(assetModule)
-        resolvedAttachments.push({ path: imageUri })
+        content.push({ ...part, path: await this.resolveAsset(assetModule) })
       }
 
-      resolved.push({ ...msg, attachments: resolvedAttachments })
+      resolved.push({ ...msg, content })
     }
 
     return resolved
@@ -126,7 +131,7 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
     const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history)
+      const history = await this.resolveMedia(p.history)
       const text = await callWhenAddonIdle(
         () =>
           completion({
@@ -151,7 +156,7 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
     const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history)
+      const history = await this.resolveMedia(p.history)
       const tokens = await callWhenAddonIdle(async () => {
         const result = completion({
           modelId: visionModelId,
@@ -187,7 +192,7 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
     const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history)
+      const history = await this.resolveMedia(p.history)
       const { text, stats } = await callWhenAddonIdle(async () => {
         const result = completion({
           modelId: visionModelId,

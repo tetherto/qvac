@@ -605,7 +605,7 @@ for (const prediction of [undefined, 'flux2_flow']) {
           response.onUpdate(() => outputCount++)
           await t.exception.all(
             response.await(),
-            /img2img: init_images requires a model supporting reference editing \(FLUX\.2 or Qwen-Image-2\.1\)\./,
+            /img2img: init_images requires a model supporting reference editing\./,
             'the native capability error reaches the public response'
           )
           t.is(outputCount, 0, 'rejected references produce no output')

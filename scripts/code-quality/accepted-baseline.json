@@ -989,31 +989,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:0750f55d6e15315a80d3bea82416f54dbdf2a5e190938f27e822dd8e2335a12d",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk-e2e/runners/js/conformance/run.mjs",
-        "symbol": "runCase#1"
-      },
-      "summary": "runCase#1 in packages/sdk-e2e/runners/js/conformance/run.mjs exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/sdk-e2e/runners/js/conformance/run.mjs",
-        "line": 50,
-        "column": 1
-      },
-      "measurement": {
-        "value": 21,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:07594af55e9756a4d4b5e4b392b250b054631b193300aba3afbf6001e4ef09fc",
       "detector": "structure",
       "rule": "function-lines",

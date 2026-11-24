@@ -2,7 +2,7 @@
 
 [Yuri Samarin](https://github.com/yuranich) · QVAC Team
 
-Last updated November 19, 2026
+Last updated November 24, 2026
 
 - [C4 Model Reference](https://c4model.com/)
 - [Agent Integrations](./AGENT-INTEGRATIONS.md)
@@ -10,12 +10,12 @@ Last updated November 19, 2026
 
 ## Product Executive Summary
 
-QVAC SDK runs models and retrieves application data on the device. The same inference engine serves two entry points.
+QVAC SDK runs models and works with vector indexes on the device. The same inference engine serves two entry points.
 
 - **Worker-backed.** `@qvac/sdk` hosts the worker for TypeScript applications. `tetherto-qvac-sdk` and the Kotlin SDK provide typed clients for the same worker contract. A bare-stow harness starts the Bare worker and gives the client an IPC stream. The worker owns the engine and its native addons.
 - **Direct Bare.** A Bare application imports `@qvac/inference`, registers its plugins, and calls the engine in its own process.
 
-The engine owns request dispatch, caller sessions, loaded models, artifact resolution, and retrieval. It loads model files from a local path or a cache populated through HTTP, the QVAC Model Registry, or Hyperdrive. An application can also opt in to GGML RPC devices for supported model loads.
+The engine owns request dispatch, caller sessions, loaded models, artifact resolution, and vector indexes. It loads model files from a local path or a cache populated through HTTP, the QVAC Model Registry, or Hyperdrive. An application can also opt in to GGML RPC devices for supported model loads.
 
 ## System Context Diagram
 
@@ -35,7 +35,7 @@ The registry supplies catalog data and model blobs through Holepunch. Direct HTT
 
 *Boxes show the host, worker, and engine roles. Cylinders show persistent stores. Grey boxes show model sources.*
 
-The host client owns the application-facing API and its connection to the worker. The worker owns the inference engine and performs model and retrieval I/O. The [deployment diagram](#deployment-diagram) shows which boundaries cross an OS process.
+The host client owns the application-facing API and its connection to the worker. The worker owns the inference engine and performs model I/O. The [deployment diagram](#deployment-diagram) shows which boundaries cross an OS process.
 
 ## Component Overview
 
@@ -101,7 +101,7 @@ TypeScript, Python, and Kotlin use their language's bare-rpc implementation for 
 
 The worker registers its plugins and binds the RPC endpoint before the harness reports `ready`. The host then sends `__init_config` with its runtime context and home directory, along with any custom configuration. Application calls start after the worker acknowledges initialization. Bare-stow frames both the RPC byte stream and the lifecycle signals, including `ready`, `error`, `exit`, and `terminate`. The SDK contract supports request/reply, server streaming, and duplex calls.
 
-A client timeout, cancellation, or early stream close can abort the corresponding request in the engine. During an orderly shutdown the harness sends `terminate`, and the worker closes the engine, draining work and releasing models, registry leases, and retrieval resources. Host adapters supervise shutdown and stop an unresponsive worker.
+A client timeout, cancellation, or early stream close can abort the corresponding request in the engine. During an orderly shutdown the harness sends `terminate`, and the worker closes the engine, draining work and releasing models, registry leases, and vector indexes. Host adapters supervise shutdown and stop an unresponsive worker.
 
 ## Domain Model Diagram
 
@@ -126,6 +126,7 @@ A `QvacPlugin` defines a canonical model type, addon metadata, a load-config sch
 | Decision | `llamacpp-decision` | `@qvac/embed-llamacpp` |
 | Reranking | `llamacpp-rerank` | `@qvac/embed-llamacpp` |
 | Image embeddings | `ggml-image-embedding` | `@qvac/classification-ggml` |
+| Stereo depth | `ggml-stereo-depth` | `@qvac/classification-ggml` |
 | Whisper | `whispercpp-transcription` | `@qvac/asr-ggml` |
 | Parakeet | `parakeet-transcription` | `@qvac/asr-ggml` |
 | MOSS transcription | `moss-transcribe` | `@qvac/asr-ggml` |
@@ -148,6 +149,8 @@ Custom plugin packages expose their manifest through a `/plugin` subpath. Built-
 
 A plugin operation inherits the calling session and abort signal. The plugin can pass that context to nested engine operations so cancellation follows the whole request.
 
+`qvac serve` can also invoke registered custom handlers over HTTP through `/qvac/v1/plugins/:name/invoke`. The route requires `--enable-admin` and uses the worker's plugin invocation API. See [Plugin invoke](../website/content/_unpublished/cli/next/http-server/index.mdx#plugins-post-qvacv1pluginsnameinvoke).
+
 ## Model Loading Flow
 
 ![Model Loading Flow](puml/images/08-model-loading-flow.png)
@@ -156,25 +159,15 @@ A plugin operation inherits the calling session and abort signal. The plugin can
 
 *The flow shows how the engine resolves artifacts and either reuses a loaded model or loads a new one.*
 
-The loader accepts local paths, source URIs, descriptors, and generated model constants. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes loads by model ID. A reload leaves that ID tied to the original configuration. While the model is reconfigured, a caller without a lease who requests the original configuration receives `ModelReconfiguredError`.
+The loader accepts local paths, source URIs, descriptors, and generated model constants shared across TypeScript, Python, and Kotlin. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes loads by model ID. A reload leaves that ID tied to the original configuration. While the model is reconfigured, a caller without a lease who requests the original configuration receives `ModelReconfiguredError`.
 
-`assessModelFit` runs each supported addon's fitter in the engine process. It uses a local file or a weightless registry description and sums estimated allocations by memory pool when evaluating several models. At load time the fitter uses the resolved files. `modelFitPolicy` can log the verdict, refuse an oversized load, or skip the check. See [Model Fit Assessment](../../packages/sdk/docs/assess-model-fit.md) and [Model Cache](../../packages/inference/docs/model-cache.md).
+`assessModelFit` runs each supported addon's fitter in the engine process using a local file or a weightless registry description. It sums estimated allocations by memory pool, accounts for devices sharing memory even for a single model, and reports why a result is unknown. `qvac fit` and the HTTP model-fit endpoint use the same assessment. At load time the fitter uses the resolved files. `modelFitPolicy` can log the verdict, refuse an oversized load, or skip the check. See [Model Fit Assessment](../../packages/sdk/docs/assess-model-fit.md) and [Model Cache](../../packages/inference/docs/model-cache.md).
 
-## RAG Component Diagram
+## Vector Indexes and Retrieval
 
-### Current SDK
+The SDK provides embeddings and a session-owned vector index API. TurboVec runs index operations asynchronously on addon-owned threads. The engine serializes operations on each index and disposes that session's indexes when it closes.
 
-The inference engine uses `@qvac/rag` 0.9. The engine opens a dedicated Corestore and storage adapter for each workspace. The workspace binds to the embedding model used for ingest and search. See the [workspace manager](../../packages/inference/src/rag/rag-workspace-manager.ts).
-
-### Target integration with RAG 0.10
-
-![RAG 0.10 Integration](puml/images/10-rag-components.png)
-
-[PlantUML source](puml/10-rag-components.puml)
-
-*The runtime boundary encloses the retrieval adapter, embedding model, and storage.*
-
-The retrieval adapter supplies and owns the Corestore and provides an embeddings port for text ingest and queries. `@qvac/rag` stores documents, chunks, and vectors in HyperDB namespaces, each bound to one embedding space. Search is scoped to a namespace and can be restricted to a set of document IDs. A per-namespace TurboVec index supplies candidates for exact rescoring against the stored vectors. Exact search remains available when the index is unavailable. See the [RAG package design](../../packages/rag/README.md#api).
+Applications that need document ingestion, chunking, and scoped search use the standalone [`@qvac/rag`](../../packages/rag/README.md) library with a caller-owned Corestore and an embeddings port. `qvac serve --openai` uses that library directly for `/v1/vector_stores`. The CLI owns the vector stores and calls the SDK for embeddings. See [Migrate from the SDK RAG API](../website/content/docs/resources/rag-migration.mdx).
 
 ## Model Registry (Online Catalog)
 
@@ -186,7 +179,7 @@ The engine can register an optional RPC server provider. In a worker bundle, sel
 
 ## Language Contract
 
-The SDK exports the language-neutral worker contract under [`packages/sdk/contract`](../../packages/sdk/contract/README.md).
+The SDK exports the language-neutral worker contract on demand from its schemas and method registry with `npm run contract:export`. The JSON artifacts are written under [`packages/sdk/contract`](../../packages/sdk/contract/README.md).
 
 | Artifact | Role |
 |---|---|
@@ -194,7 +187,7 @@ The SDK exports the language-neutral worker contract under [`packages/sdk/contra
 | `manifest.json` | RPC methods, call shapes, and owner-only operations |
 | `models.json` | Model constants and artifact metadata |
 
-The SDK owns contract export and drift detection. Python generates Pydantic models and typed stubs, and Kotlin generates Kotlin serialization models and typed calls. Each client handles its own transport and idiomatic lifecycle. Release builds align the generated clients with the SDK version and package their worker distributions. The [SDK e2e catalog](../../packages/sdk-e2e/README.md) includes a cross-client conformance corpus. The [SDK release train](../ci/RELEASE-TRAIN.md) checks and publishes the packages in dependency order.
+The contract JSON and generated client sources are build outputs. The Python and Kotlin build, test, and packaging workflows export the contract and then generate typed calls, models, and constants. Each client supplies its own transport and lifecycle. The [SDK e2e catalog](../../packages/sdk-e2e/README.md) drives JavaScript, Python, and Kotlin runners, including the built Python wheel and the Kotlin Maven package. The [SDK release train](../ci/RELEASE-TRAIN.md) checks and publishes the packages in dependency order.
 
 ## Security Model
 
@@ -222,6 +215,8 @@ The SDK owns contract export and drift detection. Python generates Pydantic mode
 
 Fabric provides a shared GGML runtime with platform-specific prebuilds. Compatible addons load the platform runtime in the worker. Speech and audio generation addons use the same shared runtime. The plugin layer owns model-specific configuration and capability routing.
 
+On Linux x64, the Fabric platform package brings in a separate, version-matched CUDA carrier. The llama.cpp addon also has an experimental WebAssembly and WebGPU build for direct browser use. See [Fabric packaging](../../packages/fabric/README.md#platform-packages) and the [llama.cpp browser guide](../../packages/llm-llamacpp/docs/browser.md).
+
 - [Fabric platform packages](qips/fabric-platform-packages.md)
 - [Addon C++ framework](../../packages/inference-addon-cpp/docs/architecture.md)
 - [LLM completion](../../packages/llm-llamacpp/docs/architecture.md)
@@ -236,7 +231,7 @@ Fabric provides a shared GGML runtime with platform-specific prebuilds. Compatib
 - **Logging.** Addons forward logs to the worker. Clients can subscribe to a live log stream and configure level and console output.
 - **Errors.** Structured errors carry numeric codes. Client, engine, and addon layers preserve the original cause when translating failures. See [Error Handling](../../packages/sdk/docs/error-handling.md).
 - **Request cleanup.** The engine uses request contexts and disposable scopes for cancellation, concurrency admission, and cleanup. See [Request Lifecycle](../../packages/inference/docs/request-lifecycle.md).
-- **Completion state.** The SDK sends full history and tool definitions on each cached turn. The llama.cpp addon matches the rendered token prefix against its cache. See [LLM KV Cache](../../packages/inference/docs/kv-cache.md).
+- **Completion state.** The SDK sends full history and tool definitions on each cached turn. The llama.cpp addon matches the rendered token prefix against its cache. Supported parallel configurations share one KV buffer with per-slot limits. See [LLM KV Cache](../../packages/inference/docs/kv-cache.md) and [Continuous Batching](../../packages/llm-llamacpp/docs/continuous-batching.md).
 - **Audio frames.** TTS encodes little-endian PCM as base64 inside the JSON response. Host clients decode the audio at the transport boundary.
 
 ## Repositories
@@ -247,9 +242,9 @@ Fabric provides a shared GGML runtime with platform-specific prebuilds. Compatib
 | [`packages/inference`](../../packages/inference) | In-process inference engine and plugin contract |
 | [`packages/sdk-python`](../../packages/sdk-python) | Python client and worker distribution |
 | [`packages/sdk-kotlin`](../../packages/sdk-kotlin) | Kotlin client and BareKit hosts |
-| [`packages/sdk-e2e`](../../packages/sdk-e2e) | Shared conformance and end-to-end catalog |
+| [`packages/sdk-e2e`](../../packages/sdk-e2e) | Client-neutral end-to-end catalog and JavaScript, Python, and Kotlin runners |
 | [`packages/cli`](../../packages/cli) | CLI, HTTP server, and worker build tooling |
 | [`packages/registry-server`](../../packages/registry-server) | Model catalog, distribution service, and client |
-| [`packages/rag`](../../packages/rag) | Embedded retrieval |
+| [`packages/rag`](../../packages/rag) | Standalone document ingestion and retrieval |
 | [`packages/turbovec-ggml`](../../packages/turbovec-ggml) | Native vector index |
 | [`packages/fabric`](../../packages/fabric) | Shared native GGML runtime |

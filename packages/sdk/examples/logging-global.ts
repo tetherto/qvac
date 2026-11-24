@@ -10,7 +10,7 @@ const { loadModel, completion, unloadModel, subscribeServerLogs, LLAMA_3_2_1B_IN
 try {
   console.log('▸ Starting global logging demo...\n')
 
-  // One subscription captures every server-side log (SDK, models, RAG, …)
+  // One subscription captures every server-side log (SDK, models, …)
   // without having to know any stream IDs ahead of time.
   const unsubscribe = subscribeServerLogs((log) => {
     console.log(`[SDK] [${log.level.toUpperCase()}] [${log.namespace}] ${log.message}`)

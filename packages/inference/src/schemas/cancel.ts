@@ -30,6 +30,7 @@ const cancelKindSchema = z
     'batchCompletion',
     'embeddings',
     'imageEmbedding',
+    'stereoDepth',
     'decision',
     'rerank',
     'transcribe',
@@ -48,8 +49,7 @@ const cancelKindSchema = z
     'downloadAsset',
     'modelRegistry',
     'rpcServer',
-    'rpcDiscovery',
-    'rag'
+    'rpcDiscovery'
   ] as const)
   .describe(
     'Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.'
@@ -60,7 +60,7 @@ const cancelKindSchema = z
  * with the `requestId` field exposed on
  * `CompletionRun` (and the decorated promises returned by
  * `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,
- * `transcribe(...)`, `rag*(...)` etc.) to cancel a specific in-flight
+ * `transcribe(...)` etc.) to cancel a specific in-flight
  * request rather than every request running on a given model.
  *
  * `clearCache` is honoured only when the targeted request is a

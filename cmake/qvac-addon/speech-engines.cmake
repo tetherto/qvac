@@ -9,7 +9,15 @@ function(qvac_addon_speech_engines)
     message(FATAL_ERROR "Speech engines require the npm Fabric headers, without another ggml target")
   endif()
   add_library(ggml ALIAS qvac-fabric::headers)
-  file(READ "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-source.json" source_manifest)
+  set(manifest_path "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-source.json")
+  set(logging_patch "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-local-logging.patch")
+  set(streaming_patch "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-streaming-capability.patch")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${manifest_path}" "${logging_patch}" "${streaming_patch}")
+  file(READ "${manifest_path}" source_manifest)
+  file(SHA256 "${logging_patch}" logging_patch_hash)
+  file(SHA256 "${streaming_patch}" streaming_patch_hash)
+  string(SHA256 patch_hash "${logging_patch_hash}${streaming_patch_hash}")
   string(JSON repository GET "${source_manifest}" repository)
   string(JSON revision GET "${source_manifest}" revision)
   string(JSON checksum GET "${source_manifest}" sha512)
@@ -17,9 +25,11 @@ function(qvac_addon_speech_engines)
   FetchContent_Declare(qvac_speech
     URL "https://github.com/${repository}/archive/${revision}.tar.gz"
     URL_HASH "SHA512=${checksum}"
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # A new archive can predate the last build. Refresh source mtimes so Ninja recompiles it.
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+    SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/qvac_speech-${patch_hash}-src"
     SOURCE_SUBDIR qvac-npm-engine-only
-    PATCH_COMMAND "${GIT_EXECUTABLE}" apply "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-local-logging.patch"
+    PATCH_COMMAND "${GIT_EXECUTABLE}" apply "${logging_patch}" "${streaming_patch}"
   )
   FetchContent_MakeAvailable(qvac_speech)
   set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

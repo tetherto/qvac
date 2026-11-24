@@ -15,17 +15,6 @@ export { finetune, type FinetuneHandle } from './finetune'
 export { translate } from './translate'
 export { cancel } from './cancel'
 export {
-  ragChunk,
-  ragIngest,
-  ragSaveEmbeddings,
-  ragSearch,
-  ragDeleteEmbeddings,
-  ragReindex,
-  ragListWorkspaces,
-  ragCloseWorkspace,
-  ragDeleteWorkspace
-} from './rag'
-export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
@@ -40,6 +29,7 @@ export { ocr } from './ocr'
 export { invokePlugin, invokePluginStream } from './invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from './diffusion'
 export { classify } from './classify'
+export { estimateDisparity } from './estimate-disparity'
 export { video, type VideoProgressTick } from './video'
 export { upscale } from './upscale'
 export { worldCreateScene, worldStep } from './world'

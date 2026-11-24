@@ -31,6 +31,7 @@ described in [README.md](README.md) and applies here. Its own configuration live
 | `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)     |
 | `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live    |
 | `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)   |
+| `POST`          | `/qvac/v1/plugins/:name/invoke`          | Call a custom plugin (admin-only)       |
 
 ## Binary inputs
 
@@ -52,8 +53,9 @@ Uploads are capped at 100 MB per file and 10 files per request.
 ## KV-cache retention
 
 `/v1/chat/completions` caches each conversation's prefix under `~/.qvac/kv-cache`, so a
-follow-up turn only prefills the new tail. It is the only endpoint that does: `/v1/responses`
-and `/v1/completions` run uncached, so they leave nothing here to reclaim. That directory
+follow-up turn only prefills the new tail. `/v1/chat/completions` and `/v1/responses` can
+also name a cache session, which keeps the cache across tool calls (see
+[KV cache sessions](openai.md#kv-cache-sessions)); `/v1/completions` runs uncached. That directory
 grows on the order of hundreds of megabytes per conversation, **but it is bounded** — you do
 not need a sweeper of your own:
 
@@ -65,10 +67,10 @@ not need a sweeper of your own:
 
 Caches held by an in-flight request are never evicted.
 
-**Responses caches follow the same policy.** `/v1/responses` names one cache per
-conversation key (`responses-<sha256>`); serve applies the same quota and TTL to those,
-counted separately, and the endpoint below reclaims them too. The quota and the endpoint
-only delete Responses caches this server has used, since other processes may share the
+**Named caches follow the same policy.** `/v1/chat/completions` and `/v1/responses` name
+one cache per conversation key (`responses-<sha256>`); serve applies the same quota and TTL
+to those, counted separately, and the endpoint below reclaims them too. The quota and the
+endpoint only delete the named caches this server has used, since other processes may share the
 directory; the TTL applies to all of them. A cache that any running QVAC process is using
 (it holds a lease file under `.responses-leases`) is never deleted. Any other caller-owned named
 cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both, and
@@ -361,14 +363,19 @@ load that `loadModel` would refuse fails the request.
 
 `pools` gives each memory pool the verdict was judged on, with what the set takes from it and the
 lowest free and total figures reported for it. Every device that shares the host's memory joins
-the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single model's
-`verdict` is its own `status`. A set of models does not fit when any pool would use more than 90%
-of its free memory.
+the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single
+model's `verdict` is its own `status`. A set of models does not fit when any model does not fit
+alone or any pool would use more than 90% of its free memory.
 
-`models` carries each entry's engine fit result, in request order: its own `status`, one row per
+`models` carries each entry's engine fit result, in request order: its `status`, the model's
+verdict alone, which is `does-not-fit` when rows sharing one pool, such as a Metal GPU and the
+CPU, would together use more than 90% of its free memory; one row per
 device the load uses (the host last), and its `stats`: the context size and GPU layers for a
-llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
-where the backend reports one, so the same GPU matches across engines.
+llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `reason` saying why
+it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
+is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
+
+`qvac fit` answers the same question from the terminal, with the same answer for the same input.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
@@ -1125,3 +1132,81 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   }
 }
 ```
+
+## Plugins: `POST /qvac/v1/plugins/:name/invoke`
+
+Call a handler of a custom plugin, backed by the SDK's `invokePlugin()`, or
+`invokePluginStream()` with `stream: true`. It runs whatever the plugin does, so it is
+**admin-only**: it answers `403 admin_disabled` unless the server was started with
+`--enable-admin`, and refuses browser origins outside the CORS allowlist like the
+[runtime routes](#runtime-qvacv1runtime).
+
+The plugin must be registered in the worker that serve runs. List it under `plugins` in
+`qvac.config.*` and run `qvac bundle sdk`, which writes `qvac/worker.entry.mjs`; serve uses
+that entry when started from the project directory, or the file `QVAC_WORKER_PATH` names.
+Then give the plugin an alias whose `type` is its model type:
+
+```json
+{
+  "serve": {
+    "models": {
+      "echo": { "src": "./models/echo.bin", "type": "echo-plugin" }
+    }
+  }
+}
+```
+
+`:name` is that model type. Built-in plugins answer `400 builtin_plugin`: use their own
+endpoints.
+
+| Field     | Type      | Required | Meaning                                                      |
+| --------- | --------- | -------- | ------------------------------------------------------------ |
+| `model`   | `string`  | Yes      | A `serve.models` alias whose `type` is `:name`               |
+| `handler` | `string`  | Yes      | The plugin handler to call                                   |
+| `params`  | any JSON  | No       | Passed to the handler as-is; the plugin validates it (`{}`)  |
+| `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
+  -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
+```
+
+```json
+{ "object": "plugin.invocation", "model": "echo", "handler": "echo", "result": { "text": "hi" } }
+```
+
+With `stream: true`, a streaming handler answers with Server-Sent Events: a
+`plugin.invocation.chunk` per result, one `plugin.invocation.done`, then `data: [DONE]`.
+
+```text
+data: {"object":"plugin.invocation.chunk","model":"echo","handler":"count","index":0,"result":{"n":1}}
+
+data: {"object":"plugin.invocation.done","model":"echo","handler":"count"}
+
+data: [DONE]
+```
+
+Plugin calls cannot be cancelled: a client disconnect stops the stream, but the handler runs
+to the end.
+
+### Errors
+
+| HTTP | `error.code`              | When                                                         |
+| ---- | ------------------------- | ------------------------------------------------------------ |
+| 400  | `missing_model`           | `model` is missing                                           |
+| 400  | `missing_handler`         | `handler` is missing                                         |
+| 400  | `builtin_plugin`          | `:name` is a built-in model type                             |
+| 400  | `invalid_model_type`      | The alias's `type` is not `:name`                            |
+| 400  | `invalid_plugin_params`   | The plugin rejected `params`                                 |
+| 400  | `handler_type_mismatch`   | `stream` does not match whether the handler streams          |
+| 400  | `invalid_request`         | The body carries an unknown field                            |
+| 403  | `admin_disabled`          | The server was started without `--enable-admin`              |
+| 403  | `origin_not_allowed`      | A browser request from an origin outside the CORS allowlist  |
+| 404  | `model_not_found`         | Unknown alias                                                |
+| 404  | `handler_not_found`       | The plugin has no such handler                               |
+| 502  | `plugin_response_invalid` | The handler's result failed the plugin's own response schema |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled                |
+| 503  | `runtime_suspended`       | The runtime is suspended                                     |
+
+A failure mid-stream arrives as an SSE `error` frame with the same codes.

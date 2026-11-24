@@ -98,7 +98,8 @@ const EVERY_SETTING = {
   'n-cpu-ffn': '1',
   'override-tensor': 'ffn_.*=CPU',
   'prefetch-weights': 'auto',
-  'fit-ctx': '2048'
+  'fit-ctx': '2048',
+  'image-max-megapixels': '8'
 }
 
 const MOBILE_REFUSED = ['main-gpu', 'split-mode', 'tensor-split']
@@ -130,6 +131,13 @@ test('a context floor that is not a count rejects', { timeout: 600_000 }, async 
 
 test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) => {
   await t.exception(assess(await modelPath(), { 'ctx-size': 'not-a-number' }))
+})
+
+test('an image limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+
+  await t.exception(assess(file, { 'image-max-megapixels': '0' }))
+  await t.exception(assess(file, { 'image-max-megapixels': 'many' }))
 })
 
 test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
@@ -205,6 +213,42 @@ test(
 )
 
 test(
+  'spec-type auto projects like the type it detects',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const file = await localModel(NO_MTP_MODEL)
+    const head = await localModel(MTP_MODEL)
+    const explicit = await assess(file, {
+      ...PINNED,
+      'spec-type': 'draft-mtp',
+      'spec-draft-model': head
+    })
+    const detected = await assess(file, {
+      ...PINNED,
+      'spec-type': 'auto',
+      'spec-draft-model': head
+    })
+    t.is(detected.status, explicit.status, 'same verdict')
+    t.is(totalUsed(detected), totalUsed(explicit), 'same figures')
+  }
+)
+
+test(
+  'spec-type auto with a drafter of no type rejects',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    await t.exception(
+      assess(await localModel(MTP_MODEL), {
+        'spec-type': 'auto',
+        'spec-draft-model': await localModel(NO_MTP_MODEL)
+      }),
+      /detected no speculative type/,
+      'the load fails the same way'
+    )
+  }
+)
+
+test(
   'an external head without MTP layers rejects',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
@@ -258,6 +302,25 @@ test('a draft model that is not a file rejects', { timeout: 600_000 }, async (t)
     'the load requires a regular file too'
   )
 })
+
+// Auto-detection opens the draft model to read its type, and opening a FIFO
+// with no writer never returns, so the file check must come first.
+test(
+  'spec-type auto with a draft model that is a FIFO rejects',
+  { timeout: 600_000, skip: isMobile || platform === 'win32' },
+  async (t) => {
+    const { spawnSync } = require('bare-subprocess')
+    const fs = require('bare-fs')
+    const fifo = path.join(os.tmpdir(), `qvac-fit-draft-${Date.now()}.gguf`)
+    t.is(spawnSync('mkfifo', [fifo]).status, 0, 'made the FIFO')
+    t.teardown(() => fs.rmSync(fifo, { force: true }))
+    await t.exception(
+      assess(await modelPath(), { 'spec-type': 'auto', 'spec-draft-model': fifo }),
+      /not a regular file/,
+      'rejected before auto-detection opens it'
+    )
+  }
+)
 
 // A margin is free memory the projection may not place into, so one as large
 // as the device leaves no room to offload, and the placement matches a load

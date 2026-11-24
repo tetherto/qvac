@@ -76,19 +76,11 @@ export interface QvacSession {
   textToSpeechStream: Api['textToSpeechStream']
   finetune: Api['finetune']
   cancel: Api['cancel']
-  ragChunk: Api['ragChunk']
-  ragIngest: Api['ragIngest']
-  ragSaveEmbeddings: Api['ragSaveEmbeddings']
-  ragSearch: Api['ragSearch']
-  ragDeleteEmbeddings: Api['ragDeleteEmbeddings']
-  ragReindex: Api['ragReindex']
-  ragListWorkspaces: Api['ragListWorkspaces']
-  ragCloseWorkspace: Api['ragCloseWorkspace']
-  ragDeleteWorkspace: Api['ragDeleteWorkspace']
   createVectorIndex: Api['createVectorIndex']
   loadVectorIndex: Api['loadVectorIndex']
   ocr: Api['ocr']
   classify: Api['classify']
+  estimateDisparity: Api['estimateDisparity']
   diffusion: Api['diffusion']
   upscale: Api['upscale']
   video: Api['video']
@@ -253,19 +245,11 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
         withSession(options)
       )) as Api['finetune'],
     cancel: (params, options) => api.cancel(params, withSession(options)),
-    ragChunk: (params, options) => api.ragChunk(params, withSession(options)),
-    ragIngest: (params, options) => api.ragIngest(params, withSession(options)),
-    ragSaveEmbeddings: (params, options) => api.ragSaveEmbeddings(params, withSession(options)),
-    ragSearch: (params, options) => api.ragSearch(params, withSession(options)),
-    ragDeleteEmbeddings: (params, options) => api.ragDeleteEmbeddings(params, withSession(options)),
-    ragReindex: (params, options) => api.ragReindex(params, withSession(options)),
-    ragListWorkspaces: (options) => api.ragListWorkspaces(withSession(options)),
-    ragCloseWorkspace: (params, options) => api.ragCloseWorkspace(params, withSession(options)),
-    ragDeleteWorkspace: (params, options) => api.ragDeleteWorkspace(params, withSession(options)),
     createVectorIndex: vectorIndexes.createVectorIndex,
     loadVectorIndex: vectorIndexes.loadVectorIndex,
     ocr: (params, options) => api.ocr(params, withSession(options)),
     classify: (params, options) => api.classify(params, withSession(options)),
+    estimateDisparity: (params, options) => api.estimateDisparity(params, withSession(options)),
     diffusion: (params, options) => api.diffusion(params, withSession(options)),
     upscale: (params, options) => api.upscale(params, withSession(options)),
     video: (params, options) => api.video(params, withSession(options)),

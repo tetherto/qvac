@@ -98,6 +98,28 @@
       "configurations": {
         "linux-x64": {
           "args": "--platform=linux --arch=x64",
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm run build:web",
+              "forwardAllArgs": false
+            }
+          ],
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           }
@@ -293,11 +315,13 @@
       },
       "configurations": {
         "linux-x64-gpu2204": {
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
         },
         "linux-x64-gpu": {
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           },
@@ -313,7 +337,7 @@
           ]
         },
         "linux-x64-vulkan": {
-          "args": "--set CUDA_VISIBLE_DEVICES=-1",
+          "args": "--set CUDA_VISIBLE_DEVICES=-1 --set QVAC_RUN_SPECULATIVE_DSPARK=1",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           }
@@ -331,6 +355,7 @@
           }
         },
         "darwin-arm64": {
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
           "ci": {
             "runner": "macos_arm64_gpu"
           }
@@ -346,6 +371,7 @@
           }
         },
         "win32-x64": {
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
           "ci": {
             "runner": "win_2025_x64_gpu"
           }
@@ -472,7 +498,10 @@
       "metadata": {
         "publish": {
           "tagPrefix": "llamacpp-llm"
-        }
+        },
+        "prebuildExtraDirs": [
+          "web"
+        ]
       }
     }
   },

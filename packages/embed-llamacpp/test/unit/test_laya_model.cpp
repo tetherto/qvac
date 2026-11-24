@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <any>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -86,8 +87,12 @@ std::string layaModelPath() {
 std::unordered_map<std::string, double> statsOf(const LayaModel& model) {
   std::unordered_map<std::string, double> stats;
   for (const auto& [key, value] : model.runtimeStats()) {
-    stats[key] =
-        std::visit([](auto v) { return static_cast<double>(v); }, value);
+    // String stats have no numeric value, so the map skips them.
+    if (const auto* number = std::get_if<double>(&value)) {
+      stats[key] = *number;
+    } else if (const auto* count = std::get_if<int64_t>(&value)) {
+      stats[key] = static_cast<double>(*count);
+    }
   }
   return stats;
 }

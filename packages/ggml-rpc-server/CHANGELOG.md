@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.12.0] - 2026-11-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. It also brings 0.32's
+  Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)), which installs CUDA
+  automatically. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.31.x or
+  0.32.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
+- RPC protocol 118: `@qvac/ggml-rpc-server` and `@qvac/llm-llamacpp` must
+  both be on `@qvac/fabric` 0.33; a server and a client on different
+  protocols cannot connect.
+- This package needed no code change for the new fabric.
+
+## [0.11.0] - 2026-11-19
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+
 ## [0.10.0] - 2026-11-16
 
 ### Changed

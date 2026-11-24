@@ -17,6 +17,16 @@ the exported inference surface rather than maintaining an independent schema.
 Read the current source before documenting defaults; configuration fields and
 defaults are intentionally not duplicated here.
 
+The diffusion addon selects the performance profile. See the
+[diffusion config schema](../src/schemas/sdcpp-config.ts) for defaults and
+overrides and the [video generation guide](../../../docs/website/content/_unpublished/sdk/next/ai-capabilities/video-generation.mdx#performance-profiles)
+for supported hardware and LTX output limits.
+
+Load-time fit checks and `assessModelFit` size bounded video at its declared
+maximum width, height, and frame count. If any limit exceeds what the
+[fitter](../src/plugins/builtin/sdcpp-generation/fit.ts) can size, the fit is
+`unknown`.
+
 `includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
 `false` for workers that only process raw PCM or streaming audio, and list the
 required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
@@ -55,6 +65,13 @@ it is refused with `streaming`, left out of config reloads, and makes the fit
 verdict `unknown` because the fitter projects one model. Parakeet streaming
 segments and events keep the native `tokenIds`, `isFinal`, `chunkIndex`,
 `eotConfidence`, end-of-turn `timestamp`/`confidence` and VAD `chunkIndex`.
+
+Omit both the load-time `streamingChunkMs` and the per-call
+`parakeetStreamingConfig.chunkMs` to use the model's native decode window.
+Omitting only the per-call value inherits an explicit load-time override.
+Offline TDT push streams, including Parakeet TDT v3, default to 30,000 ms and
+require at least 30,000 ms. Explicit SDK overrides must be positive. Full
+TranscribePsy EU uses its own default.
 
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages

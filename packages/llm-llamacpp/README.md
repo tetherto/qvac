@@ -1,6 +1,6 @@
 # llm-llamacpp
 
-This native C++ addon, built using the `Bare` Runtime, simplifies running Large Language Models (LLMs) within QVAC runtime applications. It provides an easy interface to load, execute, and manage LLM instances.
+This package simplifies running Large Language Models (LLMs) within QVAC applications. It uses a native C++ addon on Bare and a WebAssembly build with WebGPU in browsers, while exposing the same JavaScript API.
 
 ## Table of Contents
 - [Supported platforms](#supported-platforms)
@@ -39,6 +39,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan, XDNA NPU (x64, opt-in) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
+| Browser | wasm32, wasm64 | WebGPU browser | Experimental | WebGPU — see [docs/browser.md](docs/browser.md) |
 
 
 **Note on CUDA (Linux and Windows, NVIDIA):**
@@ -160,7 +161,7 @@ const args = {
 
 The `args` obj contains the following properties:
 
-* `files.model`: Exactly one absolute disk path: the single GGUF file or only the first shard. Fabric reads the remaining shards from the same directory.
+* `files.model`: Exactly one absolute model path: the single GGUF file or only the first shard. Fabric reads the remaining shards from the same directory.
 * `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
 * `config`: The model configuration object (see next section).
 * `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
@@ -223,10 +224,10 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `webgpu`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
-| parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
+| parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()`; the slots share one KV cache, each limited to `ctx_size / parallel` tokens ([details](./docs/continuous-batching.md#one-shared-kv-pool)) |
 | cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models, DeepSeek V4 and sliding-window models (Gemma 3/4, gpt-oss), one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B; on sliding-window models the window cells, which reach hundreds of MB on larger models). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. The newest one ending at a user message is kept on top of this count, so the next user turn after a tool loop can restore it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation loaded in a new process continues from them. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
 | cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window). Also accepted as `cache-checkpoints-max-bytes` |
 | cache_checkpoint_storage | `"memory"` or `"disk"`             | `"memory"`                   | Where checkpoints and the per-request rollback snapshot live. `"memory"` keeps them in host RAM so a cached chat never touches the disk; `"disk"` writes them to a private directory inside `cache_checkpoint_dir`, which it requires. Also accepted as `cache-checkpoint-storage` |
@@ -237,11 +238,11 @@ const config = {
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU or NPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
-| spec-type         | `"none"`, `"draft-mtp"` or `"draft-dflash"` | `"none"`                     | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model` (see [Speculative decoding](#speculative-decoding-mtp-dflash) below). Also accepted as `spec_type` |
-| spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash model, required by `spec-type: "draft-dflash"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
-| spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |
+| spec-type         | `"none"`, `"draft-mtp"`, `"draft-dflash"`, `"draft-dspark"` or `"auto"` | `"none"` | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model`, `draft-dspark` with the DSpark model in `spec-draft-model`, `auto` with whichever of the three the `spec-draft-model` header names (see [Speculative decoding](#speculative-decoding-mtp-dflash-dspark) below). Also accepted as `spec_type` |
+| spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash or DSpark model, required by `spec-type: "draft-dflash"` and `"draft-dspark"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
+| spec-draft-n-max  | 1 – 64                                      | 3, or 5 for `draft-dflash`   | Longest draft per step. Also accepted as `spec_draft_n_max` |
 | spec-draft-n-min  | 0 – `spec-draft-n-max`                      | 0                            | Drafts shorter than this are not verified. Also accepted as `spec_draft_n_min` |
-| spec-draft-p-min  | 0 – 1                                       | 0                            | Minimum draft-head probability for a token to extend the draft. Also accepted as `spec_draft_p_min` |
+| spec-draft-p-min  | 0 – 1                                       | 0                            | Minimum draft-head probability for a token to extend the draft; with `draft-dspark`, the confidence head's threshold. Also accepted as `spec_draft_p_min` |
 
 
 #### KV-cache type & auto-default
@@ -288,15 +289,19 @@ projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 `[LlamaModel] multimodal projector backend: …`.
 
 
-#### Speculative decoding (MTP, DFlash)
+#### Speculative decoding (MTP, DFlash, DSpark)
 
 `spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option unless an external head is given, see below). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
 
 For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` rejects it. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` rejects it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
 
-`spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
+`spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further; without it, 5, as llama-server's default for `draft-dflash`, also when `auto` detects a DFlash model). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
 
-MTP and DFlash work on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
+`spec-type: 'draft-dspark'` drafts with a DSpark model, given as `spec-draft-model` like a DFlash model (llama-server's `--spec-type draft-dspark -md <model>`). A DSpark model is a DFlash model with a Markov head, which conditions each drafted token on the one before it, and a confidence head; some, such as LiquidAI's LFM2.5 DSpark GGUFs, borrow the model's embeddings and output head. A step drafts up to its block size tokens, and `spec-draft-p-min` sets the confidence head's threshold: the draft stops at the first token below it (0, the default, keeps the whole block). The model is loaded, placed, fitted and run like a DFlash model. A DFlash or DSpark model for another model (another vocabulary or hidden width, or a target layer past the model's last) fails the load, and `assessFit` rejects it, by fabric's header check. With `spec-draft-p-min` above 0 and a DSpark model that has no confidence head, fabric refuses to draft, and the model decodes without speculation, as llama-server does.
+
+`spec-type: 'auto'` reads the type from the `spec-draft-model` header, as llama-server does for `-md` without `--spec-type`, using fabric's own detection: a `dflash` model with a Markov head (`markov_w1.weight`) drafts as `draft-dspark`, one without as `draft-dflash`, and a model whose last block has an MTP projection (`blk.N.nextn.eh_proj.weight`) as `draft-mtp`. The load logs the type it detected, and the draft then runs exactly as with that type given explicitly. The load fails with `InvalidArgument`, and `assessFit` rejects, when it detects none of the three. A Gemma 4 assistant is not detected, as in llama-server: its MTP tensors are named differently, so give it `spec-type: 'draft-mtp'`.
+
+MTP, DFlash and DSpark work on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
 
 - Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`); per-position acceptance rates are logged at debug level.
 - `spec-draft-n-max` is lowered at load, with a warning, so the sampled token and the draft fit one `ubatch-size` and each sequence's share of `batch-size` (`batch-size / parallel`); a batch too small for even one draft token fails the load.
@@ -316,7 +321,7 @@ const model = new LlmLlamacpp(args)
 await model.load()
 ```
 
-Loads the model file(s) passed in `files.model` and activates the native addon. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
+Loads the model file(s) passed in `files.model` and activates the engine. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
 
 ### 6. Run Inference
 
@@ -536,7 +541,7 @@ The projection reads the model's vocabulary, and llama asserts on a vocabulary i
 
 `config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
 
-With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the device rows; on a model or head without MTP layers the load fails, so the projection rejects. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the rows too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the device rows; on a model or head without MTP layers the load fails, so the projection rejects. A DFlash or DSpark draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the rows too (see [Speculative decoding](#speculative-decoding-mtp-dflash-dspark)).
 
 Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
 

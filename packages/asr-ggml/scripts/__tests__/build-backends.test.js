@@ -9,6 +9,10 @@ const packageRoot = path.resolve(__dirname, '..', '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
+const speechCmakeSource = fs.readFileSync(
+  path.resolve(packageRoot, '../../cmake/qvac-addon/speech-engines.cmake'),
+  'utf8'
+)
 const testCmakeSource = fs.readFileSync(
   path.join(packageRoot, 'addon/tests/CMakeLists.txt'),
   'utf8'
@@ -50,6 +54,13 @@ test('the ggml runtime is the shared @qvac/fabric prebuild', () => {
 test('both engine packages link the fabric headers in place of the ggml archives', () => {
   assert.match(cmakeSource, /qvac_addon_speech_engines\(whisper parakeet\)/)
   assert.equal(/ggml::/.test(cmakeSource), false, 'no ggml target is linked by hand')
+})
+
+test('speech source updates refresh extracted timestamps so incremental builds recompile', () => {
+  assert.match(
+    speechCmakeSource,
+    /FetchContent_Declare\(qvac_speech\b[^)]*\bDOWNLOAD_EXTRACT_TIMESTAMP\s+FALSE\b/
+  )
 })
 
 test('the C++ tests link and stage the fabric runtime next to the test binary', () => {

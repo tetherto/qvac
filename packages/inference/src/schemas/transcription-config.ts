@@ -246,7 +246,7 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
+      'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
@@ -356,7 +356,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .positive()
     .optional()
     .describe(
-      'Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.'
+      'Streaming decode window in ms. Omit to use the model default. Offline TDT push streams, including Parakeet TDT v3, default to 30000 and require at least 30000. Full TranscribePsy EU defaults to 2000. Nemotron defaults to 320 and supports 80, 160, 320, 560, or 1120.'
     ),
   streamingHistoryMs: z
     .number()
@@ -516,7 +516,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
+      'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     ),
   openclCacheDir: z
     .string()

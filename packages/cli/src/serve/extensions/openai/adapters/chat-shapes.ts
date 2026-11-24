@@ -16,6 +16,8 @@ interface ChatCompletionResponseParams {
   toolCalls: ToolCall[]
   completionTokens: number
   promptTokens?: number
+  cachedTokens?: number
+  cacheTokens?: number
   finishReason: OpenAiFinishReason
 }
 
@@ -57,23 +59,34 @@ interface ChatCompletionChunkParams {
 
 export interface ChatCompletionUsage {
   prompt_tokens: number
+  prompt_tokens_details?: { cached_tokens: number }
+  qvac_cache_tokens?: number
   completion_tokens: number
   total_tokens: number
 }
 
 /**
- * Builds an OpenAI `usage` object from SDK token stats. `prompt_tokens` is only
- * reported when the SDK provided it; `total_tokens` is the sum of prompt and
- * completion tokens. SDK `cacheTokens` is KV-cache occupancy, not this request's
- * reuse, so it is not reported as `cached_tokens`.
+ * Builds an OpenAI `usage` object. `promptTokens` is the whole prompt and
+ * `cachedTokens` the part of it the KV cache already held. SDK `cacheTokens` is
+ * KV-cache occupancy, not this request's reuse; a request that named a cache
+ * session passes it and gets it back as `qvac_cache_tokens`.
  */
 export function buildUsage(params: {
   completionTokens: number
   promptTokens?: number
+  cachedTokens?: number
+  cacheTokens?: number
 }): ChatCompletionUsage {
   const promptTokens = params.promptTokens ?? 0
+  const cacheTokens = params.cacheTokens
   return {
     prompt_tokens: promptTokens,
+    ...(params.cachedTokens !== undefined
+      ? { prompt_tokens_details: { cached_tokens: Math.min(params.cachedTokens, promptTokens) } }
+      : {}),
+    ...(typeof cacheTokens === 'number' && Number.isFinite(cacheTokens) && cacheTokens >= 0
+      ? { qvac_cache_tokens: cacheTokens }
+      : {}),
     completion_tokens: params.completionTokens,
     total_tokens: promptTokens + params.completionTokens
   }
@@ -117,7 +130,9 @@ export function chatCompletionResponse(
     choices: [{ index: 0, message, finish_reason: params.finishReason }],
     usage: buildUsage({
       completionTokens: params.completionTokens,
-      ...(params.promptTokens !== undefined ? { promptTokens: params.promptTokens } : {})
+      ...(params.promptTokens !== undefined ? { promptTokens: params.promptTokens } : {}),
+      ...(params.cachedTokens !== undefined ? { cachedTokens: params.cachedTokens } : {}),
+      ...(params.cacheTokens !== undefined ? { cacheTokens: params.cacheTokens } : {})
     })
   }
 }

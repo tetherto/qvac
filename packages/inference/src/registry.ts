@@ -9,7 +9,6 @@ import { handleLoadModel } from '@/handlers/load-model/index'
 import { handleUnloadModel } from '@/handlers/unload-model'
 import { handleLoggingStream } from '@/handlers/logging-stream'
 import { cancelHandler } from '@/handlers/cancelHandler'
-import { handleRag } from '@/rag/handler'
 import { handleVectorIndex } from '@/handlers/vector-index'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { handleDownloadAsset } from '@/handlers/download-asset'
@@ -53,11 +52,6 @@ function pluginDuplex(capability: string): DuplexStreamHandler {
     dispatchPluginStream(request.modelId, capability, request, inputStream)
 }
 
-function ragSupportsProgress(request: Request): boolean {
-  if (request.type !== 'rag') return false
-  return ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)
-}
-
 function finetuneSupportsProgress(request: Request): boolean {
   if (request.type !== 'finetune') return false
   return ['start', 'resume', undefined].includes(request.operation)
@@ -83,6 +77,11 @@ export const registry: Record<string, HandlerEntry> = {
   embedBatch: { type: 'reply', pluginOp: true, handler: pluginReply('embedBatch') },
   decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
   rerank: { type: 'reply', pluginOp: true, handler: pluginReply('rerank') },
+  estimateDisparity: {
+    type: 'reply',
+    pluginOp: true,
+    handler: pluginReply('estimateDisparity')
+  },
   cancel: {
     type: 'reply',
     handler: cancelHandler
@@ -105,7 +104,6 @@ export const registry: Record<string, HandlerEntry> = {
     supportsProgress: true
   },
   downloadAsset: { type: 'reply', handler: handleDownloadAsset, supportsProgress: true },
-  rag: { type: 'reply', handler: handleRag, supportsProgress: ragSupportsProgress },
   vectorIndex: { type: 'reply', handler: handleVectorIndex },
   finetune: { type: 'reply', handler: handleFinetune, supportsProgress: finetuneSupportsProgress },
 

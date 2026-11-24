@@ -6,7 +6,7 @@ skinparam wrapWidth 160
 title QVAC SDK Family - Internal Components
 
 Container_Boundary(host_side, "Host") {
-    Component(api, "Public API", "TypeScript / Python / Kotlin", "Model, inference, and retrieval operations")
+    Component(api, "Public API", "TypeScript / Python / Kotlin", "Model, inference, and vector index operations")
     Component(rpc_client, "RPC Adapter", "bare-rpc / bare-stow host", "Connects over framed IPC")
 }
 
@@ -21,7 +21,7 @@ Container_Boundary(worker, "Bare Worker") {
         Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
         Component(model_registry, "Model Registry", "TypeScript", "Loaded local model instances and caller leases")
         Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
-        Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
+        Component(vector_index, "Vector Indexes", "TypeScript / TurboVec", "Session-owned indexes and async vector search")
     }
 }
 
@@ -34,11 +34,11 @@ Rel_D(dispatch, plugin_registry, "Looks up handler")
 Rel_D(plugin_registry, plugins, "Invokes handler")
 Rel_D(dispatch, model_registry, "Registers models")
 Rel_D(dispatch, distribution, "Fetches models")
-Rel_D(dispatch, rag, "Searches vectors")
+Rel_D(dispatch, vector_index, "Routes index operations")
 
 Lay_R(plugin_registry, model_registry)
 Lay_R(model_registry, distribution)
 Lay_D(plugin_registry, plugins)
-Lay_R(distribution, rag)
+Lay_R(distribution, vector_index)
 
 @enduml
