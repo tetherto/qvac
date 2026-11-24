@@ -23,14 +23,15 @@ function argument(name: string): string | undefined {
 
 async function readFromTarball(url: string, path: string): Promise<string | undefined> {
   const response = await fetch(url)
-  if (!response.ok || !response.body)
+  if (!response.ok || !response.body) {
     throw new Error(`downloading ${url} answered ${response.status}`)
+  }
   const extract = tar.extract()
   let found: string | undefined
   extract.on('entry', (header, stream, next) => {
     const chunks: Buffer[] = []
-    stream.on('data', (chunk: Buffer) => {
-      if (header.name === path) chunks.push(chunk)
+    stream.on('data', (chunk: unknown) => {
+      if (header.name === path) chunks.push(chunk as Buffer)
     })
     stream.on('end', () => {
       if (header.name === path) found = Buffer.concat(chunks).toString('utf8')
