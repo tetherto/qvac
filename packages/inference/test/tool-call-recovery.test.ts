@@ -261,6 +261,42 @@ test('a role marker split across pushes does not demote the calls before it', (t
   }
 })
 
+test('a harmony reasoning or answer frame after a call keeps its markers out of the text', (t) => {
+  const weather: Tool = {
+    type: 'function',
+    name: 'get_weather',
+    description: 'weather',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  }
+  const call = (city: string) =>
+    `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"${city}"}<|call|>`
+  const reasoning = `${call('Tokyo')}<|start|>assistant<|channel|>analysis<|message|>private reasoning<|end|><|start|>assistant${call('Lima')}`
+  for (let split = 0; split <= reasoning.length; split++) {
+    const n = createCompletionNormalizer({
+      capabilities: { toolCalling: 'textParse', thinkingFraming: 'thinkTags' },
+      tools: [weather],
+      captureThinking: false,
+      emitRawDeltas: false,
+      toolDialect: 'harmony'
+    })
+    const events = [
+      ...n.push(reasoning.slice(0, split)),
+      ...n.push(reasoning.slice(split)),
+      ...n.finish()
+    ]
+    const calls = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments] : []))
+    t.alike(calls, [{ city: 'Tokyo' }, { city: 'Lima' }], `split ${split}: calls`)
+    t.is(n.getAccumulated().contentText, '', `split ${split}: reasoning hidden`)
+  }
+
+  const answer = `${call('Tokyo')}<|start|>assistant<|channel|>final<|message|>It is sunny.<|return|>`
+  for (let split = 0; split <= answer.length; split++) {
+    const r = run([answer.slice(0, split), answer.slice(split)], [weather], 'harmony')
+    t.ok(r.content.endsWith('It is sunny.'), `split ${split}: answer shown`)
+    t.absent(r.content.includes('final'), `split ${split}: no channel name`)
+  }
+})
+
 test('an unfinished tag after a call at the end of the turn is shown and makes it an example', (t) => {
   const block = '<function=login><parameter=password>a</parameter></function>'
   const r = run([block, ' <note'], [LOGIN])

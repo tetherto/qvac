@@ -251,6 +251,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   const toolOpeners: readonly string[] = toolFrames.map((f) => f.open)
   registerFrames(thinkingFrames, 'thinking')
   registerFrames(contentFrames, 'content')
+  const textFrameOpeners = [...thinkingFrames, ...contentFrames].map((f) => f.open)
   for (const t of dropTokens) {
     if (markerToEntry.has(t) || dropTokenSet.has(t)) continue
     dropTokenSet.add(t)
@@ -540,8 +541,14 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         openToolFrame(opener, markerToEntry.get(opener)!.spec, false)
         return trimmed.slice(opener.length)
       }
+      // Reasoning and answer frames go to the content path: reasoning keeps the
+      // calls held, an answer is text after them.
+      if (textFrameOpeners.some((m) => trimmed.startsWith(m))) {
+        state = 'content'
+        return rest
+      }
       // A split opener (`<|channel|>comm…`) must not be taken for a protocol token.
-      if (toolOpeners.some((m) => m.startsWith(trimmed))) {
+      if ([...toolOpeners, ...textFrameOpeners].some((m) => m.startsWith(trimmed))) {
         afterToolTail = rest
         return ''
       }
