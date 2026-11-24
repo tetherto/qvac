@@ -1,8 +1,9 @@
 # SDK wire contract
 
 Language-neutral description of the SDK server's RPC surface, generated from
-the Zod schemas and the method registry. Generated clients are built from
-these artifacts.
+the Zod schemas and the method registry. The Python and Kotlin clients are
+generated from these files when they build. Only this README is committed:
+the JSON files are written on demand and gitignored.
 
 - `schema.json` — JSON Schema (draft 2020-12) for every request and response
   wire type, plus every public constant registered in `@/schemas/constants-
@@ -19,7 +20,6 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
   ...) from `@/models/registry`, the same constants JS consumers import
   directly and pass as `modelSrc`. Not part of the RPC wire contract, but a
   static data catalog downstream client generators need the same way.
-
 - `model-type-maps.json` — canonical engine/category mappings, recognized legacy
   engine identifiers, and `legacyRegistryEngineRules` for shared legacy packages
   that need discriminator tags. The same canonical definitions generate
@@ -27,17 +27,25 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
   inside the registry package for submission validation. These
   rules describe legacy classification, not checkpoint compatibility with
   multiple plugins.
+- `error-codes.json` — the SDK's server, client and registry error codes, name
+  to number.
+- `numeric-constants.json` — the SDK's numeric public vocabularies, name to
+  number.
 
-Do not edit these files by hand. Regenerate with:
+Write them with:
 
 ```bash
 npm run contract:export
 ```
 
-`npm run contract:check` exits non-zero when the SDK artifacts or the registry
-engine manifest are stale; `test/contract-export.test.ts` enforces the same in
-`test:unit`. The registry validator consumes only its local manifest; it does not
-load files from the SDK at validation time.
+Exporting needs the SDK's dependencies installed and `@qvac/inference` built.
+Each client's generator runs it first, so building a client needs no separate
+step.
+
+The engine manifest is committed, because the registry validator reads it with
+no SDK beside it. `npm run engine-manifest:write` writes it,
+`npm run engine-manifest:check` exits non-zero when it is stale, and
+`test/contract-export.test.ts` checks the same in `test:unit`.
 
 ## Naming nested/inline schemas
 
