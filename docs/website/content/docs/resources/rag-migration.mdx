@@ -23,15 +23,15 @@ Pin the last versions that include it:
 |---|---|
 | `@qvac/sdk` | `~0.24.0` |
 | `tetherto-qvac-sdk` (Python) | `~=0.24.0` |
-| `@qvac/cli` | `0.19.0` |
-| Kotlin SDK | build from the `sdk-v0.24.0` tag |
+| `@qvac/cli` | `~0.20.0` |
+| Kotlin SDK | the Maven ZIPs on the [`sdk-v0.24.0` release](https://github.com/tetherto/qvac/releases/tag/sdk-v0.24.0) |
 
 ## Existing data
 
 Workspaces are not migrated, and the old API has no export, so keep your source documents and ingest them again after upgrading.
 
 - SDK workspaces stay on disk in `rag-hyperdb/<workspace>` and `rag-turbovec/<workspace>`, next to the SDK `cacheDirectory` (`~/.qvac/rag-hyperdb` by default; under `$SNAP_USER_COMMON/.qvac` in the Snap). Newer versions never read or delete them: keep them while you still run 0.24.x, then delete them by hand.
-- `qvac serve openai` vector stores up to CLI 0.19.0 were SDK workspaces named after the store id, in the same folders. Later versions keep stores in `serve/vector-stores` next to the `cacheDirectory`. Upload the files again and attach them to new stores.
+- `qvac serve openai` vector stores up to CLI 0.20.x were SDK workspaces named after the store id, in the same folders. Later versions keep stores in `serve/vector-stores` next to the `cacheDirectory`. Upload the files again and attach them to new stores.
 
 ## JavaScript and TypeScript: `@qvac/rag`
 
@@ -39,7 +39,7 @@ Workspaces are not migrated, and the old API has no export, so keep your source 
 npm install @qvac/rag corestore
 ```
 
-`@qvac/rag` runs on Bare and Node. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you create and close, and gets vectors from an embeddings port you supply.
+`@qvac/rag` runs on Bare and Node; on Bare, also install `@qvac/turbovec-ggml` for indexed search. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you create and close, and gets vectors from an embeddings port you supply.
 
 ```typescript
 import Corestore from 'corestore'
@@ -83,6 +83,7 @@ await corestore.close()
 - The port can wrap any embedding function: another model, a remote API or your own code.
 - Without a port, ingest precomputed vectors and search with `{ vector, spaceId }`.
 - Change `space` when the vectors change (model, revision, pooling); a namespace rejects vectors from another space.
+- On Node, `@qvac/turbovec-ggml` does not load, so every search scans all chunks and `index.dir` is ignored. That suits small stores: at 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the index on Bare. Past that, run `@qvac/rag` on Bare.
 
 | SDK function | `@qvac/rag` |
 |---|---|
@@ -96,6 +97,10 @@ await corestore.close()
 | `ragListWorkspaces`, `ragDeleteWorkspace` | list or delete your Corestore folders |
 
 See the [`@qvac/rag` README](https://www.npmjs.com/package/@qvac/rag) for the full API.
+
+## React Native and Expo
+
+`@qvac/rag` is not supported in React Native or Expo apps yet. Build retrieval from the SDK instead: embed with [`embed()`](/sdk/reference/api#embed) or `embedBatch()`, index the vectors with [`createVectorIndex()`](/sdk/reference/api#createvectorindex), and keep the documents in your own store. The [RAG](/sdk/ai-capabilities/rag) page has a TurboVec example.
 
 ## Python and Kotlin
 
