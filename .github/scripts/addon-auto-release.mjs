@@ -167,7 +167,11 @@ export const releaseRun = (runs, head) =>
 export const scanReports = (row) => row.action !== 'skip' || row.rerun || /^cut moments ago/.test(row.reason)
 
 // Keeps branch-sourced text from breaking the summary table or a workflow command.
-const cell = (text) => String(text).replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|')
+const cell = (text) =>
+  String(text)
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
 const command = (text) => String(text).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
 
 export const diffBase = (sha, before) => (before && !/^0+$/.test(before) ? before : `${sha}^1`)

@@ -146,6 +146,11 @@ test('plan: any publish run that ended without success is flagged for a re-run; 
   assert.equal(state({ status: 'waiting', conclusion: '' }).rerun, false)
 })
 
+test('summary: a backslash cannot un-escape a pipe', () => {
+  const text = summary([{ name: 'a\\|b', version: '1.0.0', action: 'skip' }], { title: 't', dryRun: false })
+  assert.ok(text.includes('| a\\\\\\|b | 1.0.0 |'))
+})
+
 test('summary: branch-sourced text cannot break the table', () => {
   const text = summary([{ name: 'a|b', version: '1.0.0', action: 'failed', reason: 'x\n::notice::y' }], { title: 't', dryRun: false })
   assert.match(text, /\| a\\\|b \| 1\.0\.0 \| not started: x ::notice::y \|/)
