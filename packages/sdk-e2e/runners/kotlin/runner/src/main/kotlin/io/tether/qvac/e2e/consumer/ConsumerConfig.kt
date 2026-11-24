@@ -3,8 +3,10 @@ package io.tether.qvac.e2e.consumer
 import io.tether.qvac.e2e.runner.asMap
 
 /**
- * Baked into the APK at build time (`e2e/consumer-config.json`, from MQTT_* and E2E_RUN_ID) and
- * overridable per launch by intent extras, so a local run can retarget an installed app.
+ * Baked settings with per-launch overrides. The Android app bakes them into the APK at build time
+ * (`e2e/consumer-config.json`, from MQTT_* and E2E_RUN_ID) and takes the overrides from intent
+ * extras, so a local run can retarget an installed app; the desktop program takes them from the
+ * environment the framework gives an mqtt-mode consumer.
  */
 data class ConsumerConfig(
     val runId: String,

@@ -1,8 +1,9 @@
 name: Publish SDK Kotlin
 
-# The Kotlin SDK's Maven repository at @qvac/sdk's version, after the release gates and the standalone Maven consumers:
-# release-assets attaches one zip per Android runtime profile, plus the JVM client, to the sdk-v<version> release that
-# publish-npm.yml or a release train with the sdk-kotlin check creates; central stages on Maven Central (publishes with release_central).
+# The Kotlin SDK's Maven repository at @qvac/sdk's version, tested before the release by the PR checks and the Kotlin
+# e2e on the published Maven package, with every publication verified here before upload: release-assets attaches one
+# zip per Android runtime profile, plus the JVM client, to the sdk-v<version> release that publish-npm.yml or a release
+# train with the sdk-kotlin check creates; central stages on Maven Central (publishes with release_central).
 on:
   push:
     tags:
@@ -116,23 +117,8 @@ jobs:
       - name: Prepare the SDK
         run: node ../sdk/ci/clients.mjs prepare-sdk
 
-      - name: Verify release gates
-        run: >-
-          ./gradlew --no-daemon
-          checkVersionAlignment
-          testContractGenerator
-          checkWireLiterals
-          testReleaseGate
-          :jvm-barekit:test
-          jvmTest
-          :android-example:testDebugUnitTest
-          :android-example:checkDebugBuild
-          :android-example:compileDebugAndroidTestKotlin
-
-      - name: Verify all artifacts through standalone Maven consumers
-        run: |
-          ./gradlew --no-daemon verifyMavenPublications
-          ./scripts/verify-maven-consumers.sh
+      - name: Verify the Maven publications
+        run: ./gradlew --no-daemon verifyMavenPublications
 
       # A zip records no commit and a rebuild is not byte-identical, so a re-run replaces the assets.
       - name: Attach Maven zips to the GitHub release

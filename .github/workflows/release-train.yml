@@ -251,8 +251,8 @@ jobs:
       ref: ${{ github.sha }}
 
   # sdk-checks.yml's sdk-kotlin checks, on this commit's @qvac/sdk and
-  # @qvac/inference. attach-kotlin-maven-zips runs the release gates, every
-  # runtime profile included, when it builds the zips after publishing.
+  # @qvac/inference. attach-kotlin-maven-zips builds every runtime profile's
+  # zip after publishing.
   sdk-kotlin:
     name: Kotlin SDK checks
     needs: [train]
