@@ -109,11 +109,16 @@ export function conflictingSource({ packageVersion, forceNpmPrebuild }) {
   return null
 }
 
-// A fork PR's on-pr run is pull_request_target, so it appears in the base repo's
-// run list while its head_repository is the fork. This warns rather than
-// refusing: the repo is fork-first (docs/gitflow.md), and a fork's prebuilds only
-// exist once the merge/release team approved `fork-ci` on that run.
+// A PR's build is a workflow_run of the default branch, so its head_repository and head_branch are the base repo's
+// and say nothing of whose code it built, a fork's included. This warns rather than refusing: the repo is fork-first
+// (docs/gitflow.md), and a fork's prebuilds only exist once the merge/release team approved `fork-ci` on that run.
 export function sourceRepositoryWarning(run, repo) {
+  if (run?.event === 'workflow_run') {
+    return (
+      `run ${run.id} built a pull request's head, possibly a fork's; its API record shows only the default ` +
+      "branch. Confirm on the run page which PR and commit it built before testing that contributor's code."
+    )
+  }
   const headRepo = run?.head_repository?.full_name
   if (!headRepo) {
     return (

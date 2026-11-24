@@ -108,12 +108,21 @@ Around each test, a runner MUST:
 
 1. evict every loaded model **not** declared by that test's `useModel` steps,
    before the first step runs;
-2. load what the test declares, on demand.
+2. load what the test declares, on demand;
+3. unload every model the test loaded itself through a `loadModel` call, once
+   its teardown has run and its started calls have drained, whether it passed,
+   failed or threw.
 
 The order matters and is not an optimisation: without eviction first, a run
 becomes sensitive to the order tests happened to arrive in, and on a
 memory-constrained platform the previous model's pages are still resident
 when the next one allocates.
+
+A model a `loadModel` call returned belongs to the test, unless a resource key
+already owns that id: a config reload or an identical load returns it. After an
+`unloadModel` call, a runner MUST forget the id under every resource key, or the
+next test gets an id the worker no longer has. Step 1 also unloads what a
+timed-out test left behind. A JS runner releases through the `endTest` binding.
 
 `useModel.deps` is a list, not a single key. Some tests genuinely need two
 models at once.
@@ -228,7 +237,7 @@ number.
    a reason for the ones you do not.
 2. Mirror the expectation semantics of §6 exactly.
 3. Implement the resource table for the keys your categories need.
-4. Evict-then-load around every test.
+4. Evict-then-load around every test, and unload what the test loaded itself.
 5. Record the asserted value with a stable summary.
 6. Honour `QVAC_WORKER_PATH`.
 7. Keep the transport swappable.

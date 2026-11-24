@@ -246,7 +246,7 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
+      'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
@@ -516,7 +516,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
+      'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     ),
   openclCacheDir: z
     .string()

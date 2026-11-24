@@ -3,7 +3,6 @@ import {
   loadModel,
   deleteCache,
   completion,
-  ragIngest,
   transcribe,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES
@@ -38,10 +37,6 @@ interface ModelLoadFailedParams {
   modelType: string
 }
 
-interface RagOperationFailedParams {
-  modelId: string
-}
-
 interface TranscriptionFailedParams {
   audioPath: string
 }
@@ -60,10 +55,6 @@ interface UseUnloadedModelParams {
 
 interface EmbeddingEmptyInputParams {
   text: string
-}
-
-interface RagUnloadedModelParams {
-  modelIdOverride: string
 }
 
 interface VerifyErrorCodesParams {
@@ -88,14 +79,10 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
           return [test.testId, this.structuredErrorCode.bind(this)]
         case 'error-chaining-cause':
           return [test.testId, this.chainingCause.bind(this)]
-        case 'error-rag-operation-failed':
-          return [test.testId, this.ragOperationFailed.bind(this)]
         case 'error-transcription-failed':
           return [test.testId, this.transcriptionFailed.bind(this)]
         case 'error-use-unloaded-model':
           return [test.testId, this.useUnloadedModel.bind(this)]
-        case 'error-rag-unloaded-model':
-          return [test.testId, this.ragUnloadedModel.bind(this)]
         case 'error-embedding-empty-input':
           return [test.testId, this.embeddingEmptyInput.bind(this)]
         default:
@@ -178,19 +165,6 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
     }
   }
 
-  async ragOperationFailed(params: RagOperationFailedParams): Promise<TestResult> {
-    try {
-      await ragIngest({
-        modelId: params.modelId,
-        documents: 'test content' as never,
-        workspace: 'test'
-      })
-      return { passed: false, output: 'Expected error for invalid RAG operation' }
-    } catch (error) {
-      return { passed: true, output: `Correctly threw: ${error}` }
-    }
-  }
-
   async transcriptionFailed(params: TranscriptionFailedParams): Promise<TestResult> {
     const whisperModelId = await this.resources.ensureLoaded('whisper')
     try {
@@ -255,19 +229,6 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
       return ValidationHelpers.validate(result, expectation)
     } catch (error) {
       return { passed: true, output: `SDK correctly rejected empty input: ${error}` }
-    }
-  }
-
-  async ragUnloadedModel(params: RagUnloadedModelParams): Promise<TestResult> {
-    try {
-      await ragIngest({
-        modelId: params.modelIdOverride,
-        documents: 'test' as never,
-        workspace: 'test'
-      })
-      return { passed: false, output: 'Expected error for unloaded embedding model' }
-    } catch (error) {
-      return { passed: true, output: `Correctly threw: ${error}` }
     }
   }
 }

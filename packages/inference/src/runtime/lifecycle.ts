@@ -1,6 +1,5 @@
 import { closeRpcResources } from '@/handlers/rpc-server'
 import { initEnv, type EnvOptions } from '@/runtime/env'
-import { closeAllRagInstances } from '@/rag/index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
 import { cleanupDownloads } from '@/handlers/load-model/download-manager'
 import { unloadAllModels } from '@/runtime/model-registry'
@@ -68,7 +67,7 @@ function clearRegistries(): void {
 /**
  * Run the shared cleanup body: clear plugin registries (each addon's
  * `releaseLogger` frees env-bound `js_ref_t` state), unload all loaded models
- * (each addon's `destroyInstance`), and close infra (swarm, RAG, downloads,
+ * (each addon's `destroyInstance`), and close infra (swarm, downloads,
  * registry client). Idempotent. Does not release the cache lock.
  */
 async function runCleanup(): Promise<void> {
@@ -82,7 +81,6 @@ async function runCleanup(): Promise<void> {
     clearRegistries()
     await Promise.allSettled([
       disposeAllVectorIndexes(),
-      closeAllRagInstances(),
       cleanupDownloads(),
       unloadAllModels(),
       closeRegistryClient()
