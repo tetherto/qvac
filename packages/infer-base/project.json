@@ -28,6 +28,14 @@
         "commands": ["npm install --ignore-scripts --no-audit --no-fund", "npm run lint"]
       }
     },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/infer-base",
+        "parallel": false,
+        "commands": ["npm install --ignore-scripts --no-audit --no-fund", "npm run typecheck"]
+      }
+    },
     "test:dts": {
       "executor": "nx:run-commands",
       "options": {
