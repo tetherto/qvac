@@ -15,7 +15,10 @@ const UNSUPPORTED_BROWSER_KEYS = [
   'rpc_servers',
   'rpc',
   'backendsDir',
-  'openclCacheDir'
+  'openclCacheDir',
+  'lora-scaled',
+  'control-vector',
+  'control-vector-scaled'
 ]
 const FILE_KEYS = ['lora', 'spec-draft-model', 'spec_draft_model']
 
@@ -37,6 +40,10 @@ function browserLoadConfig(config = {}) {
     if (config[key] !== undefined) {
       throw new Error(`${key} is not supported in the browser build`)
     }
+  }
+
+  if (String(config.lora ?? '').includes(',')) {
+    throw new Error('lora takes one adapter path in the browser build')
   }
 
   const { load_mode: underscore, 'load-mode': hyphen, ...rest } = config

@@ -397,6 +397,28 @@ test('invalid parallel configuration does not retain or load an engine', async (
   }
 })
 
+test('invalid browser load config does not load an engine', async (t) => {
+  let loads = 0
+  const isolated = isolatedBinding(() => {
+    loads++
+    return {}
+  })
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    for (const [config, message] of [
+      [{ mmap: 'true' }, /mmap is not supported/],
+      [{ 'lora-scaled': '/m/lora.gguf:0.5' }, /lora-scaled is not supported/],
+      [{ lora: '/m/a.gguf,/m/b.gguf' }, /lora takes one adapter path/],
+      [{ spec_draft_model: undefined, 'spec-draft-model': '/m/d.gguf' }, /must not both be set/]
+    ]) {
+      const handle = isolated.createInstance({}, { path: '/m/model.gguf', config }, () => {})
+      await t.exception.all(() => isolated.activate(handle), message)
+      await isolated.destroyInstance(handle)
+    }
+    t.is(loads, 0, `iteration ${iteration + 1}`)
+  }
+})
+
 test('healthy unload retains failed filesystem cleanup for retry', async (t) => {
   let loads = 0
   let failUnmount = false

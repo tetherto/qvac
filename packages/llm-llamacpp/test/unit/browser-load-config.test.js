@@ -73,10 +73,15 @@ test('browser load config rejects unavailable native services', (t) => {
     ['rpc_servers', '127.0.0.1:50052'],
     ['rpc', '127.0.0.1:50052'],
     ['backendsDir', '/backends'],
-    ['openclCacheDir', '/cache/opencl']
+    ['openclCacheDir', '/cache/opencl'],
+    ['lora-scaled', '/m/lora.gguf:0.5'],
+    ['control-vector', '/m/vector.gguf'],
+    ['control-vector-scaled', '/m/vector.gguf:0.5']
   ]) {
     t.exception(() => browserLoadConfig({ [key]: value }), /not supported/)
   }
+  t.exception(() => browserLoadConfig({ lora: '/m/a.gguf,/m/b.gguf' }), /one adapter path/)
+  t.is(browserLoadConfig({ lora: '/m/a.gguf' }).lora, '/m/a.gguf')
 })
 
 test('browser load files mounts every model asset once', async (t) => {
