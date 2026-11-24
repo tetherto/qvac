@@ -367,7 +367,7 @@ export function rerunPlan(state) {
 }
 
 export async function plan(env) {
-  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
+  const event = JSON.parse(env.PR_EVENT || readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
   const matrices = JSON.parse(env.MATRICES || '{}')
   const labelled = matrices['test:integration:labelled'] ?? []
   const mobile = matrices['test:mobile'] ?? []
@@ -620,7 +620,7 @@ export function body(mark, key, results, lines) {
 }
 
 export async function report(env) {
-  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
+  const event = JSON.parse(env.PR_EVENT || readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
   const pr = event.pull_request?.number
   const mode = env.MODE
   const rows = JSON.parse(env.REPORT || '[]')
