@@ -2129,7 +2129,8 @@ export function createStepBindings(
         const modelId = (value as { modelId?: unknown } | null)?.modelId
         if (typeof modelId === 'string') resources.adoptTestLoad(modelId)
       } else if (method === 'unloadModel') {
-        resources.released(String((params as { modelId?: unknown }).modelId))
+        const modelId = (params as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.released(modelId)
       }
       return value
     },

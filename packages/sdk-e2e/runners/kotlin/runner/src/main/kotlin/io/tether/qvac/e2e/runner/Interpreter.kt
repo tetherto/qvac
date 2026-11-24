@@ -181,7 +181,7 @@ class Interpreter(
         // Here, not in `callValue`, so a `callError` load that succeeds is tracked too.
         when (method) {
             "loadModel" -> ((value as? Map<*, *>)?.get("modelId") as? String)?.let(resources::adoptTestLoad)
-            "unloadModel" -> resources.released(params["modelId"].toString())
+            "unloadModel" -> (params["modelId"] as? String)?.let(resources::released)
         }
         return value
     }

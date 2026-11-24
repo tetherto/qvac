@@ -1225,16 +1225,23 @@ class Interpreter:
         teardown: list[dict[str, Any]] | None = None,
     ) -> StepResult:
         teardown = teardown or []
+        scope: dict[str, Any] = {"params": params}
+        # Released only once no started call runs, so none of them loses its model.
         try:
-            return await self._run_declared(steps, params, expectation, teardown)
+            return await self._run_declared(steps, scope, expectation, teardown)
+        except asyncio.CancelledError:
+            started = [pending.task for pending in self._started(scope)]
+            for task in started:
+                task.cancel()
+            await asyncio.gather(*started, return_exceptions=True)
+            raise
         finally:
-            # After `_run_declared` drains started calls, so none of them loses its model.
             await self._resources.release_test_scope()
 
     async def _run_declared(
         self,
         steps: list[dict[str, Any]],
-        params: dict[str, Any],
+        scope: dict[str, Any],
         expectation: dict[str, Any],
         teardown: list[dict[str, Any]],
     ) -> StepResult:
@@ -1247,8 +1254,6 @@ class Interpreter:
             for dep in step["useModel"].get("deps", [])
         }
         await self._resources.evict_all_except(declared)
-
-        scope: dict[str, Any] = {"params": params}
 
         body = await self._run_body(steps, scope, expectation)
         failed_teardown = await self._run_teardown(teardown, scope, expectation)
@@ -1438,8 +1443,8 @@ class Interpreter:
             model_id = response.get("modelId")
             if isinstance(model_id, str):
                 self._resources.adopt_test_load(model_id)
-        elif method == "unloadModel":
-            self._resources.released(str(params.get("modelId")))
+        elif method == "unloadModel" and isinstance(params.get("modelId"), str):
+            self._resources.released(params["modelId"])
         return response
 
     async def _dispatch(
