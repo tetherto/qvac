@@ -225,7 +225,7 @@
     "enforce-inference-versions": "tsx scripts/enforce-inference-versions.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
-    "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
+    "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases && tsx ./scripts/export-capability-baseline.ts",
     "build:pack": "npm run build && npm pack --ignore-scripts --pack-destination dist/",
     "sdk-source:workspace": "node ./scripts/link-workspace-inference.mjs",
     "watch": "nodemon --watch src --ext ts --exec 'npm run build'",
@@ -237,6 +237,7 @@
     "contract:export": "tsx ./scripts/export-contract.ts",
     "engine-manifest:check": "tsx ./scripts/export-contract.ts --check-engine-manifest",
     "engine-manifest:write": "tsx ./scripts/export-contract.ts --write-engine-manifest",
+    "contract:check-majors": "tsx ./scripts/check-capability-majors.ts",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
     "bare-kit-runtimes:generate": "tsx ./scripts/generate-bare-kit-runtimes.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
@@ -383,6 +384,7 @@
       "contract:export",
       "engine-manifest:check",
       "engine-manifest:write",
+      "contract:check-majors",
       "check:resource-collectors",
       "bare-kit-runtimes:generate",
       "changelog:generate"
