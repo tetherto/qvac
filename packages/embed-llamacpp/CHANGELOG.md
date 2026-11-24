@@ -1,6 +1,15 @@
 # Changelog
 
-## [0.58.0] - 2026-11-19
+## [Unreleased]
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+## [0.58.1] - 2026-11-23
 
 ### Changed
 
@@ -15,6 +24,11 @@
   (e.g. a FLAC without a sample count) is still rejected, now with
   `cannot decode the audio`. Images keep the header check that rejects formats
   stb_image cannot read (WebP, video).
+
+## [0.58.0] - 2026-11-19
+
+### Changed
+
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
   ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,

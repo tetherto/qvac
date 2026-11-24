@@ -17,8 +17,8 @@ that object, so this example does the grouping itself:
  - the final frame carries `stats`, one aggregate for the whole batch (e.g.
    `avg_concurrent_seq`), not one per prompt.
 
-Each prompt may also carry `tools`, `attachments` or `responseFormat`, as in
-the JS example; they are left out here to keep the run fast.
+Each prompt may also carry `tools`, media `content` parts or `responseFormat`,
+as in the JS example; they are left out here to keep the run fast.
 
 RUN: python examples/batch_completion.py
 """

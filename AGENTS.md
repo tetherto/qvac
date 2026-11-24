@@ -26,6 +26,8 @@ or other volatile facts into agent instructions. Link to their owning source.
 - Preserve unrelated changes in a dirty worktree.
 - Diagnose reported failures from runtime evidence before editing. Add tests for
   the confirmed failure mode rather than speculative paths.
+- Do not write tests for test code (e2e runners, consumers, test harness). Verify a
+  change there by running the affected tests.
 - Run the narrowest relevant package-owned lint, type, unit, and integration checks
   before handoff. Report any check that cannot run.
 - Do not delete, disable, skip, or weaken tests to make a check pass. Fix the

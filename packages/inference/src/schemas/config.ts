@@ -1,4 +1,5 @@
 import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
+import { stereoDepthConfigSchema } from '@/schemas/stereo-depth'
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { decisionConfigBaseSchema } from '@/schemas/decision'
@@ -59,6 +60,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
     [ModelType.llamacppRerank]: rerankConfigBaseSchema.optional(),
     [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema.optional(),
+    [ModelType.ggmlStereoDepth]: stereoDepthConfigSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),

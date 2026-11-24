@@ -10,7 +10,8 @@ import {
   loadNativeIndex,
   setNativeIndexLoader,
   type NativeIndex,
-  type NativeIndexModule
+  type NativeIndexModule,
+  type NativeSearchResult
 } from '../../src/vector-index/native.js'
 import { createSnapshotStore, type SnapshotIdentity } from '../../src/vector-index/snapshots.js'
 import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
@@ -464,17 +465,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => timers.setTimeout(resolve, ms))
 }
 
-// A native index whose method `broken` throws, standing in for an addon fault.
 function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') {
   const counts = { creates: 0 }
   const wrap = (native: NativeIndex): NativeIndex =>
     new Proxy(native, {
       get(target, key) {
-        if (key === broken) {
-          return () => {
-            throw new Error('addon fault')
-          }
-        }
+        if (key === broken) return () => Promise.reject(new Error('addon fault'))
         const value = Reflect.get(target, key) as unknown
         return typeof value === 'function' ? value.bind(target) : value
       }
@@ -484,7 +480,7 @@ function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') 
       counts.creates++
       return wrap(real.create(dim, storage))
     },
-    load: (path) => wrap(real.load(path))
+    load: async (path) => wrap(await real.load(path))
   }
   return { module, counts }
 }
@@ -507,6 +503,206 @@ for (const broken of ['addWithIds', 'search'] as const) {
     t.is(counts.creates, 1, 'without rebuilding on every search')
   })
 }
+
+interface Gate {
+  entered: Promise<void>
+  enter(): void
+  opened: Promise<void>
+  open(): void
+}
+
+function gate(): Gate {
+  const held = {} as Gate
+  held.entered = new Promise<void>((resolve) => (held.enter = resolve))
+  held.opened = new Promise<void>((resolve) => (held.open = resolve))
+  return held
+}
+
+// Lets a test hold one native call, as if it were queued on the worker.
+function controlledLoader(real: NativeIndexModule) {
+  const controls = {
+    creates: 0,
+    searches: 0,
+    lastSearch: null as Promise<NativeSearchResult> | null,
+    holdCall: null as Gate | null,
+    holdResult: null as Gate | null,
+    failAdd: null as Gate | null
+  }
+  async function runSearch(start: () => Promise<NativeSearchResult>): Promise<NativeSearchResult> {
+    controls.searches++
+    const call = controls.holdCall
+    controls.holdCall = null
+    if (call) {
+      call.enter()
+      await call.opened
+    }
+    const pending = start()
+    controls.lastSearch = pending
+    const result = controls.holdResult
+    controls.holdResult = null
+    if (result) {
+      result.enter()
+      await result.opened
+    }
+    return await pending
+  }
+
+  const wrap = (native: NativeIndex): NativeIndex =>
+    new Proxy(native, {
+      get(target, key) {
+        if (key === 'search') {
+          return (...args: Parameters<NativeIndex['search']>) =>
+            runSearch(() => target.search(...args))
+        }
+        if (key === 'searchFiltered') {
+          return (...args: Parameters<NativeIndex['searchFiltered']>) =>
+            runSearch(() => target.searchFiltered(...args))
+        }
+        if (key === 'addWithIds') {
+          return async (vectors: Float32Array, ids: BigUint64Array): Promise<void> => {
+            const held = controls.failAdd
+            if (!held) return await target.addWithIds(vectors, ids)
+            controls.failAdd = null
+            held.enter()
+            await held.opened
+            throw new Error('addon fault')
+          }
+        }
+        const value = Reflect.get(target, key) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+  const module: NativeIndexModule = {
+    create(dim, storage) {
+      controls.creates++
+      return wrap(real.create(dim, storage))
+    },
+    load: async (path) => wrap(await real.load(path))
+  }
+  return { module, controls }
+}
+
+async function useControlledIndex(t: Test) {
+  await countNativeCalls(t)
+  const loaded = controlledLoader((await loadNativeIndex()) as NativeIndexModule)
+  setNativeIndexLoader(() => Promise.resolve(loaded.module))
+  return loaded.controls
+}
+
+for (const filtered of [false, true]) {
+  test(`an abort stops waiting for a native ${filtered ? 'filtered search' : 'search'}`, async (t) => {
+    const controls = await useControlledIndex(t)
+    const rag = await openOn(t, await openStore(t))
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+    const documentIds = filtered ? ['a'] : undefined
+    t.alike(contents(await search(rag, spaceId, [1, 0, 0], 1, documentIds)), ['a'])
+
+    const call = gate()
+    controls.holdCall = call
+    const controller = new AbortController()
+    const pending = rag.search({
+      scope: { namespace: 'ns', documentIds },
+      vector: [1, 0, 0],
+      spaceId,
+      k: 1,
+      signal: controller.signal
+    })
+    const settled = pending.then(
+      () => 'resolved',
+      (error: { code?: number }) => error.code
+    )
+    await call.entered
+    const reason = new Error('stop')
+    controller.abort(reason)
+    const outcome = await Promise.race([settled, delay(100).then(() => 'still waiting')])
+    call.open()
+    t.is(outcome, ERR_CODES.OPERATION_CANCELLED, 'rejected before the native call ran')
+    await call.opened
+    const nativeOutcome = await controls.lastSearch?.catch((error: unknown) => error)
+    t.is(nativeOutcome, reason, 'TurboVec received the aborted signal')
+
+    const before = controls.searches
+    t.alike(contents(await search(rag, spaceId, [1, 0, 0], 1, documentIds)), ['a'])
+    t.is(controls.searches, before + 1, 'later searches still use the index')
+  })
+}
+
+test('a search whose index is disposed while its call waits retries on the rebuilt index', async (t) => {
+  const controls = await useControlledIndex(t)
+  const rag = await openOn(t, await openStore(t))
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a'])
+
+  const call = gate()
+  controls.holdCall = call
+  const pending = search(rag, spaceId, [1, 0, 0])
+  await call.entered
+  // A failing add drops the index, disposing it under the waiting search.
+  const fault = gate()
+  fault.open()
+  controls.failAdd = fault
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+  call.open()
+  t.alike(contents(await pending), ['a', 'b'], 'retried on a fresh reader and a rebuilt index')
+  t.is(controls.creates, 2, 'one rebuild after the drop')
+
+  const before = controls.searches
+  t.alike(contents(await search(rag, spaceId, [0, 1, 0])), ['b', 'a'])
+  t.ok(controls.searches > before, 'the disposal did not stop later searches using the index')
+})
+
+test('a rebuild between the rounds of a search retries it on the new index', async (t) => {
+  const controls = await useControlledIndex(t)
+  const rag = await openOn(t, await openStore(t))
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  const names = Array.from({ length: 20 }, (_, i) => `d${String(i).padStart(2, '0')}`)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: names.map((name) => doc(name, spaceId, [[name, [1, 0, 0]]]))
+  })
+  t.alike(contents(await search(rag, spaceId, [0, 0, 0], 1)), ['d00'])
+
+  // All scores tie, forcing a second, wider round.
+  const result = gate()
+  controls.holdResult = result
+  const pending = search(rag, spaceId, [0, 0, 0], 1)
+  await result.entered
+  const fault = gate()
+  fault.open()
+  controls.failAdd = fault
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [0, 1, 0]]])] })
+  t.alike(contents(await search(rag, spaceId, [0, 1, 0], 1)), ['a'], 'another search rebuilt it')
+  t.is(controls.creates, 2)
+
+  result.open()
+  t.alike(contents(await pending), ['a'], 'the held search answered from the new state')
+})
+
+test('a search never reads a commit whose native add is still failing', async (t) => {
+  const controls = await useControlledIndex(t)
+  const rag = await openOn(t, await openStore(t))
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['old', [1, 0, 0]]])] })
+  t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['old'])
+
+  // The remove lands and the add fails: briefly neither version is indexed.
+  const fault = gate()
+  controls.failAdd = fault
+  const replacing = rag.ingest({
+    namespace: 'ns',
+    documents: [doc('a', spaceId, [['new', [1, 0, 0]]])]
+  })
+  await fault.entered
+  const before = controls.searches
+  const pending = search(rag, spaceId, [1, 0, 0])
+  while (controls.searches === before) await delay(1)
+  fault.open()
+  t.alike(contents(await pending), ['new'], 'not an empty result from the half-applied commit')
+  await replacing
+  t.is(controls.creates, 2, 'the failed commit dropped the index, and it was rebuilt')
+})
 
 test('TurboVec storage is opt-in and needs dimensions divisible by 8 up to 1,024', async (t) => {
   await countNativeCalls(t)
@@ -722,9 +918,6 @@ test('replay compacts the rows it removes', async (t) => {
 
 test('removing a dropped namespace keeps the snapshot of its re-created successor', async (t) => {
   const store = createSnapshotStore(await tmp(t), 'core')
-  const index = {
-    write: (path: string) => fs.writeFileSync(path, 'snapshot')
-  } as unknown as NativeIndex
   const identity = (createdAt: number): SnapshotIdentity => ({
     namespace: 'ns',
     createdAt,
@@ -732,7 +925,10 @@ test('removing a dropped namespace keeps the snapshot of its re-created successo
     storage: 'f32',
     dimensions: 4
   })
-  await store.write(identity(2), index, () => 1)
+  await store.write(identity(2), (pathFor) => ({
+    revision: 1,
+    written: Promise.resolve(fs.writeFileSync(pathFor(1), 'snapshot'))
+  }))
 
   await store.remove('ns', 1)
   t.ok(await store.read(identity(2)), 'a removal for the old namespace leaves it')

@@ -1,5 +1,83 @@
 # Changelog
 
+## [0.33.0] - 2026-11-23
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.5.0` -> `12032.0.0`, which rebases
+  fabric from upstream b11739 onto b12032
+  ([qvac-fabric-llm.cpp#506](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/506)).
+- RPC protocol 117 -> 118. `GGML_OP_TOP_K_MASK` goes in before
+  `GGML_OP_UNARY`, so every later op id moves, and the ragged ops now come
+  before the ConvRot ops. An 11739 RPC peer and a 12032 one cannot connect:
+  `@qvac/ggml-rpc-server` and its clients move to this release together.
+- `common.h`: `common_control_vector_load` takes `n_layer`,
+  `fs_path_to_utf8` is removed, and `common_params` gains fields, among them
+  `common_params_speculative_draft::n_max_explicit`. Native consumers must
+  rebuild against these headers, and every addon loaded in one process must
+  resolve the same `@qvac/fabric` minor.
+- `mtmd.h` / `mtmd-helper.h`: `mtmd_gen_audio_process` takes an
+  `mtmd_gen_state`, and `mtmd_gen_inp`, `mtmd_gen_out`, `mtmd_caps`,
+  `mtmd_audio_stream_params`, `mtmd_helper_gen_audio_inp` and
+  `mtmd_helper_video_init_params` change layout. `mtmd_helper_model_can_chat`
+  and `mtmd_helper_support_video` are deprecated in favour of
+  `mtmd_helper_get_capabilities`.
+
+### Added
+
+- ggml API: `ggml_top_k_mask`, `ggml_backend_tensor_copy_n`,
+  `ggml_backend_tensor_set_n`, `ggml_backend_tensor_get_n`,
+  `ggml_prec_get_acc` and `ggml_prec_get_src`.
+- The CUDA 13 modules (`@qvac/fabric-linux-x64-cuda`, linux-arm64,
+  win32-x64) include CUTLASS MXFP4/NVFP4 matmuls for compute capability 12.x
+  GPUs. Other GPUs and the Jetson module are unchanged
+  ([qvac-registry-vcpkg#502](https://github.com/tetherto/qvac-registry-vcpkg/pull/502)).
+
+### Changed
+
+- `draft-dflash` drafts 5 tokens per step when the draft length is not set,
+  instead of 3. The CLI argument parser applies it; callers that fill
+  `common_params` themselves call `common_speculative_set_default_n_max` once
+  the spec types are final. Other spec types keep 3
+  ([qvac-fabric-llm.cpp#557](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/557)).
+- Faster few-row mat-muls: CUDA on DGX Spark at 9-16 columns (bit-identical
+  results), and Vulkan on NVIDIA at 9-32 columns
+  (`GGML_VK_DISABLE_NARROW_MUL_MAT` turns it off)
+  ([qvac-fabric-llm.cpp#555](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/555)).
+
+### Fixed
+
+- WebGPU dequantizes quantized weights in `f32`, so Intel GPUs that flush
+  subnormal `f16` values no longer produce corrupted output
+  ([qvac-fabric-llm.cpp#567](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/567)).
+- WebGPU browser builds: the logger runs without pthreads, device creation
+  keeps the adapter that passed validation, and the Memory64 build compiles
+  ([qvac-fabric-llm.cpp#554](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/554)).
+
+## [0.32.0] - 2026-11-23
+
+This release splits the Linux x64 CUDA backend into its own automatically
+installed package so Fabric can continue to ship all backends within npm's
+package size limit. Installation and inference behavior remain unchanged.
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+- The Fabric meta, platform and CUDA packages move together to 0.32.0.
+  Existing consumers using `^0.31.0` stay on the previous packaging; adopting
+  this layout requires explicitly updating their Fabric dependency ranges.
+
+## Pull Requests
+
+- [#5824](https://github.com/tetherto/qvac/pull/5824) - QVAC-28570: split Fabric Linux x64 GPU backend packages.
+
 ## [0.31.2] - 2026-11-20
 
 ### Changed
