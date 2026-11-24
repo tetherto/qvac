@@ -203,9 +203,10 @@ key per user, as OpenAI suggests, still gets a cache per conversation;
 `prompt_cache_key: null` counts as absent. The QVAC
 plugins for OpenCode and OpenClaw have the host send its session id as
 `prompt_cache_key`; the pi coding agent does so only when
-`PI_CACHE_RETENTION=long` is set. On a keyed request
-`usage.qvac_cache_tokens` reports SDK cache occupancy, not a count of reused
-tokens. Retention is described under
+`PI_CACHE_RETENTION=long` is set. `usage.prompt_tokens` counts the whole prompt
+and `usage.prompt_tokens_details.cached_tokens` the part the cache already held.
+On a keyed request `usage.qvac_cache_tokens` reports SDK cache occupancy.
+Retention is described under
 [KV-cache retention](default.md#kv-cache-retention).
 
 ## `POST /v1/completions`

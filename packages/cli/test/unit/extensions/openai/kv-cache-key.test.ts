@@ -157,4 +157,13 @@ describe('buildUsage: qvac_cache_tokens', () => {
       total_tokens: 12
     })
   })
+
+  it('reports the reused part of the prompt as cached_tokens', () => {
+    assert.deepEqual(buildUsage({ completionTokens: 2, promptTokens: 300, cachedTokens: 290 }), {
+      prompt_tokens: 300,
+      prompt_tokens_details: { cached_tokens: 290 },
+      completion_tokens: 2,
+      total_tokens: 302
+    })
+  })
 })

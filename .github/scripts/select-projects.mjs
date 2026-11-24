@@ -604,7 +604,8 @@ const byName = (graph, names) =>
     .map((n) => n.name)
 
 function main(env) {
-  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
+  // A workflow_run build passes its PR's event, rebuilt from the API; any other run reads its own.
+  const event = JSON.parse(env.PR_EVENT || readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
   const targets = env.TARGETS.split(/[\s,]+/).filter(Boolean)
   const unknown = targets.filter((t) => !TARGETS.includes(t))
   if (unknown.length) throw new Error(`not standard targets: ${unknown.join(', ')}`)

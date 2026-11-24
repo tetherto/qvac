@@ -1675,7 +1675,7 @@ Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`
 
 The QVAC plugins for OpenCode and OpenClaw have the host send its session id as `prompt_cache_key`, so each session gets its own cache. The pi coding agent does the same for a custom provider only when `PI_CACHE_RETENTION=long` is set.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. It is **not** a per-request count of reused prompt tokens. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
+`usage.prompt_tokens` counts the whole prompt, and `usage.prompt_tokens_details.cached_tokens` the part of it the cache already held. On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
 
 #### Unsupported parameters
 
@@ -1763,7 +1763,7 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 
 OpenAI's `prompt_cache_key` works as well, so clients that already send one per conversation (Codex does) get a cache without extra configuration. Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once, since a repeated header is rejected. A supplied key must be a string containing at least one non-whitespace character and no more than 512 UTF-8 bytes, measured before hashing. Invalid keys return `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use; the same exact key selects the same named SDK session in blocking and streaming requests, including tool turns. Use a separate key per conversation, resend it with the growing history (or `previous_response_id`), and serialize turns within a session. A key selects a cache, not stored history. With no key, Responses remains uncached; `store` and `previous_response_id` do not opt in or inherit a key.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy, **not** a per-request count of reused prompt tokens, so it is not mapped to OpenAI's `input_tokens_details.cached_tokens`. Streaming includes the same diagnostic in the final response event. Existing `input_tokens` / `total_tokens` accounting is unchanged. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
+On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy. The reused part of the input is reported separately as `usage.input_tokens_details.cached_tokens`. Streaming includes both in the final response event. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
 
 <Callout type="warn">
 **Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
