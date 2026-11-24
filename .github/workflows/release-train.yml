@@ -201,7 +201,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The checks publish-inference.yml and publish-sdk.yml run before npm. The
+  # The checks the inference and sdk verify:deps targets run before npm. The
   # engine is not on npm yet, so the sdk check uses the workspace copy.
   shared-runtime-libs:
     name: Shared runtime libs resolve once
@@ -225,7 +225,7 @@ jobs:
       - name: Check @qvac/sdk
         run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
 
-  # publish-inference.yml's Pear e2e, on the train's @qvac/inference tarball.
+  # publish-npm.yml's inference Pear e2e, on the train's @qvac/inference tarball.
   pear-e2e:
     name: Pear e2e
     needs: [train, build]
@@ -244,10 +244,25 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: train
+      ref: ${{ github.sha }}
+
+  # sdk-checks.yml's sdk-kotlin checks, on this commit's @qvac/sdk and
+  # @qvac/inference. attach-kotlin-maven-zips builds every runtime profile's
+  # zip after publishing.
+  sdk-kotlin:
+    name: Kotlin SDK checks
+    needs: [train]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'sdk-kotlin')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/sdk-checks.yml
+    with:
+      packages: sdk-kotlin
       ref: ${{ github.sha }}
 
   sdk-python:
@@ -278,6 +293,10 @@ jobs:
         with:
           python-version: "3.10"
 
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
       - name: Install build tooling
         run: |
           python3 -m venv .venv
@@ -285,28 +304,14 @@ jobs:
           .venv/bin/pip install --quiet build twine
           .venv/bin/pip install --quiet -e ".[gen]"
 
-      - name: Contract check
-        run: .venv/bin/python3 scripts/generate.py --check
+      # The package takes @qvac/sdk's version and carries the client generated from this commit's SDK.
+      - name: Generate the client
+        run: |
+          node ../sdk/ci/clients.mjs prepare-sdk
+          .venv/bin/python3 scripts/generate.py
 
       - name: Build
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
-
-      - name: Verify python version matches @qvac/sdk
-        working-directory: ${{ github.workspace }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_VER=$(git show "${GITHUB_SHA}":packages/sdk/package.json | jq -r .version)
-          PY_VER=$(git show "${GITHUB_SHA}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
-          if [ -z "$PY_VER" ]; then
-            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${GITHUB_SHA}"
-            exit 1
-          fi
-          if [ "$PY_VER" != "$SDK_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${GITHUB_SHA}. Run packages/sdk-python/scripts/generate.py before release."
-            exit 1
-          fi
-          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER"
 
       - name: Check metadata
         run: .venv/bin/twine check dist/*
@@ -333,6 +338,7 @@ jobs:
       - shared-runtime-libs
       - package-checks
       - sdk-python
+      - sdk-kotlin
       - pear-e2e
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
@@ -514,7 +520,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: published
@@ -627,8 +633,25 @@ jobs:
       - train
       - github-release
     if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-python') }}
+    # publish-pypi.yml's PyPI job, skipped on this path, asks for id-token; a called workflow may not ask for more than this.
     permissions:
       contents: write
-    uses: ./.github/workflows/build-sdk-python-fat-wheels.yml
+      id-token: write
+    uses: ./.github/workflows/publish-pypi.yml
     with:
+      version: ${{ needs.train.outputs.release_version }}
+
+  # One Maven repository zip per Android runtime profile, plus the JVM client,
+  # on the same release, as publish-sdk.yml attaches them.
+  attach-kotlin-maven-zips:
+    name: Attach the Kotlin Maven zips
+    needs:
+      - train
+      - github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-kotlin') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-kotlin.yml
+    with:
+      destination: release-assets
       version: ${{ needs.train.outputs.release_version }}

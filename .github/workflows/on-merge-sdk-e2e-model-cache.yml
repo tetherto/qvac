@@ -1,0 +1,125 @@
+name: On Merge SDK E2E Model Cache
+
+# Seeds the per-model SDK e2e cache with what it lacks. Legs run in sequence so a later one
+# reuses an earlier one's entries (Linux and Windows share them; macOS adds Core ML sets).
+# Source under src/, as in _desktop.yml: entry paths are part of the cache version.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/sdk-e2e/catalog/**"
+      - "packages/sdk-e2e/qvac-test.config.js"
+      - "packages/sdk-e2e/runners/js/shared/resource-manager.ts"
+      - "packages/sdk-e2e/runners/js/shared/collect-test-deps.ts"
+      - "packages/sdk-e2e/runners/js/shared/bootstrap-deps.ts"
+      - "packages/sdk-e2e/scripts/model-cache-*.mjs"
+      - "packages/inference/src/models/registry/**"
+      - "packages/inference/src/utils/cache/layout.ts"
+      - "packages/sdk/package.json"
+      - "packages/sdk/ci/e2e*.mjs"
+      - "packages/sdk-e2e/package.json"
+      - ".github/actions/sdk-e2e-model-cache/**"
+      - ".github/workflows/on-merge-sdk-e2e-model-cache.yml"
+  # The cache server prunes entries untouched for 5 days and a lookup does not count, so the
+  # scheduled run restores every entry for real.
+  schedule:
+    - cron: "47 2 */2 * *"
+  # No workflow_call or pull_request: either would put PR code on the save path.
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore every entry for real, as the cron does, which resets the cache server's prune clock. A lookup alone does not."
+        type: boolean
+        default: false
+
+# A cancelled run cannot save what it downloaded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - os: linux
+            runner: linux_ubuntu2204_x64_gpu
+            families: desktop,python,kotlin,electron,snap
+          - os: macos
+            runner: macos_arm64_gpu
+            families: desktop,python,kotlin,electron
+          - os: windows
+            runner: win_2025_x64_gpu
+            families: desktop,python,kotlin,electron
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner] }}
+    # A cold seed downloads and uploads the whole catalog (~70 GB).
+    timeout-minutes: 240
+    name: seed (${{ matrix.os }})
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          ref: ${{ github.sha }}
+          path: src
+          persist-credentials: "false"
+
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          node-version: "22"
+
+      - name: Install, build and plan
+        id: models-plan
+        env:
+          SEED_FAMILIES: ${{ matrix.families }}
+          SEED_OS: ${{ matrix.os }}
+        run: node src/packages/sdk/ci/e2e.mjs seed
+
+      - name: Probe models cache
+        id: models-cache
+        uses: ./src/.github/actions/sdk-e2e-model-cache
+        with:
+          mode: restore
+          plan: ${{ steps.models-plan.outputs.plan }}
+          lookup-only: ${{ github.event_name != 'schedule' && inputs.force_refresh != true }}
+
+      - name: Download missing models
+        if: steps.models-cache.outputs.complete != 'true'
+        working-directory: src/packages/sdk-e2e
+        env:
+          PLAN: ${{ steps.models-plan.outputs.plan }}
+          QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
+        run: node scripts/model-cache-bootstrap.mjs --plan "$PLAN"
+
+      # Also after a failed download, to keep what arrived.
+      - name: Save models cache
+        if: ${{ !cancelled() && steps.models-cache.outputs.complete == 'false' }}
+        uses: ./src/.github/actions/sdk-e2e-model-cache
+        with:
+          mode: save
+          plan: ${{ steps.models-plan.outputs.plan }}
+          fail-on-save-error: "true"

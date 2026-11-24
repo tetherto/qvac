@@ -1,0 +1,306 @@
+name: Build native prebuilds
+
+# One job per package and build configuration, on the runner the build target's metadata names. Nx runs the package's
+# ci:system and build targets with that configuration; a provider's prebuilds come from its own job, run first.
+on:
+  workflow_call:
+    inputs:
+      rows:
+        description: JSON build rows from _select-projects, one per package and build configuration
+        type: string
+        required: true
+      reuse:
+        description: Take a leg from an earlier run on this branch or PR when its native code and build inputs are unchanged
+        type: boolean
+        default: false
+      repository:
+        description: Repository of the commit to build, a PR's head; empty builds this run's own commit
+        type: string
+        default: ""
+      ref:
+        description: Commit to build, a PR's head SHA; empty builds this run's own commit
+        type: string
+        default: ""
+      pr:
+        description: PR number whose own earlier legs reuse may take; empty for a branch build
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  plan:
+    if: inputs.rows != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      # prebuild-reuse.mjs checks a PR artifact's built commit belongs to that PR.
+      pull-requests: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      reused: ${{ steps.plan.outputs.reused }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
+          path: src
+          persist-credentials: "false"
+      - id: plan
+        shell: bash
+        env:
+          SLUGS: ${{ toJSON(fromJSON(inputs.rows).*.slug) }}
+          CONFIGS: ${{ toJSON(fromJSON(inputs.rows).*.config) }}
+          DIRS: ${{ toJSON(fromJSON(inputs.rows).*.dir) }}
+          RUNNERS: ${{ toJSON(fromJSON(inputs.rows).*.runner) }}
+          PROVIDERS: ${{ toJSON(fromJSON(inputs.rows).*.providers) }}
+          SRC: src
+          REUSE: ${{ inputs.reuse && (inputs.repository || github.repository) == github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PR: ${{ inputs.pr }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/prebuild-reuse.mjs
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build != '[]'
+    name: ${{ fromJSON(inputs.rows)[matrix.leg.i].slug }} ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+    runs-on: ${{ fromJSON(inputs.rows)[matrix.leg.i].runner }}
+    environment: release
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: ${{ fromJSON(needs.plan.outputs.build) }}
+    env:
+      WORKDIR: src/${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      pnpm_config_verify_deps_before_run: "false"
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/config
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
+          path: src
+          persist-credentials: "false"
+      - if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac-actions/runner-free-disk@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          keep-android: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform == 'android' }}
+      # Toolchain versions are the workspace's, from nx.json; a package's own system packages come from its ci:system target.
+      - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
+        uses: tetherto/qvac-actions/runner-apt-install@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          packages: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.aptPackages }}
+      - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
+        uses: tetherto/qvac-actions/setup-android-ndk@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          ndk-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.ndk }}
+          api-level: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.apiLevel }}
+      - if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac-actions/setup-clang@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.linux }}
+          windows-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.windows }}
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+      - uses: tetherto/qvac-actions/setup-aws-cli@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+      - uses: ./.github/actions/vcpkg-bootstrap
+      - uses: ./.github/actions/vcpkg-cache-setup
+        with:
+          mode: s3
+          cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
+          arch: ${{ fromJSON(inputs.rows)[matrix.leg.i].arch }}
+      - uses: ./.github/actions/setup-windows-host
+        with:
+          arch: ${{ fromJSON(inputs.rows)[matrix.leg.i].arch }}
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          package-json-file: src/package.json
+      # main's locked bare toolchain: bare-make, clang, clang-format and llvm tools from the checkout's lock, first on PATH.
+      - name: Install the locked bare toolchain
+        run: node src/.github/bare-toolchain/install.mjs
+      - uses: ./.github/actions/setup-apple-clang
+      - id: vulkan
+        uses: ./.github/actions/setup-vulkan
+        with:
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+          cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+      - if: steps.vulkan.outputs.upload-archive != ''
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.vulkan.outputs.upload-archive }}
+          KEY: ${{ steps.vulkan.outputs.upload-key }}
+          BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: aws s3 cp "$ARCHIVE" "s3://$BUCKET/$KEY"
+      # A provider's exported CMake config may find_dependency its toolkits, so the host's are here plus the configuration's.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'cuda') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cuda }}
+          # Only commands that load it compile with MSVC 14.44; the rest keep the runner's default toolset, as on main.
+          msvc-scope: file
+      # Jetson's CUDA 12 beside the host's CUDA 13: only the package command that reads QVAC_CUDA_JETSON_PATH uses it.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda-jetson')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cudaJetson }}
+          cuda-target: jetson
+          export: path
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'rocm') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'rocm')
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.version }}
+          gfx: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.gfx }}
+          sha256: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.sha256 }}
+      # XRT and IRON for fabric's XDNA backend, which any build of fabric from source compiles.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'xdna') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'xdna')
+        uses: ./.github/actions/setup-xdna
+      # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources. A row
+      # that names a provider but restores none installs the package alone from npm, with the provider's release.
+      - name: Install
+        shell: bash
+        working-directory: src
+        env:
+          NPM: ${{ fromJSON(inputs.rows)[matrix.leg.i].npm }}
+          DIR: ${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
+          RELEASED: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider != '' && fromJSON(inputs.rows)[matrix.leg.i].providers[0] == null }}
+        run: |
+          if [ "$RELEASED" = "true" ]; then
+            pnpm install --frozen-lockfile --ignore-scripts --filter .
+            node scripts/ci/checks-source.mjs install published "$DIR"
+          else
+            pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
+          fi
+      - name: ci:system
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+        run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      # The providers' prebuilds for this configuration, from their jobs in this run.
+      - if: fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          pattern: prebuild-@(${{ join(fromJSON(inputs.rows)[matrix.leg.i].providers, '|') }})-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+          path: ${{ runner.temp }}/providers
+          merge-multiple: "true"
+      - name: link:platform
+        if: fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null
+        shell: bash
+        working-directory: src
+        env:
+          PROVIDERS: ${{ join(fromJSON(inputs.rows)[matrix.leg.i].providers, ' ') }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+        run: |
+          read -ra list <<< "$PROVIDERS"
+          for p in "${list[@]}"; do
+            [ -d "$RUNNER_TEMP/providers/packages/$p/prebuilds" ] || { echo "::error::no $p prebuilds for $CONFIG; its build failed"; exit 1; }
+            cp -R "$RUNNER_TEMP/providers/packages/$p/prebuilds" "packages/$p/"
+          done
+          pnpm exec nx run-many -t link:platform -p "$(printf 'packages/%s\n' "${list[@]}" | paste -sd, -)" --exclude-task-dependencies --outputStyle=stream
+      # A package with a provider never builds it here: it links the prebuilds restored above, or the installed release.
+      - name: Build
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+          PROVIDED: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider != '' }}
+        run: |
+          exclude=()
+          if [ "$PROVIDED" = "true" ]; then exclude=(--exclude-task-dependencies); fi
+          pnpm exec nx run-many -t build -p "$PROJECT" -c "$CONFIG" "${exclude[@]}" --parallel=1 --outputStyle=stream
+      - if: failure()
+        shell: bash
+        run: for f in "$VCPKG_ROOT"/buildtrees/*/{config,install,build}-*.log; do [ -f "$f" ] && { echo "== $f"; tail -200 "$f"; }; done; true
+      - uses: ./.github/actions/prebuilds-strip
+        with:
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
+          workdir: ${{ env.WORKDIR }}
+      - uses: ./.github/actions/prebuilds-check-exports
+        with:
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
+          workdir: ${{ env.WORKDIR }}
+          provider: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider }}
+      - if: fromJSON(inputs.rows)[matrix.leg.i].platform == 'win32'
+        uses: ./.github/actions/prebuilds-check-windows-runtime
+        with:
+          workdir: ${{ env.WORKDIR }}
+      # Every package this job built, its native dependencies too, as packages/<dir>/prebuilds; package.json keeps
+      # that root when only one package built. Consumers take the <dir>/prebuilds they need.
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          name: prebuild-${{ fromJSON(inputs.rows)[matrix.leg.i].slug }}-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+          path: |
+            src/package.json
+            src/packages/*/prebuilds
+      # The same files under the leg's key, for a later run on this branch to reuse.
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          name: ${{ matrix.leg.cacheName }}
+          retention-days: "14"
+          path: |
+            src/package.json
+            src/packages/*/prebuilds
+
+  # A leg an earlier run built from the same native code and inputs, under this run's name for the jobs downstream.
+  reuse:
+    needs: plan
+    if: needs.plan.outputs.reused != '[]'
+    name: reuse ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.plan.outputs.reused) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          name: ${{ matrix.row.name }}
+          run-id: ${{ matrix.row.runId }}
+          github-token: ${{ github.token }}
+          path: leg
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: leg/
