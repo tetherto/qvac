@@ -266,6 +266,25 @@ safeTest(
       t.ok(/2 to 10 levels/.test(rejected.message), `11 score levels rejected: ${rejected.message}`)
       t.is(rejected.code, DECISION_INVALID_REQUEST, 'rejection is coded as an invalid request')
 
+      // Upstream reads a question's type with json_value(), which catches the
+      // runtime's common_json_error for a value of the wrong type and uses the
+      // default (no type), so upstream's own check names the question. Were
+      // that catch to miss the runtime's type_info (Linux, libc++), the raw
+      // JSON type error would come back instead.
+      const wrongType = await decide(engine, {
+        state: 'x',
+        questions: { q: { type: 7, instructions: '?', criteria: { a: 'A', b: 'B' } } }
+      }).catch((err) => err)
+      t.ok(
+        /questions\.q: "type" must be one of/.test(wrongType.message),
+        `a numeric question type falls back to upstream's default: ${wrongType.message}`
+      )
+      t.is(
+        wrongType.code,
+        DECISION_INVALID_REQUEST,
+        'a numeric question type is an invalid request'
+      )
+
       // The depth guard counts from where each value starts: a state, the
       // instructions and an option description all pass it at 128 nested
       // levels and are rejected at 129 before any recursive code runs.
