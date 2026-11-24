@@ -220,6 +220,40 @@ describe('createRagBackend', () => {
     })
   })
 
+  it('closes an idle store, so another server can take it, and reopens it on use', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts, idleMs: 20 })
+      const second = createRagBackend({ dir, embedTexts })
+      await first.attach('vs_idle', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+
+      await eventually(() => second.search('vs_idle', model, 'moon', 1))
+      await second.close()
+      const hits = await first.search('vs_idle', model, 'moon', 1)
+      assert.equal(hits[0]?.fileId, 'file-1')
+
+      await eventually(() => second.delete('vs_idle'))
+      assert.deepEqual(await first.search('vs_idle', model, 'moon', 1), [])
+      await first.close()
+      await second.close()
+    })
+  })
+
+  // Retries while the store is still held by another server.
+  async function eventually<T>(run: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await run()
+      } catch (err) {
+        if (!(err instanceof VectorStoreInUseError) || attempt >= 100) throw err
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }
+  }
+
   // The second server reads the record, then waits on its embedding probe
   // while the first deletes the store, before it opens the store's data.
   function gatedProbe() {

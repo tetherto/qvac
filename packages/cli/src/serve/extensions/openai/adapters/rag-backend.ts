@@ -24,6 +24,7 @@ const RECORD_FILE = 'store.json'
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
 // Not a valid store id, so a folder being deleted is never listed as a store.
 const DELETED_PREFIX = '.deleted-'
+const IDLE_CLOSE_MS = 60_000
 
 /** Vector stores live next to the SDK's model cache, like the rest of its data. */
 export function vectorStoreDirFor(cacheDirectory: string | undefined): string {
@@ -165,23 +166,46 @@ function spaceRevision(model: ModelIdentity): string {
 // Each store has its own folder: its record and a data folder with its
 // Corestore and index. Stores never contend for one Corestore lock.
 export function createRagBackend(
-  options: { dir?: string; embedTexts?: EmbedTexts } = {}
+  options: { dir?: string; embedTexts?: EmbedTexts; idleMs?: number } = {}
 ): RagBackend {
   const baseDir = options.dir ?? vectorStoreDirFor(undefined)
   const embedTexts = options.embedTexts ?? embedTextsWithSdk
+  const idleMs = options.idleMs ?? IDLE_CLOSE_MS
   const storesDir = path.join(baseDir, 'stores')
   const open = new Map<string, OpenRag>()
   const queues = new Map<string, Promise<unknown>>()
+  const idleTimers = new Map<string, NodeJS.Timeout>()
+
+  function cancelIdleClose(id: string): void {
+    clearTimeout(idleTimers.get(id))
+    idleTimers.delete(id)
+  }
+
+  // An open store holds its Corestore lock, which keeps other servers on the
+  // same directory out of it, so a store nothing is using gets closed.
+  function scheduleIdleClose(id: string): void {
+    cancelIdleClose(id)
+    if (!open.has(id)) return
+    const timer = setTimeout(() => {
+      idleTimers.delete(id)
+      void serialize(id, () => closeOpen(id)).catch(() => {})
+    }, idleMs)
+    timer.unref()
+    idleTimers.set(id, timer)
+  }
 
   // One operation per store at a time; other stores and the record reads
   // (list, embeddingAlias) are not held up.
   function serialize<T>(id: string, task: () => Promise<T>): Promise<T> {
+    cancelIdleClose(id)
     const previous = queues.get(id) ?? Promise.resolve()
     const run = previous.then(task, task)
     const tail = run.catch(() => {})
     queues.set(id, tail)
     void tail.then(() => {
-      if (queues.get(id) === tail) queues.delete(id)
+      if (queues.get(id) !== tail) return
+      queues.delete(id)
+      scheduleIdleClose(id)
     })
     return run
   }
@@ -506,6 +530,7 @@ export function createRagBackend(
 
     async close() {
       await Promise.all([...open.keys()].map((id) => serialize(id, () => closeOpen(id))))
+      for (const id of [...idleTimers.keys()]) cancelIdleClose(id)
     }
   }
 }
