@@ -261,6 +261,23 @@ test('a role marker split across pushes does not demote the calls before it', (t
   }
 })
 
+test('a call made in reasoning after a held call comes after it', (t) => {
+  const frame = (p: string) =>
+    `<tool_call>\n<function=login>\n<parameter=password>${p}</parameter>\n</function>\n</tool_call>`
+  const text = `${frame('a')}\n<think>then the second ${frame('b')}</think>`
+  for (let split = 0; split <= text.length; split++) {
+    const r = run([text.slice(0, split), text.slice(split)], [LOGIN])
+    t.alike(
+      argsOf(r),
+      [
+        ['login', { password: 'a' }],
+        ['login', { password: 'b' }]
+      ],
+      `split ${split}`
+    )
+  }
+})
+
 test('a harmony reasoning or answer frame after a call keeps its markers out of the text', (t) => {
   const weather: Tool = {
     type: 'function',

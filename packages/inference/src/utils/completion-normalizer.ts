@@ -517,8 +517,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return rest
   }
 
+  // Held calls came before any reasoning block still open, so they go out directly.
   function releaseTrailingCalls(events: CompletionEvent[]) {
-    for (const call of trailingCalls.take().calls) emitMadeCall(events, call)
+    for (const call of trailingCalls.take().calls) emitStreamedToolCall(events, call)
   }
 
   function demoteTrailingCalls(events: CompletionEvent[]) {
@@ -636,7 +637,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return ''
   }
 
+  // A call made in reasoning after held calls means those were made too, first.
   function closeThinkingBlock(events: CompletionEvent[]) {
+    if (deferredCalls.some((d) => d.made)) releaseTrailingCalls(events)
     for (const { call, made } of deferredCalls) if (made) emitStreamedToolCall(events, call)
     deferredCalls = []
     activeThinkingFrame = null
@@ -647,6 +650,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   function releaseHeldCalls(events: CompletionEvent[]) {
     const held = heldThinkingCalls
     heldThinkingCalls = null
+    if (held?.calls.length) releaseTrailingCalls(events)
     for (const call of held?.calls ?? []) emitMadeCall(events, call)
   }
 
