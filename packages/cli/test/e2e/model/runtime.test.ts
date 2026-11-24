@@ -48,7 +48,7 @@ describe('qvac runtime: loaded models', () => {
     assert.deepEqual(res.json(), { object: 'runtime.state', state: 'active' })
   })
 
-  it('refuses chat while suspended and serves it again after resume', async () => {
+  it('refuses chat while suspended, still reports capabilities, and serves chat after resume', async () => {
     const app = server()
     const chat = () =>
       app.inject({
@@ -65,6 +65,16 @@ describe('qvac runtime: loaded models', () => {
       assert.equal((blocked.json() as { error: { code: string } }).error.code, 'runtime_suspended')
       const state = await app.inject({ method: 'GET', url: '/qvac/v1/runtime/state' })
       assert.equal((state.json() as { state: string }).state, 'suspended')
+      const capabilities = await app.inject({
+        method: 'GET',
+        url: '/qvac/v1/runtime/capabilities'
+      })
+      assert.equal(capabilities.statusCode, 200, capabilities.payload)
+      const { data } = capabilities.json() as { data: Array<{ id: string }> }
+      assert.ok(
+        data.some((capability) => capability.id === 'completion'),
+        data.map((capability) => capability.id).join(',')
+      )
     } finally {
       const resumed = await app.inject({ method: 'POST', url: '/qvac/v1/runtime/resume' })
       assert.deepEqual(resumed.json(), { object: 'runtime.state', state: 'active' })
