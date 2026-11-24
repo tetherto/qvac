@@ -264,6 +264,12 @@ const resourcesChildren: Node[] = [
     type: 'page',
     icon: resolveIcon('Bug'),
   },
+  {
+    name: 'Migrate from the SDK RAG API',
+    url: '/resources/rag-migration',
+    type: 'page',
+    icon: resolveIcon('ScanSearch'),
+  },
   offSite('Discord', 'https://discord.com/invite/tetherdev', 'MessageCircle'),
 ];
 

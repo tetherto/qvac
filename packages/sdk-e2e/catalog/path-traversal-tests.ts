@@ -96,22 +96,11 @@ export const pathTraversalHyperdriveBackslashLoad: TestDefinition = {
   metadata
 }
 
-// Deleting a workspace removes its directory; the name must not reach a sibling.
-// The target does not exist, so a regression deletes nothing.
-export const pathTraversalRagDeleteWorkspace: TestDefinition = {
-  testId: 'path-traversal-rag-delete-workspace',
-  params: { workspace: '../path-traversal-e2e-canary' },
-  expectation: { validation: 'throws-error', errorContains: 'traversal' },
-  steps: rejects('ragDeleteWorkspace', { workspace: '$params.workspace' }),
-  metadata
-}
-
 export const pathTraversalTests = [
   pathTraversalHttpShardedLoad,
   pathTraversalHttpShardedQuery,
   pathTraversalHttpShardedFragment,
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
-  pathTraversalHyperdriveBackslashLoad,
-  pathTraversalRagDeleteWorkspace
+  pathTraversalHyperdriveBackslashLoad
 ]

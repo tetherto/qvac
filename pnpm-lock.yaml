@@ -475,6 +475,9 @@ importers:
       '@inquirer/prompts':
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
+      '@qvac/rag':
+        specifier: ^0.11.0
+        version: link:../rag
       '@qvac/sdk':
         specifier: ^0.24.0
         version: link:../sdk
@@ -484,6 +487,9 @@ importers:
       commander:
         specifier: ^14.0.3
         version: 14.0.3
+      corestore:
+        specifier: ^7.11.0
+        version: 7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       fastify:
         specifier: ^5.0.0
         version: 5.10.0
@@ -1001,9 +1007,6 @@ importers:
       '@qvac/logging':
         specifier: ^0.1.1
         version: 0.1.1
-      '@qvac/rag':
-        specifier: ^0.9.0
-        version: 0.9.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       '@qvac/registry-client':
         specifier: ^0.8.0
         version: link:../registry-server/client
@@ -5523,9 +5526,6 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/rag@0.9.0':
-    resolution: {integrity: sha512-cjoYirg2jDcx6Gi7bxekXJJnm9iblWs9D5lFj+T3Icobr5TcNH8/p/1L5fgYs4Xeii4S8teqinN/w+eRSx8pYg==}
-
   '@qvac/registry-client@0.4.1':
     resolution: {integrity: sha512-BZz/7HASD1Wth/r8f7NpWF1bAihND04xKaRjJ2s31ujnQPHO0m04daM/PEiffzPPKYDHQTSGkecOh13451imlw==}
     hasBin: true
@@ -5553,9 +5553,6 @@ packages:
 
   '@qvac/registry-schema@0.3.0':
     resolution: {integrity: sha512-U5+oNXh34ngCnyTRCf1cjSjZcoacM3xixsPTwXv7jTQQUdvtEownb3mb+nClb7nEc/SlJDffPEy5kFj5D2Zxjg==}
-
-  '@qvac/response@0.1.2':
-    resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
 
   '@qvac/translation-nmtcpp@0.25.1':
     resolution: {integrity: sha512-YuNpZeEibVhuQpgomshEBFbiLjohpgRLYFrxWEj8ZT2MwOcwADDvP6I6eXneZPdzdvEknwVdZLQO7/dZM36fXA==}
@@ -6676,9 +6673,6 @@ packages:
 
   bare-env@3.0.1:
     resolution: {integrity: sha512-BdoLvnzaWR0YyyJreEx4zG2Od0AC/s9JSZ+EXyMZKunpn8zEgR/dGv37hdFUaY1bjDkcRKvcKkFyJIwlJ0CaYA==}
-
-  bare-events@2.4.2:
-    resolution: {integrity: sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q==}
 
   bare-events@2.9.1:
     resolution: {integrity: sha512-Z0oHEHAFDZkffN8Qc39zNZjQlMDkPJRyyyZieU1VH7u8c5S+qHZ2S8ixdKIAxEjfHO7FJxXmJWgteOghVanIsg==}
@@ -9712,9 +9706,6 @@ packages:
   listr2@11.2.0:
     resolution: {integrity: sha512-+H/hEo9EA7tyLY0ZihpDg76jHWolc0nCjbjnXFguSm4Epk+WYtL1w1tYs1kjEo229NmhgLmUrncyn81K1vBoRw==}
     engines: {node: '>=22.13.0'}
-
-  llm-splitter@0.2.0:
-    resolution: {integrity: sha512-Yqi947Vk5Ps2YqhOV8K+RR6bseLhZLIVfovpWJH5cT7GE4Pca8/3iny/3oQ47scD7SfQd3whhxMfc+KgxTgDHA==}
 
   llvm-runtime-clang-darwin-arm64@23.1.5:
     resolution: {integrity: sha512-r5nFpFJYrwRXeWBwPCeGC3M6v+Nw2tutv9RHjhGi10JUDV5vmQchWbN2CdgNjbNtBtRzWsRXbGN9RsUBMrlXng==}
@@ -16177,30 +16168,6 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
-  '@qvac/rag@0.9.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/logging': 0.1.1
-      '@qvac/response': 0.1.2
-      bare-crypto: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      hyperdb: 6.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      hyperschema: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      llm-splitter: 0.2.0
-      ready-resource: 1.2.0(bare-abort-controller@1.1.2)
-      zod: 4.6.5
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
-
   '@qvac/registry-client@0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -16351,10 +16318,6 @@ snapshots:
       - bare-url
       - react-native-b4a
       - sodium-javascript
-
-  '@qvac/response@0.1.2':
-    dependencies:
-      bare-events: 2.4.2
 
   '@qvac/translation-nmtcpp@0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
@@ -17835,8 +17798,6 @@ snapshots:
   bare-env@3.0.1:
     dependencies:
       bare-os: 3.9.3
-
-  bare-events@2.4.2: {}
 
   bare-events@2.9.1(bare-abort-controller@1.1.2):
     optionalDependencies:
@@ -22721,8 +22682,6 @@ snapshots:
       cli-truncate: 6.1.1
       log-update: 8.0.0
       wrap-ansi: 10.0.2
-
-  llm-splitter@0.2.0: {}
 
   llvm-runtime-clang-darwin-arm64@23.1.5(bare-url@2.4.6):
     dependencies:
