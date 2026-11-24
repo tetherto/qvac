@@ -23858,6 +23858,343 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
     ] = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrc(GeneratedBaseModel):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -24582,6 +24919,29 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             alias="embeddingsConnectorsModelSrc",
             description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
+        ),
+    ] = None
+    taesd_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrc | None,
+        Field(
+            alias="taesdModelSrc",
+            description="Tiny autoencoder weights (TAESD `taesd.safetensors`; TAESDXL for SDXL) — image diffusion only. Replaces the full VAE for every encode and decode, so the model's own VAE and `vaeModelSrc` go unused. Required by `coremlTaeDecoderModelSrc` unless the model has a built-in tiny autoencoder (SDXS).",
+        ),
+    ] = None
+    coreml_unet_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrc | None,
+        Field(
+            alias="coremlUnetModelSrc",
+            description="Apple Core ML UNet sidecar: a compiled `.mlmodelc` directory, as a local path or a `registry://` bundle. Runs the SD 1.x/2.x UNet (SDXS included) on Core ML, which places it on the Neural Engine, GPU or CPU; the GGUF's UNet weights are skipped and text encoding and sampling stay on ggml. macOS and iOS only, image diffusion only. The export fixes the image size, batch and 77-token prompt length; requests with a LoRA are rejected. Set `prediction` when the export does not record its prediction type: `'eps'` for the SD 2.1-base sidecar on SD 2.1. The load-time fit check reports `unknown` for Core ML loads.",
+        ),
+    ] = None
+    coreml_tae_decoder_model_src: Annotated[
+        str
+        | LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrc
+        | None,
+        Field(
+            alias="coremlTaeDecoderModelSrc",
+            description="Apple Core ML tiny-autoencoder decoder sidecar: a compiled `.mlmodelc` directory, as a local path or a `registry://` bundle. Decodes latents on Core ML. Needs a tiny autoencoder: SDXS's built-in one or `taesdModelSrc`. Tiled decoding and image encoding use the ggml tiny autoencoder. macOS and iOS only, image diffusion only.",
         ),
     ] = None
     taehv_model_src: Annotated[

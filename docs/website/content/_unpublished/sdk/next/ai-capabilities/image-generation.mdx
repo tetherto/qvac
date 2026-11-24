@@ -20,6 +20,59 @@ Image generation supports CUDA with two exceptions to the [general CUDA rules](/
 - On Windows, it finds the CUDA 13 runtime and cuBLAS DLLs through `PATH`, not `%CUDA_PATH%\bin\x64`.
 - On Linux arm64, its CUDA build targets NVIDIA DGX Spark only. It has no NVIDIA Jetson module.
 
+### Core ML on macOS and iOS
+
+On macOS and iOS, SD 1.x and 2.x models, SDXS included, can run their UNet and their tiny-autoencoder decoder as Apple Core ML sidecars. Core ML places each sidecar on the Neural Engine, GPU or CPU; text encoding and sampling stay on the diffusion engine. Pass compiled `.mlmodelc` directories in `modelConfig`:
+
+- `coremlUnetModelSrc`: the UNet. The GGUF still supplies the text encoder and VAE, and its own UNet weights are not loaded.
+- `coremlTaeDecoderModelSrc`: the tiny-autoencoder decoder. It needs a tiny autoencoder: SDXS has one built in; other models need `taesdModelSrc`.
+- `taesdModelSrc`: TAESD weights (`taesd.safetensors`). They replace the full VAE for every encode and decode. This one is not Core ML and works on every platform.
+
+A sidecar source is the path of a local `.mlmodelc` directory or the `registry://` address of one. The SDK downloads every file of a registry bundle, verifies it and keeps the directory layout. HTTP and `pear://` sources are refused because they fetch a single file. QVAC provides no model constants for the sidecars yet.
+
+The following example runs SD 2.1 with the SD 2.1-base UNet and the TAESD decoder on Core ML:
+
+```js
+import { diffusion, loadModel, unloadModel, SD_V2_1_1B_Q8_0 } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: SD_V2_1_1B_Q8_0,
+  modelType: "diffusion",
+  modelConfig: {
+    // The SD 2.1-base sidecar predicts noise (epsilon). SD 2.1 only supplies
+    // the text encoder the two models share.
+    prediction: "eps",
+    coremlUnetModelSrc: "/models/sd21base_unet_p6.mlmodelc",
+    taesdModelSrc: "/models/taesd.safetensors",
+    coremlTaeDecoderModelSrc: "/models/taesd_decoder.mlmodelc",
+  },
+});
+
+try {
+  const { outputs } = diffusion({
+    modelId,
+    prompt: "a red fox in a snowy forest",
+    width: 512,
+    height: 512,
+    steps: 20,
+    cfg_scale: 7,
+    seed: 42,
+  });
+  const [png] = await outputs;
+  // Save or display the PNG bytes.
+} finally {
+  await unloadModel({ modelId });
+}
+```
+
+- **Prediction type:** the SDK does not choose one for you, because it belongs to the UNet export rather than to the GGUF. Set `prediction: "eps"` when you pair the SD 2.1-base sidecar with SD 2.1, whose own UNet uses v-prediction. An export that records its prediction type needs no setting; for SD 2.x, an export that records none fails to load until you set it.
+- **Fixed shapes:** an export fixes the image size, the batch and the 77-token prompt length. Generate at the size the sidecar was exported for (512×512 for the SDXS and SD 2.1-base sidecars); longer prompts fail.
+- **Unsupported with a Core ML UNet:** `diffusion({ lora })` is refused, and so is circular padding. With the Core ML decoder, tiled decoding and image encoding use the engine's tiny autoencoder.
+- **Platforms:** `loadModel()` refuses the two Core ML sources on Linux, Windows and Android before it downloads anything. `taesdModelSrc` works everywhere.
+- **First load:** the first load on a device compiles each sidecar for its hardware, which can take several seconds. Core ML caches the result, so later loads are fast.
+- **Compute units:** `SD_COREML_COMPUTE_UNITS` selects the devices Core ML may use: `cpu_ne` (default), `all`, `cpu_gpu` or `cpu`. It is read from the environment of the process that runs the SDK worker each time a model loads, and applies to every Core ML load in that process. On desktop the worker inherits the environment of the process that starts it. It selects eligible devices and does not guarantee Neural Engine execution.
+- **Fit checks:** [`assessModelFit()`](/sdk/models/assess-model-fit) and the check `loadModel()` runs before loading report `unknown` for a load with Core ML sidecars, because Core ML sizes them itself. The load still runs.
+
 ## Functions
 
 Use the following sequence of function calls:

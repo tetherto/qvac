@@ -5,7 +5,7 @@ import type ImgStableDiffusion from '@qvac/diffusion-cpp'
 import { getRequestRegistry, withRequestContext } from '@/runtime'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getEngineLogger } from '@/logging'
-import { InferenceCancelledError } from '@/errors'
+import { InferenceCancelledError, PluginRequestValidationFailedError } from '@/errors'
 import type {
   DiffusionRequest,
   DiffusionStreamResponse,
@@ -18,6 +18,13 @@ interface ResponseWithStats {
 }
 
 export type DiffusionOpResult = { requestId: string; stats: DiffusionStats | undefined }
+
+const coremlUnetModels = new WeakSet<object>()
+
+/** Marks an image model whose UNet runs as a Core ML sidecar, which takes no LoRA. */
+export function markCoremlUnetModel(model: ImgStableDiffusion) {
+  coremlUnetModels.add(model)
+}
 
 export async function* diffusion(
   request: DiffusionRequest & TrackedRequest,
@@ -32,6 +39,14 @@ export async function* diffusion(
   })
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const model = getModel(request.modelId)
+  // The native engine refuses it too, but only once the request reaches it.
+  if (request.lora !== undefined && coremlUnetModels.has(model)) {
+    throw new PluginRequestValidationFailedError(
+      'diffusionStream',
+      'lora is not supported with a Core ML UNet (modelConfig.coremlUnetModelSrc). ' +
+        'Load the model without coremlUnetModelSrc to apply a LoRA.'
+    )
+  }
   const cancellable = model as typeof model & Pick<ImgStableDiffusion, 'cancel'>
   const logger = withRequestContext(getEngineLogger(), ctx)
 

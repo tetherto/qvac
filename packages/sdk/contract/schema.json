@@ -23165,6 +23165,306 @@
                         }
                       ]
                     },
+                    "taesdModelSrc": {
+                      "description": "Tiny autoencoder weights (TAESD `taesd.safetensors`; TAESDXL for SDXL) — image diffusion only. Replaces the full VAE for every encode and decode, so the model's own VAE and `vaeModelSrc` go unused. Required by `coremlTaeDecoderModelSrc` unless the model has a built-in tiny autoencoder (SDXS).",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-image-embedding",
+                                    "ggml-stereo-depth",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigTaesdModelSrc"
+                        }
+                      ]
+                    },
+                    "coremlUnetModelSrc": {
+                      "description": "Apple Core ML UNet sidecar: a compiled `.mlmodelc` directory, as a local path or a `registry://` bundle. Runs the SD 1.x/2.x UNet (SDXS included) on Core ML, which places it on the Neural Engine, GPU or CPU; the GGUF's UNet weights are skipped and text encoding and sampling stay on ggml. macOS and iOS only, image diffusion only. The export fixes the image size, batch and 77-token prompt length; requests with a LoRA are rejected. Set `prediction` when the export does not record its prediction type: `'eps'` for the SD 2.1-base sidecar on SD 2.1. The load-time fit check reports `unknown` for Core ML loads.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-image-embedding",
+                                    "ggml-stereo-depth",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigCoremlUnetModelSrc"
+                        }
+                      ]
+                    },
+                    "coremlTaeDecoderModelSrc": {
+                      "description": "Apple Core ML tiny-autoencoder decoder sidecar: a compiled `.mlmodelc` directory, as a local path or a `registry://` bundle. Decodes latents on Core ML. Needs a tiny autoencoder: SDXS's built-in one or `taesdModelSrc`. Tiled decoding and image encoding use the ggml tiny autoencoder. macOS and iOS only, image diffusion only.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-image-embedding",
+                                    "ggml-stereo-depth",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigCoremlTaeDecoderModelSrc"
+                        }
+                      ]
+                    },
                     "taehvModelSrc": {
                       "description": "taew2_2 streaming pixel decoder (`taew2_2_f16.gguf`) — required for mode: 'world'. Decodes each generated block's latents to RGB frames. Rejected in every other mode.",
                       "anyOf": [
