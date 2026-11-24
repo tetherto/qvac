@@ -478,6 +478,26 @@ test('a structured parameter written as text is decoded', (t) => {
   })
 })
 
+test('a valid array is not read as an object followed by prose', (t) => {
+  const tool: Tool = {
+    type: 'function',
+    name: 'store',
+    description: 'store',
+    parameters: {
+      type: 'object',
+      properties: { items: { type: ['object', 'array'] } },
+      required: ['items']
+    }
+  }
+  const text =
+    '<tool_call>\n<function=store>\n<parameter=items>\n[{"id":1},"keep"]\n</parameter>\n</function>\n</tool_call>'
+  const r = run([text], [tool])
+  t.alike(argsOf(r), [['store', { items: [{ id: 1 }, 'keep'] }]])
+
+  const prose = run([text.replace('[{"id":1},"keep"]', '{"id":1}\nthat is the item')], [tool])
+  t.alike(argsOf(prose), [['store', { items: { id: 1 } }]], 'an object followed by prose')
+})
+
 test('text that does not hold the declared structure is left alone', (t) => {
   t.is(body('[{"title":"My Document"}]'), '[{"title":"My Document"}]')
   t.is(body('{bad json'), '{bad json')

@@ -107,6 +107,15 @@ function keysWritten(value: unknown, text: string): boolean {
   return check(value)
 }
 
+function isValidJson(text: string): boolean {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function read(text: string): unknown {
   try {
     return JSON.parse(text)
@@ -145,12 +154,14 @@ export function readStructured(value: string, types: ReadonlySet<string>): unkno
   const accepted = accept(parsed, types)
   if (accepted !== null) return accepted
 
-  // jsonrepair reads `{…}\nprose` as NDJSON; a real array value has no trailing string.
+  // jsonrepair reads `{…}\nprose` as NDJSON. An array the text already held as
+  // valid JSON is a real value, not that.
   if (
     Array.isArray(parsed) &&
     types.has('object') &&
     isPlainObject(parsed[0]) &&
-    typeof parsed.at(-1) === 'string'
+    typeof parsed.at(-1) === 'string' &&
+    !isValidJson(text)
   ) {
     return parsed[0]
   }
