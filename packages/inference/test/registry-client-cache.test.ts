@@ -321,6 +321,32 @@ test('deleteCache({ modelSrc }): refused while another source downloads the same
   await download.promise
 })
 
+test('deleteCache({ modelSrc }): refused while a Core ML bundle downloads under its trailing-slash spelling', async (t) => {
+  stubClient(t, {})
+  let finish!: () => void
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey('s3', `${BUNDLE_PATH}/`),
+    () => new Promise<string>((resolve) => (finish = () => resolve('path')))
+  )
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+  t.is(response.success, false)
+  t.ok(response.error?.includes('downloading'), 'reports the active download')
+
+  const joined = startOrJoinDownload(
+    createRegistryDownloadKey('s3', BUNDLE_PATH),
+    async () => 'second'
+  )
+  t.ok(joined.joined, 'the other spelling joins the download instead of writing the same files')
+
+  finish()
+  await download.promise
+  await joined.promise
+})
+
 test('deleteCache({ modelSrc }): a model sharing a companion file cannot download during deletion', async (t) => {
   let release: (() => void) | undefined
   let clearing!: () => void
