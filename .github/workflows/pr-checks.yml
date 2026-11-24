@@ -43,12 +43,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - run: node scripts/ci/check-workspace-ranges.mjs
@@ -60,15 +60,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - run: |
           pnpm install --frozen-lockfile --ignore-scripts --filter .
           node scripts/ci/check-disallowed-deps.mjs
@@ -88,21 +88,21 @@ jobs:
         project: ${{ fromJSON(needs.select.outputs.projects) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       # A workspace install, so a package checks against its dependencies' sources in this PR, not their published builds.

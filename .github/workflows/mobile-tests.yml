@@ -126,7 +126,7 @@ jobs:
       android: ${{ steps.find.outputs.android }}
       ios: ${{ steps.find.outputs.ios }}
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions/mobile-weekly
@@ -203,11 +203,11 @@ jobs:
       actions: read
       issues: write
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions/mobile-weekly
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: console-logs-*
           path: logs
@@ -226,7 +226,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions/mobile-weekly-report-gc
           persist-credentials: "false"
