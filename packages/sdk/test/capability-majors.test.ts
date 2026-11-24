@@ -112,6 +112,20 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     /default of "n" changed/
   ],
   [
+    'request: default removed',
+    'request',
+    object({ n: { type: 'number', default: 1 } }),
+    object({ n: { type: 'number' } }),
+    /default of "n" was removed/
+  ],
+  [
+    'request: default added',
+    'request',
+    object({ n: { type: 'number' } }),
+    object({ n: { type: 'number', default: 1 } }),
+    undefined
+  ],
+  [
     'request: union widened',
     'request',
     object({ v: { anyOf: [text] } }),
@@ -159,6 +173,34 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     object({ m: { type: 'object', additionalProperties: text } }),
     object({ m: { type: 'object', additionalProperties: { type: 'number' } } }),
     /no longer accepts string/
+  ],
+  [
+    'request: map of any values narrowed to typed entries',
+    'request',
+    object({ m: { type: 'object', additionalProperties: {} } }),
+    object({ m: { type: 'object', additionalProperties: { type: 'number' } } }),
+    /"m.<extra>" is now limited to number/
+  ],
+  [
+    'request: loose object made strict',
+    'request',
+    { type: 'object', properties: { a: text }, additionalProperties: {} },
+    object({ a: text }),
+    /the value no longer accepts fields it does not declare/
+  ],
+  [
+    'response: map entries widened to any value',
+    'response',
+    object({ m: { type: 'object', additionalProperties: { type: 'number' } } }),
+    object({ m: { type: 'object', additionalProperties: {} } }),
+    /"m.<extra>" is now limited to number/
+  ],
+  [
+    'response: loose object where the old one was not strict',
+    'response',
+    object({ a: text }),
+    { type: 'object', properties: { a: text }, additionalProperties: {} },
+    undefined
   ],
   [
     'response: new field when the old schema allowed extras',
@@ -352,6 +394,22 @@ test('the capability baseline is compatible with itself', function (t) {
     'it carries the typed operations'
   )
   t.alike(findMajorProblems(current, baseline()), [])
+})
+
+test('the capability baseline records every contract operation', function (t) {
+  const current = baseline()
+  const recorded = new Set(current.manifest.methods.map((method) => method.name))
+  const missing = current.capabilities.contracts
+    .flatMap((contract) => [...contract.operations, ...contract.optionalOperations])
+    .filter((operation) => !recorded.has(operation))
+  t.alike(missing, [], 'operations called through pluginInvoke included')
+
+  const changed = baseline()
+  const vlaRequest = defOf(changed, 'vlaRun.request')
+  vlaRequest['required'] = [...(vlaRequest['required'] as string[]), 'noise']
+  t.alike(findMajorProblems(baseline(), changed), [
+    'vision-language-action@1: vlaRun request: field "noise" became required'
+  ])
 })
 
 test('the capability baseline marks strict Zod objects only', function (t) {
