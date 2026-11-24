@@ -18,7 +18,9 @@ export const ERR_CODES = Object.freeze({
   EMBEDDING_SPACE_MISMATCH: 14024,
   NATIVE_ID_EXHAUSTED: 14025,
   EMBEDDING_FAILED: 14027,
-  DOCUMENT_CHANGED: 14028
+  DOCUMENT_CHANGED: 14028,
+  IMPORT_INVALID: 14029,
+  IMPORT_LINEAGE_MISMATCH: 14030
 } as const)
 
 // Codes 0.9 raised and 0.10 does not. They stay registered: @qvac/error keeps
@@ -147,6 +149,14 @@ const definitions: ErrorCodesMap = {
   [ERR_CODES.DOCUMENT_CHANGED]: {
     name: 'DOCUMENT_CHANGED',
     message: (message) => `Document changed: ${message}`
+  },
+  [ERR_CODES.IMPORT_INVALID]: {
+    name: 'IMPORT_INVALID',
+    message: (message) => `Invalid import stream: ${message}`
+  },
+  [ERR_CODES.IMPORT_LINEAGE_MISMATCH]: {
+    name: 'IMPORT_LINEAGE_MISMATCH',
+    message: (message) => `Import lineage mismatch: ${message}`
   }
 }
 
@@ -161,4 +171,4 @@ export function toRagError(error: unknown): QvacErrorRAG {
   })
 }
 
-addCodes(definitions, { name: '@qvac/rag', version: '0.10.0' })
+addCodes(definitions, { name: '@qvac/rag', version: '0.11.0' })

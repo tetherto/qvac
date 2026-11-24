@@ -29,6 +29,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { MobileTranscriptionExecutor } from './executors/transcription-executor.js'
 import { MobileTranscribeStreamEventsExecutor } from './executors/transcribe-stream-events-executor.js'
 import { MobileParakeetStreamExecutor } from './executors/parakeet-stream-executor.js'
@@ -175,7 +176,7 @@ async function loadBatchImageAssets() {
   return batchImageAssets
 }
 
-async function resolveBatchAttachmentPath(inputPath: string) {
+async function resolveBatchMediaPath(inputPath: string) {
   const images = await loadBatchImageAssets()
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
@@ -205,7 +206,7 @@ export const executor = createExecutor({
     // Real executors
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new CalcTokensExecutor(resources),
@@ -221,6 +222,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources, hostLlamaOnCpu),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
     new TranslationExecutor(resources),

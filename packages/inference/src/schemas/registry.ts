@@ -44,6 +44,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.ggmlVla,
   ModelType.ggmlClassification,
   ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth,
   'onnx-vad'
 ])
 

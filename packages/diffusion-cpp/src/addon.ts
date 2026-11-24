@@ -12,6 +12,9 @@ export interface SdConfigurationParams {
   llmPath?: string
   llmVisionPath?: string
   tokenizerPath?: string
+  taesdPath?: string
+  coremlUnetPath?: string
+  coremlTaeDecoderPath?: string
   vaePath?: string
   clipVisionPath?: string
   esrganPath?: string
@@ -210,6 +213,11 @@ export class SdInterface {
   ) {
     this._binding = binding
     this._spatialAlign = configurationParams.embeddingsConnectorsPath ? 32 : 16
+
+    // Older SdInterface callers omit these optional image paths; native reads strings.
+    configurationParams.taesdPath ??= ''
+    configurationParams.coremlUnetPath ??= ''
+    configurationParams.coremlTaeDecoderPath ??= ''
 
     if (!configurationParams.config) {
       configurationParams.config = {}

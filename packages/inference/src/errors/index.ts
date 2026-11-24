@@ -165,6 +165,12 @@ export class ModelFitRefusedError extends QvacErrorBase {
   }
 }
 
+export class ModelFitRejectedError extends QvacErrorBase {
+  constructor(modelType: string, detail: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.MODEL_FIT_REJECTED, [modelType, detail], cause))
+  }
+}
+
 export class ModelFileLocateFailedError extends QvacErrorBase {
   constructor(modelType: string, modelPath: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_FILE_LOCATE_FAILED, [modelType, modelPath], cause))

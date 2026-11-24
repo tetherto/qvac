@@ -2,36 +2,41 @@ import type { IndexStorage } from '../types.js'
 
 // The subset of `@qvac/turbovec-ggml`'s IdMapIndex this package uses. The
 // addon is an optional peer, so its own types are not part of ours.
+// An index runs its calls in call order; `length` counts finished calls only.
+
 export interface NativeSearchResult {
   scores: Float32Array
   ids: BigUint64Array
   k: number
 }
 
-export interface NativeFilter {
-  search(queries: Float32Array, k: number): NativeSearchResult
-  dispose(): void
-}
-
 export interface NativeIndex {
   readonly length: number
   readonly dim: number
   readonly bitWidth: number
-  addWithIds(vectors: Float32Array, ids: BigUint64Array): void
-  remove(id: bigint): boolean
-  compact(): void
-  contains(id: bigint): boolean
-  search(queries: Float32Array, k: number): NativeSearchResult
-  searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array): NativeSearchResult
-  prepareFilter(allowedIds: BigUint64Array): NativeFilter
-  prepare(): void
-  write(path: string): void
-  dispose(): void
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): Promise<void>
+  remove(id: bigint): Promise<boolean>
+  compact(): Promise<void>
+  contains(id: bigint): Promise<boolean>
+  search(
+    queries: Float32Array,
+    k: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<NativeSearchResult>
+  searchFiltered(
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array,
+    options?: { signal?: AbortSignal }
+  ): Promise<NativeSearchResult>
+  prepare(): Promise<void>
+  write(path: string): Promise<void>
+  dispose(): Promise<void>
 }
 
 export interface NativeIndexModule {
   create(dim: number, storage: IndexStorage): NativeIndex
-  load(path: string): NativeIndex
+  load(path: string): Promise<NativeIndex>
 }
 
 // UINT64_MAX pads short result rows.
@@ -49,7 +54,7 @@ export const BIT_WIDTHS: Record<IndexStorage, number> = {
 
 interface IdMapIndexClass {
   new (options: { dim: number; storage: IndexStorage }): NativeIndex
-  load(path: string): NativeIndex
+  load(path: string): Promise<NativeIndex>
 }
 
 type Loader = () => Promise<NativeIndexModule | null>
@@ -77,8 +82,11 @@ async function importTurboVec(): Promise<NativeIndexModule | null> {
   const IdMapIndex = imported.default
   if (typeof IdMapIndex !== 'function') return null
   // The package imports anywhere but loads its native binding on first use,
-  // which fails on Node and on hosts without a prebuild.
-  new IdMapIndex({ dim: 8, storage: 'q8' }).dispose()
+  // which fails on Node and on hosts without a prebuild. Releases before 0.7
+  // are synchronous and fall back to the scan.
+  const disposed: unknown = new IdMapIndex({ dim: 8, storage: 'q8' }).dispose()
+  if (!(disposed instanceof Promise)) return null
+  await disposed
   return {
     create: (dim, storage) => new IdMapIndex({ dim, storage }),
     load: (path) => IdMapIndex.load(path)

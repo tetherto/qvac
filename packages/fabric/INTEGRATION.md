@@ -26,14 +26,15 @@ build against the forked llama.cpp + ggml runtime:
   `string_*` / `json_schema_to_grammar` / cpu-params libcommon helpers, and
   `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()`
 - **ggml compute backends** — on **Linux, Android, and Windows**, shipped as
-  shared libraries in `@qvac/fabric-<host>/prebuilds/<host>/qvac__fabric-<host>/`
+  shared libraries under `prebuilds/<host>/<module>/` in the platform package,
+  or the CUDA backend package on Linux x64
 
 ### Platform packages
 
 ```
 node_modules/@qvac/fabric/binding.js                       module.exports = require('#host-addon')
 node_modules/@qvac/fabric/prebuilds/{include,share}/       headers + CMake config
-node_modules/@qvac/fabric-<host>/index.js                  module.exports = require.addon()
+node_modules/@qvac/fabric-<host>/index.js                  loads the runtime and any backend carriers
 node_modules/@qvac/fabric-<host>/prebuilds/<host>/         qvac__fabric-<host>.bare
 node_modules/@qvac/fabric-<host>/prebuilds/<host>/qvac__fabric-<host>/   ggml backends
 ```
@@ -43,6 +44,13 @@ specifier, and every other host to `addon-unavailable.js`. Every iOS flavour
 ships in `@qvac/fabric-ios`, as `qvac__fabric-ios.bare`. The module name is the
 platform package's name, so cmake-bare's `include_bare_module(... PREBUILD)`
 derives the right `DT_NEEDED` from the package it resolves.
+
+On Linux x64, CUDA lives in a separate, exact-version dependency,
+`@qvac/fabric-linux-x64-cuda`; HIP remains in the base platform package. The
+platform entry loads the runtime first and then the CUDA carrier addon, which
+registers its backend directory. Installing Fabric continues to install all
+backends; consumer code and dependencies do not change. The carrier remains an
+ordinary Bare addon so `bare-pack` and `bare-link` include its native payload.
 
 The desktop packages are `os`/`cpu` filtered `optionalDependencies` of the meta
 package, so npm 7+, pnpm, bun and Yarn Berry install the right one. Yarn v1 and
@@ -126,6 +134,12 @@ dependencies. Hence each kind of declaration:
   version, so npm installs a matching pair, and a fabric patch needs no
   manifest change. When one is missing, configure fails and names the package
   to add.
+
+A consumer that is itself split into platform packages keeps its `.bare` in
+those packages, not in the meta that carries the declarations above. The
+publish-time slicer repeats the matching one on each of the consumer's platform
+packages as an optional peer (`@qvac/fabric-ios` on `<consumer>-ios`), so
+bare-link finds it next to the binary it has to rewrite.
 
 After `npm install`, the headers and CMake config are under
 `node_modules/@qvac/fabric/prebuilds/`, and the host's prebuilt `.bare` and ggml
@@ -291,7 +305,8 @@ not default one: a user-supplied `backendsDir`, if the addon accepts one, is
 passed through untouched and loaded as given.
 
 For diagnostics, `require('@qvac/fabric').backendsDir()` returns the directory
-fabric loads from.
+of the primary backends. On Linux x64, `loadBackends()` also loads the registered
+CUDA directory unless `QVAC_FABRIC_BACKENDS_DIR` overrides discovery.
 
 ---
 

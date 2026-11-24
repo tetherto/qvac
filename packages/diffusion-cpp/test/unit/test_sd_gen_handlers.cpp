@@ -129,6 +129,7 @@ TEST(SdGenHandlers_Scheduler, AllSchedulersAccepted) {
       {"smoothstep", SMOOTHSTEP_SCHEDULER},
       {"kl_optimal", KL_OPTIMAL_SCHEDULER},
       {"bong_tangent", BONG_TANGENT_SCHEDULER},
+      {"flux", FLUX_SCHEDULER},
   };
   for (const auto& [name, expected] : cases) {
     SdGenConfig cfg;

@@ -185,6 +185,10 @@
     "./ggml-image-embedding/plugin": {
       "types": "./dist/src/worker/plugins/ggml-image-embedding.d.ts",
       "import": "./dist/src/worker/plugins/ggml-image-embedding.js"
+    },
+    "./ggml-stereo-depth/plugin": {
+      "types": "./dist/src/worker/plugins/ggml-stereo-depth.d.ts",
+      "import": "./dist/src/worker/plugins/ggml-stereo-depth.js"
     }
   },
   "imports": {

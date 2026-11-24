@@ -489,6 +489,39 @@ test('llmConfigBaseSchema: rejects invalid prefetch-weights values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 1 }).success, false)
 })
 
+test('llmConfigBaseSchema: accepts Core ML FFN splits in METALxN form', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '8192x2' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects Core ML FFN splits fabric refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x3' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '0x1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1 ' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-cache': '' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn': 'true' }).success, false)
+})
+
+test('llmConfigSchema: Core ML FFN split requires coreml-ffn, the cache does not', (t) => {
+  const split = llmConfigSchema.safeParse({ 'coreml-ffn-split': '3072x1' })
+  t.is(split.success, false)
+  t.is(split.error?.issues[0]?.path[0], 'coreml-ffn-split')
+  t.is(
+    llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success,
+    true
+  )
+  t.is(llmConfigSchema.safeParse({ 'coreml-ffn-cache': '/tmp/c' }).success, true)
+  t.is(
+    llmConfigSchema.safeParse({
+      'coreml-ffn': true,
+      'coreml-ffn-split': '3072x1',
+      'coreml-ffn-cache': '/tmp/c'
+    }).success,
+    true
+  )
+})
+
 test('llmConfigBaseSchema: accepts both forms of fit-target', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 512 }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '1024,512' }).success, true)
