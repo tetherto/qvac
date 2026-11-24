@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-24
+
+### Changed
+
+- Update `bare-https` from `^3.0.0` to `^4.0.0`.
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05
