@@ -150,11 +150,13 @@ async function acceptedBy(gh, env, pr) {
   return false
 }
 
-// No run for a commit starts before the commit exists: its committer date, or now if a fork dated it in the future.
+// No run for a commit starts before the commit exists: its committer date, or the PR's creation for a commit dated in
+// the future, which never moves, so a finished build stays in the search.
 async function headSince(gh, env, pr) {
   pr.since ??= (async () => {
     const { commit } = await gh.get(`repos/${env.GITHUB_REPOSITORY}/commits/${pr.head.sha}`)
-    const date = Math.min(Date.parse(commit.committer.date), Date.now()) - 3600_000
+    const committed = Date.parse(commit.committer.date)
+    const date = (committed > Date.now() ? Date.parse(pr.created_at) : committed) - 3600_000
     return new Date(date).toISOString().replace(/\.\d{3}Z$/, 'Z')
   })()
   return pr.since

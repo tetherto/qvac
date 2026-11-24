@@ -15,15 +15,17 @@
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/infer-base"
+        "cwd": "packages/infer-base",
+        "parallel": false,
+        "commands": ["npm install --ignore-scripts --no-audit --no-fund", "npm run test:unit"]
       }
     },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/infer-base"
+        "cwd": "packages/infer-base",
+        "parallel": false,
+        "commands": ["npm install --ignore-scripts --no-audit --no-fund", "npm run lint"]
       }
     },
     "test:dts": {

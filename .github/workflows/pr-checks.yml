@@ -112,6 +112,9 @@ jobs:
       - name: Install
         working-directory: src
         run: pnpm install --frozen-lockfile
+      # The Bare runtime on PATH for brittle-bare and bare scripts, as main's sanity checks installed it.
+      - name: Install Bare
+        run: npm install -g --force bare
       # One step per target; nx run-many skips a target the package does not declare.
       - name: lint
         working-directory: src
