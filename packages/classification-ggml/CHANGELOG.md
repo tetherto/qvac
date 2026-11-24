@@ -7,6 +7,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.42.0] - 2026-11-23
+
+MegaLoc skips OpenCL when choosing a backend automatically. This avoids an
+OpenCL mixed-weight upload crash and an F16 embedding precision mismatch on
+Adreno. The addon also moves to Fabric 0.32.
+
+### Breaking Changes
+
+- MegaLoc's `load()` and `assessFit()` reject explicit OpenCL requests for
+  both F16 and mixed GGUF models. Omit `backend` for automatic selection,
+  set `backend: 'CPU'`, or select another supported backend.
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`. The Linux x64 CUDA backend now comes in a separate package
+  that installs automatically
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)).
+
+### Pull Requests
+
+- [#5912](https://github.com/tetherto/qvac/pull/5912) - Reject OpenCL for MegaLoc.
+- [#5915](https://github.com/tetherto/qvac/pull/5915) - Adopt Fabric 0.32.0 across native addons.
+
 ## [0.41.0] - 2026-11-19
 
 ### Changed

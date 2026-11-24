@@ -248,6 +248,9 @@ test('a fork-built source run is surfaced, not silently accepted', () => {
   // A payload with no head_repository must not be read as "same repo".
   assert.match(sourceRepositoryWarning(run({ head_repository: null }), REPO), /cannot be confirmed/)
   assert.match(sourceRepositoryWarning({ id: 1 }, REPO), /cannot be confirmed/)
+
+  // A PR build on workflow_run reports the base repo as its head, so it is surfaced too.
+  assert.match(sourceRepositoryWarning(run({ event: 'workflow_run' }), REPO), /pull request's head/)
 })
 
 test('a fork-built run still resolves, with the warning attached', async () => {

@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { readFileSync } from 'node:fs'
+import { contractManifest as manifest, contractSchema as schema } from './utils/contract-validator'
 
 // The exported contract is what the Kotlin and Python clients are generated
 // from. Every method's request must list the caller session there, so a
@@ -16,13 +16,6 @@ function requestObjects(node: JsonSchema): JsonSchema[] {
 }
 
 test('contract: every method request carries sessionId', (t) => {
-  const manifest = JSON.parse(
-    readFileSync(new URL('../contract/manifest.json', import.meta.url), 'utf8')
-  ) as { methods: { name: string; requestSchema: string }[] }
-  const schema = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  ) as { $defs: Record<string, JsonSchema> }
-
   t.ok(manifest.methods.length > 40, `${manifest.methods.length} methods in the manifest`)
   for (const method of manifest.methods) {
     const key = method.requestSchema.replace('schema.json#/$defs/', '')

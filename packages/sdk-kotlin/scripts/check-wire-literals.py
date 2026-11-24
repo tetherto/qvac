@@ -1,7 +1,7 @@
 """Fail on unknown wire keys/types in the handwritten common API.
 
-This deliberately checks vocabulary, not path-sensitive schema validation. Actual
-serialization and worker conformance tests cover shapes. Supplemental plugin and
+This deliberately checks vocabulary, not path-sensitive schema validation. The
+serialization tests and the shared e2e catalog cover shapes. Supplemental plugin and
 worker-control vocabulary must have a checked-in upstream source anchor.
 """
 import json
@@ -13,6 +13,8 @@ SCHEMA = ROOT.parent / "sdk/contract/schema.json"
 KEY = re.compile(r'(?:\b(?:put(?:JsonObject|JsonArray)?|get(?:Value)?|required\w*)\(\s*|\[\s*)"([^"\n]+)"')
 TYPE = re.compile(r'(?:\b(?:type|handler)\s*=\s*|\bput\(\s*"type"\s*,\s*)"([^"\n]+)"')
 BRANCH = re.compile(r'^\s*"([\w:-]+)"\s*->', re.M)
+# Reads JSON Schema keywords to pick a union arm; it assembles no wire JSON.
+SCHEMA_READERS = {"WireVariant.kt"}
 
 
 def vocabulary(schema):
@@ -49,8 +51,8 @@ def main():
     count = 0
     source_root = ROOT / "src/commonMain/kotlin/io/tether/qvac/sdk"
     for path in sorted(source_root.rglob("*.kt")):
-        if path.relative_to(source_root).parts[0] == "generated":
-            continue  # Generated code does not hand-assemble SDK JSON.
+        if path.name in SCHEMA_READERS:
+            continue
         bad_keys, bad_values = check(path.read_text(),
             keys | plugin_keys if path.name == "QvacVlaApi.kt" else keys,
             values | plugin_types if path.name == "QvacVlaApi.kt" else values)
