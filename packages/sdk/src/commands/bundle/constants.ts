@@ -2,6 +2,7 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'llamacpp-completion': { exportName: 'llmPlugin' },
   'llamacpp-embedding': { exportName: 'embeddingsPlugin' },
   'ggml-image-embedding': { exportName: 'imageEmbeddingPlugin' },
+  'ggml-stereo-depth': { exportName: 'stereoDepthPlugin' },
   'llamacpp-decision': { exportName: 'decisionPlugin' },
   'llamacpp-rerank': { exportName: 'rerankPlugin' },
   'whispercpp-transcription': { exportName: 'whisperPlugin' },

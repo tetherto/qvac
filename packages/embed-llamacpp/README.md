@@ -161,7 +161,7 @@ These keys apply with [`files.projectionModel`](#embed-images-and-audio), with t
 | `mmproj-no-audio`      | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | `"false"` | Skip loading the projector's audio encoder, for image-only use. Audio input is then rejected with `UnsupportedMedia` |
 | `mmproj-use-gpu`       | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto | Run the projector on the GPU. Unset, it follows the model, except on Android GPUs below Adreno 800 (Mali, older Adreno), where it runs on the CPU, as in `@qvac/llm-llamacpp`. Ignored with a warning when the model runs on the CPU |
 | `image-max-megapixels` | string of positive integer           | `"50"`  | Largest image accepted, read from its header before decoding. A larger one is rejected with `UnsupportedMedia` |
-| `audio-max-seconds`    | string of positive integer           | `"600"` | Longest audio accepted, read from its headers (WAV, FLAC) or frames (MP3) before decoding, which bounds the decoded samples. Longer audio, or audio whose length cannot be read (e.g. FLAC without a sample count), is rejected with `UnsupportedMedia`. Not in `@qvac/llm-llamacpp` |
+| `audio-max-seconds`    | string of positive integer           | `"600"` | Longest audio accepted. The decoder's own length is checked before the samples are allocated, so the limit bounds the decoded samples. Longer audio is rejected with `UnsupportedMedia`. So is audio whose length cannot be read before decoding, such as a FLAC without a sample count, with an error that says so |
 
 #### Native addon logging
 

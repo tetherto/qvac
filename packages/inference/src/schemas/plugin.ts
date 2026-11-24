@@ -445,6 +445,9 @@ export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as c
 /** Image descriptors for visual place recognition and retrieval with MegaLoc. */
 export const PLUGIN_IMAGE_EMBEDDING = '@qvac/inference/ggml-image-embedding/plugin' as const
 
+/** Stereo disparity from a rectified left/right image pair with BridgeDepth. */
+export const PLUGIN_STEREO_DEPTH = '@qvac/inference/ggml-stereo-depth/plugin' as const
+
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
  * Provides: audio transcription, language detection.
@@ -519,6 +522,7 @@ export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_IMAGE_EMBEDDING,
+  PLUGIN_STEREO_DEPTH,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,

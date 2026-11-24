@@ -15,15 +15,14 @@ if (process.argv.length < 3) {
 }
 
 try {
-  // const modelPath = args[modelIndex + 1]!;
   const imageFilePath = process.argv[2]!
 
   // Load the main model with projection in a single step
   const modelId = await loadModel({
     modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
     modelConfig: {
-      // An image is tiled into hundreds of context units before a single word
-      // of the prompt is counted, and the comparison below sends two at once.
+      // Each image takes hundreds of context tokens, and the comparison below
+      // sends two at once.
       ctx_size: 8192,
       projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
     },
@@ -35,12 +34,14 @@ try {
     }
   })
 
-  //Using one particular media
+  // A user turn passes text and media as ordered parts.
   const history = [
     {
       role: 'user',
-      content: "What's in this image?",
-      attachments: [{ path: imageFilePath }]
+      content: [
+        { type: 'media', path: imageFilePath },
+        { type: 'text', text: "What's in this image?" }
+      ] satisfies HistoryContentPart[]
     }
   ]
   const result = completion({ modelId, history, stream: true })
@@ -55,7 +56,6 @@ try {
 
   console.log('▸ --------------------------------')
 
-  //Using multiple media
   if (process.argv.length < 4) {
     console.log(`▸ Only one image provided, terminating`)
     process.exit(0)
@@ -63,13 +63,16 @@ try {
 
   const imageFilePath2 = process.argv[3]!
 
-  const history2 = [
-    {
-      role: 'user',
-      content: 'Compare the two newspaper articles',
-      attachments: [{ path: imageFilePath }, { path: imageFilePath2 }]
-    }
+  // Each image keeps its position in the turn, so the text can name the
+  // picture next to it.
+  const content: HistoryContentPart[] = [
+    { type: 'text', text: 'Image A: ' },
+    { type: 'media', path: imageFilePath },
+    { type: 'text', text: '\nImage B: ' },
+    { type: 'media', path: imageFilePath2 },
+    { type: 'text', text: '\nWhich image is a newspaper?' }
   ]
+  const history2 = [{ role: 'user', content }]
 
   const result2 = completion({ modelId, history: history2, stream: true })
 
@@ -80,30 +83,6 @@ try {
   const stats2 = await result2.stats
 
   console.log('\n▸ Performance Stats:', stats2)
-
-  console.log('▸ --------------------------------')
-
-  // Ordered text and media: each image keeps its position in the turn, so the
-  // text can sit next to the picture it refers to. Attachments can't do this,
-  // because they are all sent before the text.
-  const content: HistoryContentPart[] = [
-    { type: 'text', text: 'Image A: ' },
-    { type: 'media', path: imageFilePath },
-    { type: 'text', text: '\nImage B: ' },
-    { type: 'media', path: imageFilePath2 },
-    { type: 'text', text: '\nWhich image is a newspaper?' }
-  ]
-  const history3 = [{ role: 'user', content }]
-
-  const result3 = completion({ modelId, history: history3, stream: true })
-
-  for await (const token of result3.tokenStream) {
-    process.stdout.write(token)
-  }
-
-  const stats3 = await result3.stats
-
-  console.log('\n▸ Performance Stats:', stats3)
 
   console.log('▸ --------------------------------')
 
