@@ -77,9 +77,6 @@ path = "hatch_build.py"
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
-markers = [
-  "heavy: real-worker tests using large or specialized models (parakeet, BCI, VLA). Excluded from the fast CI leg (pytest -m 'not heavy'); run in the broader cross-platform e2e that restores the shared model cache.",
-]
 
 [tool.ruff]
 target-version = "py310"

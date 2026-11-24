@@ -1,5 +1,8 @@
-// Builds against this checkout's packages/sdk-kotlin as a composite build, so the
-// runner tests the SDK at this commit without publishing it first.
+// With -PqvacSdkRepository=<dir>, the Android app takes io.tether:qvac-sdk-android and
+// io.tether:qvac-sdk-kotlin from that Maven repository, as an app outside the monorepo does;
+// device.mjs build --maven publishes them there. Without it, this checkout's packages/sdk-kotlin is
+// a composite build, for local work on both. The desktop program needs the composite build: the
+// JVM worker host is not published.
 pluginManagement {
     repositories {
         google()
@@ -8,26 +11,40 @@ pluginManagement {
     }
 }
 
+val sdkRepository = providers.gradleProperty("qvacSdkRepository").filter { it.isNotBlank() }.orNull
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        // The included sdk-kotlin build resolves its holepunch dependencies through this
-        // build's repositories, and Holepunch publishes them only on JitPack.
+        // The SDK resolves its holepunch dependencies through this build's repositories, and
+        // Holepunch publishes them only on JitPack.
         exclusiveContent {
             forRepository { maven("https://jitpack.io") }
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
+        }
+        if (sdkRepository != null) {
+            exclusiveContent {
+                forRepository { maven { url = file(sdkRepository).toURI() } }
+                filter { includeGroup("io.tether") }
+            }
         }
     }
 }
 
 rootProject.name = "qvac-sdk-e2e-kotlin"
 
-includeBuild("../../../sdk-kotlin") {
-    dependencySubstitution {
-        substitute(module("io.tether:qvac-sdk-android")).using(project(":android-barekit"))
+if (sdkRepository == null) {
+    includeBuild("../../../sdk-kotlin") {
+        dependencySubstitution {
+            substitute(module("io.tether:qvac-sdk-kotlin")).using(project(":"))
+            substitute(module("io.tether:qvac-sdk-android")).using(project(":android-barekit"))
+            substitute(module("io.tether:qvac-sdk-jvm")).using(project(":jvm-barekit"))
+        }
     }
 }
 
+include(":runner")
 include(":app")
+if (sdkRepository == null) include(":desktop")
