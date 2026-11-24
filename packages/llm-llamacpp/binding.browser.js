@@ -14,7 +14,7 @@ const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 const MEDIA_STAGE_CHUNK_BYTES = 1024 * 1024
 const { ensureMessageCacheDirectories, ensureParentDirectory } = require('./browser/cache-files.js')
 const createEngine = require('./browser/create-engine.js')
-const { mountLoadFiles } = require('./browser/load-config.js')
+const { browserLoadConfig, mountLoadFiles } = require('./browser/load-config.js')
 const { mountModelFiles, unmountModelFiles } = require('./browser/model-files.js')
 const retryableModule = require('./browser/retryable-module.js')
 const { prepareRunData } = require('./browser/run-data.js')
@@ -236,6 +236,7 @@ function activate(handle) {
     enqueue(async () => {
       const { config } = handle.params
       handle.cooperative = config?.parallel !== undefined && Number(config.parallel) > 1
+      browserLoadConfig(config)
       const engine = await loadEngine()
       handle.engine = engine
       // loadEngine() caches a healthy engine across unload/reload cycles. The

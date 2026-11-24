@@ -61,7 +61,8 @@ binding verifies that the set is complete before loading it.
 `files.projectionModel`, `config.lora`, and
 `config.spec_draft_model`/`config['spec-draft-model']` use the same absolute
 OPFS or SDK-registered path rules. For a sharded draft model, pass its first
-shard path.
+shard path. `config.lora` takes one adapter path; `lora-scaled`,
+`control-vector` and `control-vector-scaled` are rejected at load.
 
 ```js
 import LlmLlamacpp from '@qvac/llm-llamacpp'
@@ -99,6 +100,7 @@ Supported:
 | ------------------------------------------------ | ------------------------------------------------------- |
 | `load_mode` other than `auto`/`none`             | Rejected at load; weights are read, never memory-mapped |
 | RPC servers and native backend/cache directories | Rejected at load                                        |
+| `lora-scaled`, control vectors, multiple LoRAs   | Rejected at load                                        |
 | `finetune()`                                     | Throws: not exposed by the browser binding              |
 | `assessFit()`                                    | Rejects                                                 |
 
