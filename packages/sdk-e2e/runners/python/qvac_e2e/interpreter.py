@@ -28,7 +28,6 @@ from tetherto.qvac_sdk import (
     GetSystemResourcesRequest,
     HeartbeatRequest,
     QvacError,
-    RagRequest,
     RerankRequest,
     ResumeRequest,
     StateRequest,
@@ -54,7 +53,6 @@ from tetherto.qvac_sdk import (
     model_registry_get_model,
     model_registry_list,
     model_registry_search,
-    rag,
     reconstruct_error,
     rerank,
     resume,
@@ -655,20 +653,7 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     "suspend": _request(SuspendRequest, "suspend", suspend),
     "resume": _request(ResumeRequest, "resume", resume),
     "state": _request(StateRequest, "state", state),
-    # --- rag, vector index, finetune -----------------------------------------
-    "ragIngest": _request(
-        RagRequest, "rag", rag, failure="RAG_SAVE_FAILED", operation="ingest"
-    ),
-    "ragCloseWorkspace": _request(
-        RagRequest,
-        "rag",
-        rag,
-        failure="RAG_WORKSPACE_CLOSE_FAILED",
-        operation="closeWorkspace",
-    ),
-    "ragDeleteWorkspace": _request(
-        RagRequest, "rag", rag, failure="RAG_DELETE_FAILED", operation="deleteWorkspace"
-    ),
+    # --- vector index, finetune ----------------------------------------------
     "createVectorIndex": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="create"
     ),

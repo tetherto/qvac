@@ -1,4 +1,4 @@
-// Vector index test definitions: embed() + createVectorIndex() without a RAG workspace.
+// Vector index test definitions: embed() + createVectorIndex().
 import type { Step, TestDefinition } from '@qvac/test-suite'
 import type { VectorIndexStorage } from './wire-types.js'
 

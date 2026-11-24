@@ -863,8 +863,15 @@ const {
   getIndicTransFileName        // filename for a model key
 } = require('@qvac/translation-nmtcpp/lib/indictrans-model-fetcher')
 
-const modelPath = await ensureIndicTransModelFile('en-indic-200M-q4_0', './models')
+const path = require('bare-path')
+
+const modelKey = 'en-indic-1B-q4_0'
+const modelPath = path.join('./models', getIndicTransFileName(modelKey))
+await ensureIndicTransModelFile(modelPath, modelKey)
 ```
+
+`ensureIndicTransModelFile(destPath, modelKey)` takes the full destination
+file path and a model key. The key defaults to `en-indic-200M-q4_0`.
 
 ### Key Pattern
 
@@ -872,6 +879,12 @@ IndicTrans2 fetcher keys follow `{direction}-{size}-{quantization}` — e.g.
 `en-indic-200M-q4_0` → `ggml-indictrans2-en-indic-dist-200M-q4_0.bin`. The
 underlying registry paths follow
 `qvac_models_compiled/ggml/indictrans2/{quant}/{model}/{date}/{file}`.
+
+| Direction | Sizes | Quantizations |
+|-----------|-------|---------------|
+| `en-indic` | `200M`, `1B` | `q4_0`, `f16` |
+| `indic-en` | `200M`, `1B` | `q4_0`, `f16` |
+| `indic-indic` | `320M`, `1B` | `q4_0`, `f16` |
 
 Applications that prefer not to manage files at all can use
 [`@qvac/inference`](../inference), which loads registry-hosted NMT models

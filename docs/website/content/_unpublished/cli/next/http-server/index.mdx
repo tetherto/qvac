@@ -1675,7 +1675,7 @@ Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`
 
 The QVAC plugins for OpenCode and OpenClaw have the host send its session id as `prompt_cache_key`, so each session gets its own cache. The pi coding agent does the same for a custom provider only when `PI_CACHE_RETENTION=long` is set.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. It is **not** a per-request count of reused prompt tokens. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
+`usage.prompt_tokens` counts the whole prompt, and `usage.prompt_tokens_details.cached_tokens` the part of it the cache already held. On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
 
 #### Unsupported parameters
 
@@ -1763,7 +1763,7 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 
 OpenAI's `prompt_cache_key` works as well, so clients that already send one per conversation (Codex does) get a cache without extra configuration. Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once, since a repeated header is rejected. A supplied key must be a string containing at least one non-whitespace character and no more than 512 UTF-8 bytes, measured before hashing. Invalid keys return `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use; the same exact key selects the same named SDK session in blocking and streaming requests, including tool turns. Use a separate key per conversation, resend it with the growing history (or `previous_response_id`), and serialize turns within a session. A key selects a cache, not stored history. With no key, Responses remains uncached; `store` and `previous_response_id` do not opt in or inherit a key.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy, **not** a per-request count of reused prompt tokens, so it is not mapped to OpenAI's `input_tokens_details.cached_tokens`. Streaming includes the same diagnostic in the final response event. Existing `input_tokens` / `total_tokens` accounting is unchanged. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
+On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy. The reused part of the input is reported separately as `usage.input_tokens_details.cached_tokens`. Streaming includes both in the final response event. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
 
 <Callout type="warn">
 **Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
@@ -2445,11 +2445,11 @@ Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first evi
 
 ### Vector stores
 
-OpenAI-compatible vector-store endpoints backed by the SDK's RAG primitives. Each vector store maps 1:1 to a RAG workspace.
+OpenAI-compatible vector-store endpoints backed by [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag). Stores keep their data under `serve/vector-stores` next to the SDK `cacheDirectory` (`~/.qvac/serve/vector-stores` by default), so they survive a restart; metadata such as `name` and `expires_after` stays in memory. A store is open in one server at a time: while another server on the same data directory holds it, search, attach and delete return `409 vector_store_in_use`. Stores created with CLI 0.20.x or earlier are not carried over; see [Migrate from the SDK RAG API](/resources/rag-migration).
 
 #### `GET /v1/vector_stores`
 
-List all stores (merged with on-disk RAG workspaces).
+List all stores, including stores that only exist on disk.
 
 #### `POST /v1/vector_stores`
 
@@ -2465,15 +2465,15 @@ Update `name`, `expires_after`, or `metadata`.
 
 #### `DELETE /v1/vector_stores/:id`
 
-Delete the store and the underlying RAG workspace.
+Delete the store and its ingested files.
 
 #### `POST /v1/vector_stores/:id/search`
 
-Embed `query` and run top-K similarity search.
+Embed `query` and run top-K similarity search (`max_num_results`, default 5).
 
 #### `POST /v1/vector_stores/:id/files`
 
-Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
+Attach a previously-uploaded `/v1/files` entry (UTF-8 text content). Attaching the same `file_id` again replaces its chunks.
 
 **End-to-end ingest + search:**
 
@@ -2504,16 +2504,16 @@ Search and ingest both pick an embedding model from `serve.models`:
 3. If multiple embedding aliases are configured and none is flagged as default, the request fails with `400 ambiguous_embedding_model`.
 4. If no embedding alias is configured, the request fails with `400 no_embedding_model_configured`.
 
-Once a vector store has been ingested with a particular embedding model, subsequent ingest or search calls must resolve to the **same** alias — otherwise the request fails with `400 embedding_model_mismatch`. To switch embeddings, create a new vector store.
+Once a vector store has been ingested with a particular embedding model, subsequent ingest or search calls must resolve to the **same** weights with the same `pooling`, `attention` and `embdNormalize` settings — otherwise the request fails with `400 embedding_model_mismatch`. Other load options, such as `device`, `gpuLayers` or `batchSize`, can change freely. To switch embeddings, create a new vector store.
 
 #### File ingest constraints
 
 - Files attached via `POST /v1/vector_stores/:id/files` must be **UTF-8 text** (e.g. `.txt`, `.md`, `.json`). Binary uploads (PDF / PNG / DOCX) are rejected with `400 unsupported_file_type` — no built-in document conversion is performed.
-- Once attached, the file is removed from the in-memory file store. The chunks are persisted by the underlying RAG workspace; only the original `file_id` and `filename` are kept as attribution metadata so search hits can carry them.
+- Once attached, the file is removed from the in-memory file store. Its chunks are stored on disk under its `file_id`, with its `filename`, so search hits can carry both.
 
 #### Search results
 
-Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
+Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each hit carries the `file_id` and `filename` of the file it came from.
 
 ### Videos
 

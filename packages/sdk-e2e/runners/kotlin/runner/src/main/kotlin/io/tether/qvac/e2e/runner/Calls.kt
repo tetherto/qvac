@@ -467,12 +467,7 @@ class Calls(
         return mapOf("path" to response["assetId"])
     }
 
-    // --- rag and vector index ---------------------------------------------------
-
-    private suspend fun rag(operation: String, params: Map<String, Any?>, failure: String): Map<String, Any?> {
-        val response = wire.send(params + mapOf("type" to "rag", "operation" to operation))
-        return Wire.requireSuccess(response, failure)
-    }
+    // --- vector index ----------------------------------------------------------
 
     private class OpenIndex(val dim: Any?, val storage: Any?, var length: Any?)
 
@@ -799,12 +794,6 @@ class Calls(
         "suspend" to { _ -> wire.send(mapOf("type" to "suspend")); mapOf("suspended" to true) },
         "resume" to { _ -> wire.send(mapOf("type" to "resume")); mapOf("resumed" to true) },
         "state" to { _ -> mapOf("state" to wire.send(mapOf("type" to "state"))["state"]) },
-        "ragIngest" to { p ->
-            val response = rag("ingest", p + ("chunk" to (p["chunk"] ?: true)) + ("requestId" to (p["requestId"] ?: Wire.requestId())), "RAG_SAVE_FAILED")
-            mapOf("processed" to response["processed"], "droppedIndices" to response["droppedIndices"])
-        },
-        "ragCloseWorkspace" to { p -> rag("closeWorkspace", p, "RAG_WORKSPACE_CLOSE_FAILED"); mapOf("closed" to true) },
-        "ragDeleteWorkspace" to { p -> rag("deleteWorkspace", p, "RAG_DELETE_FAILED"); mapOf("deleted" to true) },
         "createVectorIndex" to { p ->
             describeIndex(vectorIndex("create", mapOf("dim" to p["dim"], "storage" to (p["storage"] ?: "turbovec-q4"))))
         },

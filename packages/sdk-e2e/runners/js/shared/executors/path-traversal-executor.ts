@@ -1,4 +1,4 @@
-import { downloadAsset, loadModel, ragDeleteWorkspace } from '@qvac/sdk'
+import { downloadAsset, loadModel } from '@qvac/sdk'
 import {
   BaseExecutor,
   ValidationHelpers,
@@ -12,7 +12,6 @@ import {
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
   pathTraversalHyperdriveBackslashLoad,
-  pathTraversalRagDeleteWorkspace,
   pathTraversalTests
 } from '../../../../catalog/path-traversal-tests.js'
 
@@ -23,10 +22,6 @@ interface LoadParams {
 
 interface DownloadParams {
   assetSrc: string
-}
-
-interface WorkspaceParams {
-  workspace: string
 }
 
 // The same bodies as the definitions' steps, for the React Native consumer,
@@ -40,8 +35,7 @@ export class PathTraversalExecutor extends BaseExecutor<typeof pathTraversalTest
     [pathTraversalHttpShardedFragment.testId]: this.downloadRejects.bind(this),
     [pathTraversalHttpShardedDottedName.testId]: this.downloadRejects.bind(this),
     [pathTraversalHyperdriveLoad.testId]: this.loadRejects.bind(this),
-    [pathTraversalHyperdriveBackslashLoad.testId]: this.loadRejects.bind(this),
-    [pathTraversalRagDeleteWorkspace.testId]: this.deleteWorkspaceRejects.bind(this)
+    [pathTraversalHyperdriveBackslashLoad.testId]: this.loadRejects.bind(this)
   }
 
   async loadRejects(params: LoadParams, expectation: Expectation): Promise<TestResult> {
@@ -53,13 +47,6 @@ export class PathTraversalExecutor extends BaseExecutor<typeof pathTraversalTest
 
   async downloadRejects(params: DownloadParams, expectation: Expectation): Promise<TestResult> {
     return rejection(() => downloadAsset({ assetSrc: params.assetSrc }), expectation)
-  }
-
-  async deleteWorkspaceRejects(
-    params: WorkspaceParams,
-    expectation: Expectation
-  ): Promise<TestResult> {
-    return rejection(() => ragDeleteWorkspace({ workspace: params.workspace }), expectation)
   }
 }
 

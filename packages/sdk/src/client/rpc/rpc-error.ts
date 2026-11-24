@@ -18,8 +18,7 @@ import {
   SessionNotOpenError,
   ModelLeasedError,
   ModelReconfiguredError,
-  OwnerOnlyError,
-  RAGWorkspaceBusyError
+  OwnerOnlyError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -252,15 +251,7 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       response.cause
     ),
   MODEL_RECONFIGURED: (response) =>
-    new ModelReconfiguredError(
-      readStringField(response.typedFields, 'modelId', ''),
-      response.cause
-    ),
-  RAG_WORKSPACE_BUSY: (response) =>
-    new RAGWorkspaceBusyError(
-      readStringField(response.typedFields, 'workspace', ''),
-      response.cause
-    )
+    new ModelReconfiguredError(readStringField(response.typedFields, 'modelId', ''), response.cause)
 }
 
 /**
