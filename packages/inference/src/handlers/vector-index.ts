@@ -54,9 +54,11 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
   try {
     return await runOperation(request, ctx.requestId, ctx.signal)
   } catch (error) {
-    // An aborted index call rejects at once with the abort reason, which the
-    // registry wraps like any native failure. Report it as the cancel it is.
-    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+    // An aborted index call rejects at once with the abort reason. Report it
+    // as the cancel it is; a failure that races the cancel keeps its own error.
+    if (ctx.signal.aborted && error === ctx.signal.reason) {
+      throw new InferenceCancelledError(ctx.requestId)
+    }
     throw error
   }
 }

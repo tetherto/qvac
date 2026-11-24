@@ -138,6 +138,37 @@ test('vectorIndex: a search cancelled while the provider runs reports the cancel
   })
 })
 
+test('vectorIndex: a provider failure that races a cancel keeps its own error', async (t) => {
+  await withProvider(async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+    const search = deferred()
+    gates.search = async () => {
+      await search.promise
+      throw new Error('disk full')
+    }
+    const requestId = 'vi-cancel-search-fails'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'search',
+      indexId: index.indexId,
+      queries: [[1, 0]],
+      k: 1,
+      requestId
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+    t.is(getRequestRegistry().cancel({ requestId }), 1, 'the search is in flight and cancellable')
+    search.resolve()
+    try {
+      await pending
+      t.fail('the failed search should reject')
+    } catch (error) {
+      t.ok(error instanceof VectorIndexFailedError, 'the failure is not reported as a cancel')
+      t.ok((error as Error).message.includes('disk full'), 'the native message is kept')
+    }
+  })
+})
+
 for (const operation of ['search', 'load'] as const) {
   test(`vector index: an active ${operation} can reject before the provider finishes`, async (t) => {
     await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
