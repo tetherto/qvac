@@ -11,6 +11,8 @@ type JsonSchema = {
   items?: unknown
   properties?: unknown
   required?: unknown
+  additionalProperties?: unknown
+  patternProperties?: unknown
   [keyword: string]: unknown
 }
 
@@ -241,21 +243,33 @@ function repairProperties(
   return out ?? value
 }
 
+// The schema accepts keys it does not declare, so a wrapper key may be a real argument.
+function allowsUndeclaredKeys(schema: JsonSchema): boolean {
+  const extra = schema.additionalProperties
+  return extra === true || isPlainObject(extra) || isPlainObject(schema.patternProperties)
+}
+
 function unwrapArguments(
   args: Record<string, unknown>,
-  declared: Record<string, unknown>
+  schema: JsonSchema
 ): Record<string, unknown> {
+  const declared = isPlainObject(schema.properties) ? schema.properties : {}
   const keys = Object.keys(args)
-  if (keys.length !== 1) return args
+  if (keys.length !== 1 || allowsUndeclaredKeys(schema)) return args
   const only = keys[0]!
   if (!ARG_WRAPPER_KEYS.has(only) || Object.hasOwn(declared, only)) return args
-  const inner = args[only]
-  if (isPlainObject(inner)) return inner
-  if (typeof inner === 'string') {
-    const parsed = readStructured(inner, new Set(['object']))
-    if (isPlainObject(parsed)) return parsed
-  }
-  return args
+  const raw = args[only]
+  const inner =
+    typeof raw === 'string'
+      ? readStructured(raw, new Set(['object']))
+      : isPlainObject(raw)
+        ? raw
+        : null
+  // Unwrapped only into arguments the tool declares.
+  if (!isPlainObject(inner)) return args
+  const innerKeys = Object.keys(inner)
+  if (innerKeys.length === 0 || !innerKeys.every((key) => Object.hasOwn(declared, key))) return args
+  return inner
 }
 
 /**
@@ -271,6 +285,5 @@ export function repairToolArguments(
   parameters: JsonSchema | undefined
 ): Record<string, unknown> {
   if (!parameters) return args
-  const declared = isPlainObject(parameters.properties) ? parameters.properties : {}
-  return repairProperties(unwrapArguments(args, declared), parameters)
+  return repairProperties(unwrapArguments(args, parameters), parameters)
 }

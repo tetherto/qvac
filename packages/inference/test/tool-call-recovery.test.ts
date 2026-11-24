@@ -413,6 +413,16 @@ test('arguments nested under an undeclared wrapper key are unwrapped', (t) => {
   t.alike(argsOf(r), [['http_request', { url: 'https://x.test' }]])
 })
 
+test('arguments the schema already accepts are not unwrapped', (t) => {
+  const open = { type: 'object', properties: {}, additionalProperties: { type: 'string' } }
+  const args = { input: '{"name":"demo"}' }
+  t.is(repairToolArguments(args, open), args, 'undeclared keys allowed')
+
+  const strict = HTTP.parameters
+  const unknown = { input: { name: 'demo' } }
+  t.is(repairToolArguments(unknown, strict), unknown, 'inner keys the tool does not declare')
+})
+
 // Cases from the app harness's argument-repair suite, minus its app-specific
 // shell escaping.
 const HTTP_PARAMETERS = HTTP.parameters
