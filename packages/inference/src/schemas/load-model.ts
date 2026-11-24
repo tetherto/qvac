@@ -1,4 +1,5 @@
 import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
+import { stereoDepthConfigSchema } from '@/schemas/stereo-depth'
 import { z } from 'zod'
 import type { Logger } from '@/logging'
 import { trackedRequestSchema } from './request-base'
@@ -114,6 +115,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.llamacppDecision, configKeys(decisionConfigBaseSchema)],
   [ModelType.llamacppRerank, configKeys(rerankConfigBaseSchema)],
   [ModelType.ggmlImageEmbedding, configKeys(imageEmbeddingConfigSchema)],
+  [ModelType.ggmlStereoDepth, configKeys(stereoDepthConfigSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -287,6 +289,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: z.literal(ModelType.ggmlImageEmbedding),
       modelConfig: imageEmbeddingConfigSchema.strict().optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: z.literal(ModelType.ggmlStereoDepth),
+      modelConfig: stereoDepthConfigSchema.strict().optional()
     })
     .strict()
 ])
@@ -620,6 +629,23 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
+      modelType: z.literal(ModelType.ggmlStereoDepth),
+      modelConfig: stereoDepthConfigSchema.strict().optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.ggmlStereoDepth,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
     }))
 ])
 
@@ -792,6 +818,13 @@ export const loadImageEmbeddingModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadStereoDepthModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.ggmlStereoDepth),
+    modelConfig: stereoDepthConfigSchema.strict().optional()
+  })
+  .strict()
+
 export const loadClassificationModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlClassification),
@@ -821,6 +854,7 @@ export const loadModelSrcRequestSchema = z
     loadDecisionModelRequestSchema,
     loadRerankModelRequestSchema,
     loadImageEmbeddingModelRequestSchema,
+    loadStereoDepthModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
@@ -997,7 +1031,9 @@ export type InferredConfig<S> = S extends {
                         ? z.input<typeof vlaConfigSchema>
                         : S extends { engine: typeof ModelType.ggmlImageEmbedding }
                           ? z.input<typeof imageEmbeddingConfigSchema>
-                          : Record<string, unknown>
+                          : S extends { engine: typeof ModelType.ggmlStereoDepth }
+                            ? z.input<typeof stereoDepthConfigSchema>
+                            : Record<string, unknown>
 
 /**
  * `loadModel` options for descriptors that preserve a literal `engine`.

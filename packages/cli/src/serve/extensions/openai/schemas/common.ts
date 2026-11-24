@@ -119,9 +119,9 @@ const INSTRUCTION_ROLES = new Set(['system', 'developer'])
 // conversation, but strict chat templates (e.g. Qwen3.5) reject `developer` and
 // any system turn that is not first. A template that throws is rendered again
 // without the tools, so merge every instruction into one leading system turn.
-export function hoistInstructions<
-  T extends { role: string; content: string; attachments?: unknown[] } | { role: 'user' }
->(history: T[]): T[] {
+export function hoistInstructions<T extends { role: string; content: string } | { role: 'user' }>(
+  history: T[]
+): T[] {
   const instructions = history.filter((msg): msg is Extract<T, { content: string }> =>
     INSTRUCTION_ROLES.has(msg.role)
   )
@@ -131,14 +131,8 @@ export function hoistInstructions<
     .map((msg) => msg.content)
     .filter((text) => text.length > 0)
     .join('\n\n')
-  const attachments = instructions.flatMap((msg) => msg.attachments ?? [])
   return [
-    {
-      ...instructions[0]!,
-      role: 'system',
-      content,
-      ...(attachments.length > 0 ? { attachments } : {})
-    },
+    { ...instructions[0]!, role: 'system', content },
     ...history.filter((msg) => !INSTRUCTION_ROLES.has(msg.role))
   ]
 }

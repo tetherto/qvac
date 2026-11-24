@@ -7,65 +7,30 @@
  * shape everywhere above it.
  */
 
-type BufferCtor = {
-  from(
-    data: ArrayBuffer | string,
-    encodingOrOffset?: string | number,
-    length?: number
-  ): {
-    toString(encoding: string): string
-    buffer: ArrayBuffer
-    byteOffset: number
-    byteLength: number
-  }
-}
-
-function bufferCtor(): BufferCtor | undefined {
-  const b = (globalThis as { Buffer?: BufferCtor }).Buffer
-  return typeof b?.from === 'function' ? b : undefined
-}
+import {
+  base64ToOwnedBytes,
+  typedArrayToBase64,
+  type BufferFromArrayBuffer,
+  type BufferFromBase64
+} from '@/utils/encoding'
 
 function toInt16(samples: ArrayLike<number>): Int16Array {
   return samples instanceof Int16Array ? samples : Int16Array.from(samples)
 }
 
 /** Base64 of the little-endian int16 bytes of `samples`. */
-export function encodeTtsPcm(samples: ArrayLike<number>, Buffer = bufferCtor()): string {
-  const int16 = toInt16(samples)
-  const bytes = new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength)
-  if (Buffer) {
-    return Buffer.from(bytes.buffer as ArrayBuffer, bytes.byteOffset, bytes.byteLength).toString(
-      'base64'
-    )
-  }
-  let binary = ''
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)))
-  }
-  return btoa(binary)
+export function encodeTtsPcm(samples: ArrayLike<number>, Buffer?: BufferFromArrayBuffer): string {
+  return typedArrayToBase64(toInt16(samples), Buffer)
 }
 
 /**
  * The samples a `pcm` field carries, as little-endian int16. The result always
- * owns its bytes (`byteOffset` 0, buffer exactly its size): runtimes hand small
- * decodes back as a view into a shared Buffer pool, and a caller doing
- * `new Int16Array(result.buffer)` on such a view would read the pool.
+ * owns its bytes (`byteOffset` 0, buffer exactly its size), so a caller doing
+ * `new Int16Array(result.buffer)` never reads a shared Buffer pool.
  */
-export function decodeTtsPcm(pcm: string, Buffer = bufferCtor()): Int16Array {
-  let bytes: Uint8Array
-  if (Buffer) {
-    const b = Buffer.from(pcm, 'base64')
-    bytes = new Uint8Array(b.buffer, b.byteOffset, b.byteLength)
-  } else {
-    const binary = atob(pcm)
-    bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  }
-  const even = bytes.byteLength - (bytes.byteLength % 2)
-  // Copy only when the view does not own its bytes (pooled, offset or odd tail).
-  const ownsBytes = bytes.byteOffset === 0 && bytes.buffer.byteLength === even
-  if (!ownsBytes) bytes = bytes.slice(0, even)
-  return new Int16Array(bytes.buffer, bytes.byteOffset, even / 2)
+export function decodeTtsPcm(pcm: string, Buffer?: BufferFromBase64): Int16Array {
+  const bytes = base64ToOwnedBytes(pcm, 2, Buffer)
+  return new Int16Array(bytes.buffer, 0, bytes.byteLength / 2)
 }
 
 /**

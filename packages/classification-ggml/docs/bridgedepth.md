@@ -40,8 +40,9 @@ box runs at its own size. Inputs are padded on the top and the right by
 edge replication and the result is cropped back, as in the original
 `InputPadder`.
 
-Backend selection, `backendsDir`, `load()`, `unload()`, `destroy()` and the
-runtime statistics behave as for [MegaLoc](megaloc.md). `cpu_fallback_nodes`
+BridgeDepth selects a GPU, an integrated GPU, then the CPU, and accepts an
+explicit device name through `backend`. See [MegaLoc](megaloc.md) for
+`backendsDir`, lifecycle methods and runtime statistics. `cpu_fallback_nodes`
 counts compute nodes the scheduler placed on the CPU while a GPU was selected.
 On Metal, CUDA and Vulkan it is 0. OpenCL has no kernel for the `roll` and
 `top_k` ops this graph uses, so on OpenCL those nodes run on the CPU, with
