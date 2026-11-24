@@ -125,7 +125,7 @@ of a fabric rollout — see *`fabric` publishes first* below for the one follow-
 released `@qvac/fabric`, so `addon-auto-release.yml` orders this itself: a consumer whose
 `@qvac/fabric` range has no version on npm gets its release branch at merge time but no
 publish run, and the workflow starts it within an hour of the Fabric publish (it re-checks
-hourly and after a successful `publish-npm.yml` run). Approve `fabric` first; to start the
+hourly). Approve `fabric` first; to start the
 consumer runs at once after it publishes, run `gh workflow run addon-auto-release.yml`.
 
 This only holds when no published Fabric satisfies the consumer's range. If the range

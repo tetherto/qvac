@@ -243,9 +243,8 @@ Do not cut these branches or dispatch `publish-npm.yml` by hand for them. The wo
 An addon whose `@qvac/*` dependency range has no version on npm yet, such as a consumer moved
 to a new Fabric minor in the same merge, gets its branch at merge time but no publish run. A
 range the published version already satisfies does not wait. The workflow starts it within an
-hour of that dependency publishing: it re-checks every hour and after a successful
-`publish-npm.yml` run, and `gh workflow run addon-auto-release.yml` with no inputs runs that
-check now. That check only starts a branch this workflow cut, still at the commit it cut it
+hour of that dependency publishing: it re-checks every hour, and
+`gh workflow run addon-auto-release.yml` with no inputs runs that check now. That check only starts a branch this workflow cut, still at the commit it cut it
 from, on `main`'s first-parent line. It leaves a branch cut in the last 15 minutes to the run
 that cut it, and its summary says so.
 
