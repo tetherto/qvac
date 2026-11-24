@@ -243,10 +243,19 @@ function repairProperties(
   return out ?? value
 }
 
-// The schema accepts keys it does not declare, so a wrapper key may be a real argument.
-function allowsUndeclaredKeys(schema: JsonSchema): boolean {
+// The schema accepts `key` without declaring it, so it may be a real argument.
+function acceptsUndeclaredKey(schema: JsonSchema, key: string): boolean {
   const extra = schema.additionalProperties
-  return extra === true || isPlainObject(extra) || isPlainObject(schema.patternProperties)
+  if (extra === true || isPlainObject(extra)) return true
+  if (!isPlainObject(schema.patternProperties)) return false
+  return Object.keys(schema.patternProperties).some((pattern) => {
+    try {
+      return new RegExp(pattern, 'u').test(key)
+    } catch {
+      // A pattern this engine can't read might match: keep the key.
+      return true
+    }
+  })
 }
 
 function unwrapArguments(
@@ -255,9 +264,10 @@ function unwrapArguments(
 ): Record<string, unknown> {
   const declared = isPlainObject(schema.properties) ? schema.properties : {}
   const keys = Object.keys(args)
-  if (keys.length !== 1 || allowsUndeclaredKeys(schema)) return args
+  if (keys.length !== 1) return args
   const only = keys[0]!
   if (!ARG_WRAPPER_KEYS.has(only) || Object.hasOwn(declared, only)) return args
+  if (acceptsUndeclaredKey(schema, only)) return args
   const raw = args[only]
   const inner =
     typeof raw === 'string'

@@ -421,6 +421,22 @@ test('arguments the schema already accepts are not unwrapped', (t) => {
   const strict = HTTP.parameters
   const unknown = { input: { name: 'demo' } }
   t.is(repairToolArguments(unknown, strict), unknown, 'inner keys the tool does not declare')
+
+  const patterned = {
+    type: 'object',
+    properties: { url: { type: 'string' } },
+    required: ['url'],
+    additionalProperties: false,
+    patternProperties: { '^x-': { type: 'string' } }
+  }
+  t.alike(
+    repairToolArguments({ arguments: { url: 'https://x.test' } }, patterned),
+    { url: 'https://x.test' },
+    'a pattern that does not match the wrapper key'
+  )
+  const matching = { ...patterned, patternProperties: { '^arg': { type: 'object' } } }
+  const kept = { arguments: { url: 'https://x.test' } }
+  t.is(repairToolArguments(kept, matching), kept, 'a pattern that matches the wrapper key')
 })
 
 // Cases from the app harness's argument-repair suite, minus its app-specific
