@@ -1225,7 +1225,9 @@ class Interpreter:
         teardown: list[dict[str, Any]] | None = None,
     ) -> StepResult:
         teardown = teardown or []
-        scope: dict[str, Any] = {"params": params}
+        # Started-call list up front: `repeat` copies the scope, and a list first made in a
+        # copy is lost.
+        scope: dict[str, Any] = {"params": params, _STARTED: []}
         # Released only once no started call runs, so none of them loses its model.
         try:
             return await self._run_declared(steps, scope, expectation, teardown)

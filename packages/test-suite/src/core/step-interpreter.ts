@@ -137,7 +137,8 @@ export class StepInterpreter {
       await this.bindings.evictAllExcept(declared)
     }
 
-    const scope: Record<string, unknown> = { params: definition.params ?? {} }
+    // Started-call list up front: `repeat` copies the scope, and a list first made in a copy is lost.
+    const scope: Record<string, unknown> = { params: definition.params ?? {}, [STARTED]: [] }
 
     const body = await this.runBody(steps, scope, definition)
     const teardown = await this.runTeardown(definition, scope)

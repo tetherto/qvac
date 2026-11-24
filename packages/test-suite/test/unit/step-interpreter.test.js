@@ -314,6 +314,40 @@ test('endTest waits for calls the body started and never settled', async () => {
   assert.deepEqual(seen, ['slow settled', 'endTest'])
 })
 
+test('endTest waits for a call first started inside repeat', async () => {
+  const seen = []
+  const result = await run(
+    [
+      {
+        repeat: {
+          over: '$params.items',
+          as: 'item',
+          steps: [{ start: { method: 'slow', as: 'pending' } }],
+          collectInto: 'all'
+        }
+      },
+      ...PASSING_BODY
+    ],
+    {
+      call: (method) =>
+        method === 'slow'
+          ? new Promise((resolve) =>
+              setTimeout(() => {
+                seen.push('slow settled')
+                resolve('late')
+              }, 30)
+            )
+          : Promise.resolve('text'),
+      endTest: async () => {
+        seen.push('endTest')
+      }
+    },
+    { params: { items: [1] } }
+  )
+  assert.equal(result.passed, true)
+  assert.deepEqual(seen, ['slow settled', 'endTest'])
+})
+
 test('a failing endTest fails a passing body', async () => {
   const result = await run(PASSING_BODY, {
     call: async () => 'text',
