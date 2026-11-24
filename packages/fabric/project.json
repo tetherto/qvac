@@ -282,7 +282,9 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/fabric",
-        "command": "node ci/boundary-regressions.mjs build",
+        "commands": [
+          "node ci/boundary-regressions.mjs build"
+        ],
         "forwardAllArgs": false
       },
       "configurations": {
@@ -314,7 +316,9 @@
       ],
       "options": {
         "cwd": "packages/fabric",
-        "command": "node ci/boundary-regressions.mjs test",
+        "commands": [
+          "node ci/boundary-regressions.mjs test"
+        ],
         "forwardAllArgs": false
       },
       "configurations": {
