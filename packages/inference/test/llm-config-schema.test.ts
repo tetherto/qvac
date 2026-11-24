@@ -559,7 +559,7 @@ test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
 })
 
 test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
-  for (const value of ['none', 'draft-mtp', 'draft-dflash']) {
+  for (const value of ['none', 'draft-mtp', 'draft-dflash', 'draft-dspark', 'auto']) {
     t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
   }
   t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
@@ -635,11 +635,15 @@ test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t
     const result = llmConfigSchema.safeParse(config)
     t.is(result.success, false)
     t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+    t.is(
+      result.error?.issues[0]?.message,
+      "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
+    )
   }
 })
 
 test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
-  for (const spec_type of ['draft-mtp', 'draft-dflash'] as const) {
+  for (const spec_type of ['draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'] as const) {
     t.is(
       llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
         .success,

@@ -405,10 +405,10 @@ export const llmConfigBaseSchema = z.object({
       'Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).'
     ),
   spec_type: z
-    .enum(['none', 'draft-mtp', 'draft-dflash'])
+    .enum(['none', 'draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'])
     .optional()
     .describe(
-      "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`."
+      "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, and `'draft-dspark'` with the DSpark model given as `draftModelSrc`; both require it. `'auto'` reads which of the three from the `draftModelSrc` header, as llama-server does for `-md` without `--spec-type`, and requires it too; the load fails when the header shows none, and a Gemma 4 assistant isn't detected, so give it `'draft-mtp'`. A DFlash or DSpark model made for another model fails the load. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`."
     ),
   spec_draft_n_max: z
     .number()
@@ -417,7 +417,7 @@ export const llmConfigBaseSchema = z.object({
     .max(64)
     .optional()
     .describe(
-      "Longest draft per step (1–64, default 5 with `'draft-dflash'` and 3 with `'draft-mtp'`). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+      "Longest draft per step (1–64, default 5 with `'draft-dflash'`, or `'auto'` when it detects a DFlash model, and 3 otherwise). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. A DSpark model drafts at most its block size per step. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
   spec_draft_n_min: z
     .number()
@@ -426,7 +426,7 @@ export const llmConfigBaseSchema = z.object({
     .max(64)
     .optional()
     .describe(
-      "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+      "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
   spec_draft_p_min: z
     .number()
@@ -434,7 +434,7 @@ export const llmConfigBaseSchema = z.object({
     .max(1)
     .optional()
     .describe(
-      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). With a DSpark model it is the confidence head's threshold: the draft stops at the first token below it, and a DSpark model without a confidence head doesn't draft at all when it is above 0. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
   projectionModelSrc: modelSrcInputSchema
     .optional()
@@ -444,7 +444,7 @@ export const llmConfigBaseSchema = z.object({
   draftModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those."
+      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash or DSpark model, required by `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. `spec_type: 'auto'` requires it and reads its type from it. Placed like the model (`device`, `gpu_layers`), and model fit checks count its memory. A draft model made for another model fails the load and the fit check."
     ),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])
@@ -493,7 +493,8 @@ export const llmConfigSchema = llmConfigBaseSchema
       ctx.addIssue({
         code: 'custom',
         path: ['draftModelSrc'],
-        message: "draftModelSrc requires spec_type 'draft-mtp' or 'draft-dflash'."
+        message:
+          "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
       })
     }
     if (data['coreml-ffn'] !== true && data['coreml-ffn-split'] !== undefined) {
