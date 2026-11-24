@@ -103,6 +103,8 @@ example.
 | `threads` | CPU threads, at most the device's CPU count; `0` uses every CPU. |
 | `parallel` | Upstream slots, at least 1. Upstream runs a request's questions, option variants and a batch's states over them together; it does not change how many requests the engine accepts at once. Unset, it is llama-server's own default: 4 slots sharing one KV cache, so memory does not grow with them. Set, each slot has its own KV cache, as with llama-server's `-np`. |
 | `mmproj` | Projector GGUF, for models that take images or audio. |
+| `image_max_megapixels` | Largest image a request may carry, in megapixels (default 50). Checked from the file's header before it is decoded; a larger one is a rejected request. Needs `mmproj`. |
+| `audio_max_seconds` | Longest audio a request may carry, in seconds (default 600). Checked against the length the decoder reads, before it allocates the samples; a longer one is a rejected request. Needs `mmproj`. |
 | `verbosity` | Native log level, `0` (error) to `3` (debug). |
 | `openclCacheDir` | Writable OpenCL kernel cache directory (Android). |
 
@@ -136,7 +138,9 @@ code. A cancelled run fails with `Job cancelled`. Rejected requests include:
   counts its own 128 levels from the prompt input it builds, so it can reject
   a value a few levels sooner, depending on the model type and where the value
   sits;
-- an input longer than a non-causal model's `max_input_tokens`.
+- an input longer than a non-causal model's `max_input_tokens`;
+- with a projector, an image or audio file over `image_max_megapixels` or
+  `audio_max_seconds`, checked from its header before it is decoded.
 
 ## Laya models
 

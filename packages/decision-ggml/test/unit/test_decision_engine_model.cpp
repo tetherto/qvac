@@ -230,6 +230,55 @@ TEST(DecisionEngineConfigTest, RejectsBadOptions) {
   }
 }
 
+TEST(
+    DecisionEngineConfigTest, MediaLimitsDefaultToEmbedsAndTakeEitherSpelling) {
+  const qvac_lib_inference_addon_decision::MediaLimits defaults =
+      DecisionEngineModel::mediaLimits({{"device", "cpu"}});
+  EXPECT_EQ(defaults.maxImagePixels, 50'000'000U);
+  EXPECT_EQ(defaults.maxAudioSeconds, 600U);
+  const qvac_lib_inference_addon_decision::MediaLimits set =
+      DecisionEngineModel::mediaLimits(
+          {{"device", "cpu"},
+           {"mmproj", "p.gguf"},
+           {"image-max-megapixels", "2"},
+           {"audio_max_seconds", "30"}});
+  EXPECT_EQ(set.maxImagePixels, 2'000'000U);
+  EXPECT_EQ(set.maxAudioSeconds, 30U);
+  // Accepted by the load options too, so they reach the model.
+  EXPECT_NO_THROW(params(
+      {{"device", "cpu"},
+       {"mmproj", "p.gguf"},
+       {"image_max_megapixels", "2"},
+       {"audio-max-seconds", "30"}}));
+}
+
+TEST(DecisionEngineConfigTest, RejectsBadMediaLimits) {
+  const std::string invalid = "[ Decision :: InvalidConfiguration ]";
+  EXPECT_EQ(
+      codeOf([] {
+        DecisionEngineModel::mediaLimits(
+            {{"device", "cpu"}, {"image-max-megapixels", "2"}});
+      }),
+      invalid)
+      << "a limit without mmproj does nothing";
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"image-max-megapixels", "0"},
+           {"image-max-megapixels", "-1"},
+           {"image-max-megapixels", "1.5"},
+           {"image-max-megapixels", "99999999999999999999"},
+           {"audio-max-seconds", "0"},
+           {"audio-max-seconds", "ten"}}) {
+    EXPECT_EQ(
+        codeOf([&key = key, &value = value] {
+          DecisionEngineModel::mediaLimits(
+              {{"device", "cpu"}, {"mmproj", "p.gguf"}, {key, value}});
+        }),
+        invalid)
+        << key << "=" << value;
+  }
+}
+
 TEST(DecisionEngineConfigTest, ConstructorRejectsBadOptionsBeforeLoading) {
   EXPECT_EQ(
       codeOf([] {
@@ -687,6 +736,36 @@ TEST_F(DecisionContextModelTest, AStopDuringABatchCancelsIt) {
   EXPECT_EQ(outcome.first, "Job cancelled");
   const json next = json::parse(context_->run(kRequest, kNeverStop));
   EXPECT_TRUE(next.contains("answers"));
+}
+
+TEST_F(DecisionContextModelTest, AnImageOverTheLimitIsRejectedBeforeDecoding) {
+  const std::string mmproj =
+      fixture("mmproj-tinyopenjev-for-testing-Q8_0.gguf");
+  if (mmproj.empty()) {
+    GTEST_SKIP() << "projector fixture not found";
+  }
+  common_params params = DecisionEngineModel::loadParams(
+      fixture("tinyopenjev-for-testing-Q8_0.gguf"),
+      {{"device", "cpu"}, {"ctx_size", "2048"}, {"mmproj", mmproj}});
+  qdecision::MediaLimits limits;
+  limits.maxImagePixels = 1'000'000;
+  qdecision::DecisionContext context(params, limits);
+  // A PNG whose header declares 2000x2000 pixels (4 MP) and holds no pixel
+  // data: only the header is read, so the check happens before decoding.
+  const json request = {
+      {"state", "What does the picture show?"},
+      {"files",
+       json::array(
+           {"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAB9AAAAfQCAIAAAAVWlMu"
+            "AAAAAElFTkSuQmCC"})},
+      {"questions",
+       {{"colorful", {{"type", "noul"}, {"instructions", "Colorful?"}}}}}};
+  const auto outcome = runOutcome(context, request.dump(), kNeverStop);
+  EXPECT_EQ(outcome.first, "[ Decision :: InvalidRequest ]") << outcome.second;
+  EXPECT_NE(
+      outcome.second.find("image is larger than the media size limit"),
+      std::string::npos)
+      << outcome.second;
 }
 
 TEST_F(DecisionContextModelTest, ALoopThatDiesDuringABatchFailsItWithItsError) {

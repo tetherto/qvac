@@ -21,6 +21,13 @@ export interface DecisionEngineConfig {
     parallel?: NumericLike;
     /** Projector GGUF path, for models that take images or audio. */
     mmproj?: string;
+    /**
+     * Largest image a request may carry, in megapixels (50 unless set), read
+     * from the file's header before it is decoded. Needs `mmproj`.
+     */
+    image_max_megapixels?: NumericLike;
+    /** Longest audio a request may carry, in seconds (600 unless set). Needs `mmproj`. */
+    audio_max_seconds?: NumericLike;
     verbosity?: NumericLike;
     openclCacheDir?: string;
 }

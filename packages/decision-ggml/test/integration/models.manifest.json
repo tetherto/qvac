@@ -29,7 +29,8 @@
         "https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/953e44649ca8a71e5a8eee4676edebff2a45b2a2/mmproj-tinyopenjev-for-testing-Q8_0.gguf"
       ],
       "sha256": "5831d2b67fcf563ce6e6f80170847bffc0b361c2c3cc93ea6d700e3087a9f03a",
-      "bytes": 3209216
+      "bytes": 3209216,
+      "targets": ["test:integration", "test:mobile", "cpp:tests"]
     },
     "unit-test-model.gguf": {
       "urls": [

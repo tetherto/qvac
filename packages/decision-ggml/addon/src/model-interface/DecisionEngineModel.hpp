@@ -111,12 +111,19 @@ public:
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config);
 
+  /// @brief The media size limits in the load options (image_max_megapixels,
+  /// audio_max_seconds), or their defaults. Throws InvalidConfiguration for a
+  /// bad value, or when one is set without mmproj.
+  static qvac_lib_inference_addon_decision::MediaLimits
+  mediaLimits(const std::unordered_map<std::string, std::string>& config);
+
 private:
   void load(const common_params& params);
   DecisionEngineResult run(const std::string& requestJson, JobId id);
 
   std::string backendsDir_;
   std::string openclCacheDir_;
+  qvac_lib_inference_addon_decision::MediaLimits mediaLimits_;
 
   // Backends (and their log routing, and the Android OpenCL cache location)
   // are initialized through the addon's shared initializer before the context

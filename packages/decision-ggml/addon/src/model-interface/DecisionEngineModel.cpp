@@ -17,6 +17,7 @@
 
 using namespace qvac_lib_inference_addon_decision::errors;
 using qvac_lib_inference_addon_decision::DecisionContext;
+using qvac_lib_inference_addon_decision::MediaLimits;
 
 namespace {
 
@@ -34,6 +35,10 @@ const std::unordered_set<std::string>& allowedConfigKeys() {
       "threads",
       "parallel",
       "mmproj",
+      "image-max-megapixels",
+      "image_max_megapixels",
+      "audio-max-seconds",
+      "audio_max_seconds",
       "verbosity",
       "openclCacheDir"};
   return keys;
@@ -99,6 +104,32 @@ bool isEncoderModel(const std::string& path) {
   return encoder;
 }
 
+/// The positive integer value of option @p key, at most @p max.
+uint64_t
+toPositive(const std::string& key, const std::string& value, uint64_t max) {
+  uint64_t n = 0;
+  try {
+    size_t used = 0;
+    if (value.empty() || value[0] == '-' || value[0] == '+') {
+      throw std::invalid_argument(value);
+    }
+    n = std::stoull(value, &used);
+    if (used != value.size()) {
+      throw std::invalid_argument(value);
+    }
+  } catch (const std::exception&) {
+    invalidConfig(string_format(
+        "%s must be a positive integer, got '%s'", key.c_str(), value.c_str()));
+  }
+  if (n == 0 || n > max) {
+    invalidConfig(string_format(
+        "%s must be between 1 and %llu",
+        key.c_str(),
+        static_cast<unsigned long long>(max)));
+  }
+  return n;
+}
+
 const std::string& requestOf(const std::any& input) {
   if (input.type() != typeid(std::string)) {
     throw qvac_errors::StatusError(
@@ -120,7 +151,8 @@ common_params DecisionEngineModel::loadParams(
       __func__,
       "DecisionEngine",
       "device, gpu_layers, ctx_size, batch_size, ubatch_size, threads, "
-      "parallel, mmproj, verbosity, openclCacheDir");
+      "parallel, mmproj, image_max_megapixels, audio_max_seconds, verbosity, "
+      "openclCacheDir");
 
   common_params params;
   params.model.path = modelGgufPath;
@@ -193,12 +225,41 @@ common_params DecisionEngineModel::loadParams(
   return params;
 }
 
+MediaLimits DecisionEngineModel::mediaLimits(
+    const std::unordered_map<std::string, std::string>& config) {
+  constexpr uint64_t kPixelsPerMegapixel = 1'000'000;
+  MediaLimits limits;
+  const std::string pixels =
+      firstOf(config, {"image-max-megapixels", "image_max_megapixels"});
+  const std::string seconds =
+      firstOf(config, {"audio-max-seconds", "audio_max_seconds"});
+  // Without a projector no media is decoded, so the limits would do nothing.
+  if ((!pixels.empty() || !seconds.empty()) &&
+      firstOf(config, {"mmproj"}).empty()) {
+    invalidConfig("image_max_megapixels and audio_max_seconds need mmproj");
+  }
+  if (!pixels.empty()) {
+    limits.maxImagePixels =
+        toPositive(
+            "image_max_megapixels",
+            pixels,
+            std::numeric_limits<uint64_t>::max() / kPixelsPerMegapixel) *
+        kPixelsPerMegapixel;
+  }
+  if (!seconds.empty()) {
+    limits.maxAudioSeconds = toPositive(
+        "audio_max_seconds", seconds, std::numeric_limits<uint64_t>::max());
+  }
+  return limits;
+}
+
 DecisionEngineModel::DecisionEngineModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
     : backendsDir_(backendsDir),
-      openclCacheDir_(firstOf(config, {"openclCacheDir"})) {
+      openclCacheDir_(firstOf(config, {"openclCacheDir"})),
+      mediaLimits_(mediaLimits(config)) {
   // Validate the options now, so a bad key fails at creation; the model
   // itself loads on activate().
   common_params params = loadParams(modelGgufPath, config);
@@ -222,7 +283,7 @@ void DecisionEngineModel::load(const common_params& params) {
   // llama logs to the addon logger and, on Android, points the OpenCL kernel
   // cache at openclCacheDir. It must run before the context is created.
   backends_.emplace(backendsDir_, openclCacheDir_);
-  context_ = std::make_unique<DecisionContext>(params);
+  context_ = std::make_unique<DecisionContext>(params, mediaLimits_);
   info_ = context_->info();
 }
 

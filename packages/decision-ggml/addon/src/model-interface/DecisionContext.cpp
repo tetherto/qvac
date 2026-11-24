@@ -416,7 +416,8 @@ void checkModelFile(const std::string& path) {
 
 } // namespace
 
-DecisionContext::DecisionContext(const common_params& params)
+DecisionContext::DecisionContext(
+    const common_params& params, const MediaLimits& media)
     : state_(std::make_unique<State>()) {
   State& d = *state_;
   d.params = params;
@@ -440,6 +441,9 @@ DecisionContext::DecisionContext(const common_params& params)
           UnableToLoadModel,
           "failed to load the model: " + d.params.model.path);
     }
+    // Media size limits, checked before a file is decoded (fabric's
+    // mtmd-helper); set before any request can decode one.
+    d.ctx->qvac_set_media_limits(media.maxImagePixels, media.maxAudioSeconds);
     // Handlers read the model metadata through this snapshot; take it before
     // the loop starts, while get_meta() may still be called from this thread.
     d.routes->update_meta(*d.ctx);

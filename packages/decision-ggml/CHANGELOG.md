@@ -28,6 +28,10 @@
   - A non-causal model (Laya) reads up to `batch_size` tokens (2048 by
     default) in one pass; a longer input is rejected with
     `DECISION_INVALID_REQUEST`, not reported as an execution failure.
+  - With a projector, each media file is checked from its header against
+    `image_max_megapixels` (default 50) and `audio_max_seconds` (default 600)
+    before it is decoded; a file over a limit is a rejected request
+    (`DECISION_INVALID_REQUEST`).
   - One request runs at a time and a second is rejected while it does;
     cancellation reaches a job even before its run starts.
   - A model without decision metadata is rejected from its GGUF header before

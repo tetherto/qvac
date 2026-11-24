@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -29,6 +30,16 @@ constexpr int DECISION_MAX_JSON_DEPTH = 128;
 /// either.
 std::string noulSemantics(common_decision_type type);
 
+/// Size limits of the media files (images, audio) a request carries, checked
+/// from each file's header before it is decoded; a file over one is rejected
+/// as an invalid request. 0 means no limit. The defaults are embed-llamacpp's.
+struct MediaLimits {
+  /// image_max_megapixels, in pixels: width * height of an image.
+  uint64_t maxImagePixels = 50'000'000;
+  /// audio_max_seconds: the length the audio decoder reads.
+  uint64_t maxAudioSeconds = 600;
+};
+
 /// @brief DecisionEngineModel's context: upstream llama.cpp's decision
 /// execution (tools/server server-context), run in-process without an HTTP
 /// server. The decision counterpart of llm-llamacpp's LlmContext.
@@ -44,7 +55,10 @@ public:
   /// owns. A model without upstream decision metadata is rejected from its
   /// GGUF header, before loading. Throws StatusError: UnsupportedModel (not a
   /// supported decision model) or UnableToLoadModel; nothing is left running.
-  explicit DecisionContext(const common_params& params);
+  /// @p media limits the files requests carry; it applies when the model has a
+  /// projector (mmproj).
+  explicit DecisionContext(
+      const common_params& params, const MediaLimits& media = {});
 
   /// Stops accepting runs, stops the runs in flight and waits for them to
   /// return, stops the execution loop, joins its thread and frees the model.
