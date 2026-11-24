@@ -35,6 +35,7 @@ export const QVAC_OPERATION_CALL_SHAPES: Readonly<Record<string, OperationCallSh
     textToSpeech: 'stream',
     textToSpeechStream: 'duplex',
     ocrStream: 'stream',
+    estimateDisparity: 'reply',
     diffusionStream: 'stream',
     upscaleStream: 'stream',
     videoStream: 'stream',

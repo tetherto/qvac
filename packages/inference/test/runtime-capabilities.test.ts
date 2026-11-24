@@ -152,6 +152,12 @@ test('the default plugin set reports every QVAC contract at major 1', function (
       { id: 'ocr', version: 1, operations: ['ocrStream'], partialOperations: [] },
       { id: 'reranking', version: 1, operations: ['rerank'], partialOperations: [] },
       {
+        id: 'stereo-depth-estimation',
+        version: 1,
+        operations: ['estimateDisparity'],
+        partialOperations: []
+      },
+      {
         id: 'text-to-speech',
         version: 1,
         operations: ['textToSpeech', 'textToSpeechStream'],

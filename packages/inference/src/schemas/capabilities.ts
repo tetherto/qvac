@@ -84,6 +84,7 @@ export const CAPABILITY_CONTRACTS = Object.freeze({
   bciTranscription: contract('bci-transcription', ['bciTranscribe'], ['bciTranscribeStream']),
   textToSpeech: contract('text-to-speech', ['textToSpeech'], ['textToSpeechStream']),
   ocr: contract('ocr', ['ocrStream']),
+  stereoDepthEstimation: contract('stereo-depth-estimation', ['estimateDisparity']),
   imageGeneration: contract('image-generation', ['diffusionStream']),
   imageUpscaling: contract('image-upscaling', ['upscaleStream']),
   videoGeneration: contract('video-generation', ['videoStream']),
