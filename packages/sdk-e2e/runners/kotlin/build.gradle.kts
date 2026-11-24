@@ -4,4 +4,5 @@ plugins {
     // compiler AGP 9.3 bundles cannot read. The version on the classpath is the one
     // AGP's built-in Kotlin compiles with.
     id("org.jetbrains.kotlin.android") version "2.4.20" apply false
+    id("org.jetbrains.kotlin.jvm") version "2.4.20" apply false
 }

@@ -165,6 +165,12 @@ export class ModelFitRefusedError extends QvacErrorBase {
   }
 }
 
+export class ModelFitRejectedError extends QvacErrorBase {
+  constructor(modelType: string, detail: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.MODEL_FIT_REJECTED, [modelType, detail], cause))
+  }
+}
+
 export class ModelFileLocateFailedError extends QvacErrorBase {
   constructor(modelType: string, modelPath: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_FILE_LOCATE_FAILED, [modelType, modelPath], cause))
@@ -620,112 +626,6 @@ export class AudioEncodeFailedError extends QvacErrorBase {
   }
   toErrorResponseFields(): Record<string, unknown> {
     return { format: this.format, ...(this.details !== undefined && { details: this.details }) }
-  }
-}
-
-// ============== RAG operations ==============
-
-export class RAGSaveFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_SAVE_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGSearchFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_SEARCH_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGDeleteFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_DELETE_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGChunkFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_CHUNK_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGCloseWorkspaceFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGListWorkspacesFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_LIST_WORKSPACES_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGUnknownOperationError extends QvacErrorBase {
-  constructor(operation: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_UNKNOWN_OPERATION, [operation], cause))
-  }
-}
-
-export class RAGHyperDBFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_HYPERDB_FAILED, [details], cause))
-  }
-}
-
-export class RAGWorkspaceModelMismatchError extends QvacErrorBase {
-  constructor(workspace: string, existingModelId: string, newModelId: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH,
-        [workspace, existingModelId, newModelId],
-        cause
-      )
-    )
-  }
-}
-
-export class RAGWorkspaceNotFoundError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_NOT_FOUND, [workspace], cause))
-  }
-}
-
-export class RAGWorkspaceInUseError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_IN_USE, [workspace], cause))
-  }
-}
-
-/** A RAG operation on a workspace that another session's operation is using. */
-export class RAGWorkspaceBusyError extends QvacErrorBase {
-  readonly workspace: string
-
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_BUSY, [workspace], cause))
-    this.workspace = workspace
-  }
-
-  toErrorResponseFields(): Record<string, unknown> {
-    return { workspace: this.workspace }
-  }
-}
-
-export class RAGWorkspaceNotOpenError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_NOT_OPEN, [workspace], cause))
   }
 }
 

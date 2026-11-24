@@ -12,7 +12,7 @@ const STOP_REASONS = [
     "contextOverflow",
 ];
 /**
- * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
+ * Normalize a raw binding event into `Output` / `Error` / `JobEnded` /
  * `FinetuneProgress`, or `null` to drop it.
  */
 function mapAddonEvent(rawEvent, rawData, rawError) {
@@ -71,7 +71,7 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     return { type: type, data: rawData, error: rawError };
 }
 /**
- * An interface between Bare addon in C++ and JS runtime.
+ * The JavaScript interface to the native or WebAssembly engine binding.
  */
 class LlamaInterface {
     _binding;
@@ -90,7 +90,7 @@ class LlamaInterface {
         return Promise.resolve(this._binding.activate(this._handle));
     }
     /**
-     * Active jobs (in-flight + queued) per the native scheduler — the
+     * Active jobs (in-flight + queued) reported by the binding — the
      * authoritative admission count.
      */
     activeJobs() {
@@ -113,7 +113,7 @@ class LlamaInterface {
     }
     /**
      * Cancel every inference job live at the moment of this call (or pause a
-     * running finetune). Snapshot-based: the native binding captures the live
+     * running finetune). Snapshot-based: the binding captures the live
      * job ids synchronously before deferring the cancellation, so a job started
      * after this call is never touched.
      */
@@ -123,13 +123,12 @@ class LlamaInterface {
         await this._binding.cancel(this._handle, savePauseCheckpoint);
     }
     /**
-     * Cancel a single job by its native-assigned id, leaving other concurrent
-     * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
+     * Cancel a single job by its binding-assigned id, leaving other jobs running.
      */
     async cancelJob(id) {
         if (!this._handle)
             return;
-        // The native binding treats a missing id as cancel-all; cancelling every
+        // The bindings treat a missing id as cancel-all; cancelling every
         // job is cancel()'s job, so require an explicit id here.
         if (typeof id !== "number") {
             throw new TypeError("cancelJob(id) requires a numeric job id; use cancel() to cancel all jobs");
@@ -163,11 +162,11 @@ class LlamaInterface {
         return Promise.resolve(this._binding.calcTokens(this._handle, params));
     }
     /**
-     * Run finetuning when native binding provides support.
+     * Run finetuning when the selected binding provides support.
      */
     finetune(finetuningParams) {
         if (typeof this._binding.finetune !== "function") {
-            throw new Error("Finetuning is not exposed by this native binding");
+            throw new Error("Finetuning is not exposed by this binding");
         }
         if (finetuningParams === undefined) {
             throw new Error("Finetuning parameters are required");
@@ -183,9 +182,9 @@ class LlamaInterface {
     unload() {
         if (!this._handle)
             return Promise.resolve();
-        this._binding.destroyInstance(this._handle);
+        const destroyed = this._binding.destroyInstance(this._handle);
         this._handle = null;
-        return Promise.resolve();
+        return Promise.resolve(destroyed);
     }
 }
 exports.LlamaInterface = LlamaInterface;

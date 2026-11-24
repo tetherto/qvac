@@ -15,7 +15,8 @@ const {
   buildSignal,
   chunkify,
   BCI_TEST_THREADS,
-  NO_GPU
+  NO_GPU,
+  LANE_CONTEXT_PARAMS
 } = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
@@ -62,6 +63,7 @@ test(
       },
       {
         whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
+        contextParams: LANE_CONTEXT_PARAMS,
         miscConfig: { caption_enabled: false }
       }
     )
@@ -86,10 +88,12 @@ test(
 
     const bci = new BCIWhispercpp(
       {
-        files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
+        files: { model: MODEL_PATH, embedder: EMBEDDER_PATH },
+        opts: { stats: true }
       },
       {
         whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
+        contextParams: LANE_CONTEXT_PARAMS,
         miscConfig: { caption_enabled: false },
         bciConfig: bciConfigFor(sample)
       }
@@ -115,6 +119,13 @@ test(
       t.ok(typeof text === 'string' && text.length > 0, 'Should produce a transcription string')
       t.ok(segments.length > 0, 'Should have segments')
       t.ok(typeof wer === 'number' && wer >= 0, 'WER should be a non-negative number')
+      if (NO_GPU) {
+        t.is(
+          response.stats && response.stats.backendId,
+          0,
+          'A CPU lane (NO_GPU=true) should decode on the CPU backend (backendId 0)'
+        )
+      }
     } finally {
       await bci.destroy()
     }
@@ -215,6 +226,7 @@ test(
       },
       {
         whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
+        contextParams: LANE_CONTEXT_PARAMS,
         miscConfig: { caption_enabled: false },
         bciConfig: bciConfigFor(sample)
       }

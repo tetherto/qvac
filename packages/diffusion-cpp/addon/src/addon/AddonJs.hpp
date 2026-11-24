@@ -94,10 +94,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.llmVisionPath = args.getMapEntry(1, "llmVisionPath");
   config.tokenizerPath = args.getMapEntry(1, "tokenizerPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
+  config.taesdPath = args.getMapEntry(1, "taesdPath");
+  config.coremlUnetPath = args.getMapEntry(1, "coremlUnetPath");
+  config.coremlTaeDecoderPath = args.getMapEntry(1, "coremlTaeDecoderPath");
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
   // LTX-2 (LTXAV) extras: audio VAE + text-embedding connectors. Empty for
-  // every non-LTX model (getMapEntry returns "" for absent keys).
+  // every non-LTX model (JS wrappers pass "" for unused paths).
   config.audioVaePath = args.getMapEntry(1, "audioVaePath");
   config.embeddingsConnectorsPath =
       args.getMapEntry(1, "embeddingsConnectorsPath");
@@ -578,6 +581,9 @@ inline FitTask parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   config.llmVisionPath = args.getMapEntry(0, "llmVisionPath");
   config.tokenizerPath = args.getMapEntry(0, "tokenizerPath");
   config.vaePath = args.getMapEntry(0, "vaePath");
+  config.taesdPath = args.getMapEntry(0, "taesdPath");
+  config.coremlUnetPath = args.getMapEntry(0, "coremlUnetPath");
+  config.coremlTaeDecoderPath = args.getMapEntry(0, "coremlTaeDecoderPath");
   config.clipVisionPath = args.getMapEntry(0, "clipVisionPath");
   config.esrganPath = args.getMapEntry(0, "esrganPath");
   config.audioVaePath = args.getMapEntry(0, "audioVaePath");

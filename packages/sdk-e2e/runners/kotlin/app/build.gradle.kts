@@ -161,25 +161,16 @@ android {
         resources {
             // Both Paho jars carry an OSGi `bundle.properties` at the root; neither client reads it.
             excludes += setOf("bundle.properties")
-            // Paho finds its transports through ServiceLoader: the app's OkHttp WebSocket factory has
-            // to be appended to Paho's service file, not dropped in favour of it.
+            // Paho finds its transports through ServiceLoader: the runner's OkHttp WebSocket factory
+            // has to be appended to Paho's service file, not dropped in favour of it.
             merges += setOf("META-INF/services/**")
         }
-    }
-
-    testOptions {
-        unitTests.isReturnDefaultValues = true
     }
 }
 
 dependencies {
-    implementation("io.tether:qvac-sdk-android:local")
+    implementation(project(":runner"))
+    // The version the -PqvacSdkRepository Maven repository holds; the composite build ignores it.
+    implementation("io.tether:qvac-sdk-android:${providers.gradleProperty("qvacSdkVersion").getOrElse("local")}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
-    implementation("org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.20")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

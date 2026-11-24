@@ -8,3 +8,5 @@ dist/
 build/
 # build_wheel.py's staged runtime+worker; never committed, wheel-only.
 src/tetherto/qvac_sdk/_worker/
+# scripts/generate.py's output; packaged, never committed.
+src/tetherto/qvac_sdk/_generated/

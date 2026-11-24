@@ -7,16 +7,17 @@
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
  *
  * Options:
- *   --family        desktop | electron | python | snap; comma-separated for a union (seed)
+ *   --family        desktop | electron | python | kotlin | snap; comma-separated for a union (seed)
  *   --os            macos | linux | windows (default: this host)
  *   --suite, --exclude-suite, --filter, --include   the run's test selection
+ *   --include-file  more exact testIds, one per line
  *   --cache-root    SDK models cache dir, relative to the repository root, which is where the
  *                   cache action runs (default packages/sdk-e2e/.qvac-cache)
  *   --out           plan JSON to write (required)
  *
  * Must run after `npm run build`: it reads the compiled catalog and runners.
  */
-import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -51,6 +52,12 @@ const FAMILIES = {
     resourcePlatform: (_os, config) =>
       externalConsumer(config, 'python').env?.QVAC_RESOURCE_PLATFORM ?? 'desktop'
   },
+  // Reads the table under the Kotlin desktop runner's RESOURCE_PLATFORM (runners/kotlin/desktop).
+  kotlin: {
+    consumer: 'desktop',
+    platform: (_os, config) => externalConsumer(config, 'kotlin-desktop').platform,
+    resourcePlatform: (_os, config) => externalConsumer(config, 'kotlin-desktop').platform
+  },
   snap: { consumer: 'electron', platform: () => 'snap-linux', resourcePlatform: () => 'snap-linux' }
 }
 
@@ -77,6 +84,7 @@ const { values } = parseArgs({
     'exclude-suite': { type: 'string', default: '' },
     filter: { type: 'string', default: '' },
     include: { type: 'string', default: '' },
+    'include-file': { type: 'string', default: '' },
     'cache-root': { type: 'string', default: 'packages/sdk-e2e/.qvac-cache' },
     out: { type: 'string' }
   }
@@ -117,11 +125,19 @@ if (!Array.isArray(sdk.models)) {
 
 const config = await testSuite.loadConfig(projectDir)
 const catalog = await testSuite.loadTests(config, projectDir)
+const fromFile = values['include-file']
+  ? readFileSync(resolve(values['include-file']), 'utf8').split('\n')
+  : []
+const include = [values.include, ...fromFile]
+  .flatMap((ids) => ids.split(','))
+  .map((id) => id.trim())
+  .filter(Boolean)
+  .join(',')
 const selectionOptions = {
   suite: values.suite || undefined,
   excludeSuite: values['exclude-suite'] || undefined,
   filter: values.filter || undefined,
-  include: values.include || undefined
+  include: include || undefined
 }
 
 const cacheRoot = values['cache-root'].replace(/\\/g, '/').replace(/\/+$/, '')

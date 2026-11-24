@@ -23,13 +23,15 @@ std::mutex& backendRegistryMutex();
 // owned; `cpu` equals `device` when the CPU itself was selected.
 class GgmlBackends {
 public:
+  enum class OpenClPolicy { Allow, Disallow };
+
   // `backend` is an exact ggml device name (CPU, CUDA0, Vulkan0, MTL0 or
   // Metal0); empty picks a GPU, then an integrated GPU, then the CPU.
   // `backendsDir` overrides where dynamic backends are loaded from. `who`
   // prefixes error messages.
   GgmlBackends(
       const std::string& backend, const std::string& backendsDir, int threads,
-      const std::string& who);
+      const std::string& who, OpenClPolicy openClPolicy = OpenClPolicy::Allow);
   ~GgmlBackends();
   GgmlBackends(const GgmlBackends&) = delete;
   GgmlBackends& operator=(const GgmlBackends&) = delete;

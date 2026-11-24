@@ -273,19 +273,19 @@ function normalizeFinetuneParams(opts) {
     return out;
 }
 /**
- * Validates the single disk path. For a sharded GGUF, pass only the first
+ * Validates the single model path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 function validateModelPath(files) {
     if (!Array.isArray(files) || files.length === 0) {
-        throw new TypeError("files.model must contain one absolute disk path");
+        throw new TypeError("files.model must contain one absolute model path");
     }
     if (files.length !== 1) {
-        throw new TypeError("Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+        throw new TypeError("Weight streaming is no longer supported. Pass only one path in files.model; " +
             "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.");
     }
     if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
-        throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+        throw new TypeError("files.model[0] must be an absolute path string; weight buffers are not supported");
     }
     if (files[0].endsWith(".tensors.txt")) {
         throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
@@ -314,7 +314,7 @@ function sanitizePromptForLog(prompt) {
         return msg;
     });
 }
-/** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
+/** LLM client wrapping LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp = class LlmLlamacpp {
     static validateModelPath = validateModelPath;
     static assessFit = fit_1.assessFit;
@@ -716,7 +716,7 @@ const LlmLlamacpp = class LlmLlamacpp {
             return;
         this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error, jobId);
     }
-    /** Instantiate the native addon with the given parameters. */
+    /** Instantiate the selected engine binding with the given parameters. */
     _createAddon(configurationParams) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- resolved lazily so this module loads without prebuilds.
         const binding = require("./binding");
@@ -799,13 +799,17 @@ const LlmLlamacpp = class LlmLlamacpp {
                 // Native cleanup is unconditional: whatever settlement does, the
                 // addon must be released and the instance left cleanly unloaded.
                 this._jobSinks.clear();
-                if (this.addon) {
-                    await this.addon.unload();
-                    // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-                    // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-                    this.addon = null;
+                try {
+                    if (this.addon)
+                        await this.addon.unload();
                 }
-                this.state.configLoaded = false;
+                finally {
+                    // Reset JavaScript state even when native cleanup reports an error.
+                    // A later load must create a new addon instead of reusing a disposed
+                    // or partially destroyed handle.
+                    this.addon = null;
+                    this.state.configLoaded = false;
+                }
             }
         });
     }

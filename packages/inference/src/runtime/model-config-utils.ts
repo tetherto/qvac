@@ -1,4 +1,5 @@
 import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
+import { stereoDepthConfigSchema } from '@/schemas/stereo-depth'
 import type { ZodSchema } from 'zod'
 import {
   ModelType,
@@ -15,7 +16,7 @@ import {
 } from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
-import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
+import { sdcppLoadConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { decisionConfigSchema } from '@/schemas/decision'
 import { rerankConfigSchema } from '@/schemas/rerank'
@@ -28,6 +29,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppDecision]: 'llamacpp-decision',
   [ModelType.llamacppRerank]: 'llamacpp-rerank',
   [ModelType.ggmlImageEmbedding]: 'ggml-image-embedding',
+  [ModelType.ggmlStereoDepth]: 'ggml-stereo-depth',
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.parakeetTranscription]: 'parakeet',
@@ -48,12 +50,13 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
   [ModelType.llamacppDecision]: decisionConfigSchema,
   [ModelType.llamacppRerank]: rerankConfigSchema,
   [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema,
+  [ModelType.ggmlStereoDepth]: stereoDepthConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
-  [ModelType.sdcppGeneration]: sdcppConfigSchema,
+  [ModelType.sdcppGeneration]: sdcppLoadConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,
   [ModelType.ggmlVla]: vlaConfigSchema,
   [ModelType.ggmlClassification]: classificationConfigSchema

@@ -625,6 +625,40 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
       << "cancelled prefill must not leave KV cells resident";
 }
 
+// The browser cannot call back into a suspended Asyncify export to invoke
+// stop(). It supplies a cancellation predicate instead. Verify that predicate
+// enters the same rollback path before any prompt tokens are retained.
+TEST_F(
+    TextLlmContextCancelTest, PrefillCancellationPredicateRollsBackOnHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+
+  LlmModelContext shared = makeShared(*model);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, /*seqId=*/0);
+  std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
+  int checks = 0;
+
+  const LlmContext::EvalMessageResult result = driver.evalMessageWithTools(
+      chatMsgs,
+      /*tools=*/{},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/true,
+      [&checks] {
+        checks++;
+        return true;
+      });
+
+  EXPECT_GT(checks, 0);
+  EXPECT_FALSE(result.ok);
+  EXPECT_TRUE(result.cancelled);
+  EXPECT_TRUE(result.rollbackOk);
+  EXPECT_EQ(driver.getNPast(), 0);
+  EXPECT_EQ(seqPosMax(*model), -1);
+}
+
 TEST_F(
     TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnPureAttention) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());

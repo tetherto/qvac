@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// The sdk's test:integration, one leg of main's desktop, python, electron or snap family: this commit's inference and
-// test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer over MQTT, the results checked
-// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache>.
+// One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families, sdk-python's python
+// family and sdk-kotlin's kotlin family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm
+// installs, the consumer and the producer run over MQTT, and the results are checked and compared with the newest
+// dispatch run on the base branch. Usage: node ci/e2e.mjs <family|seed>. CI_MODELS_PHASE=plan installs and plans
+// the leg's models; the run then reuses the install (see _desktop.yml).
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
@@ -17,13 +19,21 @@ import {
   appendFileSync
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
 export const E2E = join(ROOT, 'packages/sdk-e2e')
-const FAMILIES = ['desktop', 'python', 'electron', 'snap']
+const FAMILIES = ['desktop', 'python', 'kotlin', 'electron', 'snap']
+// The package whose test:integration runs a family, which uploads <package>/test/results/e2e.
+const OWNERS = {
+  python: join(ROOT, 'packages/sdk-python'),
+  kotlin: join(ROOT, 'packages/sdk-kotlin')
+}
+// The external consumer in sdk-e2e's qvac-test.config.js that runs a non-JS family.
+const EXTERNAL = { python: 'python', kotlin: 'kotlin-desktop' }
+const ownerOf = (family) => OWNERS[family] ?? SDK
 // Checked before any value reaches a command line, as main's run step did.
 export const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/
 
@@ -86,10 +96,9 @@ export function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`)
 }
 
-// main's MQTT certificate step: each set secret into a file the test config reads by path.
+// main's MQTT certificate step: each set secret into a file the test config reads by path, in a fresh 0700 directory.
 export function mqttCerts(env) {
-  const dir = join(tmpdir(), 'mqtt-certs')
-  mkdirSync(dir, { recursive: true })
+  const dir = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'mqtt-certs-'))
   const out = {}
   for (const [secret, file, name] of [
     ['MQTT_CA_CERT', 'ca.crt', 'MQTT_CA_PATH'],
@@ -98,7 +107,7 @@ export function mqttCerts(env) {
   ]) {
     const value = (env[secret] || '').trim()
     if (!value) continue
-    writeFileSync(join(dir, file), value)
+    writeFileSync(join(dir, file), value, { mode: 0o600 })
     out[name] = join(dir, file)
   }
   return { ...env, ...out }
@@ -173,7 +182,9 @@ export async function compareBaseline({ env, workflow, artifact, reports, label 
     const event = env.GITHUB_EVENT_PATH
       ? JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
       : {}
+    // CI_BASE_REF: a workflow_run build's PR base, which GITHUB_BASE_REF leaves empty.
     const base =
+      env.CI_BASE_REF ||
       env.GITHUB_BASE_REF ||
       (env.GITHUB_REF_NAME !== event.repository?.default_branch
         ? event.repository?.default_branch
@@ -279,15 +290,38 @@ const platformOf = (label) => {
       : 'linux'
 }
 
-// main's sdk-python-venv: the runner's own Python, 3.10 or later, in a venv the python consumer's config points at.
+// The runner's own Python, 3.10 or later, in the venv the python consumer's config points at. The client is generated
+// from the SDK prepare built, packed with its bundled worker into the wheel PyPI gets, and installed from that wheel,
+// whose worker the tests then run on.
 function pythonVenv(env) {
   const py = spawnSync('python3', ['--version']).status === 0 ? 'python3' : 'python'
   run(py, ['-c', 'import sys; assert sys.version_info[:2] >= (3, 10), sys.version'], { env })
-  const venv = join(ROOT, 'packages/sdk-python/.venv')
+  const pkg = join(ROOT, 'packages/sdk-python')
+  const venv = join(pkg, '.venv')
   run(py, ['-m', 'venv', venv], { env })
   const bin = join(venv, existsSync(join(venv, 'bin/python')) ? 'bin/python' : 'Scripts/python')
-  run(bin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { env })
-  run(bin, ['-m', 'pip', 'install', '-e', `${join(ROOT, 'packages/sdk-python')}[dev]`], { env })
+  run(bin, ['-m', 'pip', 'install', '--upgrade', 'pip', 'build'], { env })
+  run(bin, ['-m', 'pip', 'install', '-e', `${pkg}[gen]`], { env })
+  run(bin, [join(pkg, 'scripts/generate.py')], { env })
+  const dist = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'sdk-python-dist-'))
+  run(bin, [join(pkg, 'scripts/build_wheel.py'), '--out-dir', dist], { env })
+  const wheel = readdirSync(dist).find((f) => f.endsWith('.whl'))
+  if (!wheel) throw new Error(`build_wheel.py wrote no wheel to ${dist}`)
+  run(bin, ['-m', 'pip', 'install', '--force-reinstall', '--no-deps', join(dist, wheel)], { env })
+  run(
+    bin,
+    [
+      '-c',
+      'import pathlib, tetherto.qvac_sdk as p; d = pathlib.Path(p.__file__).parent; assert "site-packages" in str(d) and (d / "_worker").is_dir(), d; print("worker under test:", d / "_worker")'
+    ],
+    { env }
+  )
+}
+
+// The Kotlin desktop program, with the client and its JVM worker host built from this checkout, the way a user gets
+// the experimental jvm-barekit. The worker bundles the sdk prepare built, so Gradle does not rebuild it.
+function kotlinDesktop(env) {
+  run('node', ['runners/kotlin/scripts/desktop.mjs', 'build', '--prebuilt-sdk'], { cwd: E2E, env })
 }
 
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.
@@ -350,13 +384,13 @@ function snapBuild(env) {
 
 // main's run step: the consumer in the background, the producer in the foreground for up to 60 minutes.
 async function consumerAndProducer({ env, runId, family, filter, options }) {
-  const external = family === 'python'
+  const external = EXTERNAL[family]
   const consumerArgs = [
     'qvac-test',
     external ? 'run:consumer:external' : `run:consumer:${family}`,
     `--runId=${runId}`,
     '--config=.',
-    ...(external ? ['--name=python'] : []),
+    ...(external ? [`--name=${external}`] : []),
     ...(family === 'electron' ? ['--skip-build'] : []),
     ...(family === 'snap' ? ['--skip-build', '--skip-snap-install'] : [])
   ]
@@ -411,7 +445,7 @@ export function seedSnapModels(from = join(E2E, '.qvac-cache'), home = homedir()
   console.log(`Seeded the Snap's models from ${from}`)
 }
 
-// The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves.
+// The model cache the consumers download into.
 function modelCache(env) {
   const dir = join(E2E, '.qvac-cache')
   mkdirSync(dir, { recursive: true })
@@ -420,12 +454,92 @@ function modelCache(env) {
   return { ...env, QVAC_CONFIG_PATH: config }
 }
 
+// Relative to the workspace the cache action runs in.
+export function cacheRoot(env, dir = join(E2E, '.qvac-cache')) {
+  return relative(env.GITHUB_WORKSPACE || ROOT, dir)
+    .split(sep)
+    .join('/')
+}
+
+export function planArgs({
+  env,
+  families,
+  os,
+  options = {},
+  tests = '',
+  out,
+  include = includeFile
+}) {
+  return [
+    'scripts/model-cache-plan.mjs',
+    `--family=${families}`,
+    ...(os ? [`--os=${os}`] : []),
+    `--cache-root=${cacheRoot(env)}`,
+    `--out=${out}`,
+    ...(options.suite ? [`--suite=${options.suite}`] : []),
+    ...(options.exclude ? [`--exclude-suite=${options.exclude}`] : []),
+    ...(tests ? [`--filter=${tests}`] : []),
+    ...(options.include ? [`--include-file=${include(options.include)}`] : [])
+  ]
+}
+
+const preparedMarker = (env) =>
+  join(env.RUNNER_TEMP || tmpdir(), `sdk-e2e-prepared-${env.CONFIG || 'local'}`)
+const head = () => run('git', ['rev-parse', 'HEAD'], { capture: true }).trim()
+
+function readPlan(env) {
+  if (!env.MODELS_PLAN || !existsSync(env.MODELS_PLAN)) return null
+  return JSON.parse(readFileSync(env.MODELS_PLAN, 'utf8'))
+}
+
+// Downloads only what the restore missed; without a plan, everything.
+function bootstrap(family, env, plan) {
+  if (plan && env.MODELS_COMPLETE === 'true') {
+    return console.log(
+      'The per-model cache restored every model this leg needs; skipping the bootstrap'
+    )
+  }
+  const missing = { QVAC_E2E_BOOTSTRAP_MODELS: env.MODELS_MISSING || '' }
+  if (family === 'snap') {
+    const deps = plan?.legs?.[0]?.deps
+    if (deps && !deps.length) {
+      return console.log('The plan names no model deps; skipping the bootstrap')
+    }
+    const narrowed = deps ? { ...missing, QVAC_E2E_BOOTSTRAP_DEPS: JSON.stringify(deps) } : {}
+    return run(
+      'npx',
+      ['qvac-test', 'run:bootstrap:snap', '--config=.', '--skip-build', '--skip-snap-install'],
+      { cwd: E2E, env: { ...env, ...narrowed } }
+    )
+  }
+  if (plan) {
+    return run('node', ['scripts/model-cache-bootstrap.mjs', '--plan', env.MODELS_PLAN], {
+      cwd: E2E,
+      env: { ...env, ...missing }
+    })
+  }
+  run(
+    'npx',
+    ['qvac-test', `run:bootstrap:${EXTERNAL[family] ? 'desktop' : family}`, '--config=.'],
+    {
+      cwd: E2E,
+      env
+    }
+  )
+}
+
 async function main(family, env) {
-  // cache:models: the desktop bootstrap alone, the model set the desktop and python legs restore.
-  if (family === 'cache') {
+  // on-merge-sdk-e2e-model-cache.yml: install and plan every family it seeds.
+  if (family === 'seed') {
     const e = modelCache(prepare(env))
     run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
-    run('npx', ['qvac-test', 'run:bootstrap:desktop', '--config=.'], { cwd: E2E, env: e })
+    if (env.GITHUB_ENV) appendFileSync(env.GITHUB_ENV, `QVAC_CONFIG_PATH=${e.QVAC_CONFIG_PATH}\n`)
+    const out = join(env.RUNNER_TEMP || tmpdir(), 'sdk-e2e-model-cache-plan.json')
+    const families = list('families', env.SEED_FAMILIES)
+    run('node', planArgs({ env: e, families, os: env.SEED_OS, out }), {
+      cwd: E2E,
+      env: e
+    })
     return
   }
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
@@ -442,14 +556,39 @@ async function main(family, env) {
     verifySpeechPreflight,
     collectNativeCrashes
   } = await import('./speech-preflight.mjs')
+  if (env.CI_MODELS_PHASE === 'plan') {
+    // A speech preflight installs its own build in the run.
+    if (family === 'desktop' && existsSync(join(SDK, 'ci/speech-preflight.json'))) {
+      return console.log(
+        'Speech preflight: no model plan; the run installs and downloads everything'
+      )
+    }
+    const e = prepare(env)
+    writeFileSync(preparedMarker(env), `${head()}\n`)
+    const out = join(env.RUNNER_TEMP || tmpdir(), `sdk-e2e-model-cache-plan-${label}.json`)
+    run('node', planArgs({ env, families: family, os: platform, options, tests, out }), {
+      cwd: E2E,
+      env: e
+    })
+    return
+  }
   const speechPreflight = family === 'desktop' ? await prepareSpeechPreflight(ROOT, env) : null
-  let e = prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
+  const marker = preparedMarker(env)
+  const prepared =
+    !speechPreflight && existsSync(marker) && readFileSync(marker, 'utf8').trim() === head()
+  if (prepared) console.log('Reusing the plan phase install')
+  let e = prepared
+    ? mqttCerts(env)
+    : prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
   verifySpeechPreflight(E2E, speechPreflight)
+  const plan = readPlan(env)
   const startedAt = Date.now()
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
-    if (family === 'desktop' || family === 'python') {
+    if (family === 'kotlin') kotlinDesktop(e)
+    // The bootstrap below runs the JS desktop consumer, on the worker this bundles.
+    if (family === 'desktop' || EXTERNAL[family]) {
       run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
     }
     if (family === 'snap') {
@@ -459,23 +598,10 @@ async function main(family, env) {
       }
       snapBuild(e)
       seedSnapModels()
-      run(
-        'npx',
-        ['qvac-test', 'run:bootstrap:snap', '--config=.', '--skip-build', '--skip-snap-install'],
-        { cwd: E2E, env: e }
-      )
+      bootstrap(family, e, plan)
     } else {
       e = modelCache(e)
-      // As main: an exact hit already holds the desktop bootstrap's models.
-      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
-        console.log('Models restored from the cache; skipping the bootstrap')
-      } else {
-        run(
-          'npx',
-          ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
-          { cwd: E2E, env: e }
-        )
-      }
+      bootstrap(family, e, plan)
     }
     if (family === 'electron') {
       run('npx', ['qvac-test', 'build:consumer:electron', '--config=.', '--skip-install'], {
@@ -515,7 +641,8 @@ async function main(family, env) {
         startedAt
       )
     }
-    keepResults(join(SDK, 'test/results/e2e', label), [
+    const owner = ownerOf(family)
+    keepResults(join(owner, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),
       ...snaps
@@ -523,7 +650,7 @@ async function main(family, env) {
     await compareBaseline({
       env: e,
       workflow: 'sdk-e2e.yml',
-      artifact: `sdk-results-${env.CONFIG}`,
+      artifact: `${basename(owner)}-results-${env.CONFIG}`,
       reports,
       label
     })

@@ -3,7 +3,8 @@
 //
 //   device.mjs prepare   build the APK and install it
 //   device.mjs run       start the app on this run and follow its log until it reports done
-//   device.mjs build     build the APK only (CI; --prebuilt-sdk when packages/sdk is already built)
+//   device.mjs build     build the APK only (CI; --prebuilt-sdk when packages/sdk is already built,
+//                        --maven to build it against the SDK's Maven package instead of its source)
 //
 // `prepare` runs before the producer: its consumer-registration window is too short for a build and
 // a large APK install. The app speaks MQTT itself, so `run` only points it at the broker.
@@ -11,7 +12,7 @@
 // ANDROID_SERIAL when several are connected.
 
 import { execFile, spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,11 +20,8 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const projectDir = path.resolve(here, '..')
 const e2eRoot = path.resolve(projectDir, '../..')
-const gradlew = path.resolve(
-  e2eRoot,
-  '../sdk-kotlin',
-  process.platform === 'win32' ? 'gradlew.bat' : 'gradlew'
-)
+const sdkKotlin = path.resolve(e2eRoot, '../sdk-kotlin')
+const gradlew = path.join(sdkKotlin, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew')
 const builtApk = path.join(projectDir, 'app/build/outputs/apk/release/app-release.apk')
 const apk = path.join(e2eRoot, 'build/consumers/kotlin-android/consumer.apk')
 const appPackage = 'io.tether.qvac.e2e.kotlin'
@@ -66,21 +64,30 @@ function build() {
   // aio only: the Kotlin SDK's other runtime profiles are not needed here.
   // --prebuilt-sdk: CI builds packages/sdk before packing it; skip Gradle's rebuild and its Python.
   const prebuilt = process.argv.includes('--prebuilt-sdk')
-    ? ['-x', ':sdk-kotlin:android-barekit:buildWorkspaceSdk']
-    : []
-  const args = [
-    ':app:assembleRelease',
-    '-PqvacProfile=aio',
-    '--console=plain',
-    ...daemon,
-    ...prebuilt
-  ]
-  const result = spawnSync(gradlew, args, {
-    cwd: projectDir,
-    stdio: 'inherit',
-    env: { ...process.env, ANDROID_HOME: sdk }
-  })
-  if (result.status !== 0) fail(`gradle exited with code ${result.status}`)
+  const gradle = (cwd, tasks) => {
+    const args = [...tasks, '-PqvacProfile=aio', '--console=plain', ...daemon]
+    const result = spawnSync(gradlew, args, {
+      cwd,
+      stdio: 'inherit',
+      env: { ...process.env, ANDROID_HOME: sdk }
+    })
+    if (result.status !== 0) fail(`gradle exited with code ${result.status}`)
+  }
+  if (process.argv.includes('--maven')) {
+    // The SDK's own Maven publication, in the repository its consumer checks read.
+    const skip = prebuilt ? ['-x', ':android-barekit:buildWorkspaceSdk'] : []
+    gradle(sdkKotlin, ['publishSdkToBuildRepository', ...skip])
+    const { version } = JSON.parse(readFileSync(path.join(sdkKotlin, 'package.json'), 'utf8'))
+    const repository = path.join(sdkKotlin, 'build/maven-repository')
+    gradle(projectDir, [
+      ':app:assembleRelease',
+      `-PqvacSdkRepository=${repository}`,
+      `-PqvacSdkVersion=${version}`
+    ])
+  } else {
+    const skip = prebuilt ? ['-x', ':sdk-kotlin:android-barekit:buildWorkspaceSdk'] : []
+    gradle(projectDir, [':app:assembleRelease', ...skip])
+  }
   mkdirSync(path.dirname(apk), { recursive: true })
   copyFileSync(builtApk, apk)
   console.log(`📦 ${path.relative(process.cwd(), apk)}`)
