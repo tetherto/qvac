@@ -47,7 +47,7 @@
     "corestore": "^7.4.5",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
-    "rag-e2e-plugin": "file:./fixtures/rag-plugin",
+    "rag-e2e-plugin": "file:./plugins/rag",
     "react-native": "0.88.1",
     "react-native-bare-kit": "^0.17.1"
   },

@@ -146,7 +146,8 @@ export function createRagOps(host) {
     },
 
     // `embedWith` embeds each chunk here first, so the documents go in pre-embedded.
-    async ingest({ store, namespace, documents, abortAfterDocuments, embedWith }) {
+    // `inSpace` stamps pre-embedded documents with the namespace's space.
+    async ingest({ store, namespace, documents, abortAfterDocuments, embedWith, inSpace }) {
       const { rag } = storeOf(store)
       const options = abortAfterDocuments ? abortAfterCommits(abortAfterDocuments) : {}
       if (embedWith) {
@@ -161,6 +162,9 @@ export function createRagOps(host) {
           embedded.push({ ...doc, spaceId, chunks })
         }
         documents = embedded
+      } else if (inSpace) {
+        const spaceId = await spaceIdOf(rag, namespace)
+        documents = documents.map((doc) => ({ ...doc, spaceId }))
       }
       return await rag.ingest({ namespace, documents }, options)
     },

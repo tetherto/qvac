@@ -5,7 +5,7 @@
 //   TurboVec), reached with `invokePlugin`, embedding in-process on the loaded model.
 // - `node`: the consumer runs @qvac/rag itself with an embeddings port over the SDK's `embed()`,
 //   through the `ragLocal` step binding.
-// Both run the same ops (`fixtures/rag-plugin/ops.js`) and answer under `result`.
+// Both run the same ops (`plugins/rag/ops.js`) and answer under `result`.
 import type { Step, TestDefinition } from '@qvac/test-suite'
 
 type Driver = 'bare' | 'node'
@@ -466,7 +466,8 @@ const CASES: Case[] = [
   },
   {
     id: 'ingest-dimension-mismatch',
-    about: 'a pre-embedded chunk of the wrong length is refused as INVALID_INPUT',
+    about:
+      'a pre-embedded chunk of the wrong length, in the namespace space, is refused as EMBEDDING_DIMENSION_MISMATCH',
     steps: (d) => [
       ...setup(d),
       ...rejects(
@@ -475,9 +476,10 @@ const CASES: Case[] = [
         {
           store: 'main',
           namespace: NS,
+          inSpace: true,
           documents: [{ id: 'x', chunks: [{ content: 'hello', embedding: [0.1, 0.2, 0.3] }] }]
         },
-        'INVALID_INPUT'
+        'EMBEDDING_DIMENSION_MISMATCH'
       )
     ]
   },
