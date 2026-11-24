@@ -120,44 +120,27 @@ android {
     }
 }
 
-val npmCi by tasks.registering(Exec::class) {
-    description = "Install pinned QVAC Android runtime dependencies"
-    workingDir(runtimeRoot)
-    commandLine("npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-package-lock")
-    inputs.files(
-        runtimeRoot.file("package.json"),
-    )
-    outputs.dir(runtimeRoot.dir("node_modules"))
-}
-
-// A checkout of this package alone (no sibling packages/sdk, as the sparse
-// clone in scripts/install-local.sh makes) bundles the exact-pinned @qvac/sdk
-// that npmCi installs. The worker build and the inputs that read the sibling
-// packages exist only in the monorepo.
+// The worker is bundled from the sibling packages/sdk.
 val workspaceSdk = runtimeRoot.dir("../sdk")
 val workspaceInference = runtimeRoot.dir("../inference")
-val hasWorkspaceSdk = workspaceSdk.file("package.json").asFile.exists()
 
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
     description = "Build packages/sdk with the shared worker build"
-    onlyIf { hasWorkspaceSdk }
     workingDir(runtimeRoot)
-    commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
-    if (hasWorkspaceSdk) {
-        inputs.dir(workspaceSdk.dir("src"))
-        inputs.dir(workspaceInference.dir("src"))
-        inputs.files(
-            workspaceSdk.file("package.json"),
-            workspaceSdk.file("tsconfig.json"),
-            workspaceSdk.file("tsconfig.alias.json"),
-            workspaceSdk.file("scripts/link-workspace-inference.mjs"),
-            workspaceInference.file("package.json"),
-            workspaceInference.file("tsconfig.build.json"),
-            workspaceInference.file("tsconfig.alias.json"),
-            runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
-        )
-        outputs.dirs(workspaceSdk.dir("dist"), workspaceInference.dir("dist"))
-    }
+    commandLine(rootProject.extra["python"] as String, "../sdk-python/scripts/build_worker.py", "--force")
+    inputs.dir(workspaceSdk.dir("src"))
+    inputs.dir(workspaceInference.dir("src"))
+    inputs.files(
+        workspaceSdk.file("package.json"),
+        workspaceSdk.file("tsconfig.json"),
+        workspaceSdk.file("tsconfig.alias.json"),
+        workspaceSdk.file("scripts/link-workspace-inference.mjs"),
+        workspaceInference.file("package.json"),
+        workspaceInference.file("tsconfig.build.json"),
+        workspaceInference.file("tsconfig.alias.json"),
+        runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
+    )
+    outputs.dirs(workspaceSdk.dir("dist"), workspaceInference.dir("dist"))
 }
 
 val runtimeBundleLock = gradle.sharedServices.registrations.getByName("qvacRuntimeBundleLock").service
@@ -166,7 +149,7 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
     tasks.register<Exec>("prepare${profile.name.replaceFirstChar(Char::uppercase)}QvacAndroidRuntime") {
         description = "Bundle the ${profile.name} QVAC worker and link Android addons"
         usesService(runtimeBundleLock)
-        dependsOn(npmCi, buildWorkspaceSdk)
+        dependsOn(buildWorkspaceSdk)
         workingDir(runtimeRoot)
         commandLine("node", "scripts/prepare-runtime.mjs")
         environment("QVAC_KOTLIN_CONFIG", runtimeRoot.file(profile.configFile).asFile.absolutePath)
@@ -179,17 +162,13 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
             runtimeRoot.file("package.json"),
             runtimeRoot.file("scripts/prepare-runtime.mjs"),
         )
-        if (hasWorkspaceSdk) {
-            inputs.files(
-                workspaceSdk.file("package.json"),
-                workspaceSdk.file("LICENSE"),
-                workspaceSdk.file("NOTICE"),
-            )
-            inputs.dir(workspaceSdk.dir("dist"))
-            inputs.dir(workspaceInference.dir("dist"))
-        } else {
-            inputs.dir(runtimeRoot.dir("node_modules/@qvac/sdk"))
-        }
+        inputs.files(
+            workspaceSdk.file("package.json"),
+            workspaceSdk.file("LICENSE"),
+            workspaceSdk.file("NOTICE"),
+        )
+        inputs.dir(workspaceSdk.dir("dist"))
+        inputs.dir(workspaceInference.dir("dist"))
         inputs.file(runtimeRoot.file(profile.configFile))
         outputs.dir(layout.buildDirectory.dir("generated/qvac/${profile.name}"))
     }
