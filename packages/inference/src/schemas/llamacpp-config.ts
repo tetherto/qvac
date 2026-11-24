@@ -115,7 +115,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.'
+      'Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding. The slots share one KV cache and each request is limited to `ctx_size / parallel` tokens. With `ctx_size` unset, auto-fit sizes the whole pool, so each slot gets the fitted context divided by `parallel`.'
     ),
   tools: z
     .boolean()
@@ -417,7 +417,7 @@ export const llmConfigBaseSchema = z.object({
     .max(64)
     .optional()
     .describe(
-      "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+      "Longest draft per step (1–64, default 5 with `'draft-dflash'` and 3 with `'draft-mtp'`). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
     ),
   spec_draft_n_min: z
     .number()
