@@ -1,4 +1,5 @@
 import test from 'brittle'
+import type { TranscribeStreamRequest } from '@qvac/inference/surface'
 import {
   createTranscribeStreamSession,
   processLine,
@@ -12,8 +13,12 @@ interface FakeRequestStream {
   destroy(): void
 }
 
-function createDuplexFactory(lines: string[]) {
-  return async function () {
+function createDuplexFactory(
+  lines: string[],
+  onRequest?: (request: TranscribeStreamRequest) => void
+) {
+  return async function (request: TranscribeStreamRequest) {
+    onRequest?.(request)
     const requestStream: FakeRequestStream = {
       write() {},
       end() {},
@@ -98,7 +103,13 @@ for (const chunkMs of [1000, 5000, 10000]) {
       undefined,
       processLine,
       'TranscribeStreamSession',
-      createDuplexFactory([JSON.stringify({ type: 'error', message })]) as never
+      createDuplexFactory([JSON.stringify({ type: 'error', message })], (request) => {
+        t.alike(
+          request.parakeetStreamingConfig,
+          { chunkMs, emitPartials: false },
+          'the SDK forwards the requested decode window and partial-output setting'
+        )
+      }) as never
     )
 
     const outcomes = await Promise.allSettled([
