@@ -10,7 +10,11 @@
   six value classes' vtables and typeinfo of the `jinja` engine, named
   exactly, plus `fs_validate_filename` and `glob_match`, on ELF, Mach-O and
   Windows. On ELF it also exports libcommon's `common_json::get<T>()`
-  specializations, which the existing `common_*` pattern missed there.
+  specializations, which the existing `common_*` pattern missed there, and
+  `common_json_error`'s typeinfo and vtable. Built from a `qvac-fabric` port
+  that defines its destructor out of line (tetherto/qvac-fabric-llm.cpp#497),
+  the runtime then holds the only copy, so an addon catching it matches the
+  type the runtime throws.
 - The CMake config records the `qvac-fabric` port the runtime is built from, as
   `QVAC_FABRIC_PORT_VERSION`; an addon that links code from the port itself is
   checked against it when it configures. The runtime reports the same port from

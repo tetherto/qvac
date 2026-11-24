@@ -105,6 +105,19 @@
     _ZTVN5jinja14value_object_tE;
     _ZTVN5jinja14value_string_tE;
 
+    # libcommon's common_json_error, which libcommon throws and server-context
+    # catches (json_value() in its server-common.h). From the qvac-fabric port
+    # that defines its destructor out of line in json.cpp
+    # (tetherto/qvac-fabric-llm.cpp#497), its typeinfo and vtable are emitted
+    # only in this runtime, and an addon catches this type, not a local copy
+    # that an address comparison of typeinfo misses. Earlier ports emit weak
+    # copies, which these entries export to no effect. Listed for Android and
+    # the ASan build; the destructor matches common_* below, and Mach-O and
+    # Windows match common_ in their mangled or decorated names.
+    _ZTI17common_json_error;
+    _ZTS17common_json_error;
+    _ZTV17common_json_error;
+
     # libcommon's common_json::get<T>() specializations, which server-context
     # calls. The extern "C++" common_* below cannot match them: a function
     # template demangles with its return type first ("double

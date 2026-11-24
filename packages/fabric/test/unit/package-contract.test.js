@@ -187,6 +187,16 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
   // A demangled-name pattern misses function templates, whose demangled names
   // start with the return type, so common_json::get<T>() is matched mangled.
   assert.ok(mapLines.includes('_ZNK11common_json3getI*;'))
+  // common_json_error's typeinfo and vtable, which libcommon throws and
+  // server-context catches; on Mach-O and Windows common_ covers them.
+  for (const name of [
+    '_ZTI17common_json_error',
+    '_ZTS17common_json_error',
+    '_ZTV17common_json_error'
+  ]) {
+    assert.ok(mapLines.includes(name + ';'), name)
+  }
+  assert.ok(read('exports.txt').split(/\r?\n/).includes('*common_*'))
 
   const exportsTxt = read('exports.txt').split(/\r?\n/)
   const exportsJinja = exportsTxt.filter((line) => line.includes('5jinja'))
