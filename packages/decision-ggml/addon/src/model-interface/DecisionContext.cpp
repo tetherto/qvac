@@ -15,7 +15,6 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <mutex>
@@ -24,7 +23,6 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
-#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -88,16 +86,6 @@ void failIfLoopDead(const State& d, const std::string& where) {
         toString(DecodeFailed),
         where + "the decision loop stopped: " + d.loopError);
   }
-}
-
-// Whether @p e is upstream's common_json_error (bad JSON, a value of the wrong
-// type). Compared by name as well as by type: the fabric runtime throws it
-// with its own type_info, which it does not export, and Linux libc++ matches
-// a catch clause by type_info address, so `catch (const common_json_error&)`
-// misses it there.
-bool isJsonError(const std::exception& e) {
-  return dynamic_cast<const common_json_error*>(&e) != nullptr ||
-         std::strcmp(typeid(e).name(), typeid(common_json_error).name()) == 0;
 }
 
 [[noreturn]] void failRequest(const std::string& message) {
@@ -582,6 +570,10 @@ std::string runOne(
     }
     failRequest(at(where) + e.what());
   } catch (const common_json_error& e) {
+    // Bad JSON or a value of the wrong type. The runtime holds the only
+    // type_info of common_json_error (its destructor is out of line in the
+    // port, which the exports function checks is this addon's), so this
+    // matches what the runtime throws.
     failIfLoopDead(d, at(where));
     if (stop()) {
       failStopped(d, at(where));
@@ -591,9 +583,6 @@ std::string runOne(
     failIfLoopDead(d, at(where));
     if (stop()) {
       failStopped(d, at(where));
-    }
-    if (isJsonError(e)) {
-      failRequest(at(where) + e.what());
     }
     fail(DecodeFailed, at(where) + e.what());
   } catch (...) {

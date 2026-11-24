@@ -269,8 +269,9 @@ safeTest(
       // Upstream reads a question's type with json_value(), which catches the
       // runtime's common_json_error for a value of the wrong type and uses the
       // default (no type), so upstream's own check names the question. Were
-      // that catch to miss the runtime's type_info (Linux, libc++), the raw
-      // JSON type error would come back instead.
+      // that catch to miss the runtime's type_info (compared by address on
+      // Linux and Intel macOS), the raw JSON type error would come back
+      // instead.
       const wrongType = await decide(engine, {
         state: 'x',
         questions: { q: { type: 7, instructions: '?', criteria: { a: 'A', b: 'B' } } }
