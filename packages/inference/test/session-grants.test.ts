@@ -459,13 +459,21 @@ test('openSession validates the grant and opens no session on failure', async fu
   await withRuntime(
     [
       makePlugin('asr', ['transcribe', 'transcribeStream'], [CAPABILITY_CONTRACTS.transcription]),
-      makePlugin('tool', ['run'], [{ id: 'acme.tool', version: 1, operations: ['run'] }])
+      makePlugin('tool', ['run'], [{ id: 'acme.tool', version: 1, operations: ['run'] }]),
+      makePlugin(
+        'search',
+        ['search/v1', 'find all'],
+        [{ id: 'acme.search', version: 1, operations: ['search/v1', 'find all'] }]
+      )
     ],
     async () => {
       for (const [grant, why] of [
         [['transcription'], 'malformed'],
         [['Transcription/transcribe'], 'malformed ID'],
         [[''], 'malformed empty'],
+        [['transcription/'], 'malformed empty operation'],
+        [['/transcribe'], 'malformed empty ID'],
+        [['acme.search/search/v2'], 'not an operation of acme.search'],
         [['transcription/transcribe', 'transcription/transcribe'], 'duplicate'],
         [['embedding/embed'], 'no plugin declares embedding'],
         [['transcription/translate'], 'not an operation of transcription'],
@@ -495,6 +503,35 @@ test('openSession validates the grant and opens no session on failure', async fu
       ])
       await open('empty', [])
       t.alike([...(getSessionGrant('empty') ?? ['unset'])], [], 'an empty grant is kept')
+
+      await open('odd-names', ['acme.search/search/v1', 'acme.search/find all'])
+      t.alike(
+        [...(getSessionGrant('odd-names') ?? [])].sort(),
+        ['acme.search/find all', 'acme.search/search/v1'],
+        'an operation named with a slash or a space can be granted'
+      )
+
+      addModel('search-model', 'search')
+      try {
+        await open('slash-only', ['acme.search/search/v1'])
+        const invoke = (handler: string) =>
+          asSession('slash-only', {
+            type: 'pluginInvoke',
+            modelId: 'search-model',
+            handler,
+            params: {}
+          })
+        t.absent(
+          refusal(() => assertSessionGrant(invoke('search/v1'))),
+          'granted slash handler'
+        )
+        t.is(
+          refusal(() => assertSessionGrant(invoke('find all')))?.required,
+          'acme.search/find all'
+        )
+      } finally {
+        unregisterModel('search-model')
+      }
     }
   )
 })

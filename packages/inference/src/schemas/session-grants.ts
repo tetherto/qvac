@@ -24,28 +24,32 @@ export const RUNTIME_PERMISSION_OPERATIONS = [
 export type RuntimePermissionOperation = (typeof RUNTIME_PERMISSION_OPERATIONS)[number]
 
 /**
- * A permission names one operation: `<capability ID>/<operation>`, such as
+ * The permission for `operation` of the contract `contractId`. A permission
+ * names one operation: `<capability ID>/<operation>`, such as
  * `transcription/transcribe`, or `runtime/<operation>` for a runtime
  * operation. The capability ID is part of the name because two third-party
  * contracts may name an operation alike. A permission carries no major, so
  * its name does not change when the contract's version does.
  */
-export const SESSION_PERMISSION_PATTERN = new RegExp(
-  `^(${CAPABILITY_ID_PATTERN.source.slice(1, -1)})/([^/\\s]+)$`
-)
-
-/** The permission for `operation` of the contract `contractId`. */
 export function permissionFor(contractId: string, operation: string): string {
   return `${contractId}/${operation}`
 }
 
-/** Splits a permission into its namespace and operation, or `undefined` if malformed. */
+/**
+ * Splits a permission into its namespace and operation, or `undefined` if
+ * malformed. It splits at the first `/`: a capability ID never contains one,
+ * and a third-party operation name may, since any non-empty handler name is
+ * accepted at registration.
+ */
 export function parsePermission(
   permission: string
 ): { namespace: string; operation: string } | undefined {
-  const match = SESSION_PERMISSION_PATTERN.exec(permission)
-  if (!match || match[1] === undefined || match[2] === undefined) return undefined
-  return { namespace: match[1], operation: match[2] }
+  const slash = permission.indexOf('/')
+  if (slash === -1) return undefined
+  const namespace = permission.slice(0, slash)
+  const operation = permission.slice(slash + 1)
+  if (!CAPABILITY_ID_PATTERN.test(namespace) || operation.length === 0) return undefined
+  return { namespace, operation }
 }
 
 /**

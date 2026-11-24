@@ -25,12 +25,7 @@ type RequestType = Request['type']
  *   or, for the session methods, by the session handlers.
  */
 type GrantRule =
-  | 'capability'
-  | { operation: string }
-  | 'pluginInvoke'
-  | 'runtime'
-  | 'free'
-  | 'ownerOnly'
+  'capability' | { operation: string } | 'pluginInvoke' | 'runtime' | 'free' | 'ownerOnly'
 
 const GRANT_RULES = {
   completionStream: 'capability',
