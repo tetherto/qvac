@@ -452,8 +452,8 @@ const RULES: Rule[] = [
     match: /^qvac-rag-.*-bare$/,
     skip: {
       reason:
-        'Runs @qvac/rag in the rag-e2e-plugin worker fixture through step bodies: the Kotlin app bundles only the built-in plugins, and the mobile consumer has no step interpreter',
-      platforms: ['kotlin-android', 'mobile']
+        'Runs @qvac/rag in the rag-e2e-plugin worker fixture, which the JS consumers register in their worker config; the Python and Kotlin legs run the worker their package ships, which bundles only the built-in plugins, and the mobile consumer has no step interpreter',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
     }
   },
   {
@@ -461,7 +461,7 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'Runs @qvac/rag in the JS consumer process through the ragLocal binding, which only the desktop and Electron consumers have',
-      platforms: ['desktop-python', 'kotlin-android', 'mobile']
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
     }
   },
 
