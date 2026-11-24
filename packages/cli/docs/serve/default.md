@@ -511,24 +511,6 @@ curl -sS http://localhost:11435/qvac/v1/translate \
 }
 ```
 
-A [TranslatePsy Nano](https://huggingface.co/qvac/TranslatePsy-AfriNano) pack is configured the
-same way. Point an explicit entry at the pack's `model.intgemm.alphas.bin`: the SDK finds the
-`vocab.spm` beside it, and for an `en-xx` pack it adds the `##<TO>` target tag to every input.
-
-```json
-{
-  "serve": {
-    "models": {
-      "en-sw": {
-        "type": "nmt",
-        "src": "/models/TranslatePsy-AfriNano/en-xx/Base/intgemm/model.intgemm.alphas.bin",
-        "config": { "engine": "Bergamot", "from": "en", "to": "sw" }
-      }
-    }
-  }
-}
-```
-
 ## `POST /qvac/v1/ocr`
 
 Read the text in an image with an OCR model, backed by the SDK's `ocr()`.
