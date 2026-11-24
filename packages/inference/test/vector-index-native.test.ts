@@ -197,6 +197,8 @@ test('vector index: a native search cancelled while it runs rejects at once', as
   try {
     const index = await createVectorIndex({ dim: 32, storage: 'f32' })
     await index.add({ ids, vectors })
+    // Run the warm-up now, so the cancel below lands on the search itself.
+    await index.search({ query: vectors[0]!, k: 1 })
     const requestId = 'vi-native-cancel-search'
     const order: string[] = []
     const searching = handleVectorIndex({

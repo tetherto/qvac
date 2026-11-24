@@ -50,7 +50,11 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
     sessionId: request.sessionId,
     kind: 'vectorIndex'
   })
-  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+  // A dispose still runs: skipping it would leave the index open until its
+  // session closes.
+  if (ctx.signal.aborted && request.operation !== 'dispose') {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
   try {
     return await runOperation(request, ctx.requestId, ctx.signal)
   } catch (error) {

@@ -1,5 +1,4 @@
 import test from 'brittle'
-import { AbortController } from 'bare-abort-controller'
 import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import fs from 'bare-fs'
 import os from 'bare-os'
@@ -83,25 +82,4 @@ test('TurboVec loader resolves concurrent imports to the same constructor', asyn
   t.is(typeof first, 'object')
   t.is(first.constructor, second.constructor)
   t.is((await provider.create({ dim: 8, storage: 'q8' })).constructor, first.constructor)
-})
-
-test('TurboVec loader forwards the signal to the addon', async (t) => {
-  const provider = await isolatedProvider(
-    t,
-    `export class IdMapIndex {
-      static load(_path, options) {
-        options?.signal?.throwIfAborted()
-        return new IdMapIndex()
-      }
-    }`
-  )
-  const controller = new AbortController()
-  const reason = new Error('snapshot load cancelled')
-  controller.abort(reason)
-  try {
-    await provider.load('snapshot.qvi', { signal: controller.signal })
-    t.fail('loading with an aborted signal should reject')
-  } catch (error) {
-    t.is(error, reason)
-  }
 })

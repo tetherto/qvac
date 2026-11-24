@@ -136,8 +136,9 @@ function openIndex(
       return run()
     })
     // An aborted call settles before the calls ahead of it, so the next call
-    // still waits for those.
-    tail = Promise.all([previous, result.catch(() => {})])
+    // still waits for those. Resolving to undefined keeps each tail from
+    // holding the one before it.
+    tail = Promise.all([previous, result.catch(() => {})]).then(() => {})
     return result
   }
   return {
@@ -247,8 +248,8 @@ export function getTurboVecBackend(): VectorIndexBackend | undefined {
     async create(dim, storage) {
       return openIndex(await provider.create({ dim, storage }), storage)
     },
-    async load(path, signal) {
-      const index = await provider.load(path, callOptions(signal))
+    async load(path) {
+      const index = await provider.load(path)
       return openIndex(index, storageFromBitWidth((index as { bitWidth?: unknown }).bitWidth))
     }
   }

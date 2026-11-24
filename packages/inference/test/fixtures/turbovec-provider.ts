@@ -68,7 +68,7 @@ export function observableIndexProvider({
   // when the index is async.
   const gates: {
     create: (() => Promise<void>) | null
-    load: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    load: (() => Promise<void>) | null
     search: ((options?: TurboVecCallOptions) => Promise<void>) | null
     prepare: ((options?: TurboVecCallOptions) => Promise<void>) | null
     remove: ((id: bigint) => Promise<void>) | null
@@ -205,10 +205,10 @@ export function observableIndexProvider({
       if (gates.create) await gates.create()
       return createIndex(options.dim)
     },
-    async load(_path, options) {
+    async load() {
       calls.load++
       if (failures.load) fail('load')
-      if (gates.load) await gates.load(options)
+      if (gates.load) await gates.load()
       return createIndex(8, 8)
     }
   }

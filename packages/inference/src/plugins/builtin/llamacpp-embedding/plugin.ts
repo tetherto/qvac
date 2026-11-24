@@ -41,9 +41,9 @@ const turbovecIndexProvider: TurboVecIndexProvider = {
     const IdMapIndex = await getIdMapIndex()
     return new IdMapIndex(options)
   },
-  async load(snapshotPath, options) {
+  async load(snapshotPath) {
     const IdMapIndex = await getIdMapIndex()
-    return IdMapIndex.load(snapshotPath, options)
+    return IdMapIndex.load(snapshotPath)
   }
 }
 

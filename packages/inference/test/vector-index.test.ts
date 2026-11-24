@@ -109,6 +109,8 @@ for (const operation of ['create', 'load'] as const) {
       t.is(getRequestRegistry().cancel({ requestId }), 1, 'the open is in flight and cancellable')
       open.resolve()
       await expectRejects(t, () => pending, InferenceCancelledError, 'the open reports the cancel')
+      // A cancelled load frees its index once the open ends; shutdown waits for that.
+      await disposeAllVectorIndexes()
       t.is(calls[operation], 1)
       t.is(calls.dispose, 1, 'the index the cancelled caller opened is released')
       t.is(getOpenVectorIndexCount(), 0)
@@ -169,62 +171,88 @@ test('vectorIndex: a provider failure that races a cancel keeps its own error', 
   })
 })
 
-for (const operation of ['search', 'load'] as const) {
-  test(`vector index: an active ${operation} can reject before the provider finishes`, async (t) => {
-    await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
-      const index = operation === 'search' ? await createVectorIndex({ dim: 2 }) : undefined
-      const started = deferred()
-      const finish = deferred()
-      gates[operation] = (options) => {
-        const signal = options?.signal
-        return new Promise<void>((resolve, reject) => {
-          const abort = () => reject(signal?.reason)
-          signal?.addEventListener('abort', abort, { once: true })
-          void finish.promise.then(() => {
-            signal?.removeEventListener('abort', abort)
-            resolve()
-          })
-          started.resolve()
+test('vector index: an active search can reject before the provider finishes', async (t) => {
+  await withProvider(async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const index = await createVectorIndex({ dim: 2 })
+    const started = deferred()
+    const finish = deferred()
+    gates.search = (options) => {
+      const signal = options?.signal
+      return new Promise<void>((resolve, reject) => {
+        const abort = () => reject(signal?.reason)
+        signal?.addEventListener('abort', abort, { once: true })
+        void finish.promise.then(() => {
+          signal?.removeEventListener('abort', abort)
+          resolve()
         })
-      }
-      const requestId = `vi-cancel-active-${operation}`
-      const pending = handleVectorIndex(
-        index
-          ? {
-              type: 'vectorIndex',
-              operation: 'search',
-              indexId: index.indexId,
-              queries: [[1, 0]],
-              k: 1,
-              requestId
-            }
-          : {
-              type: 'vectorIndex',
-              operation: 'load',
-              path: tempSnapshotPath('aborted-active-load'),
-              requestId
-            }
-      )
-      let error: unknown
-      const settled = pending.catch((cause: unknown) => {
-        error = cause
+        started.resolve()
       })
-      try {
-        await Promise.race([started.promise, pending])
-        t.is(getRequestRegistry().cancel({ requestId }), 1)
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        t.ok(error instanceof InferenceCancelledError, 'cancellation reaches the active provider')
-      } finally {
-        finish.resolve()
-        await settled
-      }
-      if (operation === 'load') {
-        t.is(calls.load, 1)
-        t.is(getOpenVectorIndexCount(), 0, 'the cancelled load leaves no registered index')
-      }
+    }
+    const requestId = 'vi-cancel-active-search'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'search',
+      indexId: index.indexId,
+      queries: [[1, 0]],
+      k: 1,
+      requestId
     })
+    let error: unknown
+    const settled = pending.catch((cause: unknown) => {
+      error = cause
+    })
+    try {
+      await Promise.race([started.promise, pending])
+      t.is(getRequestRegistry().cancel({ requestId }), 1)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      t.ok(error instanceof InferenceCancelledError, 'cancellation reaches the active provider')
+    } finally {
+      finish.resolve()
+      await settled
+    }
   })
-}
+})
+
+test('vector index: an active load rejects at once and shutdown waits for it', async (t) => {
+  await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const started = deferred()
+    const finish = deferred()
+    gates.load = async () => {
+      started.resolve()
+      await finish.promise
+    }
+    const requestId = 'vi-cancel-active-load'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'load',
+      path: tempSnapshotPath('aborted-active-load'),
+      requestId
+    })
+    let shutDown = false
+    try {
+      await Promise.race([started.promise, pending])
+      t.is(getRequestRegistry().cancel({ requestId }), 1)
+      await expectRejects(
+        t,
+        () => pending,
+        InferenceCancelledError,
+        'the load reports the cancel before the native load ends'
+      )
+      const shutdown = disposeAllVectorIndexes().then(() => {
+        shutDown = true
+      })
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      t.is(shutDown, false, 'shutdown waits for the native load')
+      finish.resolve()
+      await shutdown
+    } finally {
+      finish.resolve()
+    }
+    t.is(calls.load, 1)
+    t.is(calls.dispose, 1, 'the index that opened after the cancel is freed')
+    t.is(getOpenVectorIndexCount(), 0)
+  })
+})
 
 test('vector index: a search cancelled during the warm-up prepares again next time', async (t) => {
   await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
@@ -256,6 +284,27 @@ test('vector index: a search cancelled during the warm-up prepares again next ti
     const [nearest] = await index.search({ query: [1, 0], k: 1 })
     t.is(nearest?.id, '1')
     t.is(calls.prepare, 1, 'the next search runs the warm-up again')
+  })
+})
+
+test('vectorIndex: a dispose cancelled before it begins still releases the index', async (t) => {
+  await withProvider(async (calls) => {
+    const index = await createVectorIndex({ dim: 2 })
+    const requestId = 'vi-cancel-before-dispose'
+    t.is(
+      getRequestRegistry().cancel({ requestId }),
+      0,
+      'the cancel lands before the dispose begins'
+    )
+    const response = await handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'dispose',
+      indexId: index.indexId,
+      requestId
+    })
+    t.is(response.operation, 'dispose')
+    t.is(calls.dispose, 1)
+    t.is(getOpenVectorIndexCount(), 0)
   })
 })
 

@@ -30,7 +30,7 @@ interface TrackedIndex {
 }
 
 const indexes = new Map<string, TrackedIndex>()
-const pendingIndexes = new Set<Promise<OpenVectorIndex>>()
+const pendingIndexes = new Set<Promise<unknown>>()
 
 function requireBackend(): VectorIndexBackend {
   const backend = getTurboVecBackend()
@@ -74,26 +74,52 @@ function failBackend(
 }
 
 // Keep pending opens reachable by shutdown until their indexes are registered.
-async function openVectorIndex(
+// A caller whose `signal` aborts stops waiting at once, but the native open
+// runs on, so it stays reachable until it ends and its index is freed: nothing
+// will hold the id of an index opened for a caller that has gone.
+function openVectorIndex(
   sessionId: string,
   action: () => OpenVectorIndex | Promise<OpenVectorIndex>,
   signal?: AbortSignal
-) {
+): Promise<{ index: OpenVectorIndex; indexId: string }> {
   const opening = (async () => {
     try {
       return await action()
     } catch (error) {
-      failBackend(error, signal)
+      failBackend(error, undefined)
     }
   })()
-  pendingIndexes.add(opening)
-  try {
-    const index = await opening
-    const indexId = track(index, sessionId)
-    return { index, indexId }
-  } finally {
-    pendingIndexes.delete(opening)
-  }
+  return new Promise((resolve, reject) => {
+    let abandoned = false
+    const onAbort = () => {
+      abandoned = true
+      reject(signal?.reason)
+    }
+    // Registers the index in the same step that settles this entry, so a
+    // shutdown waiting on it sees the index.
+    const settled = opening.then(
+      async (index) => {
+        if (abandoned) {
+          try {
+            await index.dispose()
+          } catch (error) {
+            getEngineLogger().warn('Failed to dispose a vector index opened after a cancel:', error)
+          }
+          return
+        }
+        signal?.removeEventListener('abort', onAbort)
+        resolve({ index, indexId: track(index, sessionId) })
+      },
+      (error: unknown) => {
+        signal?.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+    pendingIndexes.add(settled)
+    void settled.then(() => pendingIndexes.delete(settled))
+    if (signal?.aborted) onAbort()
+    else signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /**
@@ -164,7 +190,7 @@ export async function loadVectorIndex(
   const backend = requireBackend()
   const { index, indexId } = await openVectorIndex(
     resolveSessionId(params),
-    () => backend.load(resolveVectorIndexPath(params.path), signal),
+    () => backend.load(resolveVectorIndexPath(params.path)),
     signal
   )
   return {

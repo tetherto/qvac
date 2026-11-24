@@ -65,5 +65,5 @@ export interface OpenVectorIndex extends VectorIndexState {
 
 export interface VectorIndexBackend {
   create(dim: number, storage: VectorIndexStorage): OpenVectorIndex | Promise<OpenVectorIndex>
-  load(path: string, signal?: AbortSignal): OpenVectorIndex | Promise<OpenVectorIndex>
+  load(path: string): OpenVectorIndex | Promise<OpenVectorIndex>
 }

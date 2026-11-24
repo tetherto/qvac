@@ -33,14 +33,16 @@ no public cancel method, so cancelling an active call discards its result after
 native inference finishes. The model slot stays occupied until that point. Its
 plugin declares `cancel: { scope: 'none' }`.
 
-Vector index handlers skip a queued call when its request is cancelled. Reads
-and snapshot loads also pass the request signal to the provider. A provider
-that rejects an active read before its native work finishes must keep that work
-in order with later calls and wait for it before freeing the index. If a
-snapshot load rejects on abort, the provider frees any index that opens later.
-If the provider returns an index after cancellation, the handler releases it.
-A mutation that has started gets no signal: it runs to the end and returns its
-result, because the native index would apply it anyway.
+Vector index handlers skip a queued call when its request is cancelled, except
+a dispose, which always runs. Reads also pass the request signal to the
+provider. A provider that rejects an active read before its native work
+finishes must keep that work in order with later calls and wait for it before
+freeing the index. A cancelled snapshot load rejects at once without a signal
+reaching the provider: the registry keeps the native load reachable by shutdown
+until it ends, then frees the index it opened. A mutation that has started gets
+no signal: it runs to the end and returns its result, because the native index
+would apply it anyway. It counts as started once the calls queued before it
+have returned, so it can still wait in the provider behind a cancelled read.
 
 ## Caller-ended streams
 
