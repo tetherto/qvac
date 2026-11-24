@@ -17,6 +17,9 @@ const KV_CACHE_RUNTIME_ONLY_KEYS: ReadonlySet<string> = new Set([
 ])
 
 const KV_CACHE_DIR_IDS_DIR = 'kv-cache-dir-ids'
+const KV_CACHE_DIR_ID_PATTERN = /^[0-9a-f]{16}$/
+
+let temporaryFileCounter = 0
 
 const kvCacheDirIds = new Map<string, string>()
 
@@ -43,8 +46,10 @@ export async function recordKvCacheDirId(modelId: string, cacheDirId: string): P
   if (cacheDirId === modelId) return
   const filePath = persistedKvCacheDirIdPath(modelId)
   try {
+    const temporaryPath = `${filePath}.tmp-${Date.now()}-${temporaryFileCounter++}`
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true })
-    await fsPromises.writeFile(filePath, cacheDirId)
+    await fsPromises.writeFile(temporaryPath, cacheDirId)
+    await fsPromises.rename(temporaryPath, filePath)
   } catch (error) {
     logger.warn(
       `Could not record the KV cache folder of model ${modelId}; deleteCache by this model id in a later process will miss it:`,
@@ -62,7 +67,7 @@ export async function resolveKvCacheDirId(modelId: string): Promise<string> {
   if (known !== undefined) return known
   try {
     const persisted = (await fsPromises.readFile(persistedKvCacheDirIdPath(modelId))).toString()
-    return persisted || modelId
+    return KV_CACHE_DIR_ID_PATTERN.test(persisted) ? persisted : modelId
   } catch {
     return modelId
   }

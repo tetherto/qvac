@@ -14,6 +14,7 @@ import { ModelType } from '@/schemas'
 import type { LoadModelResponse, Request } from '@/schemas'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { __kvCacheDirIdTestHooks, kvCacheDirIdFor, kvCacheIdentityConfig } from '@/utils/index'
+import { getQvacPath } from '@/utils/qvac-paths'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { useTestCacheDir } from './fixtures/test-cache'
 
@@ -210,6 +211,28 @@ test('kv cache folder: deleteCache by model id finds the shared folder in a proc
 
   await deleteCache({ kvCacheKey: 'chat-g', modelId: isolatedId })
   t.absent(fs.existsSync(isolatedOnlyPath), 'a sharing-off model id still names its own folder')
+})
+
+test('kv cache folder: a damaged saved mapping falls back to the model id', async (t) => {
+  registerFakePlugin(t)
+  const modelSrc = writeModelFile()
+
+  const isolatedId = await load(modelSrc, { ctx_size: 768, cache_share_across_keys: false })
+  const sharingId = await load(modelSrc, { ctx_size: 768, cache_share_across_keys: true })
+  unregisterModel(isolatedId)
+  unregisterModel(sharingId)
+  const mappingPath = getQvacPath('kv-cache-dir-ids', sharingId)
+  t.is(fs.readFileSync(mappingPath).toString(), isolatedId, 'the load saved the full mapping')
+  t.absent(
+    fs.readdirSync(path.dirname(mappingPath)).some((name) => name.includes('.tmp-')),
+    'no temporary file is left behind'
+  )
+
+  fs.writeFileSync(mappingPath, isolatedId.slice(0, 7))
+  __kvCacheDirIdTestHooks.forgetInMemory()
+
+  const removed = await deleteCache({ kvCacheKey: 'chat-p', modelId: sharingId })
+  t.is(path.basename(removed), sharingId, 'a partial id is not used as a folder name')
 })
 
 test('kv cache folder: a model id this process never loaded names its own folder', (t) => {
