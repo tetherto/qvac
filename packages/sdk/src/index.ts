@@ -6,6 +6,8 @@ export {
   calcTokens,
   type CalcTokensClientParams,
   loadModel,
+  mountBrowserFile,
+  mountBrowserFiles,
   downloadAsset,
   heartbeat,
   unloadModel,

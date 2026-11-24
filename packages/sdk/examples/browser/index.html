@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QVAC browser WebGPU PoC</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC browser WebGPU PoC</p>
+          <h1>Run an LLM locally in the browser</h1>
+        </div>
+        <div class="readiness">
+          <span id="readiness" class="status pending">Checking WebGPU…</span>
+          <button id="webgpu-help" class="secondary" hidden>Browser settings</button>
+        </div>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <label for="model-files">Or local GGUF file or shard group</label>
+        <input id="model-files" type="file" accept=".gguf" multiple />
+        <div class="row">
+          <button id="load" disabled>Load model</button>
+          <button id="unload" disabled>Unload</button>
+        </div>
+        <progress id="progress" max="100" value="0"></progress>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Run inference</h2>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="4">What is 2+2? Answer only.</textarea>
+        <div class="row">
+          <button id="run" disabled>Run completion</button>
+          <button id="stop" disabled>Stop</button>
+        </div>
+        <pre id="output">Load a model to begin.</pre>
+        <pre id="stats"></pre>
+      </section>
+
+      <section>
+        <h2>Runtime log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <dialog id="webgpu-dialog" aria-labelledby="webgpu-dialog-title">
+      <form method="dialog">
+        <div class="row dialog-heading">
+          <h2 id="webgpu-dialog-title">Enable Vulkan in Chrome on Linux</h2>
+          <button class="secondary" value="close">Close</button>
+        </div>
+        <p>
+          Chrome did not expose a usable WebGPU adapter with its current settings. A webpage cannot
+          change browser settings automatically.
+        </p>
+        <ol>
+          <li>Copy the address below and paste it into Chrome's address bar.</li>
+          <li>Set <strong>Vulkan</strong> to <strong>Enabled</strong>.</li>
+          <li>Relaunch Chrome and reopen this page.</li>
+        </ol>
+        <label for="chrome-flags-url">Chrome setting</label>
+        <div class="row">
+          <input id="chrome-flags-url" value="chrome://flags/#enable-vulkan" readonly />
+          <button id="copy-flags-url" type="button">Copy address</button>
+        </div>
+        <p class="detail">Do not enable Unsafe WebGPU, Ignore GPU blocklist, or Dawn overrides.</p>
+      </form>
+    </dialog>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -18,6 +18,7 @@ import {
   signalOnCancelOrStreamClose
 } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
+import { decodeUtf8 } from '@/utils/encoding'
 
 type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
 
@@ -26,7 +27,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   let transport: Transport
 
   try {
-    const rawData = req.data?.toString()
+    const rawData = req.data ? decodeUtf8(req.data) : undefined
 
     // Duplex stream request: metadata arrives as the first chunk on the
     // request stream (client used createRequestStream instead of send).
@@ -152,7 +153,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     })
 
     const parseStart = nowMs()
-    const jsonData: unknown = JSON.parse(firstChunk.toString())
+    const jsonData: unknown = JSON.parse(decodeUtf8(firstChunk))
     const jsonParseMs = nowMs() - parseStart
 
     const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData)

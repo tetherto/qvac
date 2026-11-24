@@ -10,7 +10,7 @@
 > <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
-**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js and [Expo](https://expo.dev).
+**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes QVAC capabilities through a unified interface. It runs on Node.js, [Expo](https://expo.dev), and compatible web browsers with WebGPU and `shader-f16`. The browser runtime currently provides LLM inference through WebAssembly and WebGPU; see the [browser WebGPU PoC](examples/browser/README.md).
 
 See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.io/sdk/getting-started) for the comprehensive QVAC documentation.
 

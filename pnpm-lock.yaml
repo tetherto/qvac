@@ -2095,6 +2095,9 @@ importers:
       chromadb:
         specifier: ^3.0.14
         version: 3.5.0
+      esbuild:
+        specifier: ^0.27.0
+        version: 0.27.7
       events:
         specifier: ^3.3.0
         version: 3.3.0
