@@ -184,7 +184,7 @@ In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch laye
 
 [PlantUML source](puml/08-model-loading-flow.puml)
 
-**Model Constants:** Model constants are rich objects (not plain strings) containing metadata such as `name`, `src`, `modelId`, `blobCoreKey`, `expectedSize`, `sha256Checksum`, and `addon`. APIs accept string URIs, local paths, descriptor objects, and model constants via the `ModelSrcInput` union type. Python receives the same constants from `packages/sdk/contract/models.json`.
+**Model Constants:** Model constants are rich objects (not plain strings) containing metadata such as `name`, `src`, `modelId`, `blobCoreKey`, `expectedSize`, `sha256Checksum`, and `addon`. APIs accept string URIs, local paths, descriptor objects, and model constants via the `ModelSrcInput` union type. The Python and Kotlin clients are generated with the same constants, from the contract's `models.json`.
 
 ---
 
@@ -208,13 +208,13 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 
 # Language Contract & Python Client
 
-The language-neutral SDK contract lives under `packages/sdk/contract/**`:
+`packages/sdk` exports the language-neutral SDK contract with `npm run contract:export` into `packages/sdk/contract/`:
 
 - `schema.json` contains JSON Schema for every request/response wire type and registered public constants.
 - `manifest.json` lists every RPC method and call shape (`request-reply`, `server-stream`, `duplex`).
 - `models.json` contains the generated model constants catalog.
 
-`packages/sdk` owns contract generation via `npm run contract:export` and drift detection via `npm run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
+The contract and the clients generated from it are build outputs and are not committed. `packages/sdk-python` and `packages/sdk-kotlin` each export the contract and generate their client when they build, test or package. The Python client gets Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
 
 The Python package provides:
 

@@ -185,11 +185,7 @@ async def main() -> int:
             # and survivor isolation: the first burst reported multiple resident
             # sequences, the doomed run cancelled, and its peer produced tokens
             # AFTER the cancel landed.
-            if (
-                peak_concurrent <= 1
-                or not doomed_cancelled
-                or tokens_after_cancel == 0
-            ):
+            if peak_concurrent <= 1 or not doomed_cancelled or tokens_after_cancel == 0:
                 print(
                     f"✖ multi-job behavior not demonstrated "
                     f"(peak_concurrent={peak_concurrent:.2f}, "

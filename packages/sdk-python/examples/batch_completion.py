@@ -91,7 +91,7 @@ async def main() -> int:
 
             # Prompt order to start with; replaced by the addon-assigned ids
             # once the frame that carries them arrives.
-            ids = [prompt["id"] for prompt in PROMPTS]
+            ids = [str(prompt["id"]) for prompt in PROMPTS]
             texts: dict[str, str] = {}
             stats = None
 

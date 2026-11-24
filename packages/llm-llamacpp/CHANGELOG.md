@@ -2,12 +2,59 @@
 
 ## [Unreleased]
 
+### Breaking
+
+Loads with `parallel >= 2` change as follows:
+
+- The KV cache is unified, as llama-server's `--kv-unified`: the slots share
+  one KV buffer instead of one each, and the addon limits each slot to its
+  share of the pool. It is not configurable
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- A slot gets `ctx_size` (rounded up to a multiple of 256) divided by
+  `parallel`, where its share used to be rounded up to a multiple of 256
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool,
+  where it used to pick each slot's. Each slot gets the trained context
+  divided by `parallel`: with `parallel: '4'`, a model trained on 32768
+  tokens gives each slot 8192 instead of 32768. When memory is short and
+  `ctx_size` is unset, fit's lower bound (`fit-ctx`, 4096 by default) also
+  applies to the whole pool, so with `parallel: '4'` a slot can get 1024
+  tokens where it kept at least 4096. To keep a slot size, set `ctx_size` to
+  `parallel x` that size ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- On Vulkan, with flash attention off, or on CUDA older than Turing, decoding
+  can be slower, because each slot's attention spans the shared buffer
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- MiniMax-M3 turns sparse attention off
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Known issues until fabric gets the slot limit: DeepSeek V4 and V4.1 size
+  each per-sequence cache to the whole buffer, so those caches take
+  `parallel` times the memory and a load that fit before can run out of
+  memory; models with long RoPE factors (for example Phi-3) use the long
+  factors whenever `ctx_size` exceeds the model's original context, so their
+  output changes ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Cache files saved with `parallel >= 2` now hold one KV stream (DeepSeek V4
+  and V4.1 keep one per slot), which earlier versions cannot restore. Files
+  saved by earlier versions with `parallel >= 2` still load. A file longer
+  than the slot limit fails its request with `ContextLengthExeeded`; raise the
+  limit or delete it. Any other file that fails to load fails its request with
+  `UnableToLoadSessionFile`; delete it, and the next request on that
+  `cacheKey` runs without it
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+
 ### Changed
 
 - `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
   `^0.32.0`, adopting the Linux x64 CUDA package split
   ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
   automatically; installation and inference configuration remain unchanged.
+
+### Fixed
+
+- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`)
+  now fails with `ContextLengthExeeded` when the cache loads, as documented.
+  The check compared against the whole context, and now also counts the KV
+  cells a multimodal prompt takes
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ## [0.72.1] - 2026-11-23
 

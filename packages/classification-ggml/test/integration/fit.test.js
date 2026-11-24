@@ -105,6 +105,10 @@ test('assessFit: MegaLoc on the selected backend', { skip: !models.megaloc }, as
   const backend = env.QVAC_MEGALOC_BACKEND
   const fit = await assessFit(request(models.megaloc, backend))
   checkRows(t, fit, `MegaLoc ${backend || 'auto'}`)
+  t.ok(
+    fit.devices.every((row) => !/^(GPU)?OpenCL/i.test(row.name)),
+    'MegaLoc fit excludes OpenCL'
+  )
   if (backend === 'CPU') t.is(fit.devices.length, 1, 'a CPU load is one row')
 
   const cpu = await assessFit(request(models.megaloc, 'CPU'))

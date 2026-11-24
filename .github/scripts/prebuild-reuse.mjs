@@ -13,6 +13,9 @@ import { pathToFileURL } from 'node:url'
 export const NATIVE =
   /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
 
+export const WEB =
+  /^packages\/llm-llamacpp\/(addon\/src\/js-interface\/web\/|web\/|scripts\/(build-web\.mjs|validate-web-prebuild\.mjs|npm-command\.cjs)$)/
+
 // Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
 // the build runs.
 export const INPUTS = [
@@ -30,9 +33,13 @@ export const INPUTS = [
 ]
 
 export function legKey(row, tree) {
+  const buildsWeb = row.slug === 'llm-llamacpp' && row.config === 'linux-x64'
   const native = tree([row.dir, ...(row.providers ?? []).map((p) => `packages/${p}`)])
     .split('\n')
-    .filter((line) => NATIVE.test(line.split('\t')[1] ?? ''))
+    .filter((line) => {
+      const path = line.split('\t')[1] ?? ''
+      return WEB.test(path) ? buildsWeb : NATIVE.test(path)
+    })
     .join('\n')
   return createHash('sha256')
     .update(JSON.stringify(row))

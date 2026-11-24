@@ -14,7 +14,7 @@
 //      through the import graph, resolved by finding which executors
 //      transitively import it.
 //   4. an inference engine directory reaches testIds through the models it
-//      serves: directory name -> `engine` in the SDK contract -> the resource
+//      serves: directory name -> `engine` in the model registry -> the resource
 //      constants naming those models -> the tests depending on those resources.
 //   5. an SDK api file reaches testIds through the functions it exports and the
 //      executors importing them.
@@ -67,13 +67,24 @@ const PATTERN_RE =
 const IMPORT_RE = /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s*['"](\.[^'"]+)['"]/g
 
 // Engine relation. No table to maintain: every link already breaks something
-// else when wrong — a bad plugin directory fails to load, a stale contract
-// fails `contract:check`, a bad model constant fails the download, a bad
-// `dependency` throws `Unknown dependency` at run time.
+// else when wrong — a bad plugin directory fails to load, a bad model constant
+// fails the download, a bad `dependency` throws `Unknown dependency` at run
+// time.
 const ENGINE_ROOT = 'packages/inference/src/plugins/builtin'
 // The leading class rejects `.` and `..` as an engine name.
 const ENGINE_DIR_RE = new RegExp(`^${ENGINE_ROOT}/([A-Za-z0-9][A-Za-z0-9._-]*)/`)
-const CONTRACT_MODELS = path.resolve(E2E_ROOT, '..', 'sdk', 'contract', 'models.json')
+const MODEL_REGISTRY = path.resolve(
+  E2E_ROOT,
+  '..',
+  'inference',
+  'src',
+  'models',
+  'registry',
+  'models.ts'
+)
+// One entry of the `models` array: its constant name, then its engine.
+const MODEL_ENTRY_RE = /\bname: '([A-Z0-9_]+)'(?:(?!\bname: ')[\s\S])*?\bengine: '([^']+)'/g
+const MODEL_ALIAS_RE = /export const ([A-Z0-9_]+) = \{\s*\.\.\.([A-Z0-9_]+),/g
 
 const RESOURCE_DEFINE_RE = /resources\.define\(\s*['"]([^'"]+)['"]\s*,\s*\{/g
 const RESOURCE_CONSTANT_RE = /(?:^|[\s,{])constant:\s*([A-Za-z0-9_]+)/m
@@ -141,22 +152,26 @@ function listFiles(dir, predicate) {
   return out
 }
 
-/** Model constant -> engine id, from the SDK's generated contract. */
+/** Model constant -> engine id, from the inference model registry's `models` array. */
 function readModelEngines() {
-  // Absent when the checkout omitted packages/sdk/contract. Resources then
-  // resolve through their literal `type` alone, which covers all but the few
-  // declaring a generic one.
-  if (!existsSync(CONTRACT_MODELS)) return new Map()
-  try {
-    const models = JSON.parse(readFileSync(CONTRACT_MODELS, 'utf8'))
-    return new Map(
-      Object.entries(models)
-        .filter(([, model]) => typeof model?.engine === 'string' && model.engine.length > 0)
-        .map(([constant, model]) => [constant, model.engine])
-    )
-  } catch {
-    return new Map()
+  // Absent when the checkout omitted the registry. Resources then resolve
+  // through their literal `type` alone, which covers all but the few declaring
+  // a generic one.
+  if (!existsSync(MODEL_REGISTRY)) return new Map()
+  const source = readFileSync(MODEL_REGISTRY, 'utf8')
+  const start = source.indexOf('export const models = [')
+  const end = source.indexOf('] as const', start)
+  if (start < 0 || end < 0) return new Map()
+  const engines = new Map(
+    [...source.slice(start, end).matchAll(MODEL_ENTRY_RE)].map(([, constant, engine]) => [
+      constant,
+      engine
+    ])
+  )
+  for (const [, alias, base] of source.matchAll(MODEL_ALIAS_RE)) {
+    if (engines.has(base)) engines.set(alias, engines.get(base))
   }
+  return engines
 }
 
 /** An object literal's own fields, with every nested object dropped. */
@@ -174,9 +189,9 @@ function ownFields(body) {
 /**
  * Resource id -> engine ids, from every consumer's `resources.define`.
  *
- * Unions both links — the model constant via the contract, and the literal
+ * Unions both links — the model constant via the model registry, and the literal
  * `type` — because a resource declaring a generic `type: 'llm'` still names its
- * real engine through the constant, and vice versa when the contract is absent.
+ * real engine through the constant, and vice versa when the registry is absent.
  */
 function readResourceEngines(enginesByConstant) {
   const engines = new Map()
@@ -205,6 +220,9 @@ function readResourceEngines(enginesByConstant) {
       // win whenever it is declared first.
       const body = ownFields(text.slice(start, index + 1))
       const constant = RESOURCE_CONSTANT_RE.exec(body)?.[1]
+      if (constant && enginesByConstant.size && !enginesByConstant.has(constant)) {
+        console.warn(`resource ${match[1]}: model ${constant} has no engine in the model registry`)
+      }
       add(match[1], constant && enginesByConstant.get(constant))
       add(match[1], RESOURCE_TYPE_RE.exec(body)?.[1])
     }
