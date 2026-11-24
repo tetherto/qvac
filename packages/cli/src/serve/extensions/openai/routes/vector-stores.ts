@@ -597,6 +597,15 @@ export function looksBinary(data: Buffer): boolean {
   return window.includes(0)
 }
 
+// Load options that change the vectors themselves. The rest (device, GPU
+// layers, batch size, threads, logging) only change how they are computed, so
+// changing them keeps existing stores usable.
+const VECTOR_CONFIG_KEYS = ['pooling', 'attention', 'embdNormalize']
+
+export function vectorConfigJson(config: Record<string, unknown>): string {
+  return stableJson(Object.fromEntries(VECTOR_CONFIG_KEYS.map((key) => [key, config[key]])))
+}
+
 function embeddingModelRef(embedding: EmbeddingResolutionOk): EmbeddingModelRef {
   const src = embedding.entry.modelSrc
   return {
@@ -604,7 +613,7 @@ function embeddingModelRef(embedding: EmbeddingResolutionOk): EmbeddingModelRef 
     sdkModelId: embedding.sdkModelId,
     model: typeof src === 'string' ? src : src.src,
     revision: typeof src === 'string' ? '' : src.sha256Checksum,
-    config: stableJson(embedding.entry.config)
+    config: vectorConfigJson(embedding.entry.config)
   }
 }
 

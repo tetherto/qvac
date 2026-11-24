@@ -14,7 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import Corestore from 'corestore'
 import { createRag, type EmbeddingSpace, type EmbeddingsPort, type Rag } from '@qvac/rag'
-import { embed } from '@qvac/sdk'
+import { embedBatch } from '@qvac/sdk'
 
 // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable, as in the SDK.
 const HOME_DIR = process.env['SNAP_USER_COMMON'] ?? os.homedir()
@@ -124,11 +124,7 @@ interface OpenRag {
 }
 
 async function embedTextsWithSdk(sdkModelId: string, texts: string[]): Promise<number[][]> {
-  if (texts.length === 1) {
-    const { embedding } = await embed({ modelId: sdkModelId, text: texts[0]! })
-    return [embedding]
-  }
-  const { embedding } = await embed({ modelId: sdkModelId, text: texts })
+  const { embedding } = await embedBatch({ modelId: sdkModelId, inputs: texts })
   return embedding
 }
 
