@@ -269,7 +269,9 @@ try {
 }
 ```
 
-`coremlUnet` supports SD 1.x/2.x, including SDXS. Use the prediction type,
+`coremlUnet` supports SD 1.x/2.x, including SDXS, and SDXL. An SDXL UNet ships as
+a folder of chunks (`*chunk1.mlmodelc`, `*chunk2.mlmodelc`); pass the folder.
+Use the prediction type,
 resolution and prompt limits of the export. `coremlTaeDecoder` requires SDXS's
 built-in tiny autoencoder or `files.taesd` for SD/SDXL. `files.taesd` replaces
 the full VAE for every encoding and decoding operation, so `files.vae` is

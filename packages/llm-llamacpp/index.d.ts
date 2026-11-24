@@ -311,9 +311,11 @@ declare namespace LlmLlamacpp {
          * server is ready to serve at full concurrency with no warm-up. It sizes
          * the native scheduler's worker pool one-to-one — that many OS threads are
          * created at load and held for the model's lifetime, idle or not — and the
-         * KV cache is split evenly across the slots (each gets `ctx_size /
-         * parallel` tokens). Size it to the concurrency you actually intend to
-         * serve, not to a generous upper bound.
+         * slots share one KV cache, each limited to `ctx_size / parallel` tokens.
+         * On MiniMax-M3, `parallel >= 2` turns sparse attention off; DeepSeek V4
+         * and long-RoPE models have known issues with it
+         * (docs/continuous-batching.md). Size it to the concurrency you actually
+         * intend to serve, not to a generous upper bound.
          *
          * Range `1..256`. The upper bound is the engine's own sequence limit
          * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
