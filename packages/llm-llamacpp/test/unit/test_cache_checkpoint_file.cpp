@@ -428,12 +428,19 @@ protected:
   // Writes a cacheKey file whose state is `tokens`, as the RAM tier does.
   [[nodiscard]] std::string
   write(const std::string& name, const std::vector<llama_token>& tokens) const {
+    const auto count = static_cast<llama_pos>(tokens.size());
+    return writeLedger(
+        name, cache::serialize(cache::fromTokens(tokens), count, count));
+  }
+
+  // Writes a cacheKey file whose header carries `ledgerWords` as they are.
+  [[nodiscard]] std::string writeLedger(
+      const std::string& name,
+      const std::vector<llama_token>& ledgerWords) const {
     using qvac_lib_inference_addon_llama::batching::SlotStateCache;
     using qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry;
     SlotStateCacheEntry entry;
-    const auto count = static_cast<llama_pos>(tokens.size());
-    entry.ledgerWords =
-        cache::serialize(cache::fromTokens(tokens), count, count);
+    entry.ledgerWords = ledgerWords;
     entry.state = std::vector<uint8_t>(16, 0x11);
     const std::string path = (dir_ / name).string();
     EXPECT_TRUE(SlotStateCache::writeStateFile(path, entry));
@@ -697,4 +704,46 @@ TEST_F(CacheFileIndexTest, IgnoresForeignFilesAndStaysBounded) {
     index.note((dir_ / ("k" + std::to_string(i))).string());
   }
   EXPECT_EQ(index.size(), cache::CacheFileIndex::MAX_FILES);
+}
+
+// A file is over a slot limit when its positions or its KV cells exceed it; a
+// file without a readable ledger is not.
+TEST_F(CacheFileIndexTest, LedgerExceedsComparesPositionsAndCells) {
+  using cache::CacheFileIndex;
+  const std::vector<llama_token> tokens{1, 2, 3, 4};
+  const std::string text = write("text.bin", tokens);
+  EXPECT_TRUE(CacheFileIndex::ledgerExceeds(text, 3));
+  EXPECT_FALSE(CacheFileIndex::ledgerExceeds(text, 4));
+  EXPECT_FALSE(CacheFileIndex::ledgerExceeds(text, 5));
+
+  // An M-RoPE image takes more KV cells than positions.
+  cache::Ledger image;
+  image.entries.push_back(
+      {.kind = cache::EntryKind::Media,
+       .identity = 1,
+       .positions = 2,
+       .cacheTokens = 6});
+  const std::string media =
+      writeLedger("media.bin", cache::serialize(image, 2, 6));
+  EXPECT_TRUE(CacheFileIndex::ledgerExceeds(media, 4));
+  EXPECT_FALSE(CacheFileIndex::ledgerExceeds(media, 6));
+
+  std::vector<llama_token> corrupt =
+      cache::serialize(cache::fromTokens(tokens), 4, 4);
+  corrupt[5] ^= 1;
+  EXPECT_FALSE(
+      CacheFileIndex::ledgerExceeds(writeLedger("corrupt.bin", corrupt), 3));
+
+  const std::string truncated = write("truncated.bin", tokens);
+  fs::resize_file(truncated, 3 * sizeof(uint32_t) + sizeof(llama_token));
+  EXPECT_FALSE(CacheFileIndex::ledgerExceeds(truncated, 3));
+
+  const std::string foreign = (dir_ / "foreign.bin").string();
+  {
+    std::ofstream out(foreign, std::ios::binary);
+    out << "not a cache file";
+  }
+  EXPECT_FALSE(CacheFileIndex::ledgerExceeds(foreign, 3));
+  EXPECT_FALSE(
+      CacheFileIndex::ledgerExceeds((dir_ / "missing.bin").string(), 3));
 }

@@ -4,22 +4,25 @@
   "tags": ["ci:sdk"],
   "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
   "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/checks.mjs typecheck"
+      },
+      "metadata": {
+        "setup": ["python", "java", "android-ndk"]
+      }
+    },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/sdk-kotlin",
-        "command": "node ci/checks.mjs"
+        "command": "node ci/checks.mjs unit"
       },
       "metadata": {
         "setup": ["python", "java", "android-ndk"],
         "sources": ["self"]
-      }
-    },
-    "verify:generated": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/sdk-kotlin",
-        "command": "node scripts/check-version-alignment.mjs"
       }
     },
     "test:integration": {

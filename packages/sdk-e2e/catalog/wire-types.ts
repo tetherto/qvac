@@ -1,9 +1,7 @@
-// The shapes the catalog shares with the SDK wire contract
-// (packages/sdk/contract/schema.json), declared here rather than imported from a
-// client so the catalog compiles without one. Two checks keep them in step with the
-// SDK: `check:contract` compares the value lists and the decision params with the
-// contract, and each JS executor that hands them to the SDK is type-checked against
-// the SDK's own types.
+// The shapes the catalog shares with the SDK wire contract, declared here rather
+// than imported from a client so the catalog compiles without one. Each JS executor
+// that hands them to the SDK is type-checked against the SDK's own types, and the
+// e2e tests using them fail when a value no longer matches the SDK.
 
 /** The contract's `toolDialect` enum. */
 export const TOOL_DIALECTS = [

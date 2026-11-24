@@ -2265,6 +2265,10 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
+  // Several slots share one KV pool, each limited to its even share by the
+  // addon. One slot has the same layout either way.
+  params.kv_unified = params.n_parallel >= 2;
+
   const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);

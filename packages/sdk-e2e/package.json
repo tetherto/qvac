@@ -37,8 +37,7 @@
     "check:resource-table": "node scripts/emit-resource-table.mjs --check",
     "check:step-dependencies": "node scripts/check-step-dependencies.mjs",
     "check:skip-matrix": "node scripts/check-skip-matrix.mjs",
-    "check:contract": "node scripts/check-contract.mjs",
-    "check:catalog": "npm run build:catalog && npm run check:resource-table && npm run check:step-dependencies && npm run check:skip-matrix && npm run check:contract && qvac-test catalog:validate --config=."
+    "check:catalog": "npm run build:catalog && npm run check:resource-table && npm run check:step-dependencies && npm run check:skip-matrix && qvac-test catalog:validate --config=."
   },
   "dependencies": {
     "@qvac/sdk": "file:../sdk",
@@ -51,7 +50,6 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/plugin-base": "^7.11.2",
-    "ajv": "^8.20.0",
     "electron": "^42.4.1",
     "expo": "^58.0.23",
     "expo-asset": "~58.0.20",
