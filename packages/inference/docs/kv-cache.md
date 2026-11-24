@@ -34,11 +34,12 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   setting stays part of the model id, but not of the cache folder name, so
   turning it on keeps reading the files existing conversations already wrote.
 - The cache folder name also ignores other settings that cannot change what a
-  cache file holds. `verbosity` counts as its default `0` when sent, like
-  `cache_share_across_keys`, so a caller that always sends `verbosity: 0` keeps
-  the folders it wrote before this rule; `openclCacheDir` and `cache_ram_mib`
-  are left out. A load whose folder name differs from its model id records the
-  mapping under `~/.qvac/kv-cache-dir-ids/`, so
+  cache file holds. A sent `verbosity` counts as its default `0`, so loads that
+  send different values share a folder. Unlike `cache_share_across_keys`, which
+  the SDK always fills in, an omitted `verbosity` stays omitted, so a load that
+  omits it and one that sends it get different folders. `openclCacheDir` and
+  `cache_ram_mib` are left out. A load whose folder name differs from its model
+  id records the mapping under `~/.qvac/kv-cache-dir-ids/`, so
   `deleteCache({ kvCacheKey, modelId })` finds the folder in a process that has
   not loaded the model.
 
