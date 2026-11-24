@@ -326,13 +326,26 @@ come from the installed app, without build-tree search paths. On Windows,
 restrict PATH to System32 and verify the packaged MSVC runtime DLLs load from
 the app too. CUDA dependencies may come from the installed toolkit/driver.
 
-The pre-rebase Windows `/MD` experiment passed this installed-package test
-with Bare 1.36.0: CPU with SmolLM2 135M, and CUDA with Gemma 3 1B (27/27
-layers) and Qwen 3.5 2B (26/26 layers), using an RTX 3080 Ti Laptop GPU and
-CUDA 13.2. Both GPU runs completed two requests and unloaded with exit zero.
-The module audit found one base and app-local qvac/MSVC DLLs. These results
-used isolated build overrides; they do not establish production `/MD`
-packaging or validation of a later rebase.
+Validation after rebasing on qvac main `3573c88ee` and refreshing the source
+from `temp-12032`:
+
+| Platform | Coverage |
+| --- | --- |
+| Linux x64 | Installed-port Debug/Release build and four boundary tests; ELF package ownership check; locally packed Fabric 0.33.0, its split CUDA carrier, and llm-llamacpp 0.72.1; two Qwen 3 0.6B CPU requests and clean unload under Bare 1.38.0. |
+| Windows x64 | Six `/MDd` boundary tests and the Release boundary test; locally packed Fabric/LLM packages under Bare 1.36.0; CPU with SmolLM2 135M and CUDA with Gemma 3 1B (27/27 layers) and Qwen 3.5 2B (26/26 layers), using an RTX 3080 Ti Laptop GPU and CUDA 13.2. Each model completed two requests and unloaded with exit zero. The module audit found one base and app-local qvac/MSVC DLLs. |
+| Android arm64 | NDK 29 CPU build, allocation/logger/abort probes on a Pixel 10 Pro XL, and two Qwen 3 0.6B CPU requests with clean unload under Bare 1.36.0 over ADB. The shell app loads from local npm tarballs without LD_LIBRARY_PATH; the NDK's libc++_shared.so is included in this test fixture. This does not test APK packaging or its linker namespace. |
+
+The source pin includes the Android RUNPATH fix. CMake suppresses Android
+INSTALL_RPATH, so the source explicitly emits `$ORIGIN` for core and backend
+libraries, and Fabric emits the companion directory on its `.bare` module.
+`ci/verify-android-shared-core.mjs` checks the emitted binaries and rejects
+the original missing-RUNPATH package. Android supports DT_RUNPATH from API 24;
+these builds target API 29. Windows still uses isolated `/MD` overrides;
+production CRT flags and consumer migration remain separate work.
+
+The Linux inference trace still shows Bare answering versioned new/delete
+imports. Successful inference and the ELF package checks therefore do not
+establish correct runtime binding under Bare.
 
 The strict runtime-binding audit remains required: versioned imports alone
 have not eliminated Bare's allocator interposition. Windows stream/vector

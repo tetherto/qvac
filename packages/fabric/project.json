@@ -88,6 +88,10 @@
             {
               "command": "bash ci/verify-xdna-module.sh",
               "forwardAllArgs": false
+            },
+            {
+              "command": "node ci/verify-shared-core.mjs linux-x64",
+              "forwardAllArgs": false
             }
           ]
         },
@@ -126,7 +130,25 @@
           "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
           "ci": {
             "runner": "ubuntu_2404"
-          }
+          },
+          "commands": [
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ci/verify-android-shared-core.mjs",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "ios-arm64": {
           "args": "--platform=ios --arch=arm64",

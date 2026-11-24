@@ -178,6 +178,11 @@ include(cmake/qvac-fabric-hosts.cmake)
 qvac_fabric_module_name("${_fabric_host}" _fabric_module_name)
 
 add_bare_module(qvac-fabric NAME ${_fabric_module_name} EXPORTS ${BACKEND_DL_LIBS})
+if(QVAC_FABRIC_SHARED_CORE AND ANDROID)
+  # cmake-bare sets a companion-directory RUNPATH on Linux only.
+  target_link_options(${qvac-fabric}_module PRIVATE
+    "LINKER:--enable-new-dtags" "LINKER:-rpath,$ORIGIN/${_fabric_module_name}")
+endif()
 if(QVAC_FABRIC_SHARED_CORE)
   # Platform-specific metadata must stay beside that platform's libraries.
   file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qvac-shared-core.cmake"
