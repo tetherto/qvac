@@ -7,7 +7,9 @@ import { clearPlugins } from '@/plugins'
 import { close } from '@/dispatch'
 import { createVectorIndex, loadVectorIndex } from '@/api/vector-index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
-import { VectorIndexFailedError } from '@/errors/index'
+import { InferenceCancelledError, VectorIndexFailedError } from '@/errors/index'
+import { handleVectorIndex } from '@/handlers/vector-index'
+import { getRequestRegistry } from '@/runtime/index'
 import { registerProviderPlugin } from './fixtures/turbovec-provider'
 
 // Keep the storage-root lock out of the real home, as dispatch.test.ts does.
@@ -166,6 +168,68 @@ test('vector index: native IVF builds with fewer entries than lists', async (t) 
       )
       await index.dispose()
     }
+  } finally {
+    await disposeAllVectorIndexes()
+    await close()
+    clearPlugins()
+  }
+})
+
+// Only the addon can stop a call it is already running, so this checks that
+// it accepts the request signal the adapter passes and that the index stays
+// usable after the abort.
+test('vector index: a native IVF build cancelled while it runs rejects at once', async (t) => {
+  const { IdMapIndex } = await import('@qvac/turbovec-ggml')
+  clearPlugins()
+  registerProviderPlugin('test-native-vector-index-cancel', {
+    create: (options) => new IdMapIndex(options),
+    load: (snapshotPath) => IdMapIndex.load(snapshotPath)
+  })
+  let seed = 13
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296 - 0.5
+  }
+  // Large enough that the build is still running when the cancel lands.
+  const vectors = Array.from({ length: 8192 }, () => Array.from({ length: 32 }, random))
+  const ids = vectors.map((_row, i) => String(i))
+  const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
+  try {
+    const index = await createVectorIndex({ dim: 32, storage: 'f32' })
+    await index.add({ ids, vectors })
+    const requestId = 'vi-native-cancel-build'
+    const order: string[] = []
+    const building = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'setIvf',
+      indexId: index.indexId,
+      ivf: { nLists: 64, nProbe: 4, nIter: 20 },
+      requestId
+    }).then(
+      () => order.push('build'),
+      (error: unknown) => {
+        order.push('cancel')
+        return error
+      }
+    )
+    // Once registered, one more turn lets the build reach the addon. A build
+    // that already finished fails the cancel check below.
+    while (getRequestRegistry().get(requestId) === null && order.length === 0) await nextTurn()
+    await nextTurn()
+    t.is(getRequestRegistry().cancel({ requestId }), 1, 'the build is running and cancellable')
+    const searching = index.search({ query: vectors[3]!, k: 1 }).then((rows) => {
+      order.push('search')
+      return rows
+    })
+    t.ok((await building) instanceof InferenceCancelledError, 'the build reports the cancel')
+    const [nearest] = await searching
+    t.alike(order, ['cancel', 'search'], 'the cancel settles before the native build ends')
+    t.is(nearest?.id, '3', 'a search after the cancelled build scans every entry')
+
+    await index.setIvf({ nLists: 8, nProbe: 8 })
+    t.is(index.ivf?.built, true, 'the lists build again after the cancel')
+    const [probed] = await index.search({ query: vectors[3]!, k: 1 })
+    t.is(probed?.id, '3', 'search probes the rebuilt lists')
   } finally {
     await disposeAllVectorIndexes()
     await close()

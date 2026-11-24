@@ -57,6 +57,10 @@ function toHitRows(result: TurboVecIndexSearchResult): VectorIndexHit[][] {
   return rows
 }
 
+function callOptions(signal: AbortSignal | undefined): TurboVecCallOptions {
+  return signal ? { signal } : {}
+}
+
 // The native index exposes these beyond the TurboVecIndex interface, which
 // does not declare them; a provider that predates them leaves them out.
 export type IndexWithControls = TurboVecIndex & {
@@ -88,7 +92,7 @@ function openIndex(
     if (needsPrepare) {
       needsPrepare = false
       try {
-        await index.prepare({ signal })
+        await index.prepare(callOptions(signal))
       } catch (error) {
         needsPrepare = true
         throw error
@@ -157,7 +161,7 @@ function openIndex(
         if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
           throw new Error('The vector index provider does not support staged search controls')
         }
-        await index.setStagedSearch(enabled, { signal })
+        await index.setStagedSearch(enabled, callOptions(signal))
         return index.stagedSearch
       }),
     setIvf: (settings, signal) =>
@@ -177,7 +181,7 @@ function openIndex(
           // aborted, search scans every entry instead of probing lists the
           // native index may already have dropped.
           ivfBuilt = false
-          await index.buildIvf(settings.nLists, settings.nIter ?? 0, { signal })
+          await index.buildIvf(settings.nLists, settings.nIter ?? 0, callOptions(signal))
           ivfBuilt = true
         }
         ivfSettings = settings
@@ -186,7 +190,7 @@ function openIndex(
     add: (vectors, ids, signal) =>
       exclusive(signal, async () => {
         markChanged()
-        await index.addWithIds(vectors, ids, { signal })
+        await index.addWithIds(vectors, ids, callOptions(signal))
         return state()
       }),
     search: (queries, k, nProbe, signal) =>
@@ -201,22 +205,22 @@ function openIndex(
         await prepareOnce(signal)
         if (ivfSettings && ivfBuilt && index.searchIvf) {
           return toHitRows(
-            await index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe, { signal })
+            await index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe, callOptions(signal))
           )
         }
-        return toHitRows(await index.search(queries, k, { signal }))
+        return toHitRows(await index.search(queries, k, callOptions(signal)))
       }),
     contains: (ids, signal) =>
       exclusive(signal, async () => {
         const present: boolean[] = []
-        for (const id of ids) present.push(await index.contains(id, { signal }))
+        for (const id of ids) present.push(await index.contains(id, callOptions(signal)))
         return present
       }),
     remove: (ids, removed, signal) =>
       exclusive(signal, async () => {
         try {
           for (const id of ids) {
-            const present = await index.remove(id, { signal })
+            const present = await index.remove(id, callOptions(signal))
             if (present) markChanged()
             removed.push(present)
             signal?.throwIfAborted()
@@ -229,7 +233,8 @@ function openIndex(
         }
         return state()
       }),
-    write: (path, signal) => exclusive(signal, async () => await index.write(path, { signal })),
+    write: (path, signal) =>
+      exclusive(signal, async () => await index.write(path, callOptions(signal))),
     dispose: () => exclusive(undefined, async () => await index.dispose())
   }
 }
@@ -249,7 +254,7 @@ export function getTurboVecBackend(): VectorIndexBackend | undefined {
       return openIndex(await provider.create({ dim, storage }), storage)
     },
     async load(path, signal) {
-      const index = await provider.load(path, { signal })
+      const index = await provider.load(path, callOptions(signal))
       return openIndex(index, storageFromBitWidth((index as { bitWidth?: unknown }).bitWidth))
     }
   }

@@ -42,8 +42,7 @@ const turbovecIndexProvider: TurboVecIndexProvider = {
     return new IdMapIndex(options)
   },
   async load(snapshotPath, options) {
-    // TurboVec 0.5 accepts the extra argument at runtime. 0.7 reads the signal.
-    const IdMapIndex: Pick<TurboVecIndexProvider, 'load'> = await getIdMapIndex()
+    const IdMapIndex = await getIdMapIndex()
     return IdMapIndex.load(snapshotPath, options)
   }
 }

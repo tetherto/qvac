@@ -3,8 +3,10 @@ import type { VectorIndexStorage } from '@/schemas/vector-index'
 
 type MaybePromise<T> = T | Promise<T>
 
+// `@qvac/turbovec-ggml` declares `signal` without `undefined`, so a call
+// without a signal leaves the key out.
 export interface TurboVecCallOptions {
-  signal?: AbortSignal | undefined
+  signal?: AbortSignal
 }
 
 export interface TurboVecIndexSearchResult {
@@ -14,9 +16,9 @@ export interface TurboVecIndexSearchResult {
   k: number
 }
 
-// `@qvac/turbovec-ggml` 0.7 returns a promise from every method and rejects
-// with the abort reason once `signal` aborts; 0.5 and earlier return the
-// value directly and ignore the options. Callers await either way.
+// `@qvac/turbovec-ggml` returns a promise from every method and rejects with
+// the abort reason once `signal` aborts. Another provider may return the value
+// directly and ignore the options. Callers await either way.
 export interface TurboVecIndex {
   readonly length: number
   readonly dim: number

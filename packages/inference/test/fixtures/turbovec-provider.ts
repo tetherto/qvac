@@ -20,8 +20,8 @@ type FakeIndex = IndexWithControls & {
 /**
  * With `ivf: true`, `searchIvf` throws on stale lists as the native index
  * does, so tests catch an adapter that probes them. Index methods return
- * promises as `@qvac/turbovec-ggml` 0.7 does; `sync: true` returns values
- * directly, as 0.5 does.
+ * promises as `@qvac/turbovec-ggml` does; `sync: true` returns values
+ * directly, as another provider may.
  */
 export function observableIndexProvider({
   ivf = false,
