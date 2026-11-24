@@ -33,6 +33,11 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   conversation; keyless state then remains available in model memory. The
   setting stays part of the model id, but not of the cache folder name, so
   turning it on keeps reading the files existing conversations already wrote.
+- The cache folder name also leaves out settings that cannot change what a cache
+  file holds: `openclCacheDir`, `verbosity` and `cache_ram_mib`. A load whose
+  folder name differs from its model id records the mapping under
+  `~/.qvac/kv-cache-dir-ids/`, so `deleteCache({ kvCacheKey, modelId })` finds
+  the folder in a process that has not loaded the model.
 
 Implementation and focused tests are authoritative for the current cache format.
 

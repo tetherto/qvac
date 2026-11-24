@@ -19,7 +19,7 @@ import {
   generateShortHash,
   canonicalConfigString,
   kvCacheIdentityConfig,
-  setKvCacheDirId,
+  recordKvCacheDirId,
   transformConfigForReload
 } from '@/utils/index'
 import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
@@ -151,7 +151,7 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
     const modelId = generateShortHash(modelHashInput)
     const kvCacheIdentityStr = canonicalConfigString(kvCacheIdentityConfig(request.modelConfig))
-    setKvCacheDirId(
+    await recordKvCacheDirId(
       modelId,
       generateShortHash(`${request.modelType}:${modelSrc}:${kvCacheIdentityStr}`)
     )
