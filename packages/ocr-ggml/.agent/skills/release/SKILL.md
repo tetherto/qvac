@@ -80,11 +80,13 @@ dispatch `publish-npm.yml` yourself.
    gh run list --repo tetherto/qvac --workflow publish-npm.yml --branch release-<package>-<version> --limit 1
    ```
 2. If a `publish-npm.yml` run exists on `release-<package>-<version>`, go to Step 4 with it.
-3. If the branch exists but has no run, the release is waiting for a `@qvac/*` dependency to
-   reach npm; the auto-release summary names it. Report that and stop: it starts on its own
-   once the dependency publishes.
+3. If the branch exists but has no run, read the reason in the latest auto-release summary.
+   - Waiting for a `@qvac/*` dependency: report it and stop. It starts on its own once the
+     dependency publishes.
+   - Any other reason, for example a branch cut by hand: if the branch is at `<merge-commit>`,
+     recover it with the commands in item 4. Otherwise report the reason and stop.
 4. If there is no branch, the bump merged before the automation existed or its run failed.
-   Show the plan, then start it:
+   Show the plan, then start it. A branch already at `<merge-commit>` is reused:
    ```bash
    gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit> -f dry_run=true
    gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit>

@@ -24,11 +24,11 @@ on:
 permissions: {}
 
 # Real scans share one group so two never start the same branch; a dropped pending scan loses nothing.
-# Bump runs and dry runs get their own group, so neither displaces a real scan.
+# Recoveries of the same sha share a group too. Pushes and dry runs get their own, so none displaces a scan.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'push' || inputs.sha != '' || inputs.dry_run)
-    && format('addon-auto-release-{0}', github.run_id) || 'addon-auto-release-scan' }}
+    ${{ (github.event_name == 'push' || inputs.dry_run) && format('addon-auto-release-{0}', github.run_id)
+    || inputs.sha != '' && format('addon-auto-release-sha-{0}', inputs.sha) || 'addon-auto-release-scan' }}
   cancel-in-progress: false
 
 jobs:
