@@ -13,12 +13,14 @@ import asyncio
 import sys
 
 from tetherto.qvac_sdk import (
+    CapabilityId,
     Client,
     GetRuntimeCapabilitiesRequest,
     get_runtime_capabilities,
 )
 
-REQUIRED = [("completion", 1), ("transcription", 1)]
+# The contracts and majors this app was built against.
+REQUIRED = [(CapabilityId.completion.value, 1), (CapabilityId.transcription.value, 1)]
 
 
 async def main() -> int:
