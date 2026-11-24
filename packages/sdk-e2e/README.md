@@ -384,7 +384,8 @@ narrows it to comma-separated categories or testId prefixes. On a pull request, 
   overwrites it from here (`adoptHostFramework`). An install or a rebuild of
   this package puts the published framework back, so re-run the sync after
   either. CI makes the same choice through the `test-suite-source` input, which
-  is `branch` for the SDK e2e PR runs.
+  is `branch` for the SDK e2e PR runs. The sync keeps the mobile
+  `@qvac/inference` pin if one is set.
 - **Executors — pick one of three locations based on runtime requirements:**
   - [`runners/js/shared/executors/`](./runners/js/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
     no RN APIs. Runs on both desktop and mobile. Example:
