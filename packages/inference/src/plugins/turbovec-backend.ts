@@ -66,8 +66,8 @@ function callOptions(signal: AbortSignal | undefined): TurboVecCallOptions {
 export type IndexWithControls = TurboVecIndex & {
   readonly calibrated?: boolean
   readonly stagedSearch?: boolean
-  setStagedSearch?: (enabled: boolean, options?: TurboVecCallOptions) => void | Promise<void>
-  buildIvf?: (nLists: number, nIter?: number, options?: TurboVecCallOptions) => void | Promise<void>
+  setStagedSearch?: (enabled: boolean) => void | Promise<void>
+  buildIvf?: (nLists: number, nIter?: number) => void | Promise<void>
   searchIvf?: (
     queries: Float32Array,
     k: number,
@@ -124,6 +124,9 @@ function openIndex(
   // IVF flags around its native await, and an interleaved add or remove would
   // leave IVF marked built over lists the native index has dropped. A call
   // whose signal aborts while it waits leaves the queue without running.
+  // Only reads pass the signal on: the native index finishes a mutation it
+  // has started even after an abort, so a started mutation runs to the end
+  // and reports its result.
   let tail: Promise<unknown> = Promise.resolve()
   function exclusive<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
     const previous = tail
@@ -161,7 +164,7 @@ function openIndex(
         if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
           throw new Error('The vector index provider does not support staged search controls')
         }
-        await index.setStagedSearch(enabled, callOptions(signal))
+        await index.setStagedSearch(enabled)
         return index.stagedSearch
       }),
     setIvf: (settings, signal) =>
@@ -177,11 +180,11 @@ function openIndex(
         const listsCurrent =
           ivfBuilt && ivfSettings !== null && sameListBuild(ivfSettings, settings)
         if (!listsCurrent) {
-          // Mark the lists stale before building. If the build throws or is
-          // aborted, search scans every entry instead of probing lists the
-          // native index may already have dropped.
+          // Mark the lists stale before building. If the build throws, search
+          // scans every entry instead of probing lists the native index may
+          // already have dropped.
           ivfBuilt = false
-          await index.buildIvf(settings.nLists, settings.nIter ?? 0, callOptions(signal))
+          await index.buildIvf(settings.nLists, settings.nIter ?? 0)
           ivfBuilt = true
         }
         ivfSettings = settings
@@ -190,7 +193,7 @@ function openIndex(
     add: (vectors, ids, signal) =>
       exclusive(signal, async () => {
         markChanged()
-        await index.addWithIds(vectors, ids, callOptions(signal))
+        await index.addWithIds(vectors, ids)
         return state()
       }),
     search: (queries, k, nProbe, signal) =>
@@ -218,23 +221,14 @@ function openIndex(
       }),
     remove: (ids, removed, signal) =>
       exclusive(signal, async () => {
-        try {
-          for (const id of ids) {
-            const present = await index.remove(id, callOptions(signal))
-            if (present) markChanged()
-            removed.push(present)
-            signal?.throwIfAborted()
-          }
-        } catch (error) {
-          // An aborted call rejects at once while the native removal runs on,
-          // so the id may be gone.
-          if (signal?.aborted) markChanged()
-          throw error
+        for (const id of ids) {
+          const present = await index.remove(id)
+          if (present) markChanged()
+          removed.push(present)
         }
         return state()
       }),
-    write: (path, signal) =>
-      exclusive(signal, async () => await index.write(path, callOptions(signal))),
+    write: (path, signal) => exclusive(signal, async () => await index.write(path)),
     dispose: () => exclusive(undefined, async () => await index.dispose())
   }
 }

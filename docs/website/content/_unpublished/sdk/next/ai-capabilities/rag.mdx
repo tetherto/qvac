@@ -163,9 +163,9 @@ External index providers may not support these controls. Their `calibrated`, `st
 
 In the JavaScript and TypeScript SDK, pass the pending operation's `requestId` to `cancel({ requestId })`. A call cancelled while it waits for its turn skips the native operation. Disposal still runs to release the index.
 
-With the built-in TurboVec provider, an active call can reject with `InferenceCancelledError` while its native work finishes. An add can still insert its batch, a remove can still delete IDs already submitted, and a write can still replace the snapshot. A staged search change can also take effect. If cancellation leaves the IVF lists stale, searches scan every entry until you rebuild the lists with `setIvf()`.
+With the built-in TurboVec provider, a search, `contains()` or snapshot load that is already running rejects with `InferenceCancelledError` at once, and its result is discarded. Later calls on the same index wait for that native work to finish. External providers without active cancellation support may wait for the current call to finish.
 
-Later calls on the same index wait for the earlier native work. Use `contains()` to check the affected IDs before retrying a cancelled add or remove. External providers without active cancellation support may wait for the current call to finish.
+An add, remove, write, `setStagedSearch()` or `setIvf()` that has already started can't be undone part-way. It runs to the end and returns its result, even after a cancel. So a cancelled call that rejects with `InferenceCancelledError` never changed the index.
 
 ### External vector DB
 

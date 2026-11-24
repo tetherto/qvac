@@ -12,8 +12,9 @@ import type {
  * to a native engine (warm-up, result padding, how the storage mode is
  * reported) is handled by the backend that implements this, not by callers.
  * Calls on one index run in call order. A queued call skips native work when
- * its signal aborts. An active call can reject before native work ends if the
- * provider supports cancellation.
+ * its signal aborts. An active read can reject before native work ends if the
+ * provider supports cancellation; an active mutation runs to the end and
+ * reports its result.
  */
 export interface VectorIndexState {
   readonly length: number

@@ -16,26 +16,23 @@ export interface TurboVecIndexSearchResult {
   k: number
 }
 
-// `@qvac/turbovec-ggml` returns a promise from every method and rejects with
-// the abort reason once `signal` aborts. Another provider may return the value
-// directly and ignore the options. Callers await either way.
+// `@qvac/turbovec-ggml` returns a promise from every method. A read or load
+// given a `signal` rejects with the abort reason once it aborts. Another
+// provider may return the value directly and ignore the options. Callers
+// await either way.
 export interface TurboVecIndex {
   readonly length: number
   readonly dim: number
-  addWithIds(
-    vectors: Float32Array,
-    ids: BigUint64Array,
-    options?: TurboVecCallOptions
-  ): MaybePromise<void>
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): MaybePromise<void>
   search(
     queries: Float32Array,
     k: number,
     options?: TurboVecCallOptions
   ): MaybePromise<TurboVecIndexSearchResult>
   contains(id: bigint, options?: TurboVecCallOptions): MaybePromise<boolean>
-  remove(id: bigint, options?: TurboVecCallOptions): MaybePromise<boolean>
+  remove(id: bigint): MaybePromise<boolean>
   prepare(options?: TurboVecCallOptions): MaybePromise<void>
-  write(path: string, options?: TurboVecCallOptions): MaybePromise<void>
+  write(path: string): MaybePromise<void>
   dispose(): MaybePromise<void>
 }
 

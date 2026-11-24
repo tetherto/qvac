@@ -226,7 +226,7 @@ for (const operation of ['search', 'load'] as const) {
   })
 }
 
-test('vector index: cancelling an active removal leaves later ids in the index', async (t) => {
+test('vector index: a removal cancelled while it runs finishes the batch', async (t) => {
   await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
     const index = await createVectorIndex({ dim: 2 })
     await index.add({
@@ -259,10 +259,51 @@ test('vector index: cancelling an active removal leaves later ids in the index',
     } finally {
       finish.resolve()
     }
-    await expectRejects(t, () => pending, InferenceCancelledError, 'the removal reports the cancel')
-    t.is(calls.remove, 1, 'only the removal already in flight completes')
-    t.alike(await index.contains({ ids: ['1', '2', '3'] }), [false, true, true])
+    const response = await pending
+    t.alike(
+      response.operation === 'remove' && response.removed,
+      [true, true, true],
+      'the removal reports every id it removed'
+    )
+    t.is(calls.remove, 3, 'the started batch runs to the end')
+    t.alike(await index.contains({ ids: ['1', '2', '3'] }), [false, false, false])
   })
+})
+
+test('vector index: an IVF build cancelled while it runs finishes and reports the lists', async (t) => {
+  await withProvider(
+    async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({ ids: ['1'], vectors: [[1, 0]] })
+      const started = deferred()
+      const finish = deferred()
+      gates.buildIvf = async () => {
+        started.resolve()
+        await finish.promise
+      }
+      const requestId = 'vi-cancel-active-build'
+      const pending = handleVectorIndex({
+        type: 'vectorIndex',
+        operation: 'setIvf',
+        indexId: index.indexId,
+        ivf: { nLists: 1, nProbe: 1 },
+        requestId
+      })
+      try {
+        await Promise.race([started.promise, pending])
+        t.is(getRequestRegistry().cancel({ requestId }), 1)
+      } finally {
+        finish.resolve()
+      }
+      const response = await pending
+      t.alike(
+        response.operation === 'setIvf' && response.ivf,
+        { nLists: 1, nProbe: 1, built: true },
+        'the build reports the lists it built'
+      )
+    },
+    { ivf: true }
+  )
 })
 
 test('createVectorIndex: rejects when no plugin provides a vector index', async (t) => {

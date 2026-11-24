@@ -70,11 +70,12 @@ async function runOperation(
 ): Promise<VectorIndexResponse> {
   const base = { type: 'vectorIndex' as const, requestId }
   // Index calls take the request's signal: a cancel skips a call still
-  // waiting for its turn and stops waiting for one that is running. The
-  // operations below that check it afterwards also catch a cancel the
-  // provider ignored: it is reported as a cancel, not a success, and an
-  // index opened for a cancelled caller is released, since nothing holds
-  // its id.
+  // waiting for its turn and stops waiting for a running read or load. A
+  // running mutation finishes and reports its result, since the native index
+  // applies it anyway. The operations below that check the signal afterwards
+  // also catch a cancel the provider ignored: it is reported as a cancel, not
+  // a success, and an index opened for a cancelled caller is released, since
+  // nothing holds its id.
   switch (request.operation) {
     case 'create': {
       const opened = await createVectorIndex(request)
@@ -103,11 +104,8 @@ async function runOperation(
       return { ...base, operation: 'remove', ...(await removeVectors(request, signal)) }
     case 'contains':
       return { ...base, operation: 'contains', ...(await containsVectors(request, signal)) }
-    case 'write': {
-      const written = await writeVectorIndex(request, signal)
-      if (signal.aborted) throw new InferenceCancelledError(requestId)
-      return { ...base, operation: 'write', ...written }
-    }
+    case 'write':
+      return { ...base, operation: 'write', ...(await writeVectorIndex(request, signal)) }
     case 'setStagedSearch':
       return {
         ...base,
