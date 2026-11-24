@@ -9,8 +9,12 @@ import { compareVersions, parseNpmView } from './lib/release-train.mjs'
 const VERSION = /^\d+\.\d+\.\d+$/
 const DEP_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies']
 const BRANCH = /^release-(.+)-(\d+\.\d+\.\d+)$/
-// A scan leaves a branch this young to the push run that cut it.
+// A scan leaves a branch this young to the run that cut it.
 const FRESH_MINUTES = 15
+// The actor that creates refs with this workflow's GITHUB_TOKEN; a scan starts only branches it cut.
+const AUTOMATION = 'github-actions[bot]'
+// Settled publish runs: a success, or one still queued, running or waiting for the npm approval.
+const SETTLED = ['success', 'queued', 'in_progress', 'waiting', 'requested', 'pending']
 
 const parse = (text) => {
   try {
@@ -49,7 +53,7 @@ export function pendingBranches({ heads, readMain }) {
     const [, dir, version] = m
     const main = parse(readMain(`packages/${dir}/package.json`))
     if (main?.version !== version || !isAddon(main, parse(readMain(`packages/${dir}/project.json`)))) continue
-    pending.push({ dir, version, sha })
+    pending.push({ dir, name: main.name, version, sha })
   }
   return pending.sort((a, b) => a.dir.localeCompare(b.dir))
 }
@@ -70,7 +74,7 @@ export function qvacRanges(manifest) {
   return ranges
 }
 
-function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha, publishRun, onMain, minutesOld }) {
+function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha, publishRun, onMain, branchOrigin }) {
   const target = bump.sha ?? sha
   if (!VERSION.test(bump.version)) return { action: 'skip', reason: `${bump.version} is not x.y.z` }
   if (bump.from && VERSION.test(bump.from) && compareVersions(bump.version, bump.from) < 0)
@@ -84,14 +88,21 @@ function decide(bump, { sha, mainVersion, isPublished, rangeAvailable, branchSha
   const existing = branchSha(branch)
   if (existing && existing !== target)
     return { action: 'skip', reason: `${branch} already exists at ${existing.slice(0, 9)}` }
-  if (bump.sha && minutesOld(bump.sha) < FRESH_MINUTES)
-    return { action: 'skip', reason: 'merged moments ago; its own run handles it' }
+  if (bump.sha) {
+    const origin = branchOrigin(branch)
+    if (!origin || origin.actor !== AUTOMATION || origin.sha !== bump.sha)
+      return { action: 'skip', reason: 'not cut by the auto-release, or moved since' }
+    if (origin.minutes < FRESH_MINUTES) return { action: 'skip', reason: 'cut moments ago; the run that cut it starts it' }
+  }
   const run = existing ? publishRun(branch, existing) : null
-  if (run)
+  if (run) {
+    const state = run.conclusion || run.status
     return {
       action: 'skip',
-      reason: `publish run already exists (${run.conclusion || run.status}): ${run.url}`,
+      rerun: !SETTLED.includes(state),
+      reason: `publish run already exists (${state}): ${run.url}`,
     }
+  }
   const missing = qvacRanges(bump.manifest).filter(({ name, range }) => !rangeAvailable(name, range))
   if (missing.length)
     return {
@@ -152,9 +163,12 @@ export function apply(rows, { dryRun, create, start }) {
 export const releaseRun = (runs, head) =>
   runs.find((r) => r.headSha === head && !r.displayTitle?.includes('(dry run)')) ?? null
 
-// A scan reports what it starts, what waits or fails, and a publish that needs a re-run.
-export const scanReports = (row) =>
-  row.action !== 'skip' || /^publish run already exists \((failure|cancelled)/.test(row.reason)
+// A scan reports what it starts, what waits or fails, a fresh branch it left alone, and a publish that needs a re-run.
+export const scanReports = (row) => row.action !== 'skip' || row.rerun || /^cut moments ago/.test(row.reason)
+
+// Keeps branch-sourced text from breaking the summary table or a workflow command.
+const cell = (text) => String(text).replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|')
+const command = (text) => String(text).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
 
 export const diffBase = (sha, before) => (before && !/^0+$/.test(before) ? before : `${sha}^1`)
 
@@ -165,12 +179,12 @@ export function summary(rows, { title, dryRun }) {
   for (const r of rows) {
     let label = LABELS[r.action][dryRun ? 1 : 0]
     if (r.action === 'wait' && r.exists && !dryRun) label = 'publish starts once the dependency is on npm'
-    lines.push(`| ${r.name} | ${r.version} | ${label}${r.reason ? `: ${r.reason}` : ''} |`)
+    lines.push(`| ${cell(r.name)} | ${cell(r.version)} | ${label}${r.reason ? `: ${cell(r.reason)}` : ''} |`)
   }
   if (rows.some((r) => r.action === 'wait'))
     lines.push('', 'Waiting releases start on their own within an hour of the dependency publishing.')
-  if (rows.some((r) => r.action === 'skip' && /publish run already exists \((failure|cancelled)/.test(r.reason)))
-    lines.push('', 'A failed or cancelled publish is not restarted here; re-run it from its run page.')
+  if (rows.some((r) => r.rerun))
+    lines.push('', 'A publish that did not succeed is not restarted here; re-run it from its run page.')
   return lines.join('\n')
 }
 
@@ -213,16 +227,26 @@ function lookups(repo, sha) {
       const out = capture('gh', ['run', 'list', '-R', repo, '-w', 'publish-npm.yml', '-b', branch, '-L', '20', '--json', fields])
       return releaseRun(JSON.parse(out), head)
     },
-    onMain: (commit) => run('git', ['merge-base', '--is-ancestor', commit, 'origin/main']).status === 0,
-    minutesOld: (commit) => (Date.now() / 1000 - Number(capture('git', ['show', '-s', '--format=%ct', commit]).trim())) / 60,
+    onMain: (commit) => onMainLine(commit),
+    // The branch's latest ref event: who made it, where it points, and how long ago.
+    branchOrigin: (branch) => {
+      const out = capture('gh', ['api', `repos/${repo}/activity?ref=refs/heads/${branch}&per_page=1`])
+      const [event] = JSON.parse(out)
+      if (!event || event.activity_type !== 'branch_creation') return null
+      return { actor: event.actor?.login, sha: event.after, minutes: (Date.now() - Date.parse(event.timestamp)) / 60000 }
+    },
   }
+}
+
+// On main's first-parent line: a push head or merge commit, not a commit from inside a merged branch.
+function onMainLine(commit) {
+  return capture('git', ['rev-list', '--first-parent', 'origin/main']).split('\n').includes(commit)
 }
 
 function bumpRows(env, repo) {
   if (env.SHA && !/^[0-9a-f]{7,40}$/.test(env.SHA)) throw new Error(`sha must be a commit hash, got ${env.SHA}`)
   const sha = capture('git', ['rev-parse', '--verify', `${env.SHA || 'HEAD'}^{commit}`]).trim()
-  if (run('git', ['merge-base', '--is-ancestor', sha, 'origin/main']).status !== 0)
-    throw new Error(`${sha} is not on main; only main commits are released`)
+  if (!onMainLine(sha)) throw new Error(`${sha} is not on main's first-parent line; only main commits are released`)
   const base = diffBase(sha, env.BEFORE)
   const changed = capture('git', ['diff', '--name-only', base, sha, '--', 'packages/*/package.json'])
     .split('\n')
@@ -240,18 +264,23 @@ function scanRows(repo) {
       return { sha, branch: ref.replace('refs/heads/', '') }
     })
   const pending = pendingBranches({ heads, readMain: show('origin/main') })
+  const found = lookups(repo, null)
   const bumps = []
   const unreadable = []
-  for (const { dir, version, sha } of pending) {
-    run('git', ['fetch', '--no-tags', '--quiet', 'origin', sha])
-    const manifest = parse(show(sha)(`packages/${dir}/package.json`))
-    if (manifest?.version === version) bumps.push({ dir, name: manifest.name, from: null, version, sha, manifest })
-    else {
-      const reason = manifest ? `branch carries version ${manifest.version}` : 'could not read its package.json'
-      unreadable.push({ dir, name: dir, version, sha, branch: `release-${dir}-${version}`, action: 'failed', reason })
+  for (const { dir, name, version, sha } of pending) {
+    const row = { dir, name, version, sha, branch: `release-${dir}-${version}` }
+    try {
+      // Name from main's manifest, and released or off-main branches are dropped before the branch is read.
+      if (found.isPublished(name, version) || !found.onMain(sha)) continue
+      run('git', ['fetch', '--no-tags', '--quiet', 'origin', sha])
+      const manifest = parse(show(sha)(`packages/${dir}/package.json`))
+      if (!manifest) unreadable.push({ ...row, action: 'failed', reason: 'could not read its package.json' })
+      else if (manifest.version === version && manifest.name === name) bumps.push({ ...row, from: null, manifest })
+    } catch (error) {
+      unreadable.push({ ...row, action: 'failed', reason: error.message.split('\n')[0] })
     }
   }
-  const rows = [...plan(bumps, lookups(repo, null)).filter(scanReports), ...unreadable]
+  const rows = [...plan(bumps, found).filter(scanReports), ...unreadable]
   return { title: 'Waiting addon releases', rows }
 }
 
@@ -260,22 +289,24 @@ function main() {
   const repo = env.GITHUB_REPOSITORY
   const dryRun = env.DRY_RUN === 'true'
   const { title, rows } = env.MODE === 'scan' ? scanRows(repo) : bumpRows(env, repo)
-  const { publishRun } = lookups(repo, null)
+  const { publishRun, branchSha } = lookups(repo, null)
 
   for (const row of rows) console.log(`${row.dir}@${row.version}: ${row.action}${row.reason ? ` (${row.reason})` : ''}`)
   apply(rows, {
     dryRun,
     create: (row) =>
       capture('gh', ['api', '--method', 'POST', `repos/${repo}/git/refs`, '-f', `ref=refs/heads/${row.branch}`, '-f', `sha=${row.sha}`]),
-    // Re-checked right before dispatch so an overlapping run's publish is not started twice.
+    // Re-checked right before dispatch: the branch must still be at the planned commit, with no publish yet.
     start: (row) => {
+      const head = branchSha(row.branch)
+      if (head !== row.sha) throw new Error(`${row.branch} moved to ${head?.slice(0, 9) ?? 'nothing'} before dispatch`)
       if (publishRun(row.branch, row.sha)) return false
       capture('gh', ['workflow', 'run', 'publish-npm.yml', '-R', repo, '--ref', row.branch, '-f', `packages=${row.dir}`])
     },
   })
 
   for (const row of rows.filter((r) => r.action === 'failed'))
-    console.log(`::error title=Auto-release ${row.dir}::${row.reason}`)
+    console.log(`::error title=Auto-release ${command(row.dir)}::${command(row.reason)}`)
   const text = summary(rows, { title, dryRun })
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${text}\n`)
   else console.log(`\n${text}`)
@@ -286,7 +317,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     main()
   } catch (error) {
-    console.log(`::error title=Auto-release::${error.message}`)
+    console.log(`::error title=Auto-release::${command(error.message)}`)
     process.exit(1)
   }
 }

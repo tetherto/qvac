@@ -26,7 +26,7 @@ const lookups = (over = {}) => ({
   branchSha: () => null,
   publishRun: () => null,
   onMain: () => true,
-  minutesOld: () => 60,
+  branchOrigin: () => ({ actor: 'github-actions[bot]', sha: OTHER, minutes: 60 }),
   ...over,
 })
 
@@ -88,7 +88,7 @@ test('pendingBranches: only addon branches at the version main still carries', (
     { branch: 'release-llm-0.36.4', sha: OTHER },
     { branch: 'release-gone-1.0.0', sha: OTHER },
   ]
-  assert.deepEqual(pendingBranches({ heads, readMain: main }), [{ dir: 'llm-llamacpp', version: '0.73.0', sha: SHA }])
+  assert.deepEqual(pendingBranches({ heads, readMain: main }), [{ dir: 'llm-llamacpp', name: '@qvac/llm-llamacpp', version: '0.73.0', sha: SHA }])
 })
 
 test('plan: a fresh bump creates the release branch and starts publish', () => {
@@ -123,14 +123,32 @@ test('plan: a publish run counts only for the commit the branch points at', () =
   assert.deepEqual(asked, [['release-llm-llamacpp-0.72.1', SHA]])
 })
 
-test('plan: a scan never starts a branch whose commit is off main or was cut moments ago', () => {
+test('plan: a scan starts only a branch the auto-release cut, still where it cut it, on main, and not just now', () => {
   const bump = { ...llm('0.73.0'), from: null, sha: OTHER }
-  const off = plan([bump], lookups({ sha: null, branchSha: () => OTHER, onMain: () => false }))[0]
-  assert.deepEqual([off.action, off.reason], ['skip', 'branch commit is not on main'])
-  const fresh = plan([bump], lookups({ sha: null, branchSha: () => OTHER, minutesOld: () => 2 }))[0]
-  assert.equal(fresh.action, 'skip')
-  assert.match(fresh.reason, /its own run handles it/)
-  assert.equal(plan([llm('0.72.1')], lookups({ onMain: () => false, minutesOld: () => 0 }))[0].action, 'release')
+  const scan = (over) => plan([bump], lookups({ sha: null, branchSha: () => OTHER, ...over }))[0]
+  assert.deepEqual([scan({}).action], ['dispatch'])
+  assert.deepEqual([scan({ onMain: () => false }).reason], ['branch commit is not on main'])
+  const notOurs = 'not cut by the auto-release, or moved since'
+  assert.equal(scan({ branchOrigin: () => ({ actor: 'someone', sha: OTHER, minutes: 60 }) }).reason, notOurs)
+  assert.equal(scan({ branchOrigin: () => ({ actor: 'github-actions[bot]', sha: SHA, minutes: 60 }) }).reason, notOurs)
+  assert.equal(scan({ branchOrigin: () => null }).reason, notOurs)
+  const fresh = scan({ branchOrigin: () => ({ actor: 'github-actions[bot]', sha: OTHER, minutes: 2 }) })
+  assert.deepEqual([fresh.action, fresh.reason], ['skip', 'cut moments ago; the run that cut it starts it'])
+  const never = () => assert.fail('a bump run does not check the branch origin')
+  assert.equal(plan([llm('0.72.1')], lookups({ onMain: never, branchOrigin: never }))[0].action, 'release')
+})
+
+test('plan: any publish run that ended without success is flagged for a re-run; queued or waiting ones are not', () => {
+  const state = (run) => plan([llm('0.72.1')], lookups({ branchSha: () => SHA, publishRun: () => ({ url: 'u', ...run }) }))[0]
+  assert.equal(state({ status: 'completed', conclusion: 'timed_out' }).rerun, true)
+  assert.equal(state({ status: 'completed', conclusion: 'startup_failure' }).rerun, true)
+  assert.equal(state({ status: 'completed', conclusion: 'success' }).rerun, false)
+  assert.equal(state({ status: 'waiting', conclusion: '' }).rerun, false)
+})
+
+test('summary: branch-sourced text cannot break the table', () => {
+  const text = summary([{ name: 'a|b', version: '1.0.0', action: 'failed', reason: 'x\n::notice::y' }], { title: 't', dryRun: false })
+  assert.match(text, /\| a\\\|b \| 1\.0\.0 \| not started: x ::notice::y \|/)
 })
 
 test('plan: a scanned branch is judged against its own commit, not the run commit', () => {
@@ -211,7 +229,7 @@ test('summary: says what happened, and only what would happen on a dry run', () 
 })
 
 test('summary: points a failed publish at its run page', () => {
-  const rows = [{ name: '@qvac/ocr-ggml', version: '0.36.0', action: 'skip', reason: 'publish run already exists (failure): u' }]
+  const rows = [{ name: '@qvac/ocr-ggml', version: '0.36.0', action: 'skip', rerun: true, reason: 'publish run already exists (timed_out): u' }]
   assert.match(summary(rows, { title: 't', dryRun: false }), /re-run it from its run page/)
 })
 
@@ -264,11 +282,17 @@ test('scanReports: keeps starts, waits, failures and a publish needing a re-run;
     { action: 'skip', reason: 'already on npm' },
     { action: 'skip', reason: 'branch commit is not on main' },
     { action: 'skip', reason: 'publish run already exists (in_progress): u' },
-    { action: 'skip', reason: 'publish run already exists (failure): u' },
+    { action: 'skip', rerun: true, reason: 'publish run already exists (failure): u' },
+    { action: 'skip', reason: 'cut moments ago; the run that cut it starts it' },
     { action: 'wait', reason: 'needs x' },
     { action: 'failed', reason: 'npm view failed' },
   ]
-  assert.deepEqual(rows.filter(scanReports).map((r) => r.reason), ['publish run already exists (failure): u', 'needs x', 'npm view failed'])
+  assert.deepEqual(rows.filter(scanReports).map((r) => r.reason), [
+    'publish run already exists (failure): u',
+    'cut moments ago; the run that cut it starts it',
+    'needs x',
+    'npm view failed',
+  ])
 })
 
 test('apply: a publish another run started first is reported as skipped, not started again', () => {

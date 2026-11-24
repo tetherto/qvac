@@ -232,18 +232,25 @@ A native addon (a `ci:addons` package that `publish-npm.yml` publishes) releases
    approval is the release decision: reject it, or cancel the run, to hold a bump back. A
    cancelled or failed publish is restarted from its own run page.
 
-Do not cut these branches or dispatch `publish-npm.yml` by hand for them. The workflow leaves
-alone a version already on npm, a version `main` has since moved past, and a release branch
-that points at another commit. A branch at the merge commit that already has a publish run
-is reported with that run's link, not started again.
+Do not cut these branches or dispatch `publish-npm.yml` by hand for them. The workflow skips:
+
+- a version already on npm, not `x.y.z`, or lower than the one it replaces;
+- a version `main` has since moved past;
+- a release branch that points at another commit;
+- a branch at the merge commit that already has a publish run. The summary links that run, and
+  flags it for a re-run from its page if it ended without success.
 
 An addon whose `@qvac/*` dependency range has no version on npm yet, such as a consumer moved
 to a new Fabric minor in the same merge, gets its branch at merge time but no publish run. A
-range the published version already satisfies does not wait. The same workflow
-starts it within an hour of that dependency publishing: it re-checks every hour and after a
-successful `publish-npm.yml` run, and `gh workflow run addon-auto-release.yml` with no inputs
-runs that check now. To release a bump that merged before this workflow existed, or whose run failed,
-run it with `-f sha=<merge commit>`; add `-f dry_run=true` to see the plan first.
+range the published version already satisfies does not wait. The workflow starts it within an
+hour of that dependency publishing: it re-checks every hour and after a successful
+`publish-npm.yml` run, and `gh workflow run addon-auto-release.yml` with no inputs runs that
+check now. That check only starts a branch this workflow cut, still at the commit it cut it
+from, on `main`'s first-parent line. It leaves a branch cut in the last 15 minutes to the run
+that cut it, and its summary says so.
+
+To release a bump that merged before this workflow existed, or whose run failed, run it with
+`-f sha=<merge commit>`; add `-f dry_run=true` to see the plan first.
 
 No backmerge is needed: the version and changelog are already on `main`. Patch releases of
 an older addon line follow [Patch flow](#patch-flow-xyz--xyz1). The SDK pod and the other
