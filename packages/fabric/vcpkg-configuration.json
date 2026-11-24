@@ -2,7 +2,8 @@
   "default-registry": {
     "kind": "git",
     "baseline": "4986a4db124a5183e175c25649e5941c2ef08517",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+    "reference": "QVAC-28038/minimax-explicit-mixed-quants"
   },
   "registries": [
     {
