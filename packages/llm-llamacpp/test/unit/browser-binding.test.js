@@ -405,13 +405,27 @@ test('invalid browser load config does not load an engine', async (t) => {
   })
 
   for (let iteration = 0; iteration < 20; iteration++) {
-    for (const [config, message] of [
-      [{ mmap: 'true' }, /mmap is not supported/],
-      [{ 'lora-scaled': '/m/lora.gguf:0.5' }, /lora-scaled is not supported/],
-      [{ lora: '/m/a.gguf,/m/b.gguf' }, /lora takes one adapter path/],
-      [{ spec_draft_model: undefined, 'spec-draft-model': '/m/d.gguf' }, /must not both be set/]
+    for (const [params, message] of [
+      [{ config: { mmap: 'true' } }, /mmap is not supported/],
+      [{ config: { 'lora-scaled': '/m/lora.gguf:0.5' } }, /lora-scaled is not supported/],
+      [
+        { config: { spec_draft_model: undefined, 'spec-draft-model': '/m/d.gguf' } },
+        /must not both be set/
+      ],
+      [{ path: 'model.gguf' }, /absolute OPFS path, got: model\.gguf/],
+      [{ projectionPath: 'mmproj.gguf' }, /absolute OPFS path, got: mmproj\.gguf/],
+      [{ config: { lora: 'adapter.gguf' } }, /absolute OPFS path, got: adapter\.gguf/],
+      [{ config: { spec_draft_model: 'draft.gguf' } }, /absolute OPFS path, got: draft\.gguf/],
+      [
+        { config: { spec_draft_model: '/m/draft-00002-of-00002.gguf' } },
+        /must be loaded from its first shard/
+      ]
     ]) {
-      const handle = isolated.createInstance({}, { path: '/m/model.gguf', config }, () => {})
+      const handle = isolated.createInstance(
+        {},
+        { path: '/m/model.gguf', config: {}, ...params },
+        () => {}
+      )
       await t.exception.all(() => isolated.activate(handle), message)
       await isolated.destroyInstance(handle)
     }

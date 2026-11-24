@@ -11,7 +11,7 @@
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 const { ensureMessageCacheDirectories, ensureParentDirectory } = require('./browser/cache-files.js')
 const createEngine = require('./browser/create-engine.js')
-const { browserLoadConfig, mountLoadFiles } = require('./browser/load-config.js')
+const { checkLoadFiles, mountLoadFiles } = require('./browser/load-config.js')
 const { mountModelFiles, unmountModelFiles } = require('./browser/model-files.js')
 const retryableModule = require('./browser/retryable-module.js')
 
@@ -222,7 +222,7 @@ function activate(handle) {
     if (config && config.parallel !== undefined && String(config.parallel) !== '1') {
       throw new Error('parallel > 1 is not supported in the browser build')
     }
-    browserLoadConfig(config)
+    checkLoadFiles(handle.params)
     const engine = await loadEngine()
     handle.engine = engine
     engine.handles.add(handle)

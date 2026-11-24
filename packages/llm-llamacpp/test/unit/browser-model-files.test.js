@@ -4,6 +4,7 @@ const test = require('brittle')
 const {
   MOUNTED_FILES_KEY,
   modelFiles,
+  installReadAhead,
   mountModelFiles,
   orderedShards,
   shardInfo,
@@ -40,7 +41,7 @@ function mockModule({ failMountAt = 0, failUnmountAt = 0, failRmdirAt = 0 } = {}
       failRmdirAt = 0
     },
     FS: {
-      filesystems: { WORKERFS: {} },
+      filesystems: { WORKERFS: { stream_ops: { read() {} } } },
       mkdirTree() {},
       mount(_filesystem, _options, mountpoint) {
         mountCalls++
@@ -342,4 +343,201 @@ test('browser model mount failure retains failed directory cleanup for retry', a
     t.alike(module.removed, ['/qvac-files/1'], `directory retried, iteration ${iteration + 1}`)
     t.alike(mounts, [], `iteration ${iteration + 1}`)
   }
+})
+
+function readAheadFixture(sizes) {
+  const calls = []
+  const files = sizes.map((size, index) => {
+    const bytes = new Uint8Array(size)
+    for (let i = 0; i < size; i++) bytes[i] = (i * 31 + index * 7) & 0xff
+    return {
+      bytes,
+      slice: (start, end) => ({
+        size: Math.max(0, Math.min(end, size) - start),
+        source: bytes,
+        start,
+        end: Math.min(end, size)
+      })
+    }
+  })
+  const direct = (stream, buffer, offset, length, position) => {
+    if (position >= stream.node.size) return 0
+    const chunk = stream.node.contents.slice(position, position + length)
+    calls.push({ direct: true, bytes: chunk.size })
+    buffer.set(chunk.source.subarray(chunk.start, chunk.end), offset)
+    return chunk.size
+  }
+  const module = {
+    FS: {
+      filesystems: { WORKERFS: { stream_ops: { read: direct } } },
+      unmount() {},
+      rmdir() {}
+    }
+  }
+  globalThis.FileReaderSync = class {
+    readAsArrayBuffer(blob) {
+      calls.push({ direct: false, bytes: blob.size })
+      return blob.source.slice(blob.start, blob.end).buffer
+    }
+  }
+  installReadAhead(module)
+  const streams = files.map((file, index) => ({ node: { contents: file, size: sizes[index] } }))
+  function read(index, position, length) {
+    const buffer = new Int8Array(length + 8)
+    const count = module.FS.filesystems.WORKERFS.stream_ops.read(
+      streams[index],
+      buffer,
+      8,
+      length,
+      position
+    )
+    return { count, bytes: new Uint8Array(buffer.buffer, 8, count) }
+  }
+  return { module, files, calls, read }
+}
+
+function readAll(fixture, index, size, chunk) {
+  const out = new Uint8Array(size)
+  let position = 0
+  while (position < size) {
+    const { count, bytes } = fixture.read(index, position, chunk)
+    if (count < 1) break
+    out.set(bytes, position)
+    position += count
+  }
+  return { out, position }
+}
+
+test('browser read-ahead returns exactly the bytes of a direct read 20x', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const MiB = 1024 * 1024
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const sizes = [9 * MiB + 123, 5 * MiB + 7]
+    const { files, read } = readAheadFixture(sizes)
+    let seed = iteration + 1
+    const random = (limit) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed % limit
+    }
+    let mismatches = 0
+    const position = [0, 0]
+    for (let step = 0; step < 400; step++) {
+      const index = random(2)
+      // Mix sequential runs, jumps, reads past the end and large reads.
+      if (step % 7 === 0) position[index] = random(sizes[index] + 16)
+      const length = step % 50 === 0 ? 5 * MiB : 1 + random(64 * 1024)
+      const at = position[index]
+      const { count, bytes } = read(index, at, length)
+      const expected = files[index].bytes.subarray(
+        Math.min(at, sizes[index]),
+        Math.min(at + length, sizes[index])
+      )
+      if (count !== expected.length) mismatches++
+      else if (bytes.some((byte, i) => byte !== expected[i])) mismatches++
+      position[index] = at + count
+    }
+    t.is(mismatches, 0, `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser read-ahead serves sequential small reads from a window', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const MiB = 1024 * 1024
+  const fixture = readAheadFixture([10 * MiB])
+  const { out, position } = readAll(fixture, 0, 10 * MiB, 2048)
+  t.is(position, 10 * MiB, 'read to the end')
+  t.ok(
+    out.every((byte, i) => byte === fixture.files[0].bytes[i]),
+    'whole file read back'
+  )
+  const [first, ...windows] = fixture.calls
+  t.alike(first, { direct: true, bytes: 2048 }, 'the first read is direct')
+  t.ok(
+    windows.every((call) => !call.direct),
+    'later reads come from windows'
+  )
+  t.alike(
+    windows.map((call) => call.bytes / 1024),
+    [64, 128, 256, 512, 1024, 2048, 4096, 2110],
+    'the window doubles to 4 MiB while reads stay sequential'
+  )
+  t.is(
+    fixture.calls.reduce((sum, call) => sum + call.bytes, 0),
+    10 * MiB,
+    'each byte is fetched once'
+  )
+  t.is(fixture.read(0, 10 * MiB, 10).count, 0, 'end of file')
+})
+
+test('browser read-ahead grows its window for reads that do not line up with it', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const MiB = 1024 * 1024
+  for (const chunk of [2000, 2049, 4095]) {
+    const fixture = readAheadFixture([32 * MiB])
+    const { out, position } = readAll(fixture, 0, 32 * MiB, chunk)
+    t.is(position, 32 * MiB, `${chunk}-byte reads reach the end`)
+    t.ok(
+      out.every((byte, i) => byte === fixture.files[0].bytes[i]),
+      `${chunk}-byte reads return the file`
+    )
+    t.ok(fixture.calls.length < 20, `${chunk}-byte reads: ${fixture.calls.length} file reads`)
+  }
+})
+
+test('browser read-ahead never serves one file from another file window', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const fixture = readAheadFixture([256 * 1024, 256 * 1024])
+  fixture.read(0, 0, 1024)
+  fixture.read(0, 1024, 1024)
+  for (let position = 2048; position < 64 * 1024; position += 1024) {
+    const { bytes } = fixture.read(1, position, 1024)
+    t.ok(
+      bytes.every((byte, i) => byte === fixture.files[1].bytes[position + i]),
+      `file 1 at ${position}`
+    )
+  }
+})
+
+test('browser read-ahead reads only the requested bytes for non-sequential reads', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const MiB = 1024 * 1024
+  const fixture = readAheadFixture([8 * MiB])
+  for (let position = 8 * MiB - 4096; position >= 0; position -= 64 * 1024) {
+    fixture.read(0, position, 2048)
+  }
+  t.ok(fixture.calls.length > 100)
+  t.ok(
+    fixture.calls.every((call) => call.direct && call.bytes === 2048),
+    'no window fetched for strided reads'
+  )
+})
+
+test('browser read-ahead releases its window on unmount', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const fixture = readAheadFixture([256 * 1024])
+  fixture.read(0, 0, 1024)
+  fixture.read(0, 1024, 1024)
+  t.is(fixture.calls.length, 2, 'direct read, then a window')
+  fixture.read(0, 4096, 1024)
+  t.is(fixture.calls.length, 2, 'served from the window')
+  unmountModelFiles(fixture.module, [])
+  fixture.read(0, 4096, 1024)
+  t.alike(fixture.calls.at(-1), { direct: true, bytes: 1024 }, 'window released')
+})
+
+test('browser read-ahead installs once per engine module', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  const { module } = readAheadFixture([16])
+  const wrapped = module.FS.filesystems.WORKERFS.stream_ops.read
+  installReadAhead(module)
+  t.is(module.FS.filesystems.WORKERFS.stream_ops.read, wrapped)
+})
+
+test('browser model mounts install the read-ahead', async (t) => {
+  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  installLoadFiles()
+  const module = mockModule()
+  const direct = module.FS.filesystems.WORKERFS.stream_ops.read
+  await mountModelFiles(module, [], '/qvac-files/1', '/models/main.gguf')
+  t.not(module.FS.filesystems.WORKERFS.stream_ops.read, direct)
 })

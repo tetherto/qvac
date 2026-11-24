@@ -45,7 +45,9 @@ function orderedShards(files, expected, path) {
   return shards.map(({ file }) => file)
 }
 
-async function modelFiles(path) {
+// Checks a model path without touching OPFS, so a bad path is rejected before
+// the engine starts.
+function parseModelPath(path) {
   if (typeof path !== 'string' || !path.startsWith('/')) {
     throw new TypeError(`Expected an absolute OPFS path, got: ${path}`)
   }
@@ -56,6 +58,11 @@ async function modelFiles(path) {
   if (shard && shard.index !== 1) {
     throw new Error(`A sharded model must be loaded from its first shard: ${path}`)
   }
+  return { parts, name, shard }
+}
+
+async function modelFiles(path) {
+  const { parts, name, shard } = parseModelPath(path)
 
   const mountedFiles = globalThis[MOUNTED_FILES_KEY]
   const mounted = mountedFiles?.get(path)
@@ -93,9 +100,80 @@ async function modelFiles(path) {
   return { primary, files: orderedShards(siblings, shard, path) }
 }
 
+const READ_AHEAD_MIN_BYTES = 64 * 1024
+const READ_AHEAD_BYTES = 4 * 1024 * 1024
+const readAheads = new WeakMap()
+
+// Each WORKERFS read is one FileReaderSync call. Loaders that read in small
+// sequential chunks (the projector loader reads ~2 KB at a time) spend most of
+// the load in that per-call cost, so a small read that continues the previous
+// one is served from a read-ahead window. One window per engine is held, and
+// unmounting releases it.
+function installReadAhead(module) {
+  const ops = module.FS.filesystems.WORKERFS.stream_ops
+  if (readAheads.has(ops)) return
+  const state = { window: null, lastFile: null, lastEnd: -1, windowBytes: READ_AHEAD_MIN_BYTES }
+  readAheads.set(ops, state)
+  const read = ops.read
+  let reader = null
+  ops.read = function (stream, buffer, offset, length, position) {
+    const file = stream.node.contents
+    const size = stream.node.size
+    const window = state.window
+    let count
+    if (
+      window?.file === file &&
+      position >= window.start &&
+      position + length <= window.start + window.bytes.length
+    ) {
+      const from = position - window.start
+      buffer.set(window.bytes.subarray(from, from + length), offset)
+      count = length
+    } else if (
+      length < READ_AHEAD_BYTES &&
+      position < size &&
+      file === state.lastFile &&
+      position === state.lastEnd
+    ) {
+      // The window doubles while reads stay sequential, so a short run of
+      // small reads before a large one fetches little extra.
+      if (
+        window?.file === file &&
+        position > window.start &&
+        position <= window.start + window.bytes.length
+      ) {
+        state.windowBytes = Math.min(state.windowBytes * 2, READ_AHEAD_BYTES)
+      } else {
+        state.windowBytes = READ_AHEAD_MIN_BYTES
+      }
+      reader ??= new globalThis.FileReaderSync()
+      const end = Math.min(position + Math.max(length, state.windowBytes), size)
+      const bytes = new Uint8Array(reader.readAsArrayBuffer(file.slice(position, end)))
+      state.window = { file, start: position, bytes }
+      count = Math.min(length, bytes.length)
+      buffer.set(bytes.subarray(0, count), offset)
+    } else {
+      count = read.call(this, stream, buffer, offset, length, position)
+    }
+    state.lastFile = file
+    state.lastEnd = position + count
+    return count
+  }
+}
+
+function releaseReadAhead(module) {
+  const state = readAheads.get(module.FS.filesystems?.WORKERFS?.stream_ops)
+  if (!state) return
+  state.window = null
+  state.lastFile = null
+  state.lastEnd = -1
+  state.windowBytes = READ_AHEAD_MIN_BYTES
+}
+
 async function mountModelFiles(module, mounts, mountpoint, path) {
   if (!path) return ''
   const { primary, files } = await modelFiles(path)
+  installReadAhead(module)
   module.FS.mkdirTree(mountpoint)
   try {
     module.FS.mount(module.FS.filesystems.WORKERFS, { files }, mountpoint)
@@ -112,6 +190,7 @@ async function mountModelFiles(module, mounts, mountpoint, path) {
 }
 
 function unmountModelFiles(module, mounts) {
+  releaseReadAhead(module)
   const pending = mounts.splice(0)
   let firstError = null
   for (const entry of pending) {
@@ -138,9 +217,11 @@ function unmountModelFiles(module, mounts) {
 
 module.exports = {
   MOUNTED_FILES_KEY,
+  installReadAhead,
   modelFiles,
   mountModelFiles,
   orderedShards,
+  parseModelPath,
   shardInfo,
   unmountModelFiles
 }

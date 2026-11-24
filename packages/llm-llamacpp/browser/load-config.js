@@ -1,3 +1,5 @@
+const { parseModelPath } = require('./model-files.js')
+
 // Mounted browser files cannot be memory-mapped, locked or opened with direct
 // I/O. Preserve the native addon's alias validation, then select plain reads.
 const LEGACY_LOAD_KEYS = [
@@ -45,10 +47,6 @@ function browserLoadConfig(config = {}) {
     }
   }
 
-  if (String(config.lora ?? '').includes(',')) {
-    throw new Error('lora takes one adapter path in the browser build')
-  }
-
   const { load_mode: underscore, 'load-mode': hyphen, ...rest } = config
   // An empty lora means none; native would read the next key as its path.
   if (rest.lora === '') delete rest.lora
@@ -77,8 +75,23 @@ function browserLoadConfig(config = {}) {
   ])
 }
 
-async function mountLoadFiles(params, mountFile) {
+// Validates the load config and the syntax of every file path, without
+// starting the engine or reading OPFS.
+function checkLoadFiles(params) {
   const config = browserLoadConfig(params.config)
+  for (const path of [params.path, params.projectionPath, ...FILE_KEYS.map((key) => config[key])]) {
+    if (path) parseModelPath(path)
+  }
+  return config
+}
+
+// The engine parses lora as CSV; quote the path so it stays one field.
+function csvField(value) {
+  return /[",]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
+
+async function mountLoadFiles(params, mountFile) {
+  const config = checkLoadFiles(params)
   const mountedPaths = new Map()
   async function mountOnce(sourcePath) {
     if (!sourcePath) return ''
@@ -91,9 +104,23 @@ async function mountLoadFiles(params, mountFile) {
   const modelPath = await mountOnce(params.path)
   const projectionPath = await mountOnce(params.projectionPath)
   for (const key of FILE_KEYS) {
-    if (config[key]) config[key] = await mountOnce(config[key])
+    if (!config[key]) continue
+    try {
+      config[key] = await mountOnce(config[key])
+    } catch (error) {
+      if (key !== 'lora' || error?.name !== 'NotFoundError' || !config.lora.includes(',/')) {
+        throw error
+      }
+      const hinted = new Error(
+        `${error.message} (lora takes one adapter path in the browser build)`,
+        { cause: error }
+      )
+      hinted.name = error.name
+      throw hinted
+    }
   }
+  if (config.lora) config.lora = csvField(config.lora)
   return { modelPath, projectionPath, config }
 }
 
-module.exports = { browserLoadConfig, mountLoadFiles }
+module.exports = { browserLoadConfig, checkLoadFiles, mountLoadFiles }

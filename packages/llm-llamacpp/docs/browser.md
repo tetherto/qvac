@@ -60,9 +60,11 @@ binding verifies that the set is complete before loading it.
 
 `files.projectionModel`, `config.lora`, and
 `config.spec_draft_model`/`config['spec-draft-model']` use the same absolute
-OPFS or SDK-registered path rules. For a sharded draft model, pass its first
-shard path. `config.lora` takes one adapter path; `lora-scaled`,
-`control-vector` and `control-vector-scaled` are rejected at load.
+OPFS path rules. Every path's form (absolute, first shard) is checked before
+the engine starts; whether the file exists is checked when it is mounted. For a
+sharded draft model, pass its first shard path. `config.lora` takes one adapter
+path, which may contain commas; `lora-scaled`, `control-vector` and
+`control-vector-scaled` are rejected at load.
 
 ```js
 import LlmLlamacpp from '@qvac/llm-llamacpp'
@@ -94,15 +96,16 @@ Supported:
 - Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
 
-| Outside the current binding scope                      | Behaviour                                                             |
-| ------------------------------------------------------ | --------------------------------------------------------------------- |
-| `parallel` > 1 and batch `run()`                       | Rejected at load/run                                                  |
-| `load_mode` other than `auto`/`none`                   | Rejected at load; weights are read, never memory-mapped               |
-| Media input and projection-backed multimodal inference | Media is rejected; the projector is not exercised until media support |
-| RPC servers and native backend/cache directories       | Rejected at load                                                      |
-| `lora-scaled`, control vectors, multiple LoRAs         | Rejected at load                                                      |
-| `finetune()`                                           | Throws: not exposed by the browser binding                            |
-| `assessFit()`                                          | Rejects                                                               |
+| Outside the current binding scope                      | Behaviour                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `parallel` > 1 and batch `run()`                       | Rejected at load/run                                                      |
+| `load_mode` other than `auto`/`none`                   | Rejected at load; weights are read, never memory-mapped                   |
+| Media input and projection-backed multimodal inference | Media is rejected; the projector is loaded but unused until media support |
+| RPC servers and native backend/cache directories       | Rejected at load                                                          |
+| `lora-scaled` and control vectors                      | Rejected at load                                                          |
+| Multiple LoRAs                                         | Not supported; a comma-separated `lora` is read as one path               |
+| `finetune()`                                           | Throws: not exposed by the browser binding                                |
+| `assessFit()`                                          | Rejects                                                                   |
 
 Requests run one at a time per Worker. A second `run()` either fails
 fast (`rejectWhenBusy`, the default) or waits its turn.
