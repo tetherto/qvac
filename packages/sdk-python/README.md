@@ -241,43 +241,48 @@ worker; hand-write per language only what is irreducibly client-side, and never
 - **Generated from the one contract.** The pydantic models + typed method stubs,
   the model-type resolution maps (`_generated/model_type_maps.py`), the
   error-code registries (`_generated/error_codes.py`), and the pinned SDK
-  version (`_generated/sdk_version.py`) are all generated from
-  `../sdk/contract/**`. `generate.py --check` (and the SDK's `contract:check`)
-  fail CI if either side drifts.
+  version (`_generated/sdk_version.py`) are generated from the SDK's contract
+  every time the package is built or tested, so they cannot drift from it.
+  `_generated/` is gitignored; the wheel and source package carry it.
 - **Behaviour lives in the worker.** `translate` source-language detection and
   the completion tool-loop (`completionOrchestrate`) run in the worker, so
   Python and JS share one implementation instead of two that diverge (they did:
   Python once used `lingua`, JS `@qvac/langdetect-text`).
 - **Version lock-step.** This package's version *is* the `@qvac/sdk` version it
   was generated against.
-- **Conformance corpus.** `../sdk-e2e/catalog/conformance/cases.json` is run by both a
-  JS runner and `tests/test_conformance.py`, so the two clients are diffed
-  against the same cases.
+- **One e2e catalog.** The shared catalog in [`../sdk-e2e`](../sdk-e2e) is this
+  client's e2e suite, and the JS and Kotlin clients run the same definitions,
+  so every client is checked against the same cases.
 
 The irreducibly-client-side code (typed error classes, numpy marshaling, stream
 assembly, the notebook facade) is the only hand-written surface mirroring the JS
-client, and it's covered by the conformance corpus + real-worker tests rather
-than trusted to match.
+client. Unit tests cover it against a fake transport, and the shared catalog
+covers it against a real worker.
 
 ## Development
+
+`scripts/generate.py` exports the SDK contract and writes the client into
+`src/tetherto/qvac_sdk/_generated/`, so it needs `packages/sdk` installed and
+`@qvac/inference` built. Run it after cloning and after any SDK change:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[gen,dev]"
-.venv/bin/python3 scripts/generate.py          # regenerate from ../sdk/contract
-.venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
+.venv/bin/python3 scripts/generate.py           # export the contract, write _generated/
+.venv/bin/python3 -m pytest                     # unit tests
 ```
 
-Format, lint, typecheck, and the generation check (all run in CI):
+Format, lint and typecheck (all run in CI):
 
 ```bash
-.venv/bin/python3 scripts/generate.py --check
 .venv/bin/python3 -m black --check src/tetherto/qvac_sdk scripts/ tests/
 .venv/bin/python3 -m ruff check src/tetherto/qvac_sdk scripts/ tests/
 .venv/bin/python3 -m mypy -p tetherto.qvac_sdk && .venv/bin/python3 -m mypy scripts tests
 ```
 
-Real-model tests spawn a worker (`packages/sdk` built via `npm run build`, or
-`QVAC_POC_SDK_DIR`) and otherwise skip. `generate.py` runs `black` + `ruff --fix
---select I` (with the package config) on its own output, so a fresh
-regeneration already passes the checks above.
+black and ruff skip the gitignored `_generated/`; mypy follows the package's
+imports into it. Building the wheel or source package fails without it, and
+also when it was generated from a contract other than the SDK's current one.
+
+The real-worker e2e for this client is the shared catalog; see
+[`../sdk-e2e/README.md`](../sdk-e2e/README.md) for running it on Python.

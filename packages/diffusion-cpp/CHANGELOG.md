@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.38.1] - 2026-11-24
+
+### Features
+
+- Support SDXL with the Core ML UNet sidecar. `files.coremlUnet` also accepts a
+  folder of UNet chunks (`*chunk1.mlmodelc`, `*chunk2.mlmodelc`), which SDXL
+  uses to fit the Neural Engine on iOS. On an iPhone 16, SDXL at 768×768 with
+  20 steps takes about 33 s per image with the mixed 4.5-bit UNet and the
+  TAESDXL Core ML decoder
+  ([engine #73](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/73)).
+
+### Fixes
+
+- Fix flat or blank images from SD 1.x/2.x, SDXS and SDXL on Metal whenever
+  the CFG scale is above 1. Batched CFG runs the UNet on two images at once,
+  and ggml's Metal GroupNorm normalized only the first
+  ([engine #73](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/73)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#4` for the SDXL Core ML UNet and
+  the Metal GroupNorm fix
+  ([registry #508](https://github.com/tetherto/qvac-registry-vcpkg/pull/508)).
+
 ## [0.38.0] - 2026-11-22
 
 ### Features

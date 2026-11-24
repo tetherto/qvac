@@ -165,7 +165,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tools-gemma4': {
-    on: ['desktop-linux', 'desktop-python'],
+    on: ['desktop-linux', 'desktop-python', 'desktop-kotlin'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
@@ -627,7 +627,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   world: {
-    on: ['desktop-linux', 'desktop-python'],
+    on: ['desktop-linux', 'desktop-python', 'desktop-kotlin'],
     constant: { $const: 'ABOT_WORLD_0_5B_Q8_0' },
     type: 'sdcpp-generation',
     config: {

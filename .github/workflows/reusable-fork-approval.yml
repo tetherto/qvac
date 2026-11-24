@@ -1,11 +1,19 @@
 name: Fork approval gate (reusable)
 
-# Gates external-fork pull_request_target runs on the fork-ci environment.
-# After approval, records qvac/fork-verified on the PR head SHA for unprivileged
-# pull_request consumers.
+# Gates a fork PR's build on the fork-ci environment. The caller says whether the PR is a fork, from the API, and which
+# head SHA it pinned. After approval, records qvac/fork-verified on that SHA for pr-check-trust.
 
 on:
   workflow_call:
+    inputs:
+      fork:
+        description: true for a fork PR, as the GitHub API reports its head repository
+        type: boolean
+        default: false
+      head-sha:
+        description: The PR head commit the caller builds
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -16,16 +24,17 @@ jobs:
     timeout-minutes: 5
     permissions:
       statuses: write
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    environment: ${{ inputs.fork && 'fork-ci' || '' }}
     steps:
       - name: Record fork-ci approval on head SHA
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+        if: inputs.fork
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no head SHA to record the approval on"; exit 1; }
           gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
             -f state=success \
             -f context=qvac/fork-verified \

@@ -1,0 +1,36 @@
+{
+  "fabric": {
+    "version": "12032.0.0",
+    "commit": "0b3fe2e8eccb390c6aa80b34939f39b044bbfd2e",
+    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/refs/tags/v12032.0.0",
+    "sha256": "a1c6c0b88ce25d6405ff04a1569551fbde1bec630ddcc9f5a7d5a174c9d37f0a"
+  },
+  "inferenceAddonCpp": {
+    "version": "1.7.0",
+    "commit": "4d2d95696a787009a3d6bc991090fdbd88380fb0",
+    "tree": "1773dff0464ebd5853c57a4f9cb8f335c82ec97f",
+    "url": "https://github.com/tetherto/qvac.git",
+    "subdir": "packages/inference-addon-cpp/src"
+  },
+  "picojson": {
+    "version": "1.3.0",
+    "url": "https://codeload.github.com/kazuho/picojson/tar.gz/refs/tags/v1.3.0",
+    "sha256": "056805ca2691798f5545935a14bb477f2e1d827c9fb862e6e449dbea22801c7d"
+  },
+  "concurrentqueue": {
+    "version": "1.0.4",
+    "url": "https://codeload.github.com/cameron314/concurrentqueue/tar.gz/refs/tags/v1.0.4",
+    "sha256": "87fbc9884d60d0d4bf3462c18f4c0ee0a9311d0519341cac7cbd361c885e5281"
+  },
+  "emscripten": {
+    "version": "4.0.23",
+    "commit": "c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56",
+    "url": "https://codeload.github.com/emscripten-core/emsdk/tar.gz/c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56",
+    "sha256": "96765e55337d957e9182215ca72f666d8c7fabdc0d1d9fa98234343882084101"
+  },
+  "dawn": {
+    "version": "v20260908.214631",
+    "url": "https://github.com/google/dawn/releases/download/v20260908.214631/emdawnwebgpu_pkg-v20260908.214631.zip",
+    "sha256": "9c36eb46ada070b9cc0de2bdfd04c1fa1a1fd852cc1ebb371e96e68e1efe6c3c"
+  }
+}

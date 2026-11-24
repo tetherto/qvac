@@ -1,7 +1,6 @@
 import test from 'brittle'
 import { createErrorResponse } from '@qvac/inference/surface'
-import { contractValidate } from './utils/contract-validator'
-import { readFileSync } from 'node:fs'
+import { contractSchema, contractValidate } from './utils/contract-validator'
 import Ajv2020 from 'ajv/dist/2020'
 
 function findSchemaTitle(node: unknown, title: string): Record<string, unknown> | undefined {
@@ -16,9 +15,7 @@ function findSchemaTitle(node: unknown, title: string): Record<string, unknown> 
 }
 
 test('contract backend config: ordered arrays and addon allow-lists', (t) => {
-  const document: unknown = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  )
+  const document: unknown = contractSchema
   for (const modelType of ['LlamacppCompletion', 'LlamacppEmbedding', 'GgmlVla']) {
     const schema = findSchemaTitle(document, `LoadModelSrcRequest${modelType}ModelConfig`)
     t.ok(schema)
@@ -46,9 +43,7 @@ test('contract backend config: ordered arrays and addon allow-lists', (t) => {
 })
 
 test('contract diffusion load config: memory controls and removed options', (t) => {
-  const document: unknown = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  )
+  const document: unknown = contractSchema
   // Validate the built-in branch directly. The outer union also allows custom
   // plugins; its modelType refinement is enforced only by the worker.
   const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfig')
@@ -77,9 +72,7 @@ test('contract diffusion load config: memory controls and removed options', (t) 
 })
 
 test('contract diffusion load config: optional vision projector accepts local model sources', (t) => {
-  const document: unknown = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  )
+  const document: unknown = contractSchema
   const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfig')
   t.ok(schema)
   if (!schema) return
@@ -108,9 +101,7 @@ test('contract regeneration preserves four-coordinate OCR boxes', (t) => {
 })
 
 test('contract world load config: memory controls reach generated clients', (t) => {
-  const document: unknown = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  )
+  const document: unknown = contractSchema
   const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfigWorld')
   t.ok(schema)
   if (!schema) return
@@ -134,7 +125,7 @@ test('contract world load config: memory controls reach generated clients', (t) 
 })
 
 // Contract-artifact checks: validate representative payloads against the
-// committed contract/schema.json (what generated clients consume). The Zod
+// exported contract/schema.json (what generated clients consume). The Zod
 // round-trip checks for these same schemas live in @qvac/inference's suite; here
 // we only assert the exported JSON Schema contract stays faithful to them.
 
