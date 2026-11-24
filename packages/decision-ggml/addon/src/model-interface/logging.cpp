@@ -8,7 +8,7 @@ namespace qvac_lib_inference_addon_decision::logging {
 // Global verbosity level - initialized to ERROR as safe default
 // This ensures that if llamaLogCallback is triggered before verbosity is set,
 // only ERROR messages will be shown, preventing log spam
-Priority g_verbosityLevel = Priority::ERROR;
+std::atomic<Priority> g_verbosityLevel{Priority::ERROR};
 
 namespace {
 Priority verbosityToPriority(int verbosity) {

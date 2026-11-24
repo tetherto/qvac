@@ -689,6 +689,29 @@ TEST_F(DecisionContextModelTest, AStopDuringABatchCancelsIt) {
   EXPECT_TRUE(next.contains("answers"));
 }
 
+TEST_F(DecisionContextModelTest, ALoopThatDiesDuringABatchFailsItWithItsError) {
+  // Its own context: the loop stays marked dead. The loop dies on the second
+  // poll, inside the batch; the stop signal it raises must not turn the
+  // batch into a cancellation.
+  qdecision::DecisionContext context(
+      DecisionEngineModel::loadParams(
+          fixture("tinyopenjev-for-testing-Q8_0.gguf"),
+          {{"device", "cpu"}, {"ctx_size", "2048"}}));
+  std::atomic<int> polls{0};
+  const auto outcome =
+      runOutcome(context, batchRequest(kStates).dump(), [&polls, &context] {
+        if (polls.fetch_add(1) == 1) {
+          context.markLoopDeadForTesting("injected loop failure");
+        }
+        return false;
+      });
+  EXPECT_EQ(outcome.first, "[ Decision :: DecodeFailed ]") << outcome.second;
+  EXPECT_NE(
+      outcome.second.find("the decision loop stopped: injected loop failure"),
+      std::string::npos)
+      << outcome.second;
+}
+
 namespace {
 
 namespace qaddon = qvac_lib_inference_addon_cpp;

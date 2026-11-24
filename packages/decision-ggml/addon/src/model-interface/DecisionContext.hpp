@@ -86,6 +86,10 @@ public:
   std::string
   run(const std::string& requestJson, const std::function<bool()>& shouldStop);
 
+  /// Tests only: records @p error as the execution loop's failure, as a loop
+  /// that throws does, so runs fail with it. The loop thread keeps running.
+  void markLoopDeadForTesting(const std::string& error) noexcept;
+
   struct State;
 
 private:

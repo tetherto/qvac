@@ -22,6 +22,7 @@
 #include <regex>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <typeinfo>
 #include <utility>
@@ -127,6 +128,13 @@ std::string at(const std::string& where) {
 [[noreturn]] void failCancelled() {
   // The job scheduler reports this message as a cancellation.
   throw std::runtime_error("Job cancelled");
+}
+
+// A raised stop signal: the loop's error when the loop died, which raises the
+// signal too, otherwise a cancellation.
+[[noreturn]] void failStopped(const State& d, const std::string& where) {
+  failIfLoopDead(d, where);
+  failCancelled();
 }
 
 // The message of upstream's {"error": {"message": ...}} payload, or the
@@ -504,19 +512,19 @@ std::string runOne(
     // 400.
     failIfLoopDead(d, at(where));
     if (stop()) {
-      failCancelled();
+      failStopped(d, at(where));
     }
     failRequest(at(where) + e.what());
   } catch (const common_json_error& e) {
     failIfLoopDead(d, at(where));
     if (stop()) {
-      failCancelled();
+      failStopped(d, at(where));
     }
     failRequest(at(where) + e.what());
   } catch (const std::exception& e) {
     failIfLoopDead(d, at(where));
     if (stop()) {
-      failCancelled();
+      failStopped(d, at(where));
     }
     if (isJsonError(e)) {
       failRequest(at(where) + e.what());
@@ -525,7 +533,7 @@ std::string runOne(
   } catch (...) {
     failIfLoopDead(d, at(where));
     if (stop()) {
-      failCancelled();
+      failStopped(d, at(where));
     }
     fail(DecodeFailed, at(where) + "unknown error");
   }
@@ -535,7 +543,7 @@ std::string runOne(
   // it raises the stop signal too.
   failIfLoopDead(d, at(where));
   if (stop()) {
-    failCancelled();
+    failStopped(d, at(where));
   }
   if (!res) {
     fail(DecodeFailed, at(where) + "no response from the decision handler");
@@ -625,9 +633,35 @@ std::string runStates(
   const size_t workers =
       std::min(n, static_cast<size_t>(std::max(1, d.params.n_parallel)));
   std::vector<std::thread> threads;
+  // Joins the started workers on every exit path: a joinable std::thread
+  // destroyed during unwinding calls std::terminate.
+  struct JoinAll {
+    std::vector<std::thread>& threads;
+    explicit JoinAll(std::vector<std::thread>& started) : threads(started) {}
+    JoinAll(const JoinAll&) = delete;
+    JoinAll& operator=(const JoinAll&) = delete;
+    ~JoinAll() {
+      for (std::thread& t : threads) {
+        if (t.joinable()) {
+          t.join();
+        }
+      }
+    }
+  } joinAll(threads);
   threads.reserve(workers - 1);
   for (size_t w = 1; w < workers; ++w) {
-    threads.emplace_back(worker);
+    try {
+      threads.emplace_back(worker);
+    } catch (const std::system_error& e) {
+      // No more threads: the started workers, and this one, take the
+      // remaining states from `next`, so the batch still completes.
+      LOG_WRN(
+          "decision batch: started %zu of %zu workers: %s\n",
+          w,
+          workers,
+          e.what());
+      break;
+    }
   }
   worker();
   for (std::thread& t : threads) {
@@ -635,7 +669,7 @@ std::string runStates(
   }
 
   if (stop()) {
-    failCancelled();
+    failStopped(d, "");
   }
   if (firstError) {
     std::rethrow_exception(firstError);
@@ -686,7 +720,7 @@ std::string DecisionContext::run(
 
   failIfLoopDead(d, "");
   if (stop()) {
-    failCancelled();
+    failStopped(d, "");
   }
   if (!withinDepthLimit(requestJson)) {
     failRequest(
@@ -706,6 +740,17 @@ std::string DecisionContext::run(
     return runStates(d, request, stop);
   }
   return runOne(d, requestJson, stop, "");
+}
+
+void DecisionContext::markLoopDeadForTesting(
+    const std::string& error) noexcept {
+  State& d = *state_;
+  try {
+    d.loopError = error;
+  } catch (...) {
+    d.loopError.clear();
+  }
+  d.loopDead.store(true, std::memory_order_release);
 }
 
 } // namespace qvac_lib_inference_addon_decision
