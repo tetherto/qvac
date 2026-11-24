@@ -21,3 +21,9 @@ self-hosted-runner:
     - ai-run-linux-gpu
     - ai-run-windows11-gpu
     - generator-windows11
+
+# actionlint does not know the job and workflow cache-mode key yet (1.7.12); GitHub enforces it.
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'unexpected key "cache-mode" for "(job|workflow)" section'

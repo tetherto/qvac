@@ -105,6 +105,33 @@ Four model families are supported — **WAN 2.1**, **Wan 2.2**, **LTX-2**, and *
 
 For models available as constants, see [SDK — Models](/sdk#models).
 
+## Performance profiles
+
+[`loadModel()`](/sdk/reference/api#loadmodel) applies speed settings for some model and GPU combinations by default (`modelConfig.performance_profile: "auto"`). Both video profiles need the full file layout, including the audio VAE (`audioVaeModelSrc`):
+
+- **MiniMax-H3** (FL2VA, Q4_K): global flash attention on NVIDIA RTX 5090 (CUDA or Vulkan), DGX Spark (CUDA) and Apple M3 Ultra (Metal). Setting `flash_attn` yourself overrides it.
+- **LTX-2.3** (`LTX_2_3_22B_Q5_K_M` with `GEMMA_3_12B_Q4_K_XL`, `LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS`, `LTX_2_3_VIDEO_VAE` and `LTX_2_3_AUDIO_VAE`): F16 transformer weights on Apple M3 Ultra (Metal). It needs output limits of at most 512×320 and 97 frames, at least 96 GiB of physical memory with 76 GiB available at load, and weights kept on the GPU, so no `offload_to_cpu` and no non-Metal `params_backend`. Setting `tensor_type_rules` yourself overrides it.
+
+Declare the output limits at load time, all three together:
+
+```js
+const modelId = await loadModel({
+  modelSrc: LTX_2_3_22B_Q5_K_M,
+  modelType: "diffusion",
+  modelConfig: {
+    mode: "video",
+    // ...companion sources, as in the LTX-2 examples below
+    performance_max_width: 512,
+    performance_max_height: 320,
+    performance_max_frames: 97,
+  },
+});
+```
+
+`loadModel()` rejects a config that sets only some of the limits. Once declared, the limits apply whether or not a profile is selected: a [`video()`](/sdk/reference/api#video) request above them fails before generation. The LTX profile uses about 26 GiB more memory and loads more slowly, so for a model that generates a single clip, load with `performance_profile: "off"`.
+
+Set `performance_profile: "off"` to keep the default settings. Profiles also stay off when you set `max_vram`, `stream_layers`, `type`, `tensor_type_rules`, `vae_auto_cpu_fallback`, `diffusion_fa: false`, `device: "cpu"`, or a `backend` with per-module or multi-device assignments.
+
 ## Examples
 
 ### Text-to-video (WAN 2.1)

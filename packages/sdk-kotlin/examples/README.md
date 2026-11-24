@@ -98,7 +98,6 @@ database drivers to those two examples only. `Finetune` trains on
 | `Ocr.kt` | `packages/sdk/examples/ocr-fasttext.ts` |
 | `Plugins.kt` | `packages/sdk/examples/plugins.ts` |
 | `Quickstart.kt` | `packages/sdk/examples/quickstart.ts` |
-| `RagManaged.kt` | `packages/sdk/examples/rag/rag-hyperdb/ingest.ts` |
 | `RagMongodb.kt` | `packages/sdk/examples/rag/rag-mongodb.ts` |
 | `RagSqlite.kt` | `packages/sdk/examples/rag/rag-sqlite.ts` |
 | `RagTurbovec.kt` | `packages/sdk/examples/rag/rag-turbovec.ts` |

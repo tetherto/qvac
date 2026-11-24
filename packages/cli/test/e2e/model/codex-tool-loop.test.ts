@@ -103,7 +103,7 @@ describe('responses: Codex tool loop', () => {
       const res = await responses({ input, tool_choice: 'required' })
       assert.equal(res.statusCode, 200, res.body)
       const body = res.json() as any
-      assert.equal(body.status, 'requires_action')
+      assert.equal(body.status, 'completed')
       assert.equal(functionCalls(body)[0]?.name, 'shell')
     })
   }

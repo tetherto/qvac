@@ -1,10 +1,13 @@
 name: PR build and test
+# prebuild-reuse.mjs reads the built PR head from this name before reusing a PR-named artifact.
+run-name: PR build and test ${{ github.event.workflow_run.head_sha || github.sha }}
 
 # Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, labeled, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*]
+  # PR checks starting on a PR, a label included: main's copy of this file builds the PR head that context finds.
+  workflow_run:
+    workflows: [PR checks]
+    types: [requested]
   workflow_dispatch:
     inputs:
       packages:
@@ -14,12 +17,52 @@ on:
 
 permissions: {}
 
+# PR code never saves to the default branch's Actions cache.
+cache-mode: read
+
+# One run per PR, keyed on the trigger's head; a dispatch per ref.
 concurrency:
-  group: pr-build-test-${{ github.event.pull_request.number || github.ref }}
+  group: pr-build-test-${{ github.event.workflow_run.head_repository.full_name || github.ref }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
+  # The PR from the API; nothing else in the trigger is read. Every later job takes its commit and facts from here.
+  context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      ok: ${{ steps.pr.outputs.ok }}
+      refused: ${{ steps.pr.outputs.refused }}
+      pr: ${{ steps.pr.outputs.pr }}
+      sha: ${{ steps.pr.outputs.sha }}
+      repository: ${{ steps.pr.outputs.repository }}
+      fork: ${{ steps.pr.outputs.fork }}
+      draft: ${{ steps.pr.outputs.draft }}
+      base-sha: ${{ steps.pr.outputs.base-sha }}
+      labels: ${{ steps.pr.outputs.labels }}
+      action: ${{ steps.pr.outputs.action }}
+      event: ${{ steps.pr.outputs.event }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: pr
+        uses: ./.github/actions/workflow-run-pr
+        with:
+          github-token: ${{ github.token }}
+          branches: main, release-*, feature-*, tmp-*
+          status-context: qvac/pr-build-test
+
   select:
+    needs: context
+    if: needs.context.outputs.ok == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
@@ -27,17 +70,21 @@ jobs:
       targets: ci:setup,build,cpp:lint,cpp:build,cpp:tests,test:integration,test:backend
       combine: desktop=test:integration+test:backend
       packages: ${{ inputs.packages }}
+      event: ${{ needs.context.outputs.event }}
 
   fork-approval:
-    needs: select
+    needs: [context, select]
     if: needs.select.outputs.any == 'true'
     permissions:
       statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
+    with:
+      fork: ${{ needs.context.outputs.fork == 'true' }}
+      head-sha: ${{ needs.context.outputs.sha }}
 
   # Labels to stages, as main's ci-router: independent of approval, so a skip still reads as a routing choice.
   route:
-    needs: select
+    needs: [context, select]
     if: needs.select.outputs.any == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -50,15 +97,19 @@ jobs:
       run_desktop: ${{ steps.route.outputs.run_desktop }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       - id: route
         uses: ./.github/actions/ci-route-stages
+        with:
+          labels: ${{ needs.context.outputs.labels }}
+          head-repo: ${{ needs.context.outputs.repository }}
+          draft: ${{ needs.context.outputs.draft }}
 
   trust:
-    needs: [select, fork-approval]
+    needs: [context, select, fork-approval]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -69,7 +120,7 @@ jobs:
       allowed: ${{ steps.trust.outputs.allowed }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
@@ -77,15 +128,22 @@ jobs:
         uses: ./.github/actions/pr-check-trust
         with:
           github-token: ${{ github.token }}
+          action: ${{ needs.context.outputs.action }}
+          head-sha: ${{ needs.context.outputs.sha }}
+          head-repo: ${{ needs.context.outputs.repository }}
+          draft: ${{ needs.context.outputs.draft }}
+          labels: ${{ needs.context.outputs.labels }}
 
   # Providers build first, once per configuration: for the labelled build, the baseline build, or C++ lint alone.
   providers:
-    needs: [select, route, trust]
+    needs: [context, select, route, trust]
     if: needs.trust.outputs.allowed == 'true' && needs.route.result == 'success'
+    cache-mode: read
     permissions:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
@@ -94,20 +152,28 @@ jobs:
         || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null && fromJSON(needs.select.outputs.matrices)['build:baseline:providers']
         || needs.route.outputs.run_verified_checks == 'true' && fromJSON(needs.select.outputs.matrices)['cpp:lint:providers'] || fromJSON('[]')) }}
       reuse: true
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
+      pr: ${{ needs.context.outputs.pr }}
 
   # A cpp:tests baseline package builds and runs its C++ tests without the labels; the labels widen to every package.
   build:
-    needs: [select, route, trust, providers]
+    needs: [context, select, route, trust, providers]
     if: always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped') && (needs.route.outputs.run_prebuilds == 'true' || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null)
+    cache-mode: read
     permissions:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
       rows: ${{ toJSON(needs.route.outputs.run_prebuilds == 'true' && fromJSON(needs.select.outputs.matrices).build || fromJSON(needs.select.outputs.matrices)['build:baseline']) }}
       reuse: true
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
+      pr: ${{ needs.context.outputs.pr }}
 
   # Folds a package's build jobs into prebuilds-<slug>, taking its own prebuilds from each job's artifact.
   merge:
@@ -126,25 +192,26 @@ jobs:
       BUILT: ${{ contains(matrix.project.targets, 'build') && (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       - if: env.BUILT == 'true'
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: prebuild-${{ matrix.project.slug }}-*
           path: prebuilds
           merge-multiple: "true"
       - if: env.BUILT == 'true'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: prebuilds-${{ matrix.project.slug }}
           path: prebuilds/${{ matrix.project.dir }}/prebuilds
 
   cpp-lint:
-    needs: [select, route, trust, providers]
+    needs: [context, select, route, trust, providers]
     if: always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
+    cache-mode: read
     permissions:
       contents: read
       actions: read
@@ -153,11 +220,15 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:lint']) }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
+      base: ${{ needs.context.outputs.base-sha }}
 
   # C++ and desktop tests run against the build's outputs; a package with no build target runs against the checkout.
   cpp-tests:
-    needs: [select, route, trust, build]
+    needs: [context, select, route, trust, build]
     if: always() && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && fromJSON(needs.select.outputs.matrices).build[0] == null)) && needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_cpp_tests == 'true' || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline'][0] != null)
+    cache-mode: read
     permissions:
       contents: read
       actions: read
@@ -167,10 +238,13 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ toJSON(needs.route.outputs.run_cpp_tests == 'true' && fromJSON(needs.select.outputs.matrices)['cpp:tests'] || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline']) }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
 
   desktop:
-    needs: [select, route, trust, build]
+    needs: [context, select, route, trust, build]
     if: always() && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && fromJSON(needs.select.outputs.matrices).build[0] == null)) && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_desktop == 'true'
+    cache-mode: read
     permissions:
       contents: read
       actions: read
@@ -180,6 +254,8 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).desktop) }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
 
   # One cross-platform report per package whose test:integration asks for it, from the desktop jobs' perf artifacts.
   perf-report:
@@ -198,14 +274,14 @@ jobs:
     steps:
       - if: matrix.project.perfReport
         name: Checkout actions and report scripts
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             scripts/perf-report
           persist-credentials: false
       - if: matrix.project.perfReport
-        uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - if: matrix.project.perfReport
@@ -217,8 +293,8 @@ jobs:
 
   # The gate's qvac/prebuild-<key> and qvac/cpp-tests-<key>; a skip passes only when routing chose not to run.
   status:
-    needs: [select, route, providers, build, merge, cpp-tests]
-    if: always() && !cancelled() && startsWith(github.event_name, 'pull_request') && needs.select.outputs.any == 'true'
+    needs: [context, select, route, providers, build, merge, cpp-tests]
+    if: always() && !cancelled() && needs.context.outputs.pr != '' && needs.select.outputs.any == 'true'
     name: status ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -232,12 +308,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_SHA: ${{ needs.context.outputs.sha }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       CI_ROUTER_RESULT: ${{ needs.route.result }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/scripts/prebuild-status
           persist-credentials: false
@@ -263,17 +339,19 @@ jobs:
 
   # Not named qvac-merge-guard: that is the required check's job, and a second one would share its context.
   # Reads this run's jobs, so the table shows each package, stage and failed job, not only the reusable callers.
+  # Also sets qvac/pr-build-test on the PR head; it runs no PR code.
   summary:
-    needs: [select, fork-approval, route, trust, providers, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
-    if: always()
+    needs: [context, select, fork-approval, route, trust, providers, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
+    if: always() && needs.context.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       actions: read
+      statuses: write
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/scripts
           persist-credentials: false
@@ -283,3 +361,15 @@ jobs:
           PROJECTS: ${{ needs.select.outputs.projects }}
           TITLE: PR build and test
         run: node .github/scripts/summarize-run.mjs
+      - if: "!cancelled() && needs.context.outputs.pr != ''"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.sha }}
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=success; description="Passed or skipped by routing"
+          if [ "$FAILED" = "true" ]; then state=failure; description="A job failed or was cancelled"; fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$state" -f context=qvac/pr-build-test \
+            -f description="$description" -f target_url="$RUN_URL" > /dev/null

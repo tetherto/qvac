@@ -39,11 +39,15 @@ jobs:
   delete-npm-versions:
     runs-on: ubuntu-latest
     environment: release
+    # Serialised per target: one shared group keeps a single pending run and would drop other PRs' cleanups.
+    concurrency:
+      group: delete-npm-versions-${{ inputs.packages }}-${{ inputs.pr-number }}-${{ inputs.version }}-${{ inputs.pattern }}
+      cancel-in-progress: false
     permissions:
       packages: write
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
           registry-url: "https://npm.pkg.github.com/"
@@ -83,7 +87,7 @@ jobs:
 
           # Determine target "pr-<num>" if applicable
           target_version=""
-          if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             pr_number="${{ github.event.number }}"
             target_version="pr-$pr_number"
             echo "Target version (from event): $target_version"
@@ -134,7 +138,7 @@ jobs:
             # Only delete on PR events (same as your original intent)
             # If you want manual deletion too, relax this guard.
             if [ "$(echo "$delete_versions" | jq 'length')" -gt 0 ] && \
-               ([ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]); then
+               [ "${{ github.event_name }}" == "pull_request" ]; then
               if [ "${{ inputs.dry-run }}" == "true" ]; then
                 echo "Dry-run enabled; skipping deletes."
               else
@@ -154,7 +158,7 @@ jobs:
           done
 
       - name: Upload version artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: package-versions
           path: |

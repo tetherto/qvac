@@ -7,7 +7,7 @@
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
  *
  * Options:
- *   --family        desktop | electron | python | snap; comma-separated for a union (seed)
+ *   --family        desktop | electron | python | kotlin | snap; comma-separated for a union (seed)
  *   --os            macos | linux | windows (default: this host)
  *   --suite, --exclude-suite, --filter, --include   the run's test selection
  *   --include-file  more exact testIds, one per line
@@ -51,6 +51,12 @@ const FAMILIES = {
     platform: (_os, config) => externalConsumer(config, 'python').platform,
     resourcePlatform: (_os, config) =>
       externalConsumer(config, 'python').env?.QVAC_RESOURCE_PLATFORM ?? 'desktop'
+  },
+  // Reads the table under the Kotlin desktop runner's RESOURCE_PLATFORM (runners/kotlin/desktop).
+  kotlin: {
+    consumer: 'desktop',
+    platform: (_os, config) => externalConsumer(config, 'kotlin-desktop').platform,
+    resourcePlatform: (_os, config) => externalConsumer(config, 'kotlin-desktop').platform
   },
   snap: { consumer: 'electron', platform: () => 'snap-linux', resourcePlatform: () => 'snap-linux' }
 }

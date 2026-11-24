@@ -9,6 +9,14 @@ on:
         description: JSON rows of every desktop target
         type: string
         required: true
+      repository:
+        description: Repository of the commit to build, a PR's head; empty builds this run's own commit
+        type: string
+        default: ""
+      ref:
+        description: Commit to build, a PR's head SHA; empty builds this run's own commit
+        type: string
+        default: ""
       perf_runs:
         description: QVAC_PERF_RUNS for the target; empty leaves the package default
         type: string
@@ -25,6 +33,10 @@ on:
         description: Install the locked bare toolchain; false for callers whose tests compile nothing
         type: boolean
         default: true
+      base-ref:
+        description: The PR's base branch, as CI_BASE_REF; a workflow_run build has no GITHUB_BASE_REF to read it from
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -50,23 +62,24 @@ jobs:
       NX_NO_CLOUD: "true"
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             .github/config
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: ${{ contains(matrix.row.setup, 'node22') && '22' || 'lts/*' }}
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       # main's locked bare toolchain: bare-make, clang, clang-format and llvm tools from the checkout's lock, first on PATH.
@@ -74,11 +87,11 @@ jobs:
       - if: inputs.toolchain
         name: Install the locked bare toolchain
         run: node src/.github/bare-toolchain/install.mjs
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
-      - uses: tetherto/qvac-actions/setup-aws-cli@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-aws-cli@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - uses: ./.github/actions/setup-vulkan
         with:
           arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
@@ -96,15 +109,15 @@ jobs:
           sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
       # Translation's quality benchmark: bergamot publishes wheels for Python 3.10 and older only.
       - if: contains(matrix.row.setup, 'python')
-        uses: tetherto/qvac-actions/setup-python@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-python@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           python-version: "3.10"
       - if: contains(matrix.row.setup, 'java')
-        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-java@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           java-version: "17"
       - if: contains(matrix.row.setup, 'android')
-        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-android@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - id: models
         uses: ./.github/actions/models-cache-key
         with:
@@ -112,7 +125,7 @@ jobs:
           target: ${{ matrix.row.target }}
       - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted'
         id: models-restore
-        uses: tetherto/qvac-actions/cache-restore@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/cache-restore@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           key: ${{ steps.models.outputs.key }}
           restore-keys: ${{ steps.models.outputs.restore-prefix }}
@@ -137,7 +150,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
       # The build job's prebuilds for this platform: the package's and its native dependencies'.
       - if: matrix.row.hasBuild
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.platform }}-${{ matrix.row.arch }}
           path: src
@@ -220,6 +233,7 @@ jobs:
           # The plan phase rewrites the package's manifest; pnpm must not reinstall.
           PNPM_FLAGS: ${{ steps.models.outputs.plan == 'true' && '--config.verify-deps-before-run=false' || '' }}
           PERF_RUNS: ${{ inputs.perf_runs }}
+          CI_BASE_REF: ${{ inputs.base-ref }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
           ARGS: ${{ inputs.args }}
         # Exported only when set, so an empty input never overrides a package default.
@@ -245,7 +259,7 @@ jobs:
           $dumpbin = Get-ChildItem -Path 'C:\Program Files\Microsoft Visual Studio', 'C:\Program Files (x86)\Microsoft Visual Studio' -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($addon -and $dumpbin) { & $dumpbin.FullName /dependents $addon.FullName }
       - if: always() && !cancelled()
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-perf-${{ matrix.row.config }}-${{ strategy.job-index }}
           path: ${{ env.WORKDIR }}/test/results/performance-report*.json
@@ -253,16 +267,34 @@ jobs:
           retention-days: "14"
       # A package's e2e reports; a dispatch on main keeps them 90 days as the baseline later runs compare with.
       - if: always() && !cancelled()
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/test/results/e2e/
           if-no-files-found: ignore
           retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && '90' || '30' }}
       - if: always() && !cancelled() && matrix.row.target == 'benchmark'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-benchmark-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/benchmarks/results/
           if-no-files-found: warn
           retention-days: "30"
+      # A cancelled or timed-out run can orphan a worker (bare.exe) that keeps the workspace busy for later jobs.
+      # Inline, not a local action: it must also run when a locked workspace failed the checkout.
+      - name: Stop processes left in the workspace
+        if: always() && runner.os == 'Windows'
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: powershell
+        run: |
+          $ws = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+          Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and (
+              ("$($_.ExecutablePath)" -replace '/', '\').StartsWith($ws, [StringComparison]::OrdinalIgnoreCase) -or
+              ("$($_.CommandLine)" -replace '/', '\').IndexOf($ws, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            )
+          } | ForEach-Object {
+            Write-Host "::warning::Stopping leftover $($_.Name) (PID $($_.ProcessId)): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
