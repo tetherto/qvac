@@ -25,3 +25,25 @@ export const runtimeModelsResult = z.object({
   object: z.literal('list'),
   data: z.array(runtimeModel)
 })
+
+export const runtimeCapability = z.object({
+  id: z
+    .string()
+    .describe(
+      'Capability contract ID, such as `transcription`. A dotted ID names a contract a third-party plugin defines.'
+    ),
+  version: z.number().int().describe('Major version of the contract.'),
+  operations: z
+    .array(z.string())
+    .describe('Operations every registered plugin that declares the contract implements.'),
+  partialOperations: z
+    .array(z.string())
+    .describe(
+      'Optional operations only some of those plugins implement. A call uses the plugin of the selected model.'
+    )
+})
+
+export const runtimeCapabilitiesResult = z.object({
+  object: z.literal('list'),
+  data: z.array(runtimeCapability)
+})
