@@ -66,6 +66,8 @@ struct DecisionContext::State {
   std::string loopError;
   // Set when the loop thread is about to end, however start_loop() returned.
   std::atomic<bool> loopExited{false};
+  // Batch request bodies serialized so far (one per state a worker claims).
+  std::atomic<size_t> batchBodies{0};
 };
 
 namespace {
@@ -290,6 +292,61 @@ const char* decisionTypeName(common_decision_type type) {
 
 } // namespace
 
+namespace {
+
+// Whether upstream's own question parser accepts a score question with
+// @p criteria for this model, with or without instructions (a few types take
+// none, or must not get any).
+bool acceptsScore(
+    const server_decision_context& decision, const common_json& criteria) {
+  for (const bool withInstructions : {true, false}) {
+    common_json question = common_json::object();
+    question["type"] = "score";
+    question["criteria"] = criteria;
+    if (withInstructions) {
+      question["instructions"] = "x";
+    }
+    common_json questions = common_json::object();
+    questions["q"] = question;
+    common_json body = common_json::object();
+    body["state"] = "x";
+    body["questions"] = questions;
+    try {
+      (void)decision.parse_questions(body);
+      return true;
+    } catch (const std::exception&) {
+    }
+  }
+  return false;
+}
+
+common_json scoreLevels(const server_decision_context& decision) {
+  // Upstream's limits differ by type (h2o-lightning from one level up to its
+  // option count, minicpm-ocr-jev no score questions at all, most from 2 to
+  // 10), and the option count is private, so the parser is asked: once per
+  // level count, at load. No type accepts more than 255 options.
+  constexpr size_t kMaxLevels = 256;
+  size_t lowest = 0;
+  size_t highest = 0;
+  common_json criteria = common_json::array();
+  for (size_t n = 1; n <= kMaxLevels; ++n) {
+    criteria.push_back("level " + std::to_string(n - 1));
+    if (acceptsScore(decision, criteria)) {
+      lowest = lowest == 0 ? n : lowest;
+      highest = n;
+    }
+  }
+  if (lowest == 0) {
+    return common_json(nullptr);
+  }
+  common_json levels = common_json::object();
+  levels["min"] = static_cast<int>(lowest);
+  levels["max"] = static_cast<int>(highest);
+  return levels;
+}
+
+} // namespace
+
 std::string noulSemantics(common_decision_type type) {
   switch (type) {
   // upstream format_answer: lev reads noul from its rating scale and answers
@@ -336,9 +393,7 @@ std::string buildInfo(State& d) {
   }
   const server_context_meta meta = d.ctx->get_meta();
 
-  common_json levels = common_json::object();
-  levels["min"] = 2;
-  levels["max"] = 10;
+  const common_json levels = scoreLevels(decision);
 
   common_json info = common_json::object();
   info["decision_type"] = std::string(decisionTypeName(decision.type));
@@ -348,6 +403,13 @@ std::string buildInfo(State& d) {
   info["images"] = decision.can_use_images() && meta.has_inp_image;
   info["audio"] = decision.can_use_images() && meta.has_inp_audio;
   info["score_levels"] = levels;
+  // What a score answer is: upstream returns the median level for lfm3-d1
+  // (and its omni variant), the expected level for the others.
+  info["score"] =
+      levels.is_null()
+          ? common_json(nullptr)
+          : common_json(
+                decision.is_lfm3_d1() ? "median_level" : "expected_level");
   info["max_json_depth"] = DECISION_MAX_JSON_DEPTH;
   info["n_ctx"] = meta.slot_n_ctx;
   // The longest input (a state with one question and its options, in
@@ -598,16 +660,27 @@ std::string runStates(
     failRequest("\"states\" must be a non-empty array");
   }
 
+  // The request without "states", serialized once: an object that holds at
+  // least "questions" and no "state". Each worker appends the state it claims
+  // and keeps that one body for its run, so a batch holds one copy of the
+  // shared inputs (questions, files) plus one body per worker, not one per
+  // state, and a stop before a state is claimed serializes nothing more.
   common_json shared = request;
   shared.erase("states");
-  std::vector<std::string> bodies;
-  bodies.reserve(states.size());
-  for (const common_json& state : states) {
-    shared["state"] = state;
-    bodies.push_back(shared.dump());
-  }
+  const std::string sharedText = shared.dump();
+  const auto bodyFor = [&d, &sharedText, &states](size_t i) {
+    d.batchBodies.fetch_add(1, std::memory_order_relaxed);
+    const std::string state = states[i].dump();
+    std::string body;
+    body.reserve(sharedText.size() + state.size() + 10);
+    body.append(sharedText, 0, sharedText.size() - 1);
+    body += ",\"state\":";
+    body += state;
+    body += '}';
+    return body;
+  };
 
-  const size_t n = bodies.size();
+  const size_t n = states.size();
   std::vector<std::string> results(n);
   std::atomic<size_t> next{0};
   std::atomic<bool> failed{false};
@@ -622,7 +695,7 @@ std::string runStates(
          i = next.fetch_add(1)) {
       try {
         results[i] = runOne(
-            d, bodies[i], batchStop, "states[" + std::to_string(i) + "]");
+            d, bodyFor(i), batchStop, "states[" + std::to_string(i) + "]");
       } catch (...) {
         // A sibling's stop makes the others end as cancelled; only the
         // failure that stopped them is reported.
@@ -744,6 +817,10 @@ std::string DecisionContext::run(
     return runStates(d, request, stop);
   }
   return runOne(d, requestJson, stop, "");
+}
+
+size_t DecisionContext::batchBodiesSerializedForTesting() const noexcept {
+  return state_->batchBodies.load(std::memory_order_relaxed);
 }
 
 void DecisionContext::markLoopDeadForTesting(

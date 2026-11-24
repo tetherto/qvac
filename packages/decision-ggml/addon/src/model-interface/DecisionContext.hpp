@@ -72,9 +72,14 @@ public:
   /// The loaded model's decision capabilities, as a JSON object:
   ///   {"decision_type": "openjev", "noul": "probability" | "expected_rating",
   ///    "joint": bool, "shared_prefix": bool, "images": bool, "audio": bool,
-  ///    "score_levels": {"min": 2, "max": 10}, "max_json_depth": 128,
-  ///    "n_ctx": int, "max_input_tokens": int, "model": string}
+  ///    "score_levels": {"min": 2, "max": 10} | null,
+  ///    "score": "expected_level" | "median_level" | null,
+  ///    "max_json_depth": 128, "n_ctx": int, "max_input_tokens": int,
+  ///    "model": string}
   /// "noul" is "unknown" for a type this addon does not list.
+  /// "score_levels" are the level counts upstream accepts for a score
+  /// question on this model (asked from its parser at load), null when it
+  /// takes no score questions; "score" says what a score answer is.
   /// "max_input_tokens" is the longest input (a state with one question and
   /// its options) a request can have.
   [[nodiscard]] const std::string& info() const noexcept;
@@ -103,6 +108,10 @@ public:
   /// Tests only: records @p error as the execution loop's failure, as a loop
   /// that throws does, so runs fail with it. The loop thread keeps running.
   void markLoopDeadForTesting(const std::string& error) noexcept;
+
+  /// Tests only: how many batch request bodies (one per state a worker
+  /// claims) have been serialized.
+  [[nodiscard]] size_t batchBodiesSerializedForTesting() const noexcept;
 
   struct State;
 

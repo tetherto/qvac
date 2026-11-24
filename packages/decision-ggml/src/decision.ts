@@ -43,23 +43,35 @@ export interface DecisionEngineConfig {
 /** A value the model reads as JSON text when it is not a string. */
 export type DecisionPayload = string | number | boolean | Record<string, unknown> | unknown[];
 
+/**
+ * A question's instructions. Most models require them. vllm-d3 and
+ * h2o-lightning may go without (their prompts have a default), and
+ * openbmb-minicpm-ocr-jev must not get any: its prompt carries its one fixed
+ * question. Upstream rejects a question that does not fit the loaded model
+ * with {@link DECISION_INVALID_REQUEST}.
+ */
+export type DecisionInstructions = DecisionPayload | null;
+
 /** One question of upstream's /v1/systemone request. */
 export type DecisionEngineQuestion =
   | {
       type: "choice";
-      instructions: DecisionPayload;
+      instructions?: DecisionInstructions;
       /** Option key → description (`null` shows the key alone). */
       criteria: Record<string, DecisionPayload | null>;
     }
   | {
       type: "score";
-      instructions: DecisionPayload;
-      /** 2 to 10 level descriptions, lowest first. */
+      instructions?: DecisionInstructions;
+      /**
+       * Level descriptions, lowest first: as many as the model's
+       * {@link DecisionEngineInfo.score_levels} allow.
+       */
       criteria: DecisionPayload[];
     }
   | {
       type: "noul";
-      instructions: DecisionPayload;
+      instructions?: DecisionInstructions;
       criteria?: { true?: DecisionPayload | null; false?: DecisionPayload | null } | null;
     };
 
@@ -91,7 +103,10 @@ export type DecisionEngineAnswer =
     }
   | {
       type: "score";
-      /** Expected level, Σ i·p(i). */
+      /**
+       * The expected level, Σ i·p(i), or for lfm3-d1 and lfm3-d1-omni the
+       * median level (see {@link DecisionEngineInfo.score}).
+       */
       score: number;
       /** Level index → description: raw JSON values unless the model canonicalizes them. */
       legend: Record<string, unknown>;
@@ -129,7 +144,19 @@ export interface DecisionEngineInfo {
   shared_prefix: boolean;
   images: boolean;
   audio: boolean;
-  score_levels: { min: number; max: number };
+  /**
+   * The number of levels a score question may have on this model (2 to 10
+   * for most, from 1 for h2o-lightning), as upstream's own parser accepts
+   * them; `null` when the model takes no score questions
+   * (openbmb-minicpm-ocr-jev).
+   */
+  score_levels: { min: number; max: number } | null;
+  /**
+   * What a score answer is: the expected level Σ i·p(i), or the median level
+   * (the first whose cumulative probability reaches one half: lfm3-d1 and
+   * lfm3-d1-omni). `null` when the model takes no score questions.
+   */
+  score: "expected_level" | "median_level" | null;
   /**
    * Maximum nesting of each value a request carries (a state, the
    * instructions, each criteria entry), counted from where the value starts.

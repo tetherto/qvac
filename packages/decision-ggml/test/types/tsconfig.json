@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2020",
+    "skipLibCheck": true,
+    "types": []
+  },
+  "files": ["questions.ts"]
+}

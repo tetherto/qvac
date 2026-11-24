@@ -74,7 +74,14 @@ what the loaded model supports; check it before building requests:
   questions and a batch's states run in slots that share one KV cache by
   default; a longer input may still fit when fewer slots are busy, but is not
   promised to.
-- `score_levels`, `images`, `audio` and the other capabilities.
+- `score_levels`: the number of levels a score question may have on this
+  model, `{ min, max }` (2 to 10 for most; from 1 for h2o-lightning), or `null`
+  when it takes no score questions (openbmb-minicpm-ocr-jev). Upstream's own
+  question parser is asked at load, so this follows the model type.
+- `score`: what a score answer is, `expected_level` (the expected level,
+  Σ i·p(i)) or `median_level` (lfm3-d1 and lfm3-d1-omni: the first level whose
+  cumulative probability reaches one half). `null` with `score_levels`.
+- `images`, `audio` and the other capabilities.
 
 ### Several states
 

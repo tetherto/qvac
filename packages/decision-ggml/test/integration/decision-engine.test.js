@@ -97,6 +97,7 @@ for (const [name, mmproj, expectType] of [
       t.is(info.decision_type, expectType)
       t.is(info.noul, 'probability')
       t.alike(info.score_levels, { min: 2, max: 10 })
+      t.is(info.score, 'expected_level')
       t.is(info.max_json_depth, 128)
       if (expectType === 'laya') {
         t.ok(

@@ -24,7 +24,14 @@
     each, as the SDK counts them. Upstream counts its own 128 levels from the
     prompt input it builds, so it can reject a value a few levels sooner (an
     invalid request too).
-  - Runtime stats count a batch's input tokens over all its states.
+  - `info()` reports `score_levels` as upstream's own parser accepts them for
+    the loaded model (`null` without score questions) and `score`:
+    `expected_level`, or `median_level` for lfm3-d1 and lfm3-d1-omni. The
+    question types allow omitted or `null` instructions, for the models that
+    take none (openbmb-minicpm-ocr-jev).
+  - Runtime stats count a batch's input tokens over all its states. A batch
+    serializes each state's request when a worker claims it, so it holds one
+    copy of the shared inputs, not one per state.
   - A non-causal model (Laya) reads up to `batch_size` tokens (2048 by
     default) in one pass; a longer input is rejected with
     `DECISION_INVALID_REQUEST`, not reported as an execution failure.

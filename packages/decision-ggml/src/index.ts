@@ -18,5 +18,6 @@ export type {
   DecisionEngineInfo,
   DecisionEngineArgs,
   DecisionPayload,
+  DecisionInstructions,
 } from "./decision";
 export type { QvacResponse };

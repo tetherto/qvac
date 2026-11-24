@@ -536,6 +536,10 @@ TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   EXPECT_EQ(info["n_ctx"], 2048);
   EXPECT_EQ(info["max_input_tokens"], 2048 / 4 - 1);
   EXPECT_EQ(info["max_json_depth"], qdecision::DECISION_MAX_JSON_DEPTH);
+  // Asked from upstream's parser: openjev takes 2 to 10 score levels, and
+  // its score answer is the expected level.
+  EXPECT_EQ(info["score_levels"], json({{"min", 2}, {"max", 10}}));
+  EXPECT_EQ(info["score"], "expected_level");
 
   const auto rejected = runOutcome(
       *context_,
@@ -723,6 +727,35 @@ TEST_F(DecisionContextModelTest, AStopBeforeABatchCancelsItAndTheNextAnswers) {
   const json next =
       json::parse(context_->run(batchRequest(kStates).dump(), kNeverStop));
   EXPECT_EQ(next.size(), kStates.size());
+}
+
+TEST_F(DecisionContextModelTest, ABatchSerializesEachStateOnceWhenClaimed) {
+  // The shared inputs (here the questions) are serialized once; each state's
+  // body is built when a worker claims it.
+  const size_t before = context_->batchBodiesSerializedForTesting();
+  const json results =
+      json::parse(context_->run(batchRequest(kStates).dump(), kNeverStop));
+  EXPECT_EQ(results.size(), kStates.size());
+  EXPECT_EQ(
+      context_->batchBodiesSerializedForTesting() - before, kStates.size());
+}
+
+TEST_F(DecisionContextModelTest, AStopAsABatchStartsSerializesNoState) {
+  // Many states sharing a large payload. The stop is raised after run()'s own
+  // check (the first poll), so the batch sees it before claiming a state:
+  // nothing is serialized, where every body used to be built up front.
+  json states = json::array();
+  for (int i = 0; i < 64; ++i) {
+    states.push_back(kStates[0]);
+  }
+  json request = batchRequest(states);
+  request["questions"]["route"]["instructions"] = std::string(256 * 1024, 'x');
+  const size_t before = context_->batchBodiesSerializedForTesting();
+  std::atomic<int> polls{0};
+  const auto outcome = runOutcome(
+      *context_, request.dump(), [&polls] { return polls.fetch_add(1) >= 1; });
+  EXPECT_EQ(outcome.first, "Job cancelled");
+  EXPECT_EQ(context_->batchBodiesSerializedForTesting() - before, 0U);
 }
 
 TEST_F(DecisionContextModelTest, AStopDuringABatchCancelsIt) {
