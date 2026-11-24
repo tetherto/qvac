@@ -113,6 +113,7 @@ describe('serve: chat completions KV cache', () => {
         assert.deepEqual(retention, { acquired: [expected], released: 1 })
         assert.deepEqual(usageOf(res.payload, stream), {
           prompt_tokens: 144,
+          prompt_tokens_details: { cached_tokens: 0 },
           qvac_cache_tokens: 128,
           completion_tokens: 2,
           total_tokens: 146
@@ -147,6 +148,7 @@ describe('serve: chat completions KV cache', () => {
       // Occupancy is reported only for a named session.
       assert.deepEqual(usageOf(res.payload, stream), {
         prompt_tokens: 144,
+        prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens: 2,
         total_tokens: 146
       })
@@ -331,6 +333,52 @@ describe('serve: chat completions KV cache', () => {
       assert.equal(called, false)
     }
   )
+
+  for (const stream of [false, true]) {
+    it(`reports the last tool_search round's prompt (stream=${stream})`, async (t) => {
+      const app = await server(t)
+      await app.ready()
+      const rounds = [
+        stubRun(
+          {
+            promptTokens: 100,
+            cacheTokens: 900,
+            generatedTokens: 5,
+            emittedTokens: 5,
+            avgConcurrentSeq: 2
+          },
+          [{ id: 'c1', name: 'tool_search', arguments: { query: 'weather' } }]
+        ),
+        stubRun({
+          promptTokens: 20,
+          cacheTokens: 218,
+          generatedTokens: 10,
+          emittedTokens: 10,
+          avgConcurrentSeq: 1
+        })
+      ]
+      let round = 0
+      openaiState(app.qvac).completionOverride = () => rounds[round++]!
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          messages: MESSAGES,
+          stream,
+          ...(stream ? { stream_options: { include_usage: true } } : {}),
+          tools: [{ ...TOOLS[0], defer_loading: true }]
+        }
+      })
+      assert.equal(res.statusCode, 200, res.payload)
+      assert.equal(round, 2)
+      // 218 - 10: the last round's full prompt, not the sum over rounds.
+      const usage = usageOf(res.payload, stream)
+      assert.equal(usage['prompt_tokens'], 208)
+      assert.deepEqual(usage['prompt_tokens_details'], { cached_tokens: 188 })
+    })
+  }
 
   const invalid: Array<[string, Record<string, string>, Record<string, unknown>]> = [
     ['empty prompt_cache_key', {}, { prompt_cache_key: '' }],

@@ -16,12 +16,12 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 /**
- * Validates the single disk path. For a sharded GGUF, pass only the first
+ * Validates the single model path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 declare function validateModelPath(files: string[]): string;
 interface LlmLlamacpp {
-    /** The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only. */
+    /** The engine interface, or `null` before `load()` and after `unload()`. Advanced/test access only. */
     addon: LlmLlamacpp.Addon | null;
     opts: {
         stats?: boolean;
@@ -92,11 +92,11 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
     new (args: LlmLlamacppArgs): LlmLlamacpp;
     readonly prototype: LlmLlamacpp;
-    /** Validates and returns the single absolute disk path; split models require the first shard. */
+    /** Validates and returns the single absolute model path; split models require the first shard. */
     readonly validateModelPath: typeof validateModelPath;
     readonly assessFit: typeof assessFitImpl;
 }
-/** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
+/** LLM client wrapping LlamaInterface for inference, finetuning, and pause/resume. */
 declare const LlmLlamacpp: LlmLlamacppConstructor;
 declare namespace LlmLlamacpp {
     type NumericLike = number | `${number}`;
@@ -104,8 +104,8 @@ declare namespace LlmLlamacpp {
     type AddonMediaMessage = AddonModule.AddonMediaMessage;
     type AddonRunJobMessage = AddonModule.AddonRunJobMessage;
     /**
-     * Discriminated admission result: the native binding only sets `id` when the
-     * scheduler minted one, so a job id exists exactly when the job was accepted.
+     * Discriminated admission result: the binding only sets `id` when a job was
+     * accepted.
      */
     type AdmissionResult = AddonModule.AdmissionResult;
     type AddonRunJobResult = AddonModule.AddonRunJobResult;
@@ -119,14 +119,14 @@ declare namespace LlmLlamacpp {
     type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
     interface Addon {
         activate(): Promise<void>;
-        /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
+        /** Single-request admission: resolves the accepted flag plus the binding-assigned job id. */
         runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
         /** Batch admission: resolves the accepted flag plus the assigned sequence ids. */
         runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
         cancel(): Promise<void>;
-        /** Cancel a single job by its native-assigned id, leaving other concurrent jobs running. */
+        /** Cancel a single job by its binding-assigned id, leaving other jobs running. */
         cancelJob(id: number): Promise<void>;
-        /** Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count. */
+        /** Active jobs (in-flight + queued) reported by the selected binding. */
         activeJobs(): number;
         /**
          * Requests occupying or waiting for a continuous-batching slot
@@ -153,7 +153,7 @@ declare namespace LlmLlamacpp {
         device?: string;
         /**
          * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
-         * Accepted names: cuda, vulkan, metal, opencl, plus
+         * Accepted names: cuda, vulkan, metal, opencl, webgpu, plus
          * `auto` for no preference. An unrecognised name is rejected; a recognised
          * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
          * Use `device: 'npu'` for the AMD XDNA NPU.
@@ -453,7 +453,7 @@ declare namespace LlmLlamacpp {
         [key: string]: string | number | boolean | string[] | undefined;
     }
     interface LlmLlamacppArgs {
-        /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
+        /** One absolute model path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
         files: {
             model: [string];
             projectionModel?: string;

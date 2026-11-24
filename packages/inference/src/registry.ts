@@ -9,7 +9,6 @@ import { handleLoadModel } from '@/handlers/load-model/index'
 import { handleUnloadModel } from '@/handlers/unload-model'
 import { handleLoggingStream } from '@/handlers/logging-stream'
 import { cancelHandler } from '@/handlers/cancelHandler'
-import { handleRag } from '@/rag/handler'
 import { handleVectorIndex } from '@/handlers/vector-index'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { handleDownloadAsset } from '@/handlers/download-asset'
@@ -51,11 +50,6 @@ function pluginStream(capability: string): StreamHandler {
 function pluginDuplex(capability: string): DuplexStreamHandler {
   return (request, inputStream) =>
     dispatchPluginStream(request.modelId, capability, request, inputStream)
-}
-
-function ragSupportsProgress(request: Request): boolean {
-  if (request.type !== 'rag') return false
-  return ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)
 }
 
 function finetuneSupportsProgress(request: Request): boolean {
@@ -110,7 +104,6 @@ export const registry: Record<string, HandlerEntry> = {
     supportsProgress: true
   },
   downloadAsset: { type: 'reply', handler: handleDownloadAsset, supportsProgress: true },
-  rag: { type: 'reply', handler: handleRag, supportsProgress: ragSupportsProgress },
   vectorIndex: { type: 'reply', handler: handleVectorIndex },
   finetune: { type: 'reply', handler: handleFinetune, supportsProgress: finetuneSupportsProgress },
 

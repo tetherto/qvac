@@ -14,13 +14,30 @@ exports.getIndicTransFileName = getIndicTransFileName;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
-exports.INDICTRANS_MODELS = {
-    "en-indic-200M-q4_0": {
-        registryPath: "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+function registryModel(direction, size, quantization, expectedMinSizeMB) {
+    const variant = size === "1B" ? size : `dist-${size}`;
+    const modelName = `ggml-indictrans2-${direction}-${variant}`;
+    const filename = `${modelName}-${quantization}.bin`;
+    return {
+        registryPath: `qvac_models_compiled/ggml/indictrans2/${quantization}/${modelName}/2026-01-01/${filename}`,
         registrySource: "s3",
-        filename: "ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
-        expectedMinSizeMB: 100,
-    },
+        filename,
+        expectedMinSizeMB,
+    };
+}
+exports.INDICTRANS_MODELS = {
+    "en-indic-200M-q4_0": registryModel("en-indic", "200M", "q4_0", 100),
+    "en-indic-200M-f16": registryModel("en-indic", "200M", "f16", 330),
+    "en-indic-1B-q4_0": registryModel("en-indic", "1B", "q4_0", 480),
+    "en-indic-1B-f16": registryModel("en-indic", "1B", "f16", 1700),
+    "indic-en-200M-q4_0": registryModel("indic-en", "200M", "q4_0", 100),
+    "indic-en-200M-f16": registryModel("indic-en", "200M", "f16", 330),
+    "indic-en-1B-q4_0": registryModel("indic-en", "1B", "q4_0", 440),
+    "indic-en-1B-f16": registryModel("indic-en", "1B", "f16", 1560),
+    "indic-indic-320M-q4_0": registryModel("indic-indic", "320M", "q4_0", 150),
+    "indic-indic-320M-f16": registryModel("indic-indic", "320M", "f16", 500),
+    "indic-indic-1B-q4_0": registryModel("indic-indic", "1B", "q4_0", 530),
+    "indic-indic-1B-f16": registryModel("indic-indic", "1B", "f16", 1850),
 };
 // ============================================================================
 // Helpers

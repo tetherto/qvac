@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Ensure a built QVAC SDK worker exists for the real-worker tests/examples.
+"""Ensure a built QVAC SDK worker exists for the examples and the e2e catalog.
 
-The real-worker tests (`test_bare_rpc_transport.py`, the poc tests, the
-conformance corpus, the orchestrate e2e) and every example spawn a real worker
+Every example and the shared e2e catalog's Python runner spawn a real worker
 from the sibling `@qvac/sdk` package's `dist/src/worker/index.js`. That file is a
-build artifact -- if it's missing the tests skip themselves, which silently
-hides real integration coverage (notably in CI). This script builds it so they
-actually run.
+build artifact, and this script builds it.
 
 Idempotent: does nothing if the worker and its shims already exist, unless
 `--force`.
@@ -15,7 +12,7 @@ Idempotent: does nothing if the worker and its shims already exist, unless
     python3 scripts/build_worker.py --force     # rebuild
     python3 scripts/build_worker.py --print     # just print the worker path
 
-Honors `QVAC_POC_SDK_DIR` (same override the tests read) to point at a
+Honors `QVAC_POC_SDK_DIR` to point at a
 different `@qvac/sdk` checkout; defaults to the monorepo sibling `../sdk`.
 """
 

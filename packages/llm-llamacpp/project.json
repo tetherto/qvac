@@ -98,6 +98,28 @@
       "configurations": {
         "linux-x64": {
           "args": "--platform=linux --arch=x64",
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm run build:web",
+              "forwardAllArgs": false
+            }
+          ],
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           }
@@ -476,7 +498,10 @@
       "metadata": {
         "publish": {
           "tagPrefix": "llamacpp-llm"
-        }
+        },
+        "prebuildExtraDirs": [
+          "web"
+        ]
       }
     }
   },

@@ -31,10 +31,11 @@ Supported identifiers come from the generated manifest at
 Validation does not require a sibling SDK directory. Unknown identifiers are
 rejected, even if they have the right spelling format.
 
-When adding an engine, run `npm run contract:export` in `packages/sdk` to regenerate
-both the SDK contract and the registry manifest from the same canonical definitions.
-`npm run contract:check` checks both artifacts for freshness. Manifest-only edits
-also trigger the required SDK checks in CI. Do not edit the manifest by hand.
+When adding an engine, run `npm run engine-manifest:write` in `packages/sdk` to write
+the registry manifest from the SDK's canonical definitions, and commit it.
+`npm run engine-manifest:check` in `packages/sdk` checks it is current, and runs
+in the SDK's CI checks. Manifest-only edits also trigger the required SDK checks
+in CI. Do not edit the manifest by hand.
 
 An addon package can implement several plugins. Classify each model by the plugin
 that loads it, rather than inferring its capability from the shared package.

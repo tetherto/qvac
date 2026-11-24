@@ -114,24 +114,6 @@ export const errorChainingCause: TestDefinition = {
   metadata: { category: 'error', dependency: 'none', estimatedDurationMs: 5000 }
 }
 
-export const errorRagOperationFailed: TestDefinition = {
-  testId: 'error-rag-operation-failed',
-  params: {
-    modelId: 'nonexistent-model',
-    query: 'test query',
-    documents: 'test content',
-    workspace: 'test'
-  },
-  expectation: { validation: 'throws-error', errorContains: '' },
-  suites: ['smoke'],
-  steps: rejects('ragIngest', {
-    modelId: '$params.modelId',
-    documents: '$params.documents',
-    workspace: '$params.workspace'
-  }),
-  metadata: { category: 'error', dependency: 'embeddings', estimatedDurationMs: 5000 }
-}
-
 export const errorTranscriptionFailed: TestDefinition = {
   testId: 'error-transcription-failed',
   params: { audioPath: '/nonexistent/audio/file.wav' },
@@ -214,25 +196,6 @@ export const errorUseUnloadedModel: TestDefinition = {
   metadata: { category: 'error', dependency: 'llm', estimatedDurationMs: 3000 }
 }
 
-export const errorRagUnloadedModel: TestDefinition = {
-  testId: 'error-rag-unloaded-model',
-  params: {
-    modelIdOverride: 'unloaded-embedding-model-xyz',
-    documentFile: 'ocean_waves_poem.txt',
-    chunkSize: 200,
-    chunkOverlap: 50,
-    documents: 'test',
-    workspace: 'test'
-  },
-  expectation: { validation: 'throws-error', errorContains: '' },
-  steps: rejects('ragIngest', {
-    modelId: '$params.modelIdOverride',
-    documents: '$params.documents',
-    workspace: '$params.workspace'
-  }),
-  metadata: { category: 'error', dependency: 'embeddings', estimatedDurationMs: 3000 }
-}
-
 export const errorTests = [
   errorInvalidModelId,
   errorInvalidResponseType,
@@ -240,13 +203,11 @@ export const errorTests = [
   errorDeleteCacheInvalidParams,
   errorStructuredErrorCode,
   errorChainingCause,
-  errorRagOperationFailed,
   errorTranscriptionFailed,
   completionNegativeTemperatureAccepted,
   completionExcessiveTemperatureAccepted,
   completionInvalidTopPAccepted,
   completionNegativeMaxTokensAccepted,
   errorEmbeddingEmptyInput,
-  errorUseUnloadedModel,
-  errorRagUnloadedModel
+  errorUseUnloadedModel
 ]
