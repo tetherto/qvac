@@ -444,7 +444,7 @@ export const llmConfigBaseSchema = z.object({
   draftModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash or DSpark model, required by `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. `spec_type: 'auto'` requires it and reads its type from it. Placed like the model (`device`, `gpu_layers`), and model fit checks count its memory. A draft model made for another model fails the load and the fit check."
+      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash or DSpark model, required by `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. `spec_type: 'auto'` requires it and reads its type from it. Placed like the model (`device`, `gpu_layers`), and model fit checks count its memory. A draft model made for another model fails the load and the fit check. Fit checks answer `unknown` for a split model or a load with `projectionModelSrc`, so they don't read the draft model there."
     ),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])
@@ -495,6 +495,19 @@ export const llmConfigSchema = llmConfigBaseSchema
         path: ['draftModelSrc'],
         message:
           "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
+      })
+    }
+    // The addon rejects these without a drafter too, but only after the target is downloaded.
+    if (
+      data.draftModelSrc === undefined &&
+      (data.spec_type === 'draft-dflash' ||
+        data.spec_type === 'draft-dspark' ||
+        data.spec_type === 'auto')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['draftModelSrc'],
+        message: `spec_type '${data.spec_type}' requires draftModelSrc.`
       })
     }
     if (data['coreml-ffn'] !== true && data['coreml-ffn-split'] !== undefined) {
