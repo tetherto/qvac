@@ -16,12 +16,10 @@ export function llmFitRequest(load: FitLoad): FitRequestPlan {
   }
 
   // The fitter rejects these as unknown arguments, and none changes what it
-  // projects: the image limit gates images at inference, and the prompt-cache
-  // keys size host-RAM and disk state the fitter does not model or choose which
-  // conversations share it.
+  // projects: the prompt-cache keys size host-RAM and disk state the fitter
+  // does not model or choose which conversations share it.
   const {
     'rpc-servers': rpcServers,
-    'image-max-megapixels': _imageMaxMegapixels,
     cache_checkpoints: _cacheCheckpoints,
     cache_checkpoints_max_bytes: _cacheCheckpointsMaxBytes,
     cache_checkpoint_storage: _cacheCheckpointStorage,
