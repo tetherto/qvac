@@ -1,4 +1,5 @@
 import type { VectorStoreExpiresAfter, VectorStoreMeta } from '@/serve/core/stores/vector-stores'
+import type { VectorStoreHit } from '@/serve/extensions/openai/adapters/rag-backend'
 
 interface OpenAIVectorStoreObject {
   id: string
@@ -22,7 +23,6 @@ interface OpenAIVectorStoreObject {
 
 export interface VectorStoreRagInfo {
   exists: boolean
-  open?: boolean
 }
 
 export function vectorStoreToOpenAI(
@@ -68,34 +68,20 @@ interface OpenAISearchResultsPage {
   next_page: null
 }
 
-export interface RagSearchResultLike {
-  id: string
-  content: string
-  score: number
-}
-
-export type ChunkAttributionLookup = (
-  chunkId: string
-) => { fileId: string; fileName: string } | null
-
 export function searchResultsToOpenAI(
-  results: RagSearchResultLike[],
-  query: string,
-  lookup?: ChunkAttributionLookup
+  results: VectorStoreHit[],
+  query: string
 ): OpenAISearchResultsPage {
   return {
     object: 'vector_store.search_results.page',
     search_query: query,
-    data: results.map((r) => {
-      const attribution = lookup ? lookup(r.id) : null
-      return {
-        file_id: attribution?.fileId ?? r.id,
-        filename: attribution?.fileName ?? r.id,
-        score: r.score,
-        attributes: {},
-        content: [{ type: 'text', text: r.content }]
-      }
-    }),
+    data: results.map((r) => ({
+      file_id: r.fileId,
+      filename: r.fileName,
+      score: r.score,
+      attributes: {},
+      content: [{ type: 'text', text: r.content }]
+    })),
     has_more: false,
     next_page: null
   }

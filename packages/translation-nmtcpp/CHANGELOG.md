@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
 - This package needed no code change for the new fabric.
 
+### Fixed
+
+- `lib/indictrans-model-fetcher` accepts all 12 registry IndicTrans2 models:
+  `en-indic` and `indic-en` at `200M` and `1B`, `indic-indic` at `320M` and
+  `1B`, each in `q4_0` or `f16`. Every key except `en-indic-200M-q4_0` used to
+  fail with `Unknown IndicTrans model key`; that key stays the default. The
+  README example now passes `(destPath, modelKey)` in the right order
+  ([#5930](https://github.com/tetherto/qvac/pull/5930)).
+
 ## [0.27.0] - 2026-11-19
 
 ### Changed

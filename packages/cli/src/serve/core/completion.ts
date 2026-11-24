@@ -170,3 +170,21 @@ export function completionTokensFromStats(
   }
   return text ? text.split(/\s+/).filter(Boolean).length : 0
 }
+
+// On a KV-cache hit the SDK's promptTokens counts only the newly evaluated
+// tail. cacheTokens is what the context holds after the run (the whole prompt
+// plus what was generated), so the full input is that minus the generated part.
+// cacheTokens is scheduler-wide, though: when other requests overlapped this
+// one it includes theirs, so promptTokens, this request's own, is used instead.
+export function inputTokensFromStats(stats: CompletionStats | undefined): number {
+  const prompt = stats?.promptTokens ?? 0
+  const held = stats?.cacheTokens
+  const generated = stats?.generatedTokens
+  if (typeof held !== 'number' || typeof generated !== 'number') return prompt
+  if ((stats?.avgConcurrentSeq ?? 1) > 1) return prompt
+  return Math.max(prompt, held - generated)
+}
+
+export function cachedTokensFromStats(stats: CompletionStats | undefined): number {
+  return Math.max(0, inputTokensFromStats(stats) - (stats?.promptTokens ?? 0))
+}

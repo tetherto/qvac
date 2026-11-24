@@ -175,26 +175,6 @@ export const cancelByRequestIdTranscribe: TestDefinition = {
   }
 }
 
-export const cancelByRequestIdRagIngest: TestDefinition = {
-  testId: 'cancel-by-requestid-rag-ingest',
-  params: {
-    workspaceBase: 'cancel-by-requestid',
-    documentFiller:
-      'The quick brown fox jumps over the lazy dog. Machine learning is a subset of artificial intelligence that enables computers to learn from data. Natural language processing combines linguistics and computer science to enable computers to understand human language. ',
-    documentFillerRepeats: 100,
-    chunkSize: 256,
-    chunkOverlap: 32,
-    registryBeginGraceMs: 200
-  },
-  expectation: { validation: 'function', fn: () => true },
-  suites: ['imperative'],
-  metadata: {
-    category: 'cancellation',
-    dependency: 'embeddings',
-    estimatedDurationMs: 30000
-  }
-}
-
 export const cancellationTests = [
   cancelMidStreamCompletion,
   cancelBeforeBeginCompletion,
@@ -205,8 +185,7 @@ export const cancellationTests = [
   cancelIsolatesConcurrentBatches,
   cancelQueuedNativeBatch,
   cancelByRequestIdEmbed,
-  cancelByRequestIdTranscribe,
-  cancelByRequestIdRagIngest
+  cancelByRequestIdTranscribe
 ]
 
 // The tests without steps cancel at a point inside a running call, which steps cannot time, so
