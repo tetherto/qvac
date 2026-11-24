@@ -129,12 +129,15 @@ fi
 # at the copy installed above; that is the one whose versions are reported.
 QVAC_PLUGIN_DIR="$SMOKE_DIR/node_modules/@qvac/opencode-plugin"
 
-# Deny every tool: with 13 advertised, qwen3.5-0.8b sometimes answers the
-# one-word prompt with a tool call and repeats it until the job times out.
+# qwen3.5-0.8b sometimes answers the one-word prompt with a tool call and
+# repeats it until the job times out. Deny every tool, and cap the agent at 3
+# steps because OpenCode always keeps `skill`; at the cap it sends
+# `tool_choice: "none"`, so the reply has to be text.
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
   "permissions": [{ "action": "*", "resource": "*", "effect": "deny" }],
+  "agents": { "build": { "steps": 3 } },
   "plugins": [
     {
       "package": "${QVAC_PLUGIN_DIR}",
