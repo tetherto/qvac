@@ -103,6 +103,12 @@ For models available as constants, see [SDK — Models](/sdk#models).
 **On upscaling:** ESRGAN can be used standalone via `modelConfig.mode: "upscale"` + `upscale()`, or paired with an RGB-output diffusion model via `diffusion({ upscale })`. ESRGAN accepts RGB only. Qwen-Image-2.1 produces RGBA and rejects post-generation upscaling; keep `upscale` omitted or `false`. Available constants: `REALESRGAN_X4PLUS_ANIME_6B`, `REALESRGAN_X4PLUS`.
 </Callout>
 
+## Performance profiles
+
+[`loadModel()`](/sdk/reference/api#loadmodel) applies measured speed settings for some model and GPU combinations by default (`modelConfig.performance_profile: "auto"`). FLUX.2-klein qualifies when you load `FLUX_2_KLEIN_4B_Q8_0` with `QWEN3_4B_Q4_K_M` and `FLUX_2_KLEIN_4B_VAE` on an NVIDIA RTX 5090 or DGX Spark (CUDA). A single 512×512 or 1024×1024 image then decodes through a faster VAE path, as long as at least 16 GiB of memory is free when the request starts. Image-to-image qualifies with one square 512×512 or 1024×1024 reference. Other GPUs and backends, other sizes, batches, multiple references, LoRA and VAE tiling keep the default settings.
+
+Set `performance_profile: "off"` to keep the default settings, or set `vae_conv_direct` yourself to override the choice. Profiles also stay off when you set `max_vram`, `stream_layers`, `type`, `tensor_type_rules`, `vae_auto_cpu_fallback`, `diffusion_fa: false`, `device: "cpu"`, or a `backend` with per-module or multi-device assignments.
+
 ## Examples
 
 ### FLUX.2-klein

@@ -5407,6 +5407,7 @@ packages:
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@qvac/fabric-linux-x64@0.29.1':
     resolution: {integrity: sha512-Sh2axN0bWXb+m9nOeWVDSfC7q5SNMMn32KrQYHJcL5W2dZppVXJ/zpWUAtbB14mW7wqf4KkHYJUSNq4YHw4F3g==}
