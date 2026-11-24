@@ -93,12 +93,11 @@ runs:
         done
 
         # Each of these packages records the port version in package.json as
-        # qvac["qvac-fabric"]. @qvac/fabric's build fails unless its record is
-        # the port it built and writes that port into its CMake config, which an
-        # addon linking code from the port itself (@qvac/decision-ggml's
-        # server-context) is checked against at configure time
-        # (qvac_addon_link_fabric_server_context). The records must match the
-        # pins.
+        # qvac["qvac-fabric"], and this is the check that the records match the
+        # pins. @qvac/fabric's build writes the port it installed into its CMake
+        # config, which an addon linking code from the port itself
+        # (@qvac/decision-ggml's server-context) is checked against at configure
+        # time (qvac_addon_link_fabric_server_context).
         mismatched=()
         for file in "${files[@]}"; do
           manifest="$(dirname "${file}")/package.json"

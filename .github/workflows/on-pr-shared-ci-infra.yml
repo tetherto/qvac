@@ -166,16 +166,6 @@ jobs:
             --package ${{ matrix.package }} \
             --root "$GITHUB_WORKSPACE"
 
-  fabric-lockstep:
-    name: qvac-fabric version lockstep
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Verify qvac-fabric versions are lockstep
-        uses: ./.github/actions/verify-qvac-fabric-lockstep
-
   # Which @qvac/fabric runtime qvac_addon_fabric_layout() links, across every install layout; nothing else
   # configures a consumer against each layout before an addon build hits the wrong one.
   fabric-cmake-layout:

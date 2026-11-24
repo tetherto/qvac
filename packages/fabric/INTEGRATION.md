@@ -278,10 +278,11 @@ The archive and the runtime must come from the same port version:
   (`QVAC_FABRIC_PORT_VERSION`), so the value travels with the prebuilds. The
   helper fails configure when the addon's own vcpkg build installed another
   version.
-- `package.json` records the port as `qvac["qvac-fabric"]`, and the addon
-  records the same. This package's build fails unless its record is the port it
-  installed, and CI (`verify-qvac-fabric-lockstep`) checks both records against
-  the `vcpkg.json` pins.
+- `package.json` records the pinned port as `qvac["qvac-fabric"]`, and the
+  addon records the same. `verify-qvac-fabric-lockstep`, run by `pr-checks.yml`
+  on every pull request, checks both records against the `vcpkg.json` pins.
+  This package's build only warns when it installs another port, as a port
+  overlay under validation does.
 
 ---
 

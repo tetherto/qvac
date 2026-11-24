@@ -13,8 +13,10 @@
   specializations, which the existing `common_*` pattern missed there.
 - The CMake config records the `qvac-fabric` port the runtime is built from, as
   `QVAC_FABRIC_PORT_VERSION`; an addon that links code from the port itself is
-  checked against it when it configures. `package.json` records the same port
-  as `qvac["qvac-fabric"]`, and the build fails if the two differ.
+  checked against it when it configures. `package.json` records the pinned port
+  as `qvac["qvac-fabric"]`, which `pr-checks.yml` now checks against the
+  `vcpkg.json` pins on every pull request; the build warns if it installed
+  another port.
 ## [0.33.0] - 2026-11-23
 
 ### Breaking
