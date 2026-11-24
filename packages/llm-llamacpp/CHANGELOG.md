@@ -41,6 +41,15 @@ Loads with `parallel >= 2` change as follows:
   `cacheKey` runs without it
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
+### Added
+
+- Browser build: `LlmLlamacpp` runs in browsers on WebGPU. The addon's engine
+  sources are compiled to WebAssembly with Emscripten and fabric 12032.0.0's
+  WebGPU backend, and `prebuilds/web` ships wasm32 and Memory64 engines; the
+  runtime loads one in a Dedicated Worker and reads models from OPFS without
+  copying them into WebAssembly memory. See `docs/browser.md`
+  ([#5890](https://github.com/tetherto/qvac/pull/5890)).
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries

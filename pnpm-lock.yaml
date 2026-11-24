@@ -23,11 +23,11 @@ overrides:
   '@qvac/audiogen-ggml-darwin-arm64': '-'
   '@qvac/audiogen-ggml-darwin-x64': '-'
   '@qvac/audiogen-ggml-win32-x64': '-'
-  '@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-x64': '-'
-  '@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-linux-arm64': '-'
-  '@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-arm64': '-'
-  '@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-darwin-x64': '-'
-  '@qvac/diffusion-cpp@0.38.0>@qvac/diffusion-cpp-win32-x64': '-'
+  '@qvac/diffusion-cpp@0.38.1>@qvac/diffusion-cpp-linux-x64': '-'
+  '@qvac/diffusion-cpp@0.38.1>@qvac/diffusion-cpp-linux-arm64': '-'
+  '@qvac/diffusion-cpp@0.38.1>@qvac/diffusion-cpp-darwin-arm64': '-'
+  '@qvac/diffusion-cpp@0.38.1>@qvac/diffusion-cpp-darwin-x64': '-'
+  '@qvac/diffusion-cpp@0.38.1>@qvac/diffusion-cpp-win32-x64': '-'
   llvm-runtime-resources-darwin>require-asset: ^1.2.4
   llvm-runtime-resources-linux>require-asset: ^1.2.4
   llvm-runtime-resources-win32>require-asset: ^1.2.4
@@ -1271,6 +1271,9 @@ importers:
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       eslint:
         specifier: ^9.39.4
         version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)

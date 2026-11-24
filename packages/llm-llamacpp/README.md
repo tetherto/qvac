@@ -1,6 +1,6 @@
 # llm-llamacpp
 
-This native C++ addon, built using the `Bare` Runtime, simplifies running Large Language Models (LLMs) within QVAC runtime applications. It provides an easy interface to load, execute, and manage LLM instances.
+This package simplifies running Large Language Models (LLMs) within QVAC applications. It uses a native C++ addon on Bare and a WebAssembly build with WebGPU in browsers, while exposing the same JavaScript API.
 
 ## Table of Contents
 - [Supported platforms](#supported-platforms)
@@ -39,6 +39,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan, XDNA NPU (x64, opt-in) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
+| Browser | wasm32, wasm64 | WebGPU browser | Experimental | WebGPU — see [docs/browser.md](docs/browser.md) |
 
 
 **Note on CUDA (Linux and Windows, NVIDIA):**
@@ -160,7 +161,7 @@ const args = {
 
 The `args` obj contains the following properties:
 
-* `files.model`: Exactly one absolute disk path: the single GGUF file or only the first shard. Fabric reads the remaining shards from the same directory.
+* `files.model`: Exactly one absolute model path: the single GGUF file or only the first shard. Fabric reads the remaining shards from the same directory.
 * `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
 * `config`: The model configuration object (see next section).
 * `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
@@ -223,7 +224,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `webgpu`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()`; the slots share one KV cache, each limited to `ctx_size / parallel` tokens ([details](./docs/continuous-batching.md#one-shared-kv-pool)) |
@@ -320,7 +321,7 @@ const model = new LlmLlamacpp(args)
 await model.load()
 ```
 
-Loads the model file(s) passed in `files.model` and activates the native addon. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
+Loads the model file(s) passed in `files.model` and activates the engine. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
 
 ### 6. Run Inference
 

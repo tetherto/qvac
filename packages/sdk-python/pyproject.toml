@@ -5,8 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "tetherto-qvac-sdk"
 # Version tracks @qvac/sdk (not an independent number) so a given python-sdk
-# release makes plain which SDK it speaks: it's read from the generated
-# _generated/sdk_version.py, which is stamped from packages/sdk/package.json.
+# release makes plain which SDK it speaks: scripts/version.py reads it from
+# packages/sdk/package.json.
 dynamic = ["version"]
 description = "Generated Python client for the QVAC SDK worker RPC"
 readme = "README.md"
@@ -20,8 +20,9 @@ dependencies = [
 ]
 
 [tool.hatch.version]
-path = "src/tetherto/qvac_sdk/_generated/sdk_version.py"
-pattern = 'SDK_VERSION = "(?P<version>[^"]+)"'
+source = "code"
+path = "scripts/version.py"
+expression = "VERSION"
 
 [project.optional-dependencies]
 gen = ["datamodel-code-generator==0.68.0", "black==26.5.1", "ruff==0.15.21"]
@@ -52,24 +53,30 @@ release = ["build>=1.2"]
 # PEP 420 namespace package: ship the whole `tetherto/` tree (no
 # tetherto/__init__.py) so `tetherto.qvac_sdk` installs under the shared root.
 packages = ["src/tetherto"]
-# The staged worker bundle is gitignored (build_wheel.py creates it
-# transiently); artifacts overrides hatchling's VCS-ignore exclusion so the
-# self-contained wheel actually carries it. Harmless when absent (thin wheel).
-artifacts = ["src/tetherto/qvac_sdk/_worker/**"]
+# The generated client and the staged worker bundle are gitignored;
+# artifacts overrides hatchling's VCS-ignore exclusion so the wheel carries
+# them. The worker bundle is absent from the thin wheel.
+artifacts = [
+  "src/tetherto/qvac_sdk/_generated/**",
+  "src/tetherto/qvac_sdk/_worker/**",
+]
 
-# hatch_build.py stamps a `py3-none-<plat>` tag on the fat (bundled) wheel when
-# QVAC_WHEEL_PLAT is set by scripts/build_wheel.py. Inert for the default thin
-# build, which stays pure `py3-none-any`.
+[tool.hatch.build.targets.sdist]
+artifacts = ["src/tetherto/qvac_sdk/_generated/**"]
+
+# hatch_build.py refuses to build without a current generated client, and stamps a
+# `py3-none-<plat>` tag on the fat (bundled) wheel when QVAC_WHEEL_PLAT is set
+# by scripts/build_wheel.py.
 [tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist.hooks.custom]
 path = "hatch_build.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
-markers = [
-  "heavy: real-worker tests using large or specialized models (parakeet, BCI, VLA). Excluded from the fast CI leg (pytest -m 'not heavy'); run in the broader cross-platform e2e that restores the shared model cache.",
-]
 
 [tool.ruff]
 target-version = "py310"
@@ -82,12 +89,9 @@ select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-# Pin tetherto as first-party so import-section grouping is identical whether
-# the generator writes in place (src/tetherto/qvac_sdk/_generated) or into a
-# temp dir (what `generate.py --check` and CI do). Left implicit, ruff's
-# first-party heuristic classifies the `tetherto.qvac_sdk._generated_base`
-# import differently between those two locations, so the committed output and a
-# fresh build disagree by a single blank line and `--check` flakes.
+# Pin tetherto as first-party: the generator sorts imports in a temp dir, where
+# ruff's first-party heuristic would otherwise classify the
+# `tetherto.qvac_sdk._generated_base` import as third-party.
 known-first-party = ["tetherto"]
 
 [tool.mypy]
@@ -106,3 +110,7 @@ module = "tetherto.qvac_sdk._generated.models._internal"
 # enum member on construction (verified: `Model().field == SomeEnum.x`
 # is True). Scoped to this one generated module, not project-wide.
 disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = ["pymongo", "pymongo.*"]
+ignore_missing_imports = true

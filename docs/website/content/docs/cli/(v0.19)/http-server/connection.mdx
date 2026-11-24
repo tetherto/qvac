@@ -50,7 +50,7 @@ Install OpenClaw, the QVAC OpenClaw plugin, and the QVAC CLI:
 
 ```bash
 npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
-openclaw plugins install @qvac/openclaw-plugin --force --accept-capabilities
+openclaw plugins install npm:@qvac/openclaw-plugin --force --accept-capabilities
 openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
 ```

@@ -96,6 +96,7 @@ public:
     GenerationParams generationParams;
     std::vector<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
+    LlmContext::CancelRequested cancelRequested;
     LlamaFinetuner::ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
