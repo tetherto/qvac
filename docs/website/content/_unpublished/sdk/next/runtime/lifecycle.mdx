@@ -8,7 +8,7 @@ schemaType: HowTo
 
 ## Overview
 
-While running, the SDK keeps live resources in the host process — Hyperswarm sockets, Corestore handles, RAG corestore, registered download streams, and a request gate above handler dispatch. When the host app moves to background (mobile suspend, desktop minimize, daemon hibernation), holding those resources open wastes battery and can break sockets that are torn down by the OS.
+While running, the SDK keeps live resources in the host process — Hyperswarm sockets, Corestore handles, registered download streams, and a request gate above handler dispatch. When the host app moves to background (mobile suspend, desktop minimize, daemon hibernation), holding those resources open wastes battery and can break sockets that are torn down by the OS.
 
 `suspend()` pauses those resources and engages a lifecycle gate so non-lifecycle operations fail fast instead of hanging. `resume()` restores them when the app returns to foreground. `state()` is the source of truth for the current runtime state — useful for branching app logic without shadow-tracking suspend/resume locally.
 

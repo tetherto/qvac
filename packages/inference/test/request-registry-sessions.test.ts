@@ -261,7 +261,7 @@ test('sessions: end() resolves the id within the given session', async (t) => {
 })
 
 // A dispatch check that ran before the session closed does not cover work the
-// handler begins later, such as a RAG embed, so the worker registry checks the
+// handler begins later, such as an embed it runs itself, so the worker registry checks the
 // session again when a request begins.
 test('sessions: the worker registry refuses a request under a closed session', async (t) => {
   const r = getRequestRegistry()

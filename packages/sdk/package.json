@@ -235,7 +235,8 @@
     "bare:ensureprebuilds": "npm run bare:ensureprebuilds:llamacpp && npm run bare:ensureprebuilds:asr && npm run bare:ensureprebuilds:embeddings",
     "prepare:husky": "husky",
     "contract:export": "tsx ./scripts/export-contract.ts",
-    "contract:check": "tsx ./scripts/export-contract.ts --check",
+    "engine-manifest:check": "tsx ./scripts/export-contract.ts --check-engine-manifest",
+    "engine-manifest:write": "tsx ./scripts/export-contract.ts --write-engine-manifest",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
     "bare-kit-runtimes:generate": "tsx ./scripts/generate-bare-kit-runtimes.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
@@ -246,7 +247,7 @@
     "@qvac/bci-whispercpp": "^0.16.0",
     "@qvac/classification-ggml": "^0.41.0",
     "@qvac/decoder-audio": "^0.9.0",
-    "@qvac/diffusion-cpp": "^0.35.0",
+    "@qvac/diffusion-cpp": "^0.36.0",
     "@qvac/embed-llamacpp": "^0.58.1",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.11.0",
@@ -380,7 +381,8 @@
       "bare:ensureprebuilds",
       "prepare:husky",
       "contract:export",
-      "contract:check",
+      "engine-manifest:check",
+      "engine-manifest:write",
       "check:resource-collectors",
       "bare-kit-runtimes:generate",
       "changelog:generate"

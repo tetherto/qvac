@@ -1,0 +1,120 @@
+---
+title: Migrate from the SDK RAG API
+description: Move from the SDK's built-in RAG workspaces to @qvac/rag, the vector index or the CLI vector stores.
+schemaType: HowTo
+tocMaxDepth: 2
+---
+
+## What changed
+
+`@qvac/sdk` 0.24.x is the last line with the built-in RAG API. Later versions remove it:
+
+- JavaScript/TypeScript: `ragChunk`, `ragIngest`, `ragSaveEmbeddings`, `ragSearch`, `ragDeleteEmbeddings`, `ragReindex`, `ragListWorkspaces`, `ragCloseWorkspace`, `ragDeleteWorkspace` and the `ragTurbovec` config.
+- Python: `rag`, `rag_with_progress` and the `RagRequest` types.
+- Kotlin: `client.retrieval` and the `RagRequest` types.
+
+[`embed()`](/sdk/reference/api#embed), [`createVectorIndex()`](/sdk/reference/api#createvectorindex) and [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex) stay. A managed document store now lives in the standalone [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package, and `qvac serve openai` vector stores are built on it.
+
+## Stay on the RAG API for now
+
+Pin the last versions that include it:
+
+| Package | Pin |
+|---|---|
+| `@qvac/sdk` | `~0.24.0` |
+| `tetherto-qvac-sdk` (Python) | `~=0.24.0` |
+| `@qvac/cli` | `~0.20.0` |
+| Kotlin SDK | the Maven ZIPs on the [`sdk-v0.24.0` release](https://github.com/tetherto/qvac/releases/tag/sdk-v0.24.0) |
+
+## Existing data
+
+Workspaces are not migrated, and the old API has no export, so keep your source documents and ingest them again after upgrading.
+
+- SDK workspaces stay on disk in `rag-hyperdb/<workspace>` and `rag-turbovec/<workspace>`, next to the SDK `cacheDirectory` (`~/.qvac/rag-hyperdb` by default; under `$SNAP_USER_COMMON/.qvac` in the Snap). Newer versions never read or delete them: keep them while you still run 0.24.x, then delete them by hand.
+- `qvac serve openai` vector stores up to CLI 0.20.x were SDK workspaces named after the store id, in the same folders. Later versions keep stores in `serve/vector-stores` next to the `cacheDirectory`. Upload the files again and attach them to new stores.
+
+## JavaScript and TypeScript: `@qvac/rag`
+
+```bash
+npm install @qvac/rag corestore
+```
+
+`@qvac/rag` runs on Bare and Node; on Bare, also install `@qvac/turbovec-ggml` for indexed search. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you create and close, and gets vectors from an embeddings port you supply.
+
+```typescript
+import Corestore from 'corestore'
+import { createRag, type EmbeddingsPort } from '@qvac/rag'
+import { embed, embedBatch, loadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16 })
+
+const port: EmbeddingsPort = {
+  // Identifies the vectors; a namespace only accepts vectors from its space.
+  space: {
+    model: 'gte-large-fp16',
+    revision: '1',
+    dimensions: 1024,
+    metric: 'cosine',
+    normalized: false,
+    documentEncoding: '',
+    queryEncoding: '',
+    preprocessing: 'none'
+  },
+  async embedDocuments(texts) {
+    const { embedding } = await embedBatch({ modelId, inputs: texts })
+    return Float32Array.from(embedding.flat())
+  },
+  async embedQuery(text) {
+    const { embedding } = await embed({ modelId, text })
+    return Float32Array.from(embedding)
+  }
+}
+
+const corestore = new Corestore('./rag/docs') // locks its folder: one per folder per process
+const rag = createRag({ corestore, embeddings: port, index: { dir: './rag/docs-index' } })
+await rag.ready()
+await rag.createNamespace({ name: 'docs', space: port.space })
+await rag.ingest({ namespace: 'docs', documents: [{ id: 'intro', text }] })
+const hits = await rag.search({ scope: { namespace: 'docs' }, query, k: 5 })
+await rag.close()
+await corestore.close()
+```
+
+- The port can wrap any embedding function: another model, a remote API or your own code.
+- Without a port, ingest precomputed vectors and search with `{ vector, spaceId }`.
+- Change `space` when the vectors change (model, revision, pooling); a namespace rejects vectors from another space.
+- On Node, `@qvac/turbovec-ggml` does not load, so every search scans all chunks and `index.dir` is ignored. That suits small stores: at 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the index on Bare. Past that, run `@qvac/rag` on Bare.
+
+| SDK function | `@qvac/rag` |
+|---|---|
+| `ragIngest` | `ingest({ namespace, documents: [{ id, text }] })`; chunk options go to `createRag({ chunking })`, `onProgress` and `signal` to the second argument of `ingest` |
+| `ragSaveEmbeddings` | `ingest` with `{ id, spaceId, chunks: [{ content, embedding }] }`; no port needed |
+| `ragChunk` | `ingest` chunks text itself; for chunks alone, use `rag-extract/chunk` |
+| `ragSearch` | `search({ scope: { namespace }, query, k })` |
+| `ragDeleteEmbeddings` | `deleteDocuments({ namespace, documentIds })` |
+| `ragReindex` | not needed; the index follows every write |
+| `ragCloseWorkspace` | `rag.close()`, then `corestore.close()` |
+| `ragListWorkspaces`, `ragDeleteWorkspace` | list or delete your Corestore folders |
+
+See the [`@qvac/rag` README](https://www.npmjs.com/package/@qvac/rag) for the full API.
+
+## React Native and Expo
+
+`@qvac/rag` is not supported in React Native or Expo apps yet. Build retrieval from the SDK instead: embed with [`embed()`](/sdk/reference/api#embed) or `embedBatch()`, index the vectors with [`createVectorIndex()`](/sdk/reference/api#createvectorindex), and keep the documents in your own store. The [RAG](/sdk/ai-capabilities/rag) page has a TurboVec example.
+
+## Python and Kotlin
+
+`@qvac/rag` is JavaScript only. From Python or Kotlin, either:
+
+- **Use the CLI vector stores.** Run `qvac serve openai` with an embedding model and call `/v1/files` and `/v1/vector_stores` from any OpenAI client. See [Vector stores](/cli/http-server#vector-stores).
+- **Build retrieval from the SDK.** Embed with `embed_batch` (Python) or `client.embeddings.embed` (Kotlin), index the vectors with `vector_index` (Python) or `client.vectorIndex` (Kotlin), and keep the documents in your own store. The [RAG](/sdk/ai-capabilities/rag) page has TurboVec, MongoDB and SQLite examples in both languages.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11435/v1", api_key="unused")
+store = client.vector_stores.create(name="my-docs")
+file = client.files.create(file=open("notes.txt", "rb"), purpose="assistants")
+client.vector_stores.files.create(vector_store_id=store.id, file_id=file.id)
+hits = client.vector_stores.search(vector_store_id=store.id, query="what is in the notes?")
+```

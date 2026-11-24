@@ -572,14 +572,15 @@ size_t MtmdLlmContext::countChatTokens(
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessage(
     const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-    bool prefill) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
+    bool prefill, const CancelRequested& cancelRequested) {
+  return evalMessageWithTools(
+      chatMsgs, {}, isCacheLoaded, prefill, cancelRequested);
 }
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-    bool prefill) {
+    bool prefill, const CancelRequested& cancelRequested) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();
@@ -719,7 +720,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   const auto prefillStart = std::chrono::steady_clock::now();
 
   size_t ledgerEntryIndex = 0;
-  for (size_t i = 0; i < nChunks; i++) {
+  for (size_t i = 0; i < nChunks || stopGeneration_.load(); i++) {
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     // Checked before every chunk, reused or not, so a cancel lands before
     // anything in it is decoded, the reconciled suffix decoded by hand below
     // included.
@@ -838,9 +842,16 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                 "[MtmdLlm] failed to decode reconciled text suffix");
           }
           processSpeculativeBatch(*textBatch);
+          if (cancelRequested && cancelRequested()) {
+            stopGeneration_.store(true);
+            break;
+          }
           if (checkpointOffset.has_value() && offset == *checkpointOffset) {
             captureHistoryCheckpoint(nPastLocal);
           }
+        }
+        if (stopGeneration_.load()) {
+          continue;
         }
         continue;
       }
@@ -914,6 +925,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
           "[MtmdLlm] failed to eval chunk " + std::to_string(i);
       throw qvac_errors::StatusError(
           ADDON_ID, toString(EncoderFailed), errorMsg);
+    }
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
     }
   }
   current_.pos = nPastLocal;

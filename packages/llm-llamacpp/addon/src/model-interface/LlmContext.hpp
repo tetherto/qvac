@@ -156,6 +156,8 @@ struct LlmModelContext {
 /// (de)serializer must persist and restore. Any driver implementing
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
+  using CancelRequested = std::function<bool()>;
+
   LlmContext() = default;
   LlmContext(const LlmContext&) = delete;
   LlmContext& operator=(const LlmContext&) = delete;
@@ -186,7 +188,7 @@ public:
    */
   virtual EvalMessageResult evalMessage(
       const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-      bool prefill) = 0;
+      bool prefill, const CancelRequested& cancelRequested = {}) = 0;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -201,7 +203,7 @@ public:
   virtual EvalMessageResult evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-      bool prefill) = 0;
+      bool prefill, const CancelRequested& cancelRequested = {}) = 0;
 
   struct GenerateResponseResult {
     bool ok = true;

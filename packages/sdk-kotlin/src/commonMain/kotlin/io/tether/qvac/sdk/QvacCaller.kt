@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -101,7 +102,8 @@ abstract class QvacCaller internal constructor(
         request: Request,
         progressType: String,
     ): Flow<QvacProgressEvent<Progress, Response>> {
-        val payload = json.encodeToJsonElement(request).jsonObject
+        // The worker streams progress only when the request asks for it.
+        val payload = JsonObject(json.encodeToJsonElement(request).jsonObject + ("withProgress" to JsonPrimitive(true)))
         transport.runtimeProfile?.requirePayload(payload)
         return transport.stream(payload).map { response ->
             val checked = checkResponse(response)

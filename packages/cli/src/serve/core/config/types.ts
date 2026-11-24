@@ -33,6 +33,8 @@ export interface ServeConfig {
   enableAdmin: boolean
   /** Parsed `serve.<extension>` blocks, keyed by extension name. */
   extensions: Partial<ServeExtensionConfig>
+  /** The SDK's top-level `cacheDirectory`, when the config sets one. */
+  cacheDirectory?: string
 }
 
 /** Augmented by each extension with its own `serve.<name>` shape. */
