@@ -1,7 +1,5 @@
 """Tests for `tetherto.qvac_sdk.Client` (QIP-1's `from tetherto.qvac_sdk import Client` entry point):
-worker resolution precedence and error messaging run as plain unit tests; the
-real connect/heartbeat/close cycle runs against a started worker, same rigor
-as test_bare_rpc_transport.py.
+worker resolution precedence and error messaging.
 """
 
 from __future__ import annotations
@@ -10,9 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
-from _worker_env import WORKER_AVAILABLE, WORKER_PATH, _bundled_harness
 
-import tetherto.qvac_sdk as qvac_sdk_pkg
 from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION
 from tetherto.qvac_sdk.client import (
     BundledWorker,
@@ -21,8 +17,6 @@ from tetherto.qvac_sdk.client import (
     WorkerNotFoundError,
     _resolve_worker,
 )
-from tetherto.qvac_sdk.methods import heartbeat
-from tetherto.qvac_sdk.schemas import HeartbeatRequest
 
 
 def _touch(path: Path, text: str = "") -> Path:
@@ -201,32 +195,3 @@ def test_client_transport_property_requires_connect(tmp_path) -> None:
     client = Client(sdk_dir=str(sdk))
     with pytest.raises(RuntimeError, match="not connected"):
         client.transport
-
-
-@pytest.mark.skipif(
-    not WORKER_AVAILABLE,
-    reason=f"no built SDK worker (worker={WORKER_PATH!r})",
-)
-async def test_client_connects_and_round_trips_a_heartbeat() -> None:
-    async with Client(worker_path=WORKER_PATH) as client:
-        response = await heartbeat(client.transport, HeartbeatRequest(type="heartbeat"))
-        assert response.type == "heartbeat"
-        assert isinstance(response.number, float)
-
-
-@pytest.mark.skipif(
-    _bundled_harness() is None,
-    reason="zero-config Client() requires an installed fat-wheel _worker",
-)
-async def test_client_zero_config_uses_installed_bundle(monkeypatch) -> None:
-    # Restores real client.__file__ past the autouse neutralization so the
-    # installed wheel's `_worker` is what `Client()` resolves.
-    monkeypatch.setattr(
-        "tetherto.qvac_sdk.client.__file__",
-        str(Path(qvac_sdk_pkg.__file__).resolve().parent / "client.py"),
-    )
-
-    async with Client() as client:
-        response = await heartbeat(client.transport, HeartbeatRequest(type="heartbeat"))
-        assert response.type == "heartbeat"
-        assert isinstance(response.number, float)

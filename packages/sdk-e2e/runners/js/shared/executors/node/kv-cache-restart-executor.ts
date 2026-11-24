@@ -128,6 +128,9 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
             `state was never lost and this test cannot prove the cache was restored`
         }
       }
+      // A passing test prints nothing else, so log how the worker ended; a SIGKILL here means an
+      // earlier test leaked a model.
+      console.info(`♻️  Worker ${before[0]} ended ${ended}`)
 
       // A load issued while the client is still tearing down the dead worker fails with that
       // abort, not with anything about this test.

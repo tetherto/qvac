@@ -41,7 +41,6 @@ export * from '@/schemas/transcription-config'
 export * from '@/schemas/text-to-speech'
 export * from '@/schemas/tts-pcm'
 export * from '@/schemas/error'
-export * from '@/schemas/rag'
 export * from '@/schemas/vector-index'
 export * from '@/schemas/ocr'
 export * from '@/schemas/sdcpp-config'
@@ -51,7 +50,6 @@ export * from '@/schemas/audio-gen'
 export * from '@/schemas/model-config-schemas'
 export * from '@/schemas/lifecycle'
 export { ERROR_CODES, REGISTRY_ERROR_CODES, modelRegistryBusyMessage } from '@/schemas/errors'
-export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
 export {
   qvacConfigSchema,
   deviceMatchSchema,

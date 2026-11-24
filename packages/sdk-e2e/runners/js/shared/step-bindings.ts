@@ -33,9 +33,6 @@ import {
   modelRegistryList,
   modelRegistrySearch,
   ocr,
-  ragCloseWorkspace,
-  ragDeleteWorkspace,
-  ragIngest,
   rerank,
   resume,
   state,
@@ -140,16 +137,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     return { closed: true }
   },
 
-  // --- rag and vector index ------------------------------------------------
-  ragIngest: (params) => ragIngest(params),
-  ragCloseWorkspace: async (params) => {
-    await ragCloseWorkspace(params)
-    return { closed: true }
-  },
-  ragDeleteWorkspace: async (params) => {
-    await ragDeleteWorkspace(params)
-    return { deleted: true }
-  },
+  // --- vector index ------------------------------------------------------
   // The vector index is a handle API: `createVectorIndex` hands back an object with methods on it,
   // and a step can only name a method and pass data.
   createVectorIndex: async (params) => describeIndex(await createVectorIndex(params)),
@@ -2052,7 +2040,10 @@ const ASSERTIONS: Record<
   }
 }
 
-export function createStepBindings(resources: ResourceManager): StepBindings {
+/** `endTest` is typed here too: published `@qvac/test-suite` up to 0.15.0 lacks it and never calls it. */
+export function createStepBindings(
+  resources: ResourceManager
+): StepBindings & { endTest(): Promise<void> } {
   return {
     async useModel(deps) {
       const ids: string[] = []
@@ -2120,7 +2111,16 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
       if (!call) {
         throw new StepIncompleteError(`SDK method "${method}" is not wired into these bindings yet`)
       }
-      return call(params as never)
+      const value = await call(params as never)
+      // Step loads bypass `useModel`; tell the resource manager who owns the model.
+      if (method === 'loadModel') {
+        const modelId = (value as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.adoptTestLoad(modelId)
+      } else if (method === 'unloadModel') {
+        const modelId = (params as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.released(modelId)
+      }
+      return value
     },
 
     async modelSource(dep) {
@@ -2165,6 +2165,10 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
 
     async evictAllExcept(keep) {
       await resources.evictExcept([...keep])
+    },
+
+    async endTest() {
+      await resources.releaseTestScope()
     }
   }
 }

@@ -222,7 +222,7 @@ const TTS_MAX_FRAMES_DESC =
 // Same wording as the transcription and llama.cpp configs — these are the
 // generic ggml backend-loading knobs, not TTS-specific ones.
 const TTS_BACKENDS_DIR_DESC =
-  'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
+  'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
 const TTS_OPENCL_CACHE_DIR_DESC =
   "Persistent directory for ggml-opencl's compiled-program cache (Android only)."
 const TTS_BACKEND_DESC =

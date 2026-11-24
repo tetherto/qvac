@@ -269,7 +269,6 @@ def test_session_errors_reconstruct_with_typed_fields():
         ModelLeasedError,
         ModelReconfiguredError,
         OwnerOnlyError,
-        RagWorkspaceBusyError,
         SessionIdConflictError,
         SessionNotOpenError,
     )
@@ -305,9 +304,3 @@ def test_session_errors_reconstruct_with_typed_fields():
     )
     assert isinstance(reconfigured, ModelReconfiguredError)
     assert reconfigured.model_id == "m-2"
-
-    busy = reconstruct_error(
-        _envelope(name="RAG_WORKSPACE_BUSY", typedFields={"workspace": "default"})
-    )
-    assert isinstance(busy, RagWorkspaceBusyError)
-    assert busy.workspace == "default"

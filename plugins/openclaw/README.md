@@ -9,7 +9,7 @@ Requires `@qvac/cli` 0.20.0 or newer.
 
 ```bash
 npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
-openclaw plugins install @qvac/openclaw-plugin --force --accept-capabilities
+openclaw plugins install npm:@qvac/openclaw-plugin --force --accept-capabilities
 openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
 openclaw onboard --auth-choice provider-plugin:qvac
@@ -19,6 +19,9 @@ openclaw onboard --auth-choice provider-plugin:qvac
 > trust and capability consent, and plugin-contributed auth choices moved behind
 > a `provider-plugin:` prefix. On **openclaw < 2026.8.1** drop the two consent
 > flags and use the bare `--auth-choice qvac`.
+>
+> **OpenClaw 2026.11.5 resolves a bare package name on ClawHub only.** The
+> plugin is published to npm, so keep the `npm:` prefix on `plugins install`.
 
 `@qvac/sdk` must be available next to the `qvac` command so serve can resolve
 model constants from the catalog. Installing and enabling the plugin alone does

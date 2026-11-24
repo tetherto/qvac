@@ -1531,8 +1531,8 @@ namespace LlmLlamacpp {
      */
     spec_draft_model?: string;
     /**
-     * Longest draft per step (default 3, maximum 64), as
-     * `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
+     * Longest draft per step (default 3, or 5 for `draft-dflash`; maximum 64),
+     * as `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
      * `spec-draft-n-max`.
      */
     spec_draft_n_max?: NumericLike;

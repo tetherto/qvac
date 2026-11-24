@@ -106,6 +106,7 @@ describe('serve: Responses KV cache', () => {
           : res.json()
         assert.deepEqual(body.usage, {
           input_tokens: 144,
+          input_tokens_details: { cached_tokens: 0 },
           qvac_cache_tokens: 128,
           output_tokens: 2,
           total_tokens: 146
@@ -135,7 +136,12 @@ describe('serve: Responses KV cache', () => {
             )?.data as { response: Record<string, unknown> }
           ).response
         : res.json()
-      assert.deepEqual(body.usage, { input_tokens: 0, output_tokens: 1, total_tokens: 1 })
+      assert.deepEqual(body.usage, {
+        input_tokens: 0,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens: 1,
+        total_tokens: 1
+      })
     })
 
     it(

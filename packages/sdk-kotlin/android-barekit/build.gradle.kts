@@ -127,7 +127,7 @@ val workspaceInference = runtimeRoot.dir("../inference")
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
     description = "Build packages/sdk with the shared worker build"
     workingDir(runtimeRoot)
-    commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
+    commandLine(rootProject.extra["python"] as String, "../sdk-python/scripts/build_worker.py", "--force")
     inputs.dir(workspaceSdk.dir("src"))
     inputs.dir(workspaceInference.dir("src"))
     inputs.files(

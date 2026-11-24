@@ -11,7 +11,7 @@ description: |
 
   This reads config, it does not define the model set -- project.json does.
 
-  NOTE: this reads the CHECKED-OUT tree. Under a pull_request_target lane that
+  NOTE: this reads the CHECKED-OUT tree. Under a privileged PR lane that
   is PR-head code, the same exposure the repo-local composites already have
   (see .github/actions/cache-models/action.yml). integration-test-nx.yml reads
   options.ci from a trusted base ref instead; the per-addon lanes being retired
