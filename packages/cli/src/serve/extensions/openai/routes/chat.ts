@@ -124,14 +124,17 @@ function formatStats(stats: CompletionStats | undefined): string {
   return parts.length > 0 ? ` ${parts.join(' ')}` : ''
 }
 
-function promptUsage(stats: CompletionStats | undefined): {
+interface PromptUsage {
   promptTokens?: number
   cachedTokens?: number
-} {
-  if (stats?.promptTokens === undefined) return {}
+}
+
+// Added per round: the overlap guard needs each round's own concurrency.
+function addPromptUsage(sum: PromptUsage, round: CompletionStats | undefined): PromptUsage {
+  if (round?.promptTokens === undefined) return sum
   return {
-    promptTokens: inputTokensFromStats(stats),
-    cachedTokens: cachedTokensFromStats(stats)
+    promptTokens: (sum.promptTokens ?? 0) + inputTokensFromStats(round),
+    cachedTokens: (sum.cachedTokens ?? 0) + cachedTokensFromStats(round)
   }
 }
 
@@ -267,6 +270,7 @@ async function runBlocking(
     let turnHistory = history
     let drained
     let total: DrainedOpenAICompletion | undefined
+    let promptUsage: PromptUsage = {}
     for (let round = 0; ; round++) {
       const result = completionFn({
         modelId: p.sdkModelId,
@@ -286,6 +290,7 @@ async function runBlocking(
       req.bindCancel(result.requestId)
       drained = await drainCompletion(result)
       total = accumulateUsage(total, drained)
+      promptUsage = addPromptUsage(promptUsage, drained.stats)
 
       if (round >= MAX_TOOL_SEARCH_ROUNDS) break
       const extended = foldToolSearch(
@@ -315,7 +320,7 @@ async function runBlocking(
         ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
-        ...promptUsage(stats),
+        ...promptUsage,
         ...cacheOccupancy(p, drained),
         finishReason
       })
@@ -359,6 +364,7 @@ async function runStreaming(
     let turnHistory = history
     let drained
     let total: DrainedOpenAICompletion | undefined
+    let promptUsage: PromptUsage = {}
     for (let round = 0; ; round++) {
       const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
 
@@ -381,6 +387,7 @@ async function runStreaming(
         (token) => emit({ reasoning_content: token })
       )
       total = accumulateUsage(total, drained)
+      promptUsage = addPromptUsage(promptUsage, drained.stats)
 
       const extended =
         round >= MAX_TOOL_SEARCH_ROUNDS
@@ -418,7 +425,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...promptUsage(stats),
+        ...promptUsage,
         ...cacheOccupancy(p, drained)
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))
