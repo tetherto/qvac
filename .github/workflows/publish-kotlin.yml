@@ -112,11 +112,17 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;29.0.14206865'
 
+      # Gradle generates the client from the contract this commit's SDK exports.
+      - name: Prepare the SDK
+        run: node ../sdk/ci/clients.mjs prepare-sdk
+
       - name: Verify release gates
         run: >-
           ./gradlew --no-daemon
           checkVersionAlignment
-          checkContract
+          testContractGenerator
+          checkWireLiterals
+          testReleaseGate
           :jvm-barekit:test
           jvmTest
           :android-example:testDebugUnitTest

@@ -279,7 +279,8 @@ const platformOf = (label) => {
       : 'linux'
 }
 
-// main's sdk-python-venv: the runner's own Python, 3.10 or later, in a venv the python consumer's config points at.
+// main's sdk-python-venv: the runner's own Python, 3.10 or later, in a venv the python consumer's config points at, with
+// the client generated from the SDK prepare built.
 function pythonVenv(env) {
   const py = spawnSync('python3', ['--version']).status === 0 ? 'python3' : 'python'
   run(py, ['-c', 'import sys; assert sys.version_info[:2] >= (3, 10), sys.version'], { env })
@@ -287,7 +288,8 @@ function pythonVenv(env) {
   run(py, ['-m', 'venv', venv], { env })
   const bin = join(venv, existsSync(join(venv, 'bin/python')) ? 'bin/python' : 'Scripts/python')
   run(bin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { env })
-  run(bin, ['-m', 'pip', 'install', '-e', `${join(ROOT, 'packages/sdk-python')}[dev]`], { env })
+  run(bin, ['-m', 'pip', 'install', '-e', `${join(ROOT, 'packages/sdk-python')}[gen,dev]`], { env })
+  run(bin, [join(ROOT, 'packages/sdk-python/scripts/generate.py')], { env })
 }
 
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.

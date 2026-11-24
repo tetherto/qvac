@@ -241,9 +241,9 @@ worker; hand-write per language only what is irreducibly client-side, and never
 - **Generated from the one contract.** The pydantic models + typed method stubs,
   the model-type resolution maps (`_generated/model_type_maps.py`), the
   error-code registries (`_generated/error_codes.py`), and the pinned SDK
-  version (`_generated/sdk_version.py`) are all generated from
-  `../sdk/contract/**`. `generate.py --check` (and the SDK's `contract:check`)
-  fail CI if either side drifts.
+  version (`_generated/sdk_version.py`) are generated from the SDK's contract
+  every time the package is built or tested, so they cannot drift from it.
+  `_generated/` is gitignored; the wheel and source package carry it.
 - **Behaviour lives in the worker.** `translate` source-language detection and
   the completion tool-loop (`completionOrchestrate`) run in the worker, so
   Python and JS share one implementation instead of two that diverge (they did:
@@ -261,23 +261,28 @@ than trusted to match.
 
 ## Development
 
+`scripts/generate.py` exports the SDK contract and writes the client into
+`src/tetherto/qvac_sdk/_generated/`, so it needs `packages/sdk` installed and
+`@qvac/inference` built. Run it after cloning and after any SDK change:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[gen,dev]"
-.venv/bin/python3 scripts/generate.py          # regenerate from ../sdk/contract
+.venv/bin/python3 scripts/generate.py           # export the contract, write _generated/
 .venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
 ```
 
-Format, lint, typecheck, and the generation check (all run in CI):
+Format, lint and typecheck (all run in CI):
 
 ```bash
-.venv/bin/python3 scripts/generate.py --check
 .venv/bin/python3 -m black --check src/tetherto/qvac_sdk scripts/ tests/
 .venv/bin/python3 -m ruff check src/tetherto/qvac_sdk scripts/ tests/
 .venv/bin/python3 -m mypy -p tetherto.qvac_sdk && .venv/bin/python3 -m mypy scripts tests
 ```
 
+black and ruff skip the gitignored `_generated/`; mypy follows the package's
+imports into it. Building the wheel or source package fails without it, and
+also when it was generated from a contract other than the SDK's current one.
+
 Real-model tests spawn a worker (`packages/sdk` built via `npm run build`, or
-`QVAC_POC_SDK_DIR`) and otherwise skip. `generate.py` runs `black` + `ruff --fix
---select I` (with the package config) on its own output, so a fresh
-regeneration already passes the checks above.
+`QVAC_POC_SDK_DIR`) and otherwise skip.

@@ -5,10 +5,9 @@ import { REGISTRY_ERROR_CODES } from '@qvac/inference/surface'
 /**
  * JSON export of the SDK error-code registries (name → numeric code) for the
  * server, client, and registry error families. The Python client's typed
- * error classes and its RPC-boundary reconstructor read these instead of
- * hand-copying the numbers, so a code added or renamed on the SDK side surfaces
- * as a `contract:check` / `generate.py --check` failure rather than a Python
- * client that silently can't reconstruct a server error.
+ * error classes and its RPC-boundary reconstructor are generated from these, so
+ * a code added or renamed on the SDK side reaches the client with its next
+ * build.
  *
  * A separate artifact from schema.json, like models.json / model-type-maps.json.
  */
