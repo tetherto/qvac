@@ -4,6 +4,7 @@ import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
+import { namedKvCacheKey } from '@/serve/lib/named-kv-cache'
 import {
   chatMessage,
   responseFormat,
@@ -37,6 +38,11 @@ export const chatCompletionsBody = z
     temperature: z.number().optional(),
     top_p: z.number().optional(),
     max_tokens: z.number().int().optional(),
+    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+    prompt_cache_key: z
+      .unknown()
+      .optional()
+      .describe('Names a KV cache session, per conversation; a string of at most 512 UTF-8 bytes.'),
     stream_options: z.object({ include_usage: z.boolean().optional() }).passthrough().optional()
   })
   .passthrough()
@@ -75,13 +81,11 @@ type DecodedContentPart = { type: 'text'; text: string } | { type: 'media'; imag
 interface TextHistoryItem extends ToolTurnFields {
   role: string
   content: string
-  attachments?: ImageAttachment[]
 }
 
 interface PartsHistoryItem extends ToolTurnFields {
   role: 'user'
   content: DecodedContentPart[]
-  attachments?: never
 }
 
 type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
@@ -91,7 +95,6 @@ type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
 interface SdkHistoryItem extends ToolTurnFields {
   role: string
   content: HistoryContent
-  attachments?: Array<{ path: string }>
 }
 
 // Past tool calls and results go to the SDK as structured fields, so the model's
@@ -134,21 +137,22 @@ function decodeMessage(msg: OpenAIMessage): ChatHistoryItem {
 // image" turn never silently degrades to a text-only answer.
 //
 // A user turn with images stays as ordered parts, so the model sees each image where the client put
-// it. Attachments would place all images before the text. The SDK accepts parts on user turns
-// only; every other turn, and a user turn without images, becomes one text string.
+// it; a turn without images becomes one text string. The model reads images on user turns only.
 function decodeMultimodalContent(role: string, parts: MessageContentPart[]): ChatHistoryItem {
+  if (role !== 'user' && parts.some((part) => part.type === 'image_url')) {
+    throw new UnsupportedImageContentError(
+      `image_url is only supported on user messages, not on a "${role}" message.`
+    )
+  }
   const decoded = parts.map((part): DecodedContentPart =>
     part.type === 'text'
       ? { type: 'text', text: part.text }
       : { type: 'media', image: decodeImageUrl(imageUrlOf(part)) }
   )
-  if (!decoded.some((part) => part.type === 'media')) return { role, content: joinText(decoded) }
-  if (role === 'user') return { role, content: decoded }
-  return { role, content: joinText(decoded), attachments: decoded.flatMap(imageOf) }
-}
-
-function imageOf(part: DecodedContentPart): ImageAttachment[] {
-  return part.type === 'media' ? [part.image] : []
+  if (role === 'user' && decoded.some((part) => part.type === 'media')) {
+    return { role, content: decoded }
+  }
+  return { role, content: joinText(decoded) }
 }
 
 function imageUrlOf(part: Extract<MessageContentPart, { type: 'image_url' }>): string {
@@ -199,7 +203,7 @@ function decodeImageUrl(url: string): ImageAttachment {
   return { ext, bytes }
 }
 
-// Materialize each image (a media part or an attachment) to a flat temp file (mirrors
+// Materialize each media part's image to a flat temp file (mirrors
 // routes/audio.ts's writeTempAudio) and return the SDK history plus the temp paths the caller must
 // unlink in a `finally`. Atomic: if a write fails partway, the files already written this call are
 // removed.
@@ -215,17 +219,11 @@ export async function writeChatImages(
   }
   const sdkHistory: SdkHistoryItem[] = []
   try {
-    for (const { content, attachments: images, ...item } of history) {
-      const sdkItem: SdkHistoryItem = {
+    for (const { content, ...item } of history) {
+      sdkHistory.push({
         ...item,
         content: typeof content === 'string' ? content : await writeMediaParts(content, writeImage)
-      }
-      if (images !== undefined && images.length > 0) {
-        const attachments: Array<{ path: string }> = []
-        for (const image of images) attachments.push({ path: await writeImage(image) })
-        sdkItem.attachments = attachments
-      }
-      sdkHistory.push(sdkItem)
+      })
     }
     return { history: sdkHistory, tmpPaths }
   } catch (err) {
@@ -250,6 +248,8 @@ async function writeMediaParts(
 export type ChatCompletionsBody = z.infer<typeof chatCompletionsBody>
 
 export interface SdkChatArgs {
+  /** The named cache session the request selected; undefined means auto-cache. */
+  kvCache: string | undefined
   history: ChatHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
@@ -257,10 +257,22 @@ export interface SdkChatArgs {
   stream: boolean
 }
 
-export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
+// OpenAI suggests one `prompt_cache_key` per user, and a cache holds one
+// conversation: conversations sharing it would evict each other every turn.
+// The messages up to the first user turn stay fixed while a conversation grows.
+function conversationOpening(messages: readonly { role: string }[]): string {
+  const firstUser = messages.findIndex((message) => message.role === 'user')
+  return JSON.stringify(firstUser === -1 ? messages : messages.slice(0, firstUser + 1))
+}
+
+export function toSdkChatArgs(
+  body: ChatCompletionsBody,
+  rawHeaders: readonly string[] = []
+): SdkChatArgs {
   const responseFmt = extractResponseFormat(body as Record<string, unknown>)
   const tools = openaiToolsToSdk(body.tools as Parameters<typeof openaiToolsToSdk>[0])
   return {
+    kvCache: namedKvCacheKey(rawHeaders, body, conversationOpening(body.messages)),
     history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
     tools,
     generationParams: withParallelToolCalls(

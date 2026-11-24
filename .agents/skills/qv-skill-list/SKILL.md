@@ -43,6 +43,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-devops-why-my-pr-not`](../qv-devops-why-my-pr-not/SKILL.md) | Diagnose missing CI checks or merge blockers (labels, CODEOWNERS, approvals). | "Why aren't checks running?" / "Why can't I merge?" **Manual:** `/qv-devops-why-my-pr-not` |
 | [`qv-devops-daily-update`](../qv-devops-daily-update/SKILL.md) | Slack standup (Done / Planned / Blockers) from PRs, reviews, CI. | DevOps EOD or standup. **Manual:** `/qv-devops-daily-update` |
 | [`qv-mobile-test-dispatch`](../qv-mobile-test-dispatch/SKILL.md) | Start an addon mobile (Device Farm) test and pick the right prebuild source; where the Android/iOS and C++ logs are. | "Run mobile tests for X" / "test my native change on a device" / reading a mobile failure. **Manual:** `/qv-mobile-test-dispatch` |
+| [`qv-ci-contract`](../qv-ci-contract/SKILL.md) | Change CI for a package on the CI contract (`ci:addons` or `ci:sdk` tag), add a package to it, or write an action the contract's groups call. | A tagged package's build/test/publish CI, the contract workflows, a native provider such as fabric, or adding a package to the contract. |
 
 ---
 
@@ -56,7 +57,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
 | [`qv-release-train`](../qv-release-train/SKILL.md) | Release a train's packages (`.github/release-trains.json`) from one branch and one publish run. | Packages of a train moving together. **Auto** |
 | [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk-e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
-| [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen SDK `models.ts` from live registry and open a `[mod]` PR; optional provider/python cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
+| [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen the inference `models.ts` from live registry and open a `[mod]` PR; optional provider cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
 | [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Plan / draft-cascade / promote the SDK → CLI → AI SDK provider → OpenCode + OpenClaw release chain. | Agent-stack release prep; `/qv-agent-stack-sync --plan`. **Auto** |
 
 ---
@@ -149,6 +150,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | DevOps team PR board | `qv-devops-pr-status` |
 | Why CI/merge is blocked | `qv-devops-why-my-pr-not` |
 | Run mobile tests on a device | `qv-mobile-test-dispatch` |
+| Change or migrate CI for a package on the CI contract | `qv-ci-contract` |
 | Write SDK PR body | `qv-sdk-pr-create` |
 | Sync SDK models.ts from registry | `qv-sdk-update-models` |
 | Write addon PR body | `qv-addon-pr-create` |

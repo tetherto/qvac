@@ -8,6 +8,7 @@ self-hosted-runner:
   labels:
     - qvac-ci
     - qvac-macos26-arm64-gpu
+    - qvac-macos26-arm64-gpu-gui
     - qvac-ubuntu2204-x64
     - qvac-ubuntu2204-x64-gpu
     - qvac-ubuntu2404-x64
@@ -20,3 +21,9 @@ self-hosted-runner:
     - ai-run-linux-gpu
     - ai-run-windows11-gpu
     - generator-windows11
+
+# actionlint does not know the job and workflow cache-mode key yet (1.7.12); GitHub enforces it.
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'unexpected key "cache-mode" for "(job|workflow)" section'

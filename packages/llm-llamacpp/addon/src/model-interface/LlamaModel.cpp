@@ -56,6 +56,21 @@ using namespace qvac_lib_inference_addon_llama::logging;
 
 namespace {
 
+void requireDraftModelMatch(
+    const common_params& params, const std::string& modelPath) {
+  const std::string mismatch =
+      common_speculative_draft_mismatch(params, modelPath);
+  if (mismatch.empty()) {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(qvac_lib_inference_addon_llama::errors::UnableToLoadModel),
+      "[Speculative] the draft model '" +
+          params.speculative.draft.mparams.path +
+          "' does not match the model: " + mismatch);
+}
+
 // llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
 // the model decodes speculatively, and its acceptance log lines.
 void appendSpeculativeStats(
@@ -323,6 +338,7 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  requireDraftModelMatch(params, modelPath);
 
   snap.demoteToRead();
   common_init_result_ptr llamaInit = common_init_from_params(params);
@@ -390,7 +406,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  // The slot limit, not n_ctx_seq, which is the whole pool when unified.
+  const uint32_t nCtxSeq =
+      batching::perSeqCeiling(llama_n_ctx(ctx), llama_n_seq_max(ctx));
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -1321,14 +1339,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
         "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
-        resolved.tools.empty()
-            ? state_->llmContext_->evalMessage(
-                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-            : state_->llmContext_->evalMessageWithTools(
-                  resolved.chatMsgs,
-                  resolved.tools,
-                  resolved.isCacheLoaded,
-                  prompt.prefill);
+        resolved.tools.empty() ? state_->llmContext_->evalMessage(
+                                     resolved.chatMsgs,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested)
+                               : state_->llmContext_->evalMessageWithTools(
+                                     resolved.chatMsgs,
+                                     resolved.tools,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested);
     // Eval owns the media from here: `tokenizeChat` has drained it, or has
     // thrown past this line and left the guard to.
     mediaGuard.dismiss();

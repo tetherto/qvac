@@ -1,0 +1,31 @@
+name: Setup Windows host
+description: The Visual Studio CMake generator, plus long paths and the arm64 SDK workaround on hosted images. No-op off Windows.
+
+inputs:
+  arch:
+    description: x64, arm64 or x86
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Self-hosted images are provisioned already, so they only get the generator.
+    - if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+      shell: powershell
+      env:
+        INPUT_ARCH: ${{ inputs.arch }}
+      run: |
+        git config --system core.longpaths true
+        if ($env:INPUT_ARCH -eq 'arm64') {
+          foreach ($d in 'Include', 'bin', 'Lib') {
+            Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\$d\10.0.26100.0" -NewName "old-10.0.26100.0"
+          }
+        }
+    - if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        INPUT_ARCH: ${{ inputs.arch }}
+      run: |
+        echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+        $platform = @{ x64 = 'x64'; arm64 = 'ARM64'; x86 = 'Win32' }[$env:INPUT_ARCH]
+        if ($platform) { echo "CMAKE_GENERATOR_PLATFORM=$platform" >> $env:GITHUB_ENV }

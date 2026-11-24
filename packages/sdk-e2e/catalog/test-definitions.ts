@@ -13,7 +13,6 @@ import { calcTokensTests } from './calc-tokens-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
-import { ragTests } from './rag-tests.js'
 import { vectorIndexTests } from './vector-index-tests.js'
 import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
@@ -42,6 +41,7 @@ import { bciTests } from './bci-tests.js'
 import { visionTests } from './vision-tests.js'
 import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
+import { pathTraversalTests } from './path-traversal-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
 import { worldTests } from './world-tests.js'
 import { audioGenTests } from './audio-gen-tests.js'
@@ -595,10 +595,7 @@ const catalog: TestDefinition[] = [
   ...embeddingTests,
   ...embeddingGemma2Tests,
 
-  // RAG tests
-  ...ragTests,
-
-  // Vector index tests (embed + TurboVec index, no RAG workspace)
+  // Vector index tests (embed + TurboVec index)
   ...vectorIndexTests,
 
   // Translation: IndicTrans2 (EN↔HI)
@@ -667,6 +664,9 @@ const catalog: TestDefinition[] = [
 
   // Download resilience: survive suspend/resume + network drop (QVAC-21225)
   ...downloadResilienceTests,
+
+  // Sources and names that would resolve outside the cache are refused
+  ...pathTraversalTests,
 
   // Diffusion tests
   ...diffusionTests,

@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "./gradlew --no-daemon checkVersionAlignment checkContract compileKotlinJvm",
+    "typecheck": "./gradlew --no-daemon checkVersionAlignment checkWireLiterals compileKotlinJvm",
     "build": "./gradlew --no-daemon :android-example:assembleDebug :android-example:compileDebugAndroidTestKotlin",
     "test:unit": "./gradlew --no-daemon jvmTest :android-example:testDebugUnitTest"
   },
   "dependencies": {
     "@qvac/sdk": "0.24.0"
+  },
+  "nx": {
+    "includedScripts": []
   }
 }

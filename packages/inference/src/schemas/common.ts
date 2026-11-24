@@ -66,7 +66,6 @@ import {
   textToSpeechStreamResponseSchema
 } from '@/schemas/text-to-speech'
 import { errorResponseSchema } from '@/schemas/error'
-import { ragRequestSchema, ragResponseSchema, ragProgressUpdateSchema } from '@/schemas/rag'
 import { vectorIndexRequestSchema, vectorIndexResponseSchema } from '@/schemas/vector-index'
 import {
   getModelInfoRequestSchema,
@@ -125,6 +124,10 @@ import {
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
+import {
+  estimateDisparityRequestSchema,
+  estimateDisparityResponseSchema
+} from '@/schemas/stereo-depth'
 import { calcTokensRequestSchema, calcTokensResponseSchema } from '@/schemas/calc-tokens'
 import {
   audioEditStreamRequestSchema,
@@ -163,7 +166,6 @@ export const requestSchema = z.union([
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
   cancelRequestSchema,
-  ragRequestSchema,
   vectorIndexRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
@@ -186,6 +188,7 @@ export const requestSchema = z.union([
   resumeRequestSchema,
   stateRequestSchema,
   classifyRequestSchema,
+  estimateDisparityRequestSchema,
   decideRequestSchema,
   rerankRequestSchema
 ])
@@ -220,8 +223,6 @@ export const responseSchema = z.discriminatedUnion('type', [
   textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   errorResponseSchema,
-  ragResponseSchema,
-  ragProgressUpdateSchema,
   vectorIndexResponseSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
@@ -245,6 +246,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   resumeResponseSchema,
   stateResponseSchema,
   classifyResponseSchema,
+  estimateDisparityResponseSchema,
   decideResponseSchema,
   rerankResponseSchema
 ])

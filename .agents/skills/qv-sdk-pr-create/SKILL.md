@@ -30,13 +30,13 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` / `BRANCH` are placehold
 
 ## Release PR branch naming (org-branch path)
 
-`publish-sdk.yml` (and sibling publish workflows) run **Release Merge Guard** on
+`publish-npm.yml` runs **Release Merge Guard** on
 `push` to any `release-*` ref. The guard validates `github.ref_name` — the branch
 that was **pushed** — not the PR base. It requires
 `release-<pkg>-x.y.z` (three-part semver).
 
 A **release train** base is `release-train-<train>-<x.y.z>` instead (see
-`qv-release-train`); `pr-release-guard.yml` checks it. Rules 2 and 3 below apply
+`qv-release-train`); `sdk-checks.yml`'s release-guard job checks it. Rules 2 and 3 below apply
 unchanged; for rule 1, read `release-train-<train>-<x.y.z>` and prefer a head of
 `chore/<train>-train-<x.y.z>-changelog`.
 
@@ -195,7 +195,7 @@ gh pr view --repo tetherto/qvac BRANCH --web
 
 **Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) modifies the `version` of `packages/sdk/package.json` or its `@qvac/inference` range, or sdk's `dependencies` / `optionalDependencies` / `peerDependencies`.
 
-When triggered, prompt the user to run `qv-sdk-inference-version` so the versions and the generated Python client are right in the same commit/PR: `@qvac/sdk`'s version and its `@qvac/inference` range sharing a major.minor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`) at the SDK's version. A range on a different major.minor fails the SDK's `lint` on every PR.
+When triggered, prompt the user to run `qv-sdk-inference-version` so the versions are right in the same commit/PR: `@qvac/sdk`'s version and its `@qvac/inference` range sharing a major.minor, and `packages/sdk-kotlin/package.json` pinned to the SDK's version. `tetherto-qvac-sdk` takes the SDK's version by itself. A range on a different major.minor fails the SDK's `lint` on every PR.
 
 A change to `packages/inference/package.json` alone is not a trigger — the engine has its own version and its own release.
 
@@ -204,9 +204,9 @@ A change to `packages/inference/package.json` alone is not a trigger — the eng
 1. Detect the trigger condition by inspecting the diff:
    - `git diff <base>...<head-remote>/<branch> -- packages/sdk/package.json` (or vs local `HEAD`) shows changes
    - Changes touch sdk's `version` line, its `@qvac/inference` range, OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
-2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-inference-version` (version + sdk-python)?" [Yes / No (skip)]
+2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-inference-version` (version + sdk-kotlin pin)?" [Yes / No (skip)]
 3. If yes, read `.agents/skills/qv-sdk-inference-version/SKILL.md` and follow it inline.
-4. Verify: `npm run enforce-inference-versions` in `packages/sdk` and `packages/sdk-python` `generate.py --check` must both pass.
+4. Verify: `npm run enforce-inference-versions` in `packages/sdk` and `./gradlew checkVersionAlignment` in `packages/sdk-kotlin` must both pass.
 5. Stage and commit the version changes onto the same branch BEFORE proceeding to Output step.
 
 ### Opt-out
@@ -270,7 +270,7 @@ Before outputting the PR description, verify:
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
-- [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
+- [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the SDK and sdk-kotlin version checks pass
 - [ ] If base is `release-<pkg>-<x.y.z>` or `release-train-<train>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`

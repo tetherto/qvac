@@ -1,0 +1,50 @@
+name: Check PR trust
+description: Decide whether a PR build may run its code. Load it from the default branch, never the PR.
+
+inputs:
+  github-token:
+    description: Token for the permission and status lookups
+    required: true
+  label:
+    description: Extra label a fork PR must carry, on top of SHA-bound fork-ci approval
+    default: ""
+  action:
+    description: The PR event the run stands for, e.g. synchronize or labeled
+    default: ""
+  head-sha:
+    description: The PR head commit the run builds
+    default: ""
+  head-repo:
+    description: The PR's head repository, from the API
+    default: ""
+  draft:
+    description: true for a draft PR
+    default: "false"
+  labels:
+    description: JSON array of the PR's label names
+    default: ""
+
+outputs:
+  allowed:
+    description: true when the run may proceed
+    value: ${{ steps.check.outputs.allowed }}
+  has_write:
+    description: 1 when the triggering actor has write or admin permission, else empty
+    value: ${{ steps.check.outputs.has_write }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        EVENT: ${{ github.event_name }}
+        ACTION: ${{ inputs.action }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        HEAD_REPO: ${{ inputs.head-repo }}
+        BASE_REPO: ${{ github.repository }}
+        IS_DRAFT: ${{ inputs.draft }}
+        LABEL_NAME: ${{ inputs.label }}
+        LABELS_JSON: ${{ inputs.labels }}
+      run: node "$GITHUB_ACTION_PATH/pr-check-trust.mjs"

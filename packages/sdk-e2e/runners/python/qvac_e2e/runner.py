@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import threading
+from pathlib import Path
 from typing import Any
 
 from tetherto.qvac_sdk import Client
@@ -44,6 +46,15 @@ def _write(message: dict[str, Any]) -> None:
 
 def _log(message: str) -> None:
     _write({"type": "log", "message": message})
+
+
+def _worker_config() -> dict[str, Any] | None:
+    """The QVAC_CONFIG_PATH file, which points the worker at CI's model cache."""
+    path = os.environ.get("QVAC_CONFIG_PATH")
+    if not path:
+        return None
+    config: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
+    return config
 
 
 def _stdin_lines() -> asyncio.Queue[str | None]:
@@ -73,9 +84,8 @@ def _stdin_lines() -> asyncio.Queue[str | None]:
 async def main() -> int:
     requests = _stdin_lines()
 
-    # The worker is resolved from QVAC_WORKER_PATH, the entry the JS legs bundle, so
-    # this client drives the same plugins and engine versions as they do.
-    async with Client() as client:
+    # The client starts the worker bundled in the installed wheel, as a pip user's does.
+    async with Client(config=_worker_config()) as client:
         resources = ResourceManager(client, _log)
         interpreter = Interpreter(resources, _log)
 

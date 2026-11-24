@@ -20,14 +20,21 @@ function platformFamily(key) {
   return key.replace(/Weekly$/, '')
 }
 
-// Benchmark shards run only through benchmark-perf-llm-llamacpp.yml's
+// Benchmark shards run only through the benchmarks.yml sweep, whose
 // test_groups override. The MoE finetune test is desktop opt-in only (see
 // test/integration/finetuning-moe.test.js), and the XDNA NPU exists only on
 // Linux x64 (see test/integration/xdna.test.js), so none belongs in this file.
+// The KV-cache extended suite is opt-in and the Qwen3.5 cache stress is Linux x64
+// by default, so on a device every test in them skips.
+const DESKTOP_ONLY = new Set([
+  'runFinetuningMoeTest',
+  'runXdnaTest',
+  'runKvCacheExtendedTest',
+  'runQwen35MultimodalCacheStressTest'
+])
+
 function isOverrideOnly(name) {
-  return (
-    name.startsWith('runBenchmarkPerf') || name === 'runFinetuningMoeTest' || name === 'runXdnaTest'
-  )
+  return name.startsWith('runBenchmarkPerf') || DESKTOP_ONLY.has(name)
 }
 
 function isGroupMap(value) {

@@ -16,7 +16,7 @@ QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
 # rather than a signal; the shell `timeout` below is only a backstop. Keep the
 # two different -- when both were 600s the shell won every time and deadlines
 # arrived as an opaque SIGTERM. The attempt budget multiplies this, and the
-# product has to fit the job timeout in openclaw-upstream-compat.yml.
+# product has to fit the openclaw-compat job timeout in sdk-scheduled-checks.yml.
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-240}"
 OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
 
@@ -226,7 +226,9 @@ fi
 # published plugin, by exact spec, into a throwaway sandbox, with no human at
 # the terminal. This is not a blanket opt-out of plugin trust or capability
 # checks -- end users installing @qvac/openclaw-plugin still get both prompts.
-npx openclaw plugins install "$QVAC_OPENCLAW_PLUGIN_SPEC" --force --accept-capabilities \
+# Since openclaw 2026.11.5 a bare spec resolves on ClawHub only; `npm:` pins
+# the npm registry, where the plugin is published.
+npx openclaw plugins install "npm:${QVAC_OPENCLAW_PLUGIN_SPEC}" --force --accept-capabilities \
   > "$ARTIFACT_DIR/openclaw-plugin-install.stdout" \
   2> "$ARTIFACT_DIR/openclaw-plugin-install.stderr"
 npx openclaw plugins enable qvac --accept-capabilities \

@@ -3817,6 +3817,402 @@
     "notes": "Importance-matrix Q8_0 quantization of qvac/TranslatePsy-AfriSLM-4B. Supports English and 19 Sub-Saharan African languages."
   },
   {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Base/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano Base en-xx (English to 8 African languages)",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano Base variant (42.68M params), English to Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu). Prepend the target tag (##AM, ##HA, ##IG, ##LN, ##SO, ##SW, ##YO, ##ZU) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Base/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano Base en-xx",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano Base en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Base/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano Base en-xx",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano Base en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/BaseMemory/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano BaseMemory en-xx (English to 8 African languages)",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano BaseMemory variant (31.25M params), English to Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu). Prepend the target tag (##AM, ##HA, ##IG, ##LN, ##SO, ##SW, ##YO, ##ZU) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/BaseMemory/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano BaseMemory en-xx",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano BaseMemory en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/BaseMemory/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano BaseMemory en-xx",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano BaseMemory en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Tiny/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano Tiny en-xx (English to 8 African languages)",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano Tiny variant (16.90M params), English to Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu). Prepend the target tag (##AM, ##HA, ##IG, ##LN, ##SO, ##SW, ##YO, ##ZU) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Tiny/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano Tiny en-xx",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano Tiny en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Tiny/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano Tiny en-xx",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "en-xx", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano Tiny en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Base/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano Base xx-en (8 African languages to English)",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano Base variant (42.68M params), Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Base/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano Base xx-en",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano Base xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Base/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano Base xx-en",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano Base xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/BaseMemory/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano BaseMemory xx-en (8 African languages to English)",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano BaseMemory variant (31.25M params), Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/BaseMemory/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano BaseMemory xx-en",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano BaseMemory xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/BaseMemory/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano BaseMemory xx-en",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "base-memory", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano BaseMemory xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Tiny/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-AfriNano Tiny xx-en (8 African languages to English)",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-AfriNano Tiny variant (16.90M params), Amharic (am), Hausa (ha), Igbo (ig), Lingala (ln), Somali (so), Swahili (sw), Yoruba (yo) and Zulu (zu) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Tiny/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-AfriNano Tiny xx-en",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-AfriNano Tiny xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/xx-en/Tiny/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-AfriNano Tiny xx-en",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-afrinano", "xx-en", "tiny", "bergamot", "intgemm", "african"],
+    "notes": "Lexical shortlist for the TranslatePsy-AfriNano Tiny xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-AfriNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Base/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano Base en-xx (English to 9 European languages)",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano Base variant (42.68M params), English to German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv). Prepend the target tag (##DE, ##ES, ##FR, ##IT, ##PT, ##FI, ##CS, ##NL, ##SV) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Base/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano Base en-xx",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano Base en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Base/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano Base en-xx",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano Base en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/BaseMemory/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano BaseMemory en-xx (English to 9 European languages)",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano BaseMemory variant (31.25M params), English to German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv). Prepend the target tag (##DE, ##ES, ##FR, ##IT, ##PT, ##FI, ##CS, ##NL, ##SV) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/BaseMemory/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano BaseMemory en-xx",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano BaseMemory en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/BaseMemory/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano BaseMemory en-xx",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano BaseMemory en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Tiny/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano Tiny en-xx (English to 9 European languages)",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano Tiny variant (16.90M params), English to German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv). Prepend the target tag (##DE, ##ES, ##FR, ##IT, ##PT, ##FI, ##CS, ##NL, ##SV) to the source text.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Tiny/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano Tiny en-xx",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano Tiny en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/en-xx/Tiny/intgemm/lex.50.50.enxx.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano Tiny en-xx",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "en-xx", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano Tiny en-xx pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Base/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano Base xx-en (9 European languages to English)",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano Base variant (42.68M params), German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Base/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano Base xx-en",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano Base xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Base/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano Base xx-en",
+    "quantization": "",
+    "params": "42.68M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano Base xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/BaseMemory/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano BaseMemory xx-en (9 European languages to English)",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano BaseMemory variant (31.25M params), German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/BaseMemory/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano BaseMemory xx-en",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano BaseMemory xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/BaseMemory/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano BaseMemory xx-en",
+    "quantization": "",
+    "params": "31.25M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "base-memory", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano BaseMemory xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Tiny/intgemm/model.intgemm.alphas.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot NMT model TranslatePsy-EuroNano Tiny xx-en (9 European languages to English)",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "INT8 (intgemm) pack of the TranslatePsy-EuroNano Tiny variant (16.90M params), German (de), Spanish (es), French (fr), Italian (it), Portuguese (pt), Finnish (fi), Czech (cs), Dutch (nl) and Swedish (sv) to English. No target tag is needed.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Tiny/intgemm/vocab.spm",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot vocabulary TranslatePsy-EuroNano Tiny xx-en",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "Shared SentencePiece vocabulary (source and target) for the TranslatePsy-EuroNano Tiny xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-EuroNano/resolve/3a5e1e4e2f7001ff5cfd79785bef03cf19281b73/xx-en/Tiny/intgemm/lex.50.50.xxen.s2t.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "Bergamot lexical shortlist TranslatePsy-EuroNano Tiny xx-en",
+    "quantization": "",
+    "params": "16.90M",
+    "licenseId": "Apache-2.0",
+    "tags": ["translation", "nmt", "translatepsy-euronano", "xx-en", "tiny", "bergamot", "intgemm", "european"],
+    "notes": "Lexical shortlist for the TranslatePsy-EuroNano Tiny xx-en pack.",
+    "link": "https://huggingface.co/qvac/TranslatePsy-EuroNano"
+  },
+  {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
@@ -3936,6 +4332,237 @@
     "tags": ["generation", "diffusion"]
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1-base UNet P6 Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sd21", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1-base UNet P6 Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sd21", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/metadata.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1-base UNet P6 Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sd21", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1-base UNet P6 Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sd21", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1-base UNet P6 Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sd21", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_tae_decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS tiny autoencoder decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxs", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_tae_decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS tiny autoencoder decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxs", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_tae_decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS tiny autoencoder decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxs", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_tae_decoder.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS tiny autoencoder decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxs", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_tae_decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS tiny autoencoder decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxs", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS UNet FP16 Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxs", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS UNet FP16 Core ML sidecar: coremldata.bin",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxs", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc/metadata.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS UNet FP16 Core ML sidecar: metadata.json",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxs", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS UNet FP16 Core ML sidecar: model.mil",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxs", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "SDXS UNet FP16 Core ML sidecar: weights/weight.bin",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxs", "unet", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Tiny AutoEncoder for Stable Diffusion (TAESD)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["vae", "taesd"],
+    "notes": "Optional tiny autoencoder for Stable Diffusion.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESD decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESD decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESD decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESD decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-19/taesd_decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESD decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF"
+  },
+  {
     "source": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/5f58340891db3ef66a79758c2dcddad92b1de169/stable-diffusion-xl-base-1.0-Q4_0.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion XL model",
@@ -3954,6 +4581,237 @@
     "quantization": "Q8_0",
     "params": "3B",
     "tags": ["generation", "diffusion"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk1.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 1 of 2: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk1.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 1 of 2: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk1.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 1 of 2: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk1.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 1 of 2: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk2.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 2 of 2: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk2.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 2 of 2: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk2.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 2 of 2: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_mixed/sdxl_unet_mixed_chunk2.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet mixed 4/6-bit (4.5 bits on average) Core ML sidecar, chunk 2 of 2: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "mixed"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_mixed/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk1.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 1 of 2: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk1.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 1 of 2: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk1.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 1 of 2: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk1.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 1 of 2: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk2.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 2 of 2: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk2.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 2 of 2: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk2.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 2 of 2: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/sdxl_unet_p6/sdxl_unet_p6_chunk2.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL UNet 6-bit palette Core ML sidecar, chunk 2 of 2: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail++",
+    "tags": ["generation", "diffusion", "sdxl", "unet", "coreml", "p6"],
+    "notes": "Compiled Core ML sidecar component for 768x768, batch 2. Preserve the sdxl_unet_p6/ folder with both .mlmodelc chunks and pass the folder as coremlUnet.",
+    "link": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/taesdxl_decoder_768.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESDXL decoder Core ML sidecar (768x768): analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxl", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout. Needs the TAESDXL weights as taesd.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/taesdxl_decoder_768.mlmodelc/coremldata.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESDXL decoder Core ML sidecar (768x768): coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxl", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout. Needs the TAESDXL weights as taesd.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/taesdxl_decoder_768.mlmodelc/model.mil",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESDXL decoder Core ML sidecar (768x768): model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxl", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout. Needs the TAESDXL weights as taesd.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/stable-diffusion/2026-11-23/taesdxl_decoder_768.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "TAESDXL decoder Core ML sidecar (768x768): weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["generation", "diffusion", "sdxl", "taesd", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout. Needs the TAESDXL weights as taesd.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
+  },
+  {
+    "source": "https://huggingface.co/madebyollin/taesdxl/resolve/b20258aaef75ef61e659c1e0f14f251cf0ad153e/diffusion_pytorch_model.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Tiny AutoEncoder for Stable Diffusion XL (TAESDXL)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["vae", "taesdxl"],
+    "notes": "Optional tiny autoencoder for SDXL. Pass it as taesd; the TAESDXL Core ML decoder requires it.",
+    "link": "https://huggingface.co/madebyollin/taesdxl"
   },
   {
     "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus.pth",
@@ -8740,6 +9598,39 @@
     "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
   },
   {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "bf16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Unquantized export of qvac/BotPsy-0.8B. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Importance-matrix Q4_K_M quantization of qvac/BotPsy-0.8B. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "q8_0",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Q8_0 quantization of qvac/BotPsy-0.8B, the recommended file. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv",
     "engine": "@qvac/tts-ggml",
     "description": "Cangjie5 traditional Chinese input table (hanzi -> Cangjie codes) used for Chatterbox multilingual Chinese (zh) tokenization",
@@ -10162,7 +11053,7 @@
   {
     "source": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "DFlash2 draft model for Qwen 3.8 27B",
+    "description": "DFlash2 draft model for Qwen3.8 27B",
     "quantization": "q8_0",
     "params": "27B",
     "licenseId": "Apache-2.0",
@@ -10270,6 +11161,94 @@
     "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 1/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00002-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 2/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00003-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 3/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00004-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 4/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00005-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 5/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00006-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 6/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00007-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 7/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00008-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 8/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
@@ -10278,7 +11257,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 1/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00002-of-00009.gguf",
@@ -10289,7 +11271,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 2/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00003-of-00009.gguf",
@@ -10300,7 +11285,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 3/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00004-of-00009.gguf",
@@ -10311,7 +11299,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 4/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00005-of-00009.gguf",
@@ -10322,7 +11313,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 5/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00006-of-00009.gguf",
@@ -10333,7 +11327,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 6/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00007-of-00009.gguf",
@@ -10344,7 +11341,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 7/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00008-of-00009.gguf",
@@ -10355,7 +11355,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 8/9; contains the stock MXFP8 Engram, which requires compatible Fabric tensor support; pair with the F16 mmproj entry for image input.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00009-of-00009.gguf",
@@ -10366,7 +11369,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 9/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",

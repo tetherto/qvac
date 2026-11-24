@@ -95,7 +95,9 @@ Parakeet request body (`config.path` is a single `.gguf` checkpoint; the
 model type is auto-detected from the GGUF metadata). With `streaming: true`
 the server drives the addon's duplex `runStreaming()` session using the
 ms-based controls (`streamingChunkMs`, `streamingEmitPartials`, and the
-Sortformer-only `streamingHistoryMs`) instead of batching the audio:
+Sortformer-only `streamingHistoryMs`) while feeding 320 ms PCM writes. Omit
+`streamingChunkMs` to use the model's native decode window. TDT v3 defaults
+to 30,000 ms and rejects shorter decode windows.
 
 ```json
 {
@@ -114,7 +116,6 @@ Sortformer-only `streamingHistoryMs`) instead of batching the audio:
     },
     "sampleRate": 16000,
     "streaming": true,
-    "streamingChunkMs": 320,
     "streamingEmitPartials": true
   }
 }

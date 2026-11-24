@@ -14,9 +14,7 @@ import {
  * Inference itself stays in each client (a plain string `modelSrc` carries no
  * engine to infer from, so it can't move server-side), but the *data* it reads
  * must not drift between languages — so the maps are exported here, alongside
- * schema.json/models.json, and generated into each client rather than
- * hand-copied. `contract:check` (JS) and `generate.py --check` (Python) then
- * fail the build if a map is edited on one side only.
+ * schema.json/models.json, and generated into each client at build time.
  *
  * A separate artifact from schema.json for the same reason models.json is: a
  * language-neutral data catalog, not part of the RPC wire contract.

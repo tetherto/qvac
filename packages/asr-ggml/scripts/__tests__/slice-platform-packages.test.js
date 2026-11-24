@@ -45,15 +45,28 @@ const EXPECTED_SLICE_SUFFIXES = [
   'ios'
 ]
 
-function makeFixture(hosts) {
+const FABRIC_RANGE = '^0.31.0'
+
+const FABRIC_CONSUMER_MANIFEST = {
+  ...META_MANIFEST,
+  dependencies: { '@qvac/fabric': FABRIC_RANGE },
+  optionalDependencies: {
+    '@qvac/fake-ggml-linux-x64': '1.2.2',
+    '@qvac/fabric-linux-x64': FABRIC_RANGE,
+    '@qvac/fabric-linux-arm64': FABRIC_RANGE
+  },
+  peerDependencies: {
+    '@qvac/fabric-android-arm64': FABRIC_RANGE,
+    '@qvac/fabric-ios': FABRIC_RANGE
+  }
+}
+
+function makeFixture(hosts, metaManifest = META_MANIFEST) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'slice-test-'))
   const workdir = path.join(root, 'fake-ggml')
   const prebuildsDir = path.join(workdir, 'prebuilds')
   fs.mkdirSync(prebuildsDir, { recursive: true })
-  fs.writeFileSync(
-    path.join(workdir, 'package.json'),
-    JSON.stringify(META_MANIFEST, null, 2) + '\n'
-  )
+  fs.writeFileSync(path.join(workdir, 'package.json'), JSON.stringify(metaManifest, null, 2) + '\n')
   fs.writeFileSync(path.join(workdir, 'LICENSE'), 'license text\n')
   fs.writeFileSync(path.join(workdir, 'NOTICE'), 'notice text\n')
   for (const host of hosts) {
@@ -189,6 +202,34 @@ test('documents direct dependency usage for cross-built mobile slices', async (t
     'utf8'
   )
   assert.match(desktopReadme, /Do not depend on this package directly/)
+})
+
+test('declares the same-host slice of a linked split addon so bare-link rewrites it', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS, FABRIC_CONSUMER_MANIFEST)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+
+  slicePlatformPackages({ workdir, outDir })
+
+  for (const suffix of ['linux-x64', 'linux-arm64', 'android-arm64', 'ios']) {
+    const manifest = readJson(outDir, 'qvac-fake-ggml-' + suffix, 'package.json')
+    const runtime = '@qvac/fabric-' + suffix
+    assert.deepEqual(manifest.peerDependencies, { [runtime]: FABRIC_RANGE }, suffix)
+    assert.deepEqual(manifest.peerDependenciesMeta, { [runtime]: { optional: true } }, suffix)
+    assert.equal(manifest.dependencies, undefined, suffix + ' must not install the runtime itself')
+  }
+})
+
+test('declares no peers on a slice whose meta names no same-host addon', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS, FABRIC_CONSUMER_MANIFEST)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+
+  slicePlatformPackages({ workdir, outDir })
+
+  const unlinked = readJson(outDir, 'qvac-fake-ggml-win32-x64', 'package.json')
+  assert.equal(unlinked.peerDependencies, undefined)
+  assert.equal(unlinked.peerDependenciesMeta, undefined)
 })
 
 test('injects lockstep optionalDependencies for host-filtered slices only', async (t) => {

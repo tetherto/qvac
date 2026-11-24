@@ -16,7 +16,7 @@ Orchestrate the published dependency cascade:
         -> @qvac/openclaw-plugin
 ```
 
-Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases run `qv-sdk-inference-version` for the `@qvac/inference` range and sdk-python.
+Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases run `qv-sdk-inference-version` for the `@qvac/inference` range and the sdk-kotlin pin.
 
 ## Modes
 
@@ -107,7 +107,7 @@ Then for each `needs_release` package in dependency order, follow [references/pr
 6. Do **not** merge. Do **not** trigger publish (Dima / human).
 
 `@qvac/inference` is the first hop: it releases from `release-inference-<version>` through
-`publish-inference.yml`, and the SDK release PR points at the engine version already on npm. SDK
+`publish-npm.yml`, and the SDK release PR points at the engine version already on npm. SDK
 releases chain `qv-sdk-inference-version` + docs Step 8 from `qv-sdk-changelog`.
 
 ### 3. `--promote <slug>`
@@ -137,7 +137,7 @@ Backmerge keeps `main` in sync with the cut.
 
 - `packages/sdk/package.json` — version + `dependencies["@qvac/inference"]` via `qv-sdk-inference-version`, against the engine version already on npm
 - changelog via `qv-sdk-changelog --package=sdk` (engine commits are scanned in), then docs Step 8
-- sdk-python regenerated; `tetherto-qvac-sdk` publishes at the SDK's version
+- `packages/sdk-kotlin` repinned to the SDK's version; `tetherto-qvac-sdk` publishes at the SDK's version
 
 ### CLI
 

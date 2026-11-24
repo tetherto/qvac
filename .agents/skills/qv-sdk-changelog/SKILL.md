@@ -199,19 +199,23 @@ source. Every user-facing add, remove, or rename in that diff must appear in
 exports under an older umbrella PR still get their own `api.md` example.
 
 **`--package=sdk` also audits the clients.** The Python and Kotlin clients are
-built from the same commit as `@qvac/sdk`, so `$LAST` is their floor too:
+built from the same commit as `@qvac/sdk`, so `$LAST` is their floor too. Their
+hand-written code is in git; their generated types are made at build time from
+the SDK's schemas, so the schemas' diff is theirs as well:
 
 ```bash
 git diff "$LAST" HEAD -- packages/sdk-python packages/sdk-kotlin
+git diff "$LAST" HEAD -- packages/sdk/src/schemas packages/inference/src/schemas packages/sdk/scripts/contract
 ```
 
 Changes to a client's public surface (Python wrappers and literals, Kotlin
-client classes and the generated contract types) go in `api.md` and
-`breaking.md` under a `### Python client` / `### Kotlin client` heading, with
-the example in that language. A generated type whose shape changes (an enum
-that becomes a string, a renamed request field) is breaking for that client
-even when the JS API only gained an option. Skip a client whose diff is tests,
-CI or build files only.
+client classes, and the generated types a schema change reshapes) go in
+`api.md` and `breaking.md` under a `### Python client` / `### Kotlin client`
+heading, with the example in that language. A generated type whose shape
+changes (an enum that becomes a string, a renamed request field) is breaking
+for that client even when the JS API only gained an option. Skip a client whose
+own diff is tests, CI or build files only and whose types no schema change
+reshapes.
 
 A client that has not been published before has no floor: its section
 announces the first release — artifact coordinates, supported targets, how to
@@ -333,14 +337,14 @@ See `.agents/skills/qv-notice-generate/SKILL.md` for full details.
 ### Step 7: Set the `@qvac/inference` version (only when `--package=sdk`)
 
 `@qvac/sdk` shares a major.minor with the `@qvac/inference` range it depends on,
-and `tetherto-qvac-sdk` is generated from `@qvac/sdk` at the same version. An sdk
-release sets both and regenerates the Python client (`SDK_VERSION` and the other
-`_generated/` outputs). Skip this step for any other `--package` value — an
+and both clients are generated from `@qvac/sdk` at build time and released at
+its version. An sdk release sets the range and the version, and repins
+`packages/sdk-kotlin`. Skip this step for any other `--package` value — an
 `--package=inference` release does not touch the SDK.
 
 **On a release train** `nx release version` has already written the
-`@qvac/inference` range; only regenerate the Python client and the Kotlin
-contract (Steps 3 and 3b of `qv-sdk-inference-version`).
+`@qvac/inference` range; only repin `packages/sdk-kotlin` (Step 3 of
+`qv-sdk-inference-version`).
 
 Read and follow `.agents/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:
@@ -348,15 +352,12 @@ Short form:
 ```bash
 npm view @qvac/inference@<x.y.z> version
 node .agents/skills/qv-sdk-inference-version/scripts/set-inference-version.mjs --engine-version=<x.y.z>
-
-cd packages/sdk-python
-.venv/bin/python3 scripts/generate.py
-.venv/bin/python3 scripts/generate.py --check
 ```
 
 `<x.y.z>` is the `@qvac/inference` version this release ships against, already
-published. Include sdk-python generated updates in the release commit. The Python
-client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
+published. Include the `packages/sdk-kotlin/package.json` repin in the release
+commit. The Python and Kotlin clients do not get their own changelogs — history
+lives in `packages/sdk/CHANGELOG.md`.
 
 ### Step 8: Cut the documentation line of the version being released
 
@@ -438,8 +439,8 @@ push, and keep this list to things that are cheap to prevent:
   generate/commit/cherry-pick, or you operate on the parent repo.
 - **Push the org remote** (`upstream` when that is `tetherto/qvac`), not the
   contributor fork. `git push` with no remote follows `origin`.
-- **Do not skip SDK Pod Checks.** Workspace red vs published red is a real
-  signal; `[skip-sdk-pod-checks]` is not the changelog fix.
+- **Do not skip the SDK's checks.** Workspace red vs published red is a real
+  signal; no label turns a failing check green, and the changelog is not the fix.
 - **Notes vs `--base-version` `gitHead`, not only `git log`.** After generate,
   audit exports / routes / constants against
   `npm view "$PKG@<base-version>" gitHead`. Do not use `sdk-v*` or npm `latest`.
@@ -468,7 +469,7 @@ Before completing:
 - [ ] When `--package=sdk`: the same diff over `packages/sdk-python` and `packages/sdk-kotlin` is reflected under `### Python client` / `### Kotlin client` in `api.md` / `breaking.md` and in `CHANGELOG_LLM.md`; a client's first release gets a first-release section
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
-- [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
+- [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, `packages/sdk-kotlin` repinned to the sdk version)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions

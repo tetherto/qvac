@@ -11,6 +11,7 @@ endif()
 add_executable(
   addon-test
   test_backend_selection.cpp
+  test_performance_profiles.cpp
   test_sd_ctx_handlers.cpp
   test_sd_model.cpp
   test_model_loading.cpp
@@ -30,6 +31,7 @@ add_executable(
   test_world_session.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/PerformanceProfiles.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp

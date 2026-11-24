@@ -118,7 +118,7 @@ runs:
     #      set, so editing test logic no longer churns the key or forces a re-save)
     #   3. legacy default: every .js under test/integration/
     # Resolved here (not in the workflow) so the manifest key takes effect from a
-    # PR-head checkout without editing the pull_request_target workflow YAML.
+    # PR-head checkout without editing the default branch's workflow YAML.
     - name: Resolve cache-key hash glob
       id: keyglob
       shell: bash
@@ -187,8 +187,7 @@ runs:
     # push, workflow_dispatch, merge_group, schedule). `schedule` runs only from
     # the default branch, so it is as trusted as `push`; without it a cron
     # refresh silently falls through to restore-only, downloading tens of GB and
-    # saving none of it. cpp-tests-llm.yml already lists it on its own cache
-    # step. The combined cache action
+    # saving none of it. The combined cache action
     # registers a post-step that saves models downloaded LATER in the job.
     #
     # Cache writes from fork-PR code are the poisoning risk the repository CI

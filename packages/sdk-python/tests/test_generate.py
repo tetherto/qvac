@@ -1,8 +1,8 @@
 """Tests for scripts/generate.py: the Python client's typed-surface generator.
 
-Mirrors the SDK's own contract-export test rigor (packages/sdk/test/unit/
-contract-export.test.ts): manifest/schema coverage, deterministic
-regeneration, and that the committed output matches a fresh build.
+Mirrors the SDK's own contract-export test rigor (packages/sdk/test/
+contract-export.test.ts): manifest/schema coverage and deterministic
+regeneration. Reads the contract and the client `generate.py` wrote.
 """
 
 from __future__ import annotations
@@ -38,15 +38,18 @@ def fresh_build() -> Iterator[Path]:
         yield output_root
 
 
-def test_committed_output_matches_a_fresh_build(fresh_build: Path) -> None:
-    assert generate.compare_dirs(fresh_build, generate.GENERATED_DIR)
+def tree(root: Path) -> dict[str, str]:
+    return {
+        path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("*.py"))
+    }
 
 
 def test_build_is_deterministic_across_runs(fresh_build: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         second = Path(tmp) / "_generated"
         generate.build(second)
-        assert generate.compare_dirs(fresh_build, second)
+        assert tree(fresh_build) == tree(second)
 
 
 def test_every_manifest_method_resolves_to_a_request_and_response_class(
@@ -173,7 +176,7 @@ def test_progress_capable_methods_get_a_with_progress_stub(
     }
 
     progress_methods = {m["name"] for m in manifest_methods if m.get("progress")}
-    assert progress_methods == {"loadModel", "downloadAsset", "rag", "finetune"}
+    assert progress_methods == {"loadModel", "downloadAsset", "finetune"}
 
     for method in manifest_methods:
         name = method["name"]

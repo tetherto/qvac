@@ -1,11 +1,9 @@
 import test from 'brittle'
 import Ajv2020 from 'ajv/dist/2020'
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import {
   buildContract,
   callShapeByHandlerType,
-  contractDir,
   renderContractFiles,
   registryEngineManifestFile,
   renderRegistryEngineManifest
@@ -78,15 +76,15 @@ test('manifest lists every method with its call shape', (t) => {
   }
 })
 
-test('progress block is present only on the 4 progress-capable methods', (t) => {
+test('progress block is present only on the 3 progress-capable methods', (t) => {
   const { schemaDocument, manifest } = buildContract()
   const defs = schemaDocument.$defs as Record<string, unknown>
 
-  const expected = new Set(['loadModel', 'downloadAsset', 'rag', 'finetune'])
+  const expected = new Set(['loadModel', 'downloadAsset', 'finetune'])
   const actual = new Set(
     manifest.methods.filter((method) => 'progress' in method).map((method) => method.name)
   )
-  t.alike(actual, expected, 'exactly loadModel/downloadAsset/rag/finetune carry a progress block')
+  t.alike(actual, expected, 'exactly loadModel/downloadAsset/finetune carry a progress block')
 
   for (const method of manifest.methods) {
     const progress = (method as { progress?: { condition: string; responseSchema: string } })
@@ -425,6 +423,45 @@ test('world fit length survives the generated load contract', function (t) {
   }
 })
 
+test('diffusion performance options survive the generated load contract', function (t) {
+  const { schemaDocument } = buildContract()
+  const nodes: JsonSchema[] = []
+  collectTitleableNodes(schemaDocument.$defs['loadModel.request'], nodes)
+  const schema = nodes.find(function (node) {
+    return node['title'] === 'LoadModelSrcRequestSdcppGeneration'
+  })
+  t.ok(schema, 'diffusion load schema is exported')
+  if (schema === undefined) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  const modelConfig = {
+    mode: 'video',
+    performance_profile: 'auto',
+    performance_max_width: 512,
+    performance_max_height: 320,
+    performance_max_frames: 97,
+    vae_conv_direct: false,
+    tensor_type_rules: ''
+  }
+  const request = {
+    type: 'loadModel',
+    modelType: 'sdcpp-generation',
+    modelSrc: '/models/ltx.gguf',
+    modelConfig
+  }
+  for (const performance_profile of ['auto', 'off']) {
+    t.ok(validate({ ...request, modelConfig: { ...modelConfig, performance_profile } }))
+  }
+  for (const override of [
+    { performance_profile: 'fast' },
+    { performance_max_width: 0 },
+    { performance_max_height: -1 },
+    { performance_max_frames: 1.5 },
+    { vae_conv_direct: 'false' }
+  ]) {
+    t.absent(validate({ ...request, modelConfig: { ...modelConfig, ...override } }))
+  }
+})
+
 test('export is deterministic across runs', async (t) => {
   const first = await renderContractFiles()
   const second = await renderContractFiles()
@@ -432,15 +469,6 @@ test('export is deterministic across runs', async (t) => {
   t.is(first['schema.json'], second['schema.json'])
   t.is(first['manifest.json'], second['manifest.json'])
   t.is(first['models.json'], second['models.json'])
-})
-
-test('committed artifacts are up to date', async (t) => {
-  const rendered = await renderContractFiles()
-
-  for (const [name, content] of Object.entries(rendered)) {
-    const committed = await readFile(fileURLToPath(new URL(name, contractDir)), 'utf8')
-    t.is(committed, content, `contract/${name} matches a fresh export`)
-  }
 })
 
 test('MOSS plugin ID is exported with its name for generated clients', (t) => {

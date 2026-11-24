@@ -1,14 +1,7 @@
-// Fails when the test app installs speech addons that record different
-// ggml-speech builds in package.json (`qvac["ggml-speech"]`). They ship their
-// ggml backends under the same file names, so an app keeps one copy of each
-// for all of them. A speech addon that records none is reported but cannot fail
-// the check.
-//
-// Usage: node check-speech-ggml-builds.mjs [--modules-dir node_modules]
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 export const SPEECH_ADDONS = [
   '@qvac/asr-ggml',
@@ -78,14 +71,36 @@ function listInstalledPackages(modulesDir) {
   return packages;
 }
 
+export function describeSpeechAddon(manifest, packageRoot) {
+  const addon = {
+    id: `${manifest.name}@${manifest.version}`,
+    ggmlSpeech: manifest[BUILD_FIELD]?.[GGML_SPEECH] ?? null,
+  };
+  if (!manifest.dependencies?.['@qvac/fabric']) return addon;
+  try {
+    const require = createRequire(path.join(packageRoot, 'package.json'));
+    const fabricPath = fs.realpathSync(require.resolve('@qvac/fabric/package'));
+    const fabric = JSON.parse(fs.readFileSync(fabricPath, 'utf8'));
+    return { ...addon, runtime: 'fabric', fabricPath, fabricVersion: fabric.version };
+  } catch {
+    return { ...addon, runtime: 'fabric', fabricPath: null };
+  }
+}
+
 export function findSpeechAddons(modulesDir) {
   return listInstalledPackages(modulesDir)
-    .map(readManifest)
-    .filter((manifest) => SPEECH_ADDONS.includes(manifest?.name))
-    .map((manifest) => ({
-      id: `${manifest.name}@${manifest.version}`,
-      ggmlSpeech: manifest[BUILD_FIELD]?.[GGML_SPEECH] ?? null,
-    }));
+    .map((packageRoot) => ({ packageRoot, manifest: readManifest(packageRoot) }))
+    .filter(({ manifest }) => SPEECH_ADDONS.includes(manifest?.name) || manifest?.dependencies?.['@qvac/fabric'])
+    .map(({ manifest, packageRoot }) => describeSpeechAddon(manifest, packageRoot));
+}
+
+function checkFabricAddons(addons) {
+  const missing = addons.filter((addon) => !addon.fabricPath);
+  const runtimes = new Set(addons.map((addon) => addon.fabricPath).filter(Boolean));
+  return [
+    ...missing.map((addon) => `${addon.id} cannot resolve its shared @qvac/fabric runtime`),
+    ...(runtimes.size > 1 ? ['consumers resolve multiple @qvac/fabric installations; deduplicate the runtime'] : []),
+  ];
 }
 
 function groupByBuild(addons) {
@@ -102,11 +117,16 @@ function formatGroups(groups) {
 
 export function summarizeSpeechAddons(addons) {
   if (addons.length === 0) return `${GGML_SPEECH}: no speech addons installed`;
-  return `${GGML_SPEECH}: ${formatGroups(groupByBuild(addons))}`;
+  const shared = addons.filter((addon) => addon.runtime === 'fabric');
+  const legacy = addons.filter((addon) => addon.runtime !== 'fabric');
+  const summary = `${GGML_SPEECH}: ${formatGroups(groupByBuild(legacy))}`;
+  return shared.length ? `${summary}; shared Fabric: ${shared.length} addons` : summary;
 }
 
 export function checkSpeechAddons(addons) {
-  if (addons.length <= 1) return { errors: [], warnings: [] };
+  const fabricErrors = checkFabricAddons(addons.filter((addon) => addon.runtime === 'fabric'));
+  addons = addons.filter((addon) => addon.runtime !== 'fabric');
+  if (addons.length <= 1) return { errors: fabricErrors, warnings: [] };
   const recorded = groupByBuild(addons.filter((addon) => addon.ggmlSpeech !== null));
   const errors =
     recorded.size > 1
@@ -115,7 +135,7 @@ export function checkSpeechAddons(addons) {
   const warnings = addons
     .filter((addon) => addon.ggmlSpeech === null)
     .map((addon) => `${addon.id} does not record the ${GGML_SPEECH} build it ships, so it cannot be checked`);
-  return { errors, warnings };
+  return { errors: [...fabricErrors, ...errors], warnings };
 }
 
 export function parseArgs(argv) {

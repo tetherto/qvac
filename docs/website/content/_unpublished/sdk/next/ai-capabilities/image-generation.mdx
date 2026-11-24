@@ -13,6 +13,13 @@ For image-to-image, pass `init_image` as PNG or JPEG bytes in a `Uint8Array`. SD
 
 For higher-resolution outputs, you can chain a Real-ESRGAN upscaler. Either attach it as a post-processing step at load time and trigger it per generation via `diffusion({ upscale })`, or load an ESRGAN model standalone with `modelConfig.mode: "upscale"` and call `upscale()` on any PNG/JPEG buffer — generated or not. Both paths return PNG `Uint8Array` buffers and accept a `repeats` option that compounds the scale factor across sequential passes.
 
+## Hardware
+
+Image generation supports CUDA with two exceptions to the [general CUDA rules](/sdk/platform-support#cuda):
+
+- On Windows, it finds the CUDA 13 runtime and cuBLAS DLLs through `PATH`, not `%CUDA_PATH%\bin\x64`.
+- On Linux arm64, its CUDA build targets NVIDIA DGX Spark only. It has no NVIDIA Jetson module.
+
 ## Functions
 
 Use the following sequence of function calls:
@@ -30,7 +37,7 @@ Supported model families and their file layouts:
 - **FLUX.3 Image Klein**: split layout — diffusion model `*.gguf` + Qwen3-VL 4B text encoder `*.gguf` (via `llmModelSrc`) + FLUX.2 VAE `*.safetensors` (via `vaeModelSrc`). Leave `prediction` unset; the engine detects FLUX.3 from the weights. QVAC provides no registry entry or model constant for these weights.
 - **Qwen-Image-2.1 and Qwen-Image-2.1-Turbo** use local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
 - **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
-- **MOSS-Image**: split layout — diffusion model `*.safetensors` + Qwen3.5 LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`) + the encoder's external `tokenizer.json` (via `tokenizerSrc`). QVAC provides no registry entry or model constant for these weights.
+- **MOSS-Image**: split layout — diffusion model `*.safetensors` + Qwen3.5 LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`) + the encoder's external `tokenizer.json` (via `tokenizerSrc`). Available constants: `MOSS_IMAGE_SFT_5B_BF16`, `QWEN3_5_9B_MULTIMODAL_Q4_K_M`, `MOSS_IMAGE_VAE` and `MOSS_IMAGE_SFT_TOKENIZER`.
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
 - **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
@@ -42,6 +49,12 @@ For models available as constants, see [SDK — Models](/sdk#models).
 <Callout type="info">
 **On upscaling:** ESRGAN can be used standalone via `modelConfig.mode: "upscale"` + `upscale()`, or paired with an RGB-output diffusion model via `diffusion({ upscale })`. ESRGAN accepts RGB only. Qwen-Image-2.1 produces RGBA and rejects post-generation upscaling; keep `upscale` omitted or `false`. Available constants: `REALESRGAN_X4PLUS_ANIME_6B`, `REALESRGAN_X4PLUS`.
 </Callout>
+
+## Performance profiles
+
+[`loadModel()`](/sdk/reference/api#loadmodel) applies measured speed settings for some model and GPU combinations by default (`modelConfig.performance_profile: "auto"`). FLUX.2-klein qualifies when you load `FLUX_2_KLEIN_4B_Q8_0` with `QWEN3_4B_Q4_K_M` and `FLUX_2_KLEIN_4B_VAE` on an NVIDIA RTX 5090 or DGX Spark (CUDA). A single 512×512 or 1024×1024 image then decodes through a faster VAE path, as long as at least 16 GiB of memory is free when the request starts. Image-to-image qualifies with one square 512×512 or 1024×1024 reference. Other GPUs and backends, other sizes, batches, multiple references, LoRA and VAE tiling keep the default settings.
+
+Set `performance_profile: "off"` to keep the default settings, or set `vae_conv_direct` yourself to override the choice. Profiles also stay off when you set `max_vram`, `stream_layers`, `type`, `tensor_type_rules`, `vae_auto_cpu_fallback`, `diffusion_fa: false`, `device: "cpu"`, or a `backend` with per-module or multi-device assignments.
 
 ## Examples
 

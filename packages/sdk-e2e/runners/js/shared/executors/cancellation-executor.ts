@@ -7,9 +7,6 @@ import {
   deleteCache,
   embed,
   InferenceCancelledError,
-  ragDeleteWorkspace,
-  ragIngest,
-  RAG_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
   transcribe,
   translate
@@ -22,7 +19,6 @@ import {
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
   cancelByRequestIdEmbed,
-  cancelByRequestIdRagIngest,
   cancelIsolatesConcurrentBatches,
   cancelQueuedNativeBatch,
   cancelMidStreamCompletion,
@@ -71,21 +67,11 @@ interface PolicyParams {
   prompt: string
 }
 
-interface RagIngestParams {
-  workspaceBase: string
-  documentFiller: string
-  documentFillerRepeats: number
-  chunkSize: number
-  chunkOverlap: number
-  registryBeginGraceMs: number
-}
-
 export interface TranscribeCancelParams {
   audioFileName: string
 }
 
 const INFERENCE_CANCELLED_CODE = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED
-const RAG_OPERATION_CANCELLED_CODE = RAG_ERROR_CODES.OPERATION_CANCELLED
 const ADDON_CANCEL_MESSAGE = 'Job cancelled'
 // Embed addon surfaces this when llama_decode is aborted mid-flight.
 const EMBED_ABORTED_MESSAGE = 'Failed to get sequence embeddings'
@@ -129,10 +115,8 @@ function errorCode(err: Error): number | undefined {
 export function isCancellationError(err: Error): boolean {
   if (err instanceof InferenceCancelledError) return true
   const code = errorCode(err)
-  if (code === INFERENCE_CANCELLED_CODE || code === RAG_OPERATION_CANCELLED_CODE) {
-    return true
-  }
-  if (err.name === 'INFERENCE_CANCELLED' || err.name === 'OPERATION_CANCELLED') {
+  if (code === INFERENCE_CANCELLED_CODE) return true
+  if (err.name === 'INFERENCE_CANCELLED') {
     return true
   }
   return err.message === ADDON_CANCEL_MESSAGE || err.message === EMBED_ABORTED_MESSAGE
@@ -319,8 +303,7 @@ const sharedTests = [
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
   serializeConcurrentCompletion,
-  cancelByRequestIdEmbed,
-  cancelByRequestIdRagIngest
+  cancelByRequestIdEmbed
 ]
 
 export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTests> {
@@ -339,8 +322,7 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       [cancelBroadTranslateLlm.testId]: this.translateLlmBroad.bind(this),
       [serializeConcurrentCompletion.testId]: this.serializeConcurrent.bind(this),
       [cancelIsolatesConcurrentBatches.testId]: this.cancelIsolatesConcurrentBatches.bind(this),
-      [cancelQueuedNativeBatch.testId]: this.cancelQueuedNativeBatch.bind(this),
-      [cancelByRequestIdRagIngest.testId]: this.ragIngestTargeted.bind(this)
+      [cancelQueuedNativeBatch.testId]: this.cancelQueuedNativeBatch.bind(this)
     }
   }
 
@@ -977,52 +959,6 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       output:
         `Queued native batch cancellation surfaced InferenceCancelledError with ` +
         `${zeroTokenIds.length}/${ids.length} sequences still awaiting their first token`
-    }
-  }
-
-  async ragIngestTargeted(params: RagIngestParams, _expectation: Expectation): Promise<TestResult> {
-    const embeddingModelId = await this.resources.ensureLoaded('embeddings')
-    const workspace = `${params.workspaceBase}-${embeddingModelId.substring(0, 8)}`
-
-    await this.safeDeleteWorkspace(workspace)
-
-    const document = params.documentFiller.repeat(params.documentFillerRepeats)
-    const op = markHandled(
-      ragIngest({
-        modelId: embeddingModelId,
-        workspace,
-        documents: [document],
-        chunk: true,
-        chunkOpts: {
-          chunkSize: params.chunkSize,
-          chunkOverlap: params.chunkOverlap,
-          chunkStrategy: 'character'
-        }
-      })
-    )
-
-    try {
-      // Unary op without observable progress — sleep covers registry begin.
-      await sleep(params.registryBeginGraceMs)
-      try {
-        await cancel({ requestId: op.requestId })
-      } catch (err) {
-        return {
-          passed: false,
-          output: `cancel({ requestId }) for ragIngest rejected: ${describeError(err)}`
-        }
-      }
-      return await this.assertCancelled(op, 'ragIngest', 'requestId')
-    } finally {
-      await this.safeDeleteWorkspace(workspace)
-    }
-  }
-
-  private async safeDeleteWorkspace(workspace: string): Promise<void> {
-    try {
-      await ragDeleteWorkspace({ workspace })
-    } catch {
-      // workspace may not exist yet or be mid-flight; either case is harmless
     }
   }
 

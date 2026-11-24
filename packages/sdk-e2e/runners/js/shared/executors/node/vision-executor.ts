@@ -5,8 +5,10 @@ import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { visionTests } from '../../../../../catalog/vision-tests.js'
 import { callWhenAddonIdle } from '../../utils/addon-idle.js'
 
+type ContentPart = { type: 'text'; text: string } | { type: 'media'; path: string }
+
 type VisionParams = {
-  history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>
+  history: Array<{ role: string; content: string | ContentPart[] }>
   stream?: boolean
   generationParams?: Record<string, unknown>
 }
@@ -30,7 +32,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
   ) as never
 
   private async getPromptTokens(modelId: string, params: VisionParams) {
-    const history = this.resolveAttachments(params.history)
+    const history = this.resolveMedia(params.history)
     return callWhenAddonIdle(async () => {
       const result = completion({
         modelId,
@@ -78,14 +80,15 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
     }
   }
 
-  private resolveAttachments(history: VisionParams['history']) {
+  private resolveMedia(history: VisionParams['history']) {
     return history.map((msg) => {
-      if (!msg.attachments?.length) return msg
+      if (typeof msg.content === 'string') return msg
       return {
         ...msg,
-        attachments: msg.attachments.map((att) => {
-          const fileName = att.path.split('/').pop()!
-          return { path: path.resolve(process.cwd(), 'assets/images', fileName) }
+        content: msg.content.map((part) => {
+          if (part.type !== 'media') return part
+          const fileName = part.path.split('/').pop()!
+          return { ...part, path: path.resolve(process.cwd(), 'assets/images', fileName) }
         })
       }
     })
@@ -94,7 +97,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
   async generic(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as VisionParams
     const visionModelId = await this.resources.ensureLoaded('vision')
-    const history = this.resolveAttachments(p.history)
+    const history = this.resolveMedia(p.history)
 
     try {
       const text = await callWhenAddonIdle(
@@ -119,7 +122,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
   async streaming(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as VisionParams
     const visionModelId = await this.resources.ensureLoaded('vision')
-    const history = this.resolveAttachments(p.history)
+    const history = this.resolveMedia(p.history)
 
     try {
       const tokens = await callWhenAddonIdle(async () => {
@@ -155,7 +158,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
   async withStats(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as VisionParams
     const visionModelId = await this.resources.ensureLoaded('vision')
-    const history = this.resolveAttachments(p.history)
+    const history = this.resolveMedia(p.history)
 
     try {
       const { text, stats } = await callWhenAddonIdle(async () => {

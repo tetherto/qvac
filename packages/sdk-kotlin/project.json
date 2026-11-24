@@ -1,0 +1,116 @@
+{
+  "name": "sdk-kotlin",
+  "root": "packages/sdk-kotlin",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/checks.mjs typecheck"
+      },
+      "metadata": {
+        "setup": ["python", "java", "android-ndk"]
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/checks.mjs unit"
+      },
+      "metadata": {
+        "setup": ["python", "java", "android-ndk"],
+        "sources": ["self"]
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ../sdk/ci/e2e.mjs kotlin"
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22", "java", "android"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "setup": ["node22", "java", "android"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "setup": ["node22", "java", "android"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "secrets": [
+          "GITHUB_TOKEN",
+          "MQTT_HOST",
+          "MQTT_USERNAME",
+          "MQTT_PASSWORD",
+          "MQTT_CA_CERT",
+          "MQTT_CLIENT_CERT",
+          "MQTT_CLIENT_KEY"
+        ],
+        "timeoutMinutes": 360,
+        "modelCache": {
+          "path": "../sdk-e2e/.qvac-cache",
+          "plan": true
+        }
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/mobile.mjs kotlin"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "mode": "producer",
+          "projectArnVar": "SDK_DEVICE_FARM_PROJECT_ARN",
+          "devicePoolsVar": {
+            "Android": "SDK_ANDROID_DEVICE_FARM_POOLS"
+          },
+          "jobTimeoutMinutes": 120
+        },
+        "secrets": ["GITHUB_TOKEN", "MQTT_HOST", "MQTT_USERNAME", "MQTT_PASSWORD"],
+        "timeoutMinutes": 280
+      }
+    }
+  }
+}

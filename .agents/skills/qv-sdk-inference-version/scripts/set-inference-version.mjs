@@ -6,11 +6,11 @@
  * dependency range must share a major and minor. Patch numbers are free on both
  * sides: @qvac/sdk 0.19.4 may depend on @qvac/inference ^0.19.2.
  *
- * The engine at that major.minor is published first (publish-inference.yml), so
+ * The engine at that major.minor is published first (publish-npm.yml), so
  * the range this writes resolves from npm while the SDK release is under review.
  *
  * Run from the monorepo root (prefer /qv-sdk-inference-version for the full
- * release preparation, which also regenerates sdk-python):
+ * release preparation, which also repins sdk-kotlin):
  *
  *   node .agents/skills/qv-sdk-inference-version/scripts/set-inference-version.mjs --check
  *   node .agents/skills/qv-sdk-inference-version/scripts/set-inference-version.mjs --engine-version=0.20.0
@@ -21,8 +21,8 @@
  * it writes the range and, unless --sdk-version says otherwise, sets the SDK's
  * version to the same major.minor.
  *
- * After writing: regenerate sdk-python (`scripts/generate.py`) so SDK_VERSION
- * follows, then review and commit.
+ * After writing: repin packages/sdk-kotlin to the new version, then review and
+ * commit.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -147,7 +147,6 @@ fs.writeFileSync(sdkPkgPath, JSON.stringify(sdkPkg, null, 2) + "\n");
 console.log(`\n${label} wrote packages/sdk/package.json`);
 console.log(`${label} next steps:`);
 console.log(`  1. confirm ${dependency}@${engineVersion} is published on npm`);
-console.log("  2. regenerate sdk-python so SDK_VERSION follows (packages/sdk-python/scripts/generate.py)");
-console.log("  3. repin packages/sdk-kotlin (its version + @qvac/sdk range) to the new version and regenerate (packages/sdk-kotlin/scripts/generate-contract.py)");
-console.log("  4. run `npm run enforce-inference-versions` in packages/sdk");
-console.log("  5. review staged changes and commit");
+console.log("  2. repin packages/sdk-kotlin (its version + @qvac/sdk range) to the new version");
+console.log("  3. run `npm run enforce-inference-versions` in packages/sdk");
+console.log("  4. review staged changes and commit");

@@ -2,6 +2,145 @@
 
 ## [Unreleased]
 
+### Breaking
+
+Loads with `parallel >= 2` change as follows:
+
+- The KV cache is unified, as llama-server's `--kv-unified`: the slots share
+  one KV buffer instead of one each, and the addon limits each slot to its
+  share of the pool. It is not configurable
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- A slot gets `ctx_size` (rounded up to a multiple of 256) divided by
+  `parallel`, where its share used to be rounded up to a multiple of 256
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool,
+  where it used to pick each slot's. Each slot gets the trained context
+  divided by `parallel`: with `parallel: '4'`, a model trained on 32768
+  tokens gives each slot 8192 instead of 32768. When memory is short and
+  `ctx_size` is unset, fit's lower bound (`fit-ctx`, 4096 by default) also
+  applies to the whole pool, so with `parallel: '4'` a slot can get 1024
+  tokens where it kept at least 4096. To keep a slot size, set `ctx_size` to
+  `parallel x` that size ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- On Vulkan, with flash attention off, or on CUDA older than Turing, decoding
+  can be slower, because each slot's attention spans the shared buffer
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- MiniMax-M3 turns sparse attention off
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Known issues until fabric gets the slot limit: DeepSeek V4 and V4.1 size
+  each per-sequence cache to the whole buffer, so those caches take
+  `parallel` times the memory and a load that fit before can run out of
+  memory; models with long RoPE factors (for example Phi-3) use the long
+  factors whenever `ctx_size` exceeds the model's original context, so their
+  output changes ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Cache files saved with `parallel >= 2` now hold one KV stream (DeepSeek V4
+  and V4.1 keep one per slot), which earlier versions cannot restore. Files
+  saved by earlier versions with `parallel >= 2` still load. A file longer
+  than the slot limit fails its request with `ContextLengthExeeded`; raise the
+  limit or delete it. Any other file that fails to load fails its request with
+  `UnableToLoadSessionFile`; delete it, and the next request on that
+  `cacheKey` runs without it
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+### Fixed
+
+- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`)
+  now fails with `ContextLengthExeeded` when the cache loads, as documented.
+  The check compared against the whole context, and now also counts the KV
+  cells a multimodal prompt takes
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+
+## [0.72.1] - 2026-11-23
+
+### Changed
+
+- `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
+  against the size its own decoder reads
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). The header check before
+  the prompt is processed stays, so an oversized image is still rejected before
+  the session cache changes, and formats stb_image cannot read (WebP, video) are
+  still rejected rather than handed to ffmpeg.
+
+### Fixed
+
+- `assessFit` accepts `image-max-megapixels` (and `image_max_megapixels`), and
+  rejects an invalid value as the load does. Before, it rejected the key as an
+  unknown argument ([#5783](https://github.com/tetherto/qvac/pull/5783)).
+
+## [0.72.0] - 2026-11-18
+
+### Added
+
+- DSpark speculative decoding (`spec-type: 'draft-dspark'` with
+  `spec-draft-model`) and `spec-type: 'auto'`, which reads the type from the
+  draft model's header, as llama-server's `--spec-type draft-dspark -md` and
+  `-md` without `--spec-type`
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
+- `assessFit` refuses a draft model or MTP head made for another model with
+  fabric's `common_speculative_draft_mismatch`, as the load does:
+  `the draft model does not match the model: <reason>`. It covers DFlash and
+  DSpark drafters too, not only external MTP heads.
+
+## [0.71.0] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- A draft model or MTP head made for another model now fails to load with
+  `the draft model '<path>' does not match the model: <reason>`, from
+  fabric's `common_speculative_draft_mismatch`. Fabric 0.30 refuses the
+  mismatch inside its own load, before the addon's MTP-head check runs, so the
+  error no longer reads `the MTP head '<path>' does not match the model`.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.10.0 or
+  newer.
+- The addon no longer sets `LLAMA_RS_RAGGED=0` at backend init. Fabric 0.30
+  checks each layer's device and falls back to the equal ubatch split when any
+  of them lacks the ragged ops, an RPC server included, so qwen35 recurrent
+  layers use ragged ubatches only where every device supports them. Set
+  `LLAMA_RS_RAGGED=0` to keep the equal split everywhere.
+
 ### Fixed
 
 - A cancel that landed after a token was streamed but before it was decoded

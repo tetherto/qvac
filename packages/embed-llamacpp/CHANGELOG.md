@@ -1,5 +1,75 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+## [0.58.1] - 2026-11-23
+
+### Changed
+
+- `audio-max-seconds` and `image-max-megapixels` are now enforced by fabric's
+  mtmd-helper, against the length and size its own decoders read, before it
+  allocates the decoded output
+  ([#5782](https://github.com/tetherto/qvac/pull/5782)). The addon's own audio
+  header parser (`AudioLengthLimit`) is gone: it had to match each decoder by
+  hand and could not size a free-format MP3, so it rejected every one. Audio
+  over the limit is still rejected with `UnsupportedMedia`, and a free-format
+  MP3 within it now embeds. Audio whose length cannot be read before decoding
+  (e.g. a FLAC without a sample count) is still rejected, now with
+  `cannot decode the audio`. Images keep the header check that rejects formats
+  stb_image cannot read (WebP, video).
+
+## [0.58.0] - 2026-11-19
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+## [0.57.0] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- This package needed no code change for the new fabric.
+
 ## [0.56.1] - 2026-11-11
 
 ### Changed

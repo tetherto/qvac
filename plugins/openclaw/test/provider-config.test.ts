@@ -104,7 +104,7 @@ test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () 
   assert.equal(model.reasoning, true)
   assert.equal(model.contextWindow, 32768)
   assert.equal(model.maxTokens, 8192)
-  assert.deepEqual(model.compat, { requiresStringContent: true })
+  assert.deepEqual(model.compat, { requiresStringContent: true, supportsPromptCacheKey: true })
   assert.deepEqual(model.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
 
   assert.ok(gptOss)

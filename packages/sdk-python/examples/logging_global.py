@@ -1,6 +1,6 @@
 """Python port of packages/sdk/examples/logging-global.ts.
 
-Capture every server-side log (SDK server, all models, RAG) with a single
+Capture every server-side log (SDK server, all models) with a single
 `subscribe_server_logs` subscription.
 
 `config/logging/logging.config.json` (next to this script) sets
@@ -44,8 +44,8 @@ async def main() -> int:
         try:
             print("▸ Starting global logging demo...\n")
 
-            # One subscription captures every server-side log (SDK, models,
-            # RAG, …) without having to know any stream IDs ahead of time.
+            # One subscription captures every server-side log (SDK, models, …)
+            # without having to know any stream IDs ahead of time.
             unsubscribe = subscribe_server_logs(t, print_log)
 
             model_id = await load_model(

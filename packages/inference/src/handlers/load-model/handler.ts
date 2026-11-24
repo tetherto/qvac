@@ -15,7 +15,13 @@ import { withModelWorkLock } from '@/runtime/model-work-lock'
 import { createResolveSession } from '@/handlers/load-model/resolve-session'
 import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
-import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/utils/index'
+import {
+  generateShortHash,
+  canonicalConfigString,
+  kvCacheIdentityConfig,
+  recordKvCacheDirId,
+  transformConfigForReload
+} from '@/utils/index'
 import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
 import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import {
@@ -144,6 +150,11 @@ export async function handleLoadModel(
     const configStr = canonicalConfigString(request.modelConfig)
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
     const modelId = generateShortHash(modelHashInput)
+    const kvCacheIdentityStr = canonicalConfigString(kvCacheIdentityConfig(request.modelConfig))
+    await recordKvCacheDirId(
+      modelId,
+      generateShortHash(`${request.modelType}:${modelSrc}:${kvCacheIdentityStr}`)
+    )
 
     let pluginArtifacts: Record<string, string> = {}
     if (pluginResolveResult) {

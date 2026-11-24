@@ -1,4 +1,101 @@
 {
   "name": "@qvac/sdk-python",
-  "root": "packages/sdk-python"
+  "root": "packages/sdk-python",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["@qvac/sdk", "sdk-e2e"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "parallel": false,
+        "commands": ["node ci/python.mjs format", "node ci/python.mjs lint"]
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ci/python.mjs typecheck"
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ci/python.mjs unit"
+      },
+      "metadata": {
+        "setup": ["python"],
+        "sources": ["self"]
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ../sdk/ci/e2e.mjs python"
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "setup": ["node22"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "setup": ["node22"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "secrets": [
+          "GITHUB_TOKEN",
+          "MQTT_HOST",
+          "MQTT_USERNAME",
+          "MQTT_PASSWORD",
+          "MQTT_CA_CERT",
+          "MQTT_CLIENT_CERT",
+          "MQTT_CLIENT_KEY"
+        ],
+        "timeoutMinutes": 360,
+        "modelCache": {
+          "path": "../sdk-e2e/.qvac-cache",
+          "plan": true
+        }
+      }
+    }
+  }
 }

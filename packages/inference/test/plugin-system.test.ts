@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { z } from 'zod'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import {
   clearPlugins,
   registerPlugin,

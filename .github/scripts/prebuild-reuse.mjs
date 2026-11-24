@@ -1,0 +1,191 @@
+#!/usr/bin/env node
+// Splits _build's rows into legs to build and legs an earlier run already built from the same native code and build
+// inputs, so a rerun only builds what failed or changed. A failed lookup builds it. A PR run reuses its own PR's legs
+// and the default branch's; a branch run its branch's and the default branch's. PR legs never count as a branch's.
+
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { appendFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+
+// The package's and its providers' native code (a consumer links its providers' prebuilds); package.json names the
+// addon and project.json holds the build commands and per-configuration settings. Linker maps, export lists and config
+// templates shape the module, and the ci/build-* and ci/verify-* scripts are the build commands' own steps.
+export const NATIVE =
+  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
+
+export const WEB =
+  /^packages\/llm-llamacpp\/(addon\/src\/js-interface\/web\/|web\/|scripts\/(build-web\.mjs|validate-web-prebuild\.mjs|npm-command\.cjs)$)/
+
+// Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
+// the build runs.
+export const INPUTS = [
+  'cmake',
+  'vcpkg-overlays',
+  'nx.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'scripts/ci',
+  '.github/bare-toolchain',
+  '.github/scripts/check-linux-module-cxx-runtime.mjs',
+  '.github/actions',
+  '.github/config',
+  '.github/workflows/_build.yml'
+]
+
+export function legKey(row, tree) {
+  const buildsWeb = row.slug === 'llm-llamacpp' && row.config === 'linux-x64'
+  const native = tree([row.dir, ...(row.providers ?? []).map((p) => `packages/${p}`)])
+    .split('\n')
+    .filter((line) => {
+      const path = line.split('\t')[1] ?? ''
+      return WEB.test(path) ? buildsWeb : NATIVE.test(path)
+    })
+    .join('\n')
+  return createHash('sha256')
+    .update(JSON.stringify(row))
+    .update(native)
+    .update(tree(INPUTS))
+    .digest('hex')
+    .slice(0, 16)
+}
+
+// A PR build's legs carry its number, so only that PR's later runs look them up.
+export const cacheName = (row, key, pr = '') =>
+  `prebuild-cache-${pr ? `pr${pr}-` : ''}${row.slug}-${row.config}-${key}`
+
+// Events whose runs build a branch's own code from its own workflow files. A workflow_run build runs on the default
+// branch but builds a PR, so its artifacts never count as the default branch's.
+export const BRANCH_EVENTS = ['push', 'schedule', 'workflow_dispatch']
+
+// The only producer of PR-named artifacts. Its run-name carries the PR head it built: `PR build and test <sha>`.
+export const PR_BUILD = '.github/workflows/pr-build-test.yml'
+export const builtSha = (run) => /^PR build and test ([0-9a-f]{40})$/.exec(run?.display_title ?? '')?.[1] ?? ''
+
+// Whether an artifact's run may be reused: a PR name only from a workflow_run PR_BUILD run of this repository whose
+// built commit belongs to that PR (prsOf lists a commit's PR numbers), a branch name only from a branch event on this
+// branch or the default branch. `run` is the artifact's run from the API.
+export async function trusted(run, { pr = '', branch = '', defaultBranch = '' }, prsOf) {
+  if (!run || run.head_repository?.id !== run.repository?.id) return false
+  if (pr) {
+    const sha = builtSha(run)
+    if (run.event !== 'workflow_run' || run.path !== PR_BUILD || !sha) return false
+    return (await prsOf(sha)).includes(Number(pr))
+  }
+  return (
+    BRANCH_EVENTS.includes(run.event) &&
+    [branch, defaultBranch].filter(Boolean).includes(run.head_branch)
+  )
+}
+
+// The first unexpired artifact whose run passes trusted(); getRun looks a run up by id.
+export async function pick(artifacts, scope, getRun, prsOf) {
+  for (const a of artifacts) {
+    if (a.expired || !a.workflow_run?.id) continue
+    if (await trusted(await getRun(a.workflow_run.id), scope, prsOf)) return a
+  }
+  return null
+}
+
+// Rows come in as index-aligned slug, config, dir, runner and providers lists: whole rows overflow one variable.
+export function legs({ slugs, configs, dirs, runners, providers = [] }) {
+  return slugs.map((slug, i) => ({
+    slug,
+    config: configs[i],
+    dir: dirs[i],
+    runner: runners[i],
+    providers: providers[i] ?? []
+  }))
+}
+
+// Legs to build go back as their row index, which _build reads the full row by. A PR run looks for its own leg first,
+// then the default branch's; it uploads under its own name only.
+export async function plan(rows, { tree, list, getRun, prsOf, reuse, pr = '', branch = '', defaultBranch = '' }) {
+  const build = []
+  const reused = []
+  for (const [i, row] of rows.entries()) {
+    const key = legKey(row, tree)
+    const own = cacheName(row, key, pr)
+    let hit = null
+    let name = own
+    if (reuse) {
+      hit = await pick(await list(own), { pr, branch, defaultBranch }, getRun, prsOf)
+      if (!hit && pr) {
+        name = cacheName(row, key)
+        hit = await pick(await list(name), { defaultBranch }, getRun, prsOf)
+      }
+    }
+    if (hit) reused.push({ slug: row.slug, config: row.config, name, runId: hit.workflow_run.id })
+    else build.push({ i, cacheName: own })
+  }
+  return { build, reused }
+}
+
+async function main(env) {
+  const tree = (paths) =>
+    execFileSync('git', ['-C', env.SRC, 'ls-tree', '-r', 'HEAD', '--', ...paths], {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024
+    })
+  const api = (path) =>
+    fetch(`${env.GITHUB_API_URL}/repos/${env.GITHUB_REPOSITORY}/${path}`, {
+      headers: { authorization: `Bearer ${env.GH_TOKEN}`, accept: 'application/vnd.github+json' }
+    })
+  const list = async (name) => {
+    const res = await api(`actions/artifacts?name=${encodeURIComponent(name)}&per_page=30`)
+    if (!res.ok) {
+      console.log(`::warning::artifact lookup for ${name} failed (${res.status}); building it`)
+      return []
+    }
+    return (await res.json()).artifacts ?? []
+  }
+  const runs = new Map()
+  const getRun = async (id) => {
+    if (!runs.has(id)) {
+      const res = await api(`actions/runs/${id}`)
+      runs.set(id, res.ok ? await res.json() : null)
+    }
+    return runs.get(id)
+  }
+  // A failed lookup matches no PR, so the leg builds.
+  const prs = new Map()
+  const prsOf = async (sha) => {
+    if (!prs.has(sha)) {
+      const res = await api(`commits/${sha}/pulls?per_page=100`)
+      prs.set(sha, res.ok ? (await res.json()).map((p) => p.number) : [])
+    }
+    return prs.get(sha)
+  }
+  const slugs = JSON.parse(env.SLUGS)
+  const providers = JSON.parse(env.PROVIDERS || '[]')
+  // A list that does not line up with the rows would key legs on the wrong providers, so nothing is reused then.
+  const aligned = providers.length === slugs.length && providers.every(Array.isArray)
+  if (!aligned) console.log('::warning::provider lists do not line up with the build rows; building every leg')
+  const reuse = env.REUSE === 'true' && aligned
+  const rows = legs({
+    slugs,
+    configs: JSON.parse(env.CONFIGS),
+    dirs: JSON.parse(env.DIRS),
+    runners: JSON.parse(env.RUNNERS),
+    providers: aligned ? providers : []
+  })
+  const { build, reused } = await plan(rows, {
+    tree,
+    list,
+    getRun,
+    prsOf,
+    reuse,
+    pr: /^\d+$/.test(env.PR || '') ? env.PR : '',
+    branch: env.BRANCH,
+    defaultBranch: env.DEFAULT_BRANCH
+  })
+  for (const r of reused) console.log(`reuse ${r.slug} ${r.config} from run ${r.runId}`)
+  console.log(`${build.length} to build, ${reused.length} reused`)
+  appendFileSync(
+    env.GITHUB_OUTPUT,
+    `build=${JSON.stringify(build)}\nreused=${JSON.stringify(reused)}\n`
+  )
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  await main(process.env)

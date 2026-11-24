@@ -41,6 +41,7 @@
 #include "addon/PayloadHandler.hpp"
 #include "handlers/FinetuneParamHandlers.hpp"
 #include "handlers/GenerationParamHandlers.hpp"
+#include "model-interface/ImagePixelLimit.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SpeculativeRuntime.hpp"
@@ -264,7 +265,21 @@ inline void parseGenerationParams(
   if (!configObj.has_value()) {
     return;
   }
-  applyGenerationParamHandlers(env, *configObj, prompt.generationParams);
+  js::Object& obj = *configObj;
+  const GenerationParamSource source{
+      .number =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Number, double>(env, key);
+          },
+      .string =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::String, std::string>(env, key);
+          },
+      .boolean =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
+          }};
+  applyGenerationParamHandlers(source, prompt.generationParams);
 }
 
 inline std::vector<std::pair<std::string, js::Object>>
@@ -713,10 +728,17 @@ inline FitResult runFit(FitRequest request) {
 
   common_params loadParams;
   try {
-    // Addon-only key, consumed before llama.cpp's parser sees it, as at load.
+    // Addon-only keys, consumed before llama.cpp's parser sees them, as at
+    // load. image-max-megapixels only bounds decoding, so the fit just
+    // validates it.
+    static_cast<void>(image_pixel_limit::takeMaxPixels(configFilemap));
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
+    // Before `spec-type: "auto"` opens the draft model to read its type: a
+    // FIFO would block that open. The load checks it at the same point.
+    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
+        speculativeConfig);
     ModelMetaData metadata;
     metadata.parse(modelPath, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
@@ -816,24 +838,20 @@ inline FitResult runFit(FitRequest request) {
     return unknownResult();
   }
 
-  // A draft context (MTP, or a DFlash draft model) is fitted next to the
-  // model, as the load does.
+  // A draft context (MTP, or a DFlash or DSpark draft model) is fitted next
+  // to the model, as the load does.
   const auto speculativeFit =
       qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
           loadParams);
 
-  // The load refuses an external MTP head for another model; so does the
-  // projection, comparing the same header values.
-  if (speculativeFit && speculativeFit->isMtp() &&
-      !speculativeFit->extra()->shares_model) {
-    namespace spec = qvac_lib_inference_addon_llama::speculative;
-    const auto head = spec::readGgufShape(speculativeFit->extra()->path_model);
-    const auto target = spec::readGgufShape(modelPath);
-    const std::string mismatch = spec::mtpHeadMismatch(
-        head.width, target.width, head.vocab, target.vocab);
-    if (!mismatch.empty()) {
-      throwFitError(qvac_errors::general_error::InvalidArgument, mismatch);
-    }
+  // A draft model or MTP head for another model aborts fabric's fit; fabric's
+  // load refuses it with the same header check, so the projection does too.
+  if (const std::string mismatch =
+          common_speculative_draft_mismatch(loadParams, modelPath);
+      !mismatch.empty()) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the draft model does not match the model: " + mismatch);
   }
 
   common_params_fit_status status{};
