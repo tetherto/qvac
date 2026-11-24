@@ -51,9 +51,11 @@ runs:
         base="https://raw.githubusercontent.com/Xilinx/mlir-aie/v${MLIR_AIE_VERSION}"
         curl -fsSL "$base/python/requirements.txt" -o "$RUNNER_TEMP/mlir-aie-requirements.txt"
         curl -fsSL "$base/utils/peano-requirements.txt" -o "$RUNNER_TEMP/peano-requirements.txt"
-        "$py" -m pip install -q -r "$RUNNER_TEMP/mlir-aie-requirements.txt"
-        "$py" -m pip install -q -r "$RUNNER_TEMP/peano-requirements.txt"
-        "$py" -m pip install -q "mlir_aie==${MLIR_AIE_VERSION}" \
+        # Self-hosted runners keep pip's cache between jobs, and a wheel cached
+        # truncated (e.g. on a full disk) fails every later install there.
+        "$py" -m pip install -q --no-cache-dir -r "$RUNNER_TEMP/mlir-aie-requirements.txt"
+        "$py" -m pip install -q --no-cache-dir -r "$RUNNER_TEMP/peano-requirements.txt"
+        "$py" -m pip install -q --no-cache-dir "mlir_aie==${MLIR_AIE_VERSION}" \
           -f "https://github.com/Xilinx/mlir-aie/releases/expanded_assets/v${MLIR_AIE_VERSION}/"
         # The wheel installs the aie package under mlir_aie/python, which is
         # not on sys.path by itself.
