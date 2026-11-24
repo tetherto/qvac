@@ -744,7 +744,7 @@ async function formatJson(value: unknown, fileName: string) {
 }
 
 export async function renderContractFiles() {
-  const { schemaDocument, manifest } = buildContract()
+  const { schemaDocument, manifest } = buildContract({ markStrict: true })
   const modelsRegistry = buildModelsRegistry()
   const modelTypeMaps = buildModelTypeMaps()
   const errorCodes = buildErrorCodes()
