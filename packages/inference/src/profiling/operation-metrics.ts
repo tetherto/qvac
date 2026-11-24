@@ -9,6 +9,7 @@ import {
   type TranslationStats,
   type TranscribeStats,
   type EmbedStats,
+  type StereoDepthStats,
   type TtsStats,
   type DiffusionStats,
   type VideoStats,
@@ -324,6 +325,19 @@ for (const op of ['embed', 'embedBatch']) {
     }
   })
 }
+
+registerOperationMetrics<{ modelId?: string }, { stats?: StereoDepthStats }>({
+  op: 'estimateDisparity',
+  kind: 'handler',
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromResult: (res) => {
+    const gauges: Record<string, number> = {}
+    const modelExecMs = readModelExecutionMs(res)
+    if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
+    if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
+    return Object.keys(gauges).length > 0 ? gauges : undefined
+  }
+})
 
 registerOperationMetrics<{ modelId?: string }, { stats?: OCRStats }>({
   op: 'ocrStream',

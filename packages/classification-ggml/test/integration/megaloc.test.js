@@ -5,7 +5,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const env = require('bare-env')
 const process = require('bare-process')
-const { MegaLoc } = require('../../index')
+const { MegaLoc, assessFit } = require('../../index')
 const references = require('../fixtures/megaloc-reference.json')
 const { isMobile, TEST_TIMEOUT, makeClassifier, loadImage, resolveModelPath } = require('./utils')
 
@@ -104,9 +104,7 @@ for (const quant of ['f16', 'mixed']) {
           ? 3
           : backend.startsWith('Metal') || backend.startsWith('MTL')
             ? 1
-            : backend.startsWith('OpenCL') || backend.startsWith('GPUOpenCL')
-              ? 4
-              : 0
+            : 0
       t.is(stats.backend_id, expected, 'requested backend is used')
       await model.unload()
       await model.unload()
@@ -151,7 +149,7 @@ for (const quant of ['f16', 'mixed']) {
         t.ok(similarity >= (quant === 'f16' ? 0.9999 : 0.9995), 'automatic backend matches PyTorch')
       }
       const backend = model.getRuntimeStats().backend_id
-      t.ok([0, 1, 2, 3, 4].includes(backend), 'automatic selection reports a known backend')
+      t.ok([0, 1, 2, 3].includes(backend), 'automatic selection uses a supported backend')
       if (env.QVAC_MEGALOC_EXPECT_GPU === '1') t.not(backend, 0, 'GPU runner executes GPU parity')
       if (process.platform === 'darwin' || process.platform === 'ios') {
         t.is(backend, 1, 'Apple automatic selection uses Metal')
@@ -260,6 +258,32 @@ test('MegaLoc and MobileNet coexist with independent jobs and lifetimes', async 
   } finally {
     await model.destroy()
     await classifier.destroy()
+  }
+})
+
+test('MegaLoc rejects explicit OpenCL before loading or sizing the model', async function (t) {
+  t.timeout(TEST_TIMEOUT)
+  const unsupported = /MegaLoc does not support OpenCL.*CPU/i
+  for (const [backend, quant] of [
+    ['opencl', 'f16'],
+    ['GPUOpenCL', 'mixed']
+  ]) {
+    const modelPath = asset(
+      `megaloc-${quant}.gguf`,
+      `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
+    )
+    const model = new MegaLoc({ modelPath, backend })
+    try {
+      await t.exception.all(() => model.load(), unsupported, `${backend} load rejects`)
+      t.is(model.getState().configLoaded, false)
+      await t.exception.all(
+        () => assessFit({ modelPath, backend }),
+        unsupported,
+        `${backend} fit rejects`
+      )
+    } finally {
+      await model.destroy()
+    }
   }
 })
 

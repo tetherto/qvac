@@ -147,8 +147,8 @@ placement.
 The fitter runs for `llamacpp-completion`, `llamacpp-embedding`,
 `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`,
 `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml`, `sdcpp-generation`,
-`ggml-ocr` and `nmtcpp-translation`, on every platform the engine's addon is built
-for.
+`ggml-ocr`, `nmtcpp-translation`, `ggml-classification` and
+`ggml-image-embedding`, on every platform the engine's addon is built for.
 
 What each engine's rows cover:
 
@@ -173,9 +173,14 @@ What each engine's rows cover:
 - **OCR**: the weights alone, leaving the memory an image needs uncounted.
 - **translation**: one allowance for the whole load, from the model and
   vocabulary files themselves, so it answers for files on disk only.
+- **image classification and image embeddings**: the measured weights and the
+  compute one image takes. MobileNet always runs on the CPU, so a
+  classification load is one host row. A MegaLoc load is the selected device,
+  then the host. Both read the model file itself, so they answer for files on
+  disk only.
 
-Everything else is `unknown`: `onnx-tts`, `ggml-vla` and `ggml-classification`,
-a translation model not yet downloaded, MOSS-Speech, a TTS load with a LavaSR
+Everything else is `unknown`: `onnx-tts`, `ggml-vla`, a translation,
+classification or image-embedding model not yet downloaded, MOSS-Speech, a TTS load with a LavaSR
 enhancer or denoiser, a diffusion world load without a `sceneSrc`, a load naming
 an ESRGAN checkpoint not yet downloaded (the catalog's `.pth` checkpoints have no
 registry description), a split model, a multimodal completion load naming a
