@@ -57,13 +57,13 @@ jobs:
         include:
           - os: linux
             runner: linux_ubuntu2204_x64_gpu
-            families: desktop,python,electron,snap
+            families: desktop,python,kotlin,electron,snap
           - os: macos
             runner: macos_arm64_gpu
-            families: desktop,python,electron
+            families: desktop,python,kotlin,electron
           - os: windows
             runner: win_2025_x64_gpu
-            families: desktop,python,electron
+            families: desktop,python,kotlin,electron
     runs-on: ${{ needs.runner_names.outputs[matrix.runner] }}
     # A cold seed downloads and uploads the whole catalog (~70 GB).
     timeout-minutes: 240
