@@ -1210,6 +1210,28 @@ class Interpreter:
         teardown: list[dict[str, Any]] | None = None,
     ) -> StepResult:
         teardown = teardown or []
+        # Started-call list up front: `repeat` copies the scope, and a list first made in a
+        # copy is lost.
+        scope: dict[str, Any] = {"params": params, _STARTED: []}
+        # Released only once no started call runs, so none of them loses its model.
+        try:
+            return await self._run_declared(steps, scope, expectation, teardown)
+        except asyncio.CancelledError:
+            started = [pending.task for pending in self._started(scope)]
+            for task in started:
+                task.cancel()
+            await asyncio.gather(*started, return_exceptions=True)
+            raise
+        finally:
+            await self._resources.release_test_scope()
+
+    async def _run_declared(
+        self,
+        steps: list[dict[str, Any]],
+        scope: dict[str, Any],
+        expectation: dict[str, Any],
+        teardown: list[dict[str, Any]],
+    ) -> StepResult:
         # Evict anything this test did not declare before it starts, so a run does not
         # depend on the order tests happened to arrive in.
         declared = {
@@ -1219,8 +1241,6 @@ class Interpreter:
             for dep in step["useModel"].get("deps", [])
         }
         await self._resources.evict_all_except(declared)
-
-        scope: dict[str, Any] = {"params": params}
 
         body = await self._run_body(steps, scope, expectation)
         failed_teardown = await self._run_teardown(teardown, scope, expectation)
@@ -1403,6 +1423,24 @@ class Interpreter:
         collect: str | None,
     ) -> Any:
         """One call, folded if the step asked for a fold."""
+        response = await self._dispatch(method, call, params, collect)
+        # Step loads bypass `useModel`; tell the resource manager who owns the model.
+        # Here, not in `_call_value`, so a `callError` load that succeeds is tracked too.
+        if method == "loadModel" and isinstance(response, dict):
+            model_id = response.get("modelId")
+            if isinstance(model_id, str):
+                self._resources.adopt_test_load(model_id)
+        elif method == "unloadModel" and isinstance(params.get("modelId"), str):
+            self._resources.released(params["modelId"])
+        return response
+
+    async def _dispatch(
+        self,
+        method: str,
+        call: Callable[[Any, dict[str, Any]], Any] | None,
+        params: dict[str, Any],
+        collect: str | None,
+    ) -> Any:
         if collect:
             stream = STREAMS.get(method)
             if stream is None:
