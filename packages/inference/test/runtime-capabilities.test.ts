@@ -337,7 +337,7 @@ test('registerPlugin rejects an undotted ID or major QVAC does not define', func
     assertRejected(
       t,
       makePlugin('b', ['transcribe'], [thirdParty('transcription', 2, ['transcribe'])]),
-      /not a QVAC capability contract/
+      /"transcription@2" is not defined by this runtime, which defines transcription@1/
     )
   } finally {
     clearPlugins()
