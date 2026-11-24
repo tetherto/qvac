@@ -90,7 +90,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ci/verify-shared-core.mjs linux-x64",
+              "command": "node ci/verify-shared-core.mjs linux-x64 --xdna",
               "forwardAllArgs": false
             }
           ]
