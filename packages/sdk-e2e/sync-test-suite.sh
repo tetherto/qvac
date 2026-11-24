@@ -12,6 +12,26 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 src="$here/../test-suite"
 dest="$here/node_modules/@qvac/test-suite"
+template="$dest/templates/mobile-consumer/package.json.template"
+
+# Reads or sets the mobile consumer's @qvac/inference override (the local pin).
+inference_pin() {
+  node -e '
+    const fs = require("node:fs")
+    const [file, spec] = process.argv.slice(1)
+    const json = JSON.parse(fs.readFileSync(file, "utf8"))
+    if (spec === undefined) {
+      process.stdout.write(json.overrides?.["@qvac/inference"] ?? "")
+    } else {
+      json.overrides = { ...json.overrides, "@qvac/inference": spec }
+      fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n")
+    }
+  ' "$template" "$@"
+}
+
+# The template copy below drops the pin, so keep it to restore afterwards.
+pin=""
+if [ -f "$template" ]; then pin="$(inference_pin)"; fi
 
 ( cd "$src" && npm run build >/dev/null )
 rm -rf "$dest/dist" "$dest/schema" "$dest/templates"
@@ -49,8 +69,7 @@ if [ "$synced_consumers" -gt 0 ]; then
   echo "  and $synced_consumers packaged consumer bundle(s)"
 fi
 
-# The template copy drops the local @qvac/inference pin; without it mobile
-# builds use the published inference. Restore it if a local tarball exists.
-if compgen -G "$here/.sdk-e2e/inference/*.tgz" >/dev/null; then
-  node "$here/scripts/pin-consumer-inference.mjs"
+if [ -n "$pin" ]; then
+  inference_pin "$pin"
+  echo "  kept the mobile @qvac/inference pin: $pin"
 fi
