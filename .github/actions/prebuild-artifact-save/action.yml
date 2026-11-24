@@ -5,7 +5,7 @@ description: >
   prebuilds-cache-pr-<num>-<hash>. A later no-native-change push
   (prebuild-artifact-reuse) finds the marker and reuses THIS run's `prebuilds`
   artifact instead of rebuilding. Replaces actions/cache/save (which can't write
-  on pull_request_target). Single source of truth — do NOT inline per workflow.
+  from a base-branch PR build). Single source of truth — do NOT inline per workflow.
 
 inputs:
   native-hash:

@@ -1,0 +1,15 @@
+name: Check Windows runtime
+description: Fail when a Windows prebuild imports the dynamic C/C++ runtime instead of linking the static one.
+
+inputs:
+  workdir:
+    description: Package directory holding prebuilds/
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-check-windows-runtime.mjs"

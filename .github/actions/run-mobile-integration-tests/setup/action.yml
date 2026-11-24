@@ -13,8 +13,7 @@ description: |
   candidate-vs-baseline benchmark) MUST set force-npm-prebuild=true alongside
   package-version — artifact presence alone would otherwise silently shadow the
   pin with binaries built in the same run (QVAC-21879). Any addon workflow that
-  adds a pinned-npm session must wire this input the way
-  integration-mobile-test-llm-llamacpp.yml does.
+  adds a pinned-npm session must wire this input alongside package-version.
 
   The pinned-package path resolves BOTH registries: @qvac/* from npmjs.org and
   @tetherto/<addon>-mono from GitHub Packages. That is how a build from ANOTHER
@@ -100,7 +99,7 @@ inputs:
     description: |
       Whether the npm fallback (npm pack <addon>@<version>) is allowed when
       no CI prebuild artifacts are present. Defaults to "false" so that
-      PR-triggered runs (pull_request / pull_request_target) NEVER silently
+      PR-triggered runs (pull_request) NEVER silently
       test the published release instead of the PR's own binaries — a missing
       artifact hard-fails in the "Verify and prepare prebuilds" step instead.
       Regardless of this input, the fallback is implicitly enabled for every
@@ -340,7 +339,7 @@ runs:
       continue-on-error: true
 
     # npm fallback — DISABLED for PR-triggered runs.
-    # On a PR (pull_request / pull_request_target) the only acceptable
+    # On a PR (pull_request) the only acceptable
     # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
     # or the merged `prebuilds` artifact handled above). If neither is
     # present the run must hard-fail in "Verify and prepare prebuilds"
@@ -350,7 +349,7 @@ runs:
     # published package is the intended behaviour, so the fallback stays on.
     # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
     - name: Download prebuilds (from npm — fallback when no artifacts found)
-      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || github.event_name != 'pull_request')
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
