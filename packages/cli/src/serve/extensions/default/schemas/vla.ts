@@ -6,7 +6,6 @@ export const MAX_EMBODIMENT_CAT_ID = 31
 export const MAX_CAMERAS = 64
 const MAX_EMBODIMENT_TAG_LENGTH = 256
 // Tokens are copied into an Int32Array, which would wrap anything wider.
-const INT32_MIN = -(2 ** 31)
 const INT32_MAX = 2 ** 31 - 1
 
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
@@ -56,11 +55,11 @@ export const vlaActionsBody = z.strictObject({
         'discrete-state models (π₀.₅). Default empty.'
     ),
   tokens: z
-    .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
+    .array(z.number().int().min(0).max(INT32_MAX))
     .min(1)
     .describe(
       "The tokenized instruction, from the model's own tokenizer. Zero-padded to " +
-        '`hparams.tokenizerMaxLength`.'
+        '`hparams.tokenizerMaxLength`, or sent as is when that is 0 (GR00T).'
     ),
   attentionMask: z
     .array(z.union([z.literal(0), z.literal(1)]))

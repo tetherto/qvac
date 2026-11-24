@@ -67,6 +67,7 @@ describe('qvac vla: validation', () => {
     assertStatusAndError(await post({ ...BODY, images: [] }), 400, 'invalid_images')
     assertStatusAndError(await post({ ...BODY, images: [{ tensor: '!!' }] }), 400, 'invalid_images')
     assertStatusAndError(await post({ ...BODY, tokens: undefined }), 400, 'invalid_tokens')
+    assertStatusAndError(await post({ ...BODY, tokens: [5, -1] }), 400, 'invalid_tokens')
     assertStatusAndError(await post({ ...BODY, attentionMask: [2] }), 400, 'invalid_attention_mask')
     assertStatusAndError(await post({ ...BODY, prompt: 'pick' }), 400, 'invalid_request')
   })
@@ -225,6 +226,21 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
     assert.deepEqual(calls, [
       { modelId: 'sdk-vla', embodiment: { tag: 'real_droid', numCameras: 1 } }
     ])
+  })
+
+  it('sends a GR00T prompt unpadded, since its tokenizerMaxLength is 0', async () => {
+    stubHparams({ ...GROOT, tokenizerMaxLength: 0 })
+    const calls: VlaClientRunParams[] = []
+    stubRun(calls)
+    const tensor = Buffer.alloc(12 * 4).toString('base64')
+    const res = await server().inject({
+      method: 'POST',
+      url: ACTIONS,
+      payload: { ...BODY, images: [{ tensor }, { tensor }], noise: new Array(8).fill(0) }
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.deepEqual([...calls[0]!.tokens], [7, 8, 9])
+    assert.deepEqual([...calls[0]!.mask], [1, 1, 1])
   })
 
   it('refuses an embodiment switch on a model that is not GR00T, without calling the SDK', async () => {

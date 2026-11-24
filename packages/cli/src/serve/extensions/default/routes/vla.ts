@@ -64,8 +64,9 @@ to the model's vision size, or a preprocessed little-endian float32 \`tensor\`, 
 passes through. Patch-input models (GR00T) take \`tensor\` only.
 
 \`tokens\` is the instruction tokenized with the model's own tokenizer; the server does not
-tokenize. \`tokens\`, \`attentionMask\` and \`state\` are zero-padded to the model's sizes. Read those
-sizes from \`GET ${MODELS}/{model}\`.
+tokenize. \`tokens\`, \`attentionMask\` and \`state\` are zero-padded to the model's sizes; a
+\`tokenizerMaxLength\` of 0 (GR00T) means the prompt is sent unpadded. Read those sizes from
+\`GET ${MODELS}/{model}\`.
 
 A client disconnect cancels the run.
 `.trim()
@@ -106,7 +107,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_images:
                 '`images` is missing, has the wrong camera count, or an entry has the wrong size or form for the model',
               invalid_state: "`state` is longer than the model's `maxStateDim`",
-              invalid_tokens: "`tokens` is missing or longer than the model's `tokenizerMaxLength`",
+              invalid_tokens:
+                "`tokens` is missing, has a negative ID, or is longer than the model's `tokenizerMaxLength`",
               invalid_attention_mask: '`attentionMask` does not have one entry per token',
               invalid_noise:
                 '`noise` is missing for a model that needs it, or is not `chunkSize * maxActionDim` values',
@@ -313,7 +315,9 @@ export function buildRunParams(body: VlaActionsBody, hparams: VlaHparams): RunPa
   const images = body.images.map((image, i) => imageTensor(image, i, hparams))
 
   const tokenCount = body.tokens.length
-  if (tokenCount > hparams.tokenizerMaxLength) {
+  // 0 means the prompt has no fixed length (GR00T): send it unpadded.
+  const padTo = hparams.tokenizerMaxLength === 0 ? tokenCount : hparams.tokenizerMaxLength
+  if (tokenCount > padTo) {
     throw invalid(
       'tokens',
       `${tokenCount} tokens is over the model's tokenizerMaxLength of ${hparams.tokenizerMaxLength}.`
@@ -325,9 +329,9 @@ export function buildRunParams(body: VlaActionsBody, hparams: VlaHparams): RunPa
       `expected ${tokenCount} entries, one per token, got ${body.attentionMask.length}.`
     )
   }
-  const tokens = new Int32Array(hparams.tokenizerMaxLength)
+  const tokens = new Int32Array(padTo)
   tokens.set(body.tokens)
-  const mask = new Uint8Array(hparams.tokenizerMaxLength)
+  const mask = new Uint8Array(padTo)
   if (body.attentionMask === undefined) mask.fill(1, 0, tokenCount)
   else mask.set(body.attentionMask)
 
