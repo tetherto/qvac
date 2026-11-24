@@ -24,13 +24,19 @@ describe('responseUsage', () => {
         completionTokens: 4,
         inputTokens: 30
       }),
-      { input_tokens: 30, output_tokens: 4, total_tokens: 34 }
+      {
+        input_tokens: 30,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens: 4,
+        total_tokens: 34
+      }
     )
   })
 
   it('falls back to the stats when no counts are passed', () => {
     assert.deepEqual(responseUsage({ text: 'hi', stats: { promptTokens: 12, emittedTokens: 3 } }), {
       input_tokens: 12,
+      input_tokens_details: { cached_tokens: 0 },
       output_tokens: 3,
       total_tokens: 15
     })
@@ -64,7 +70,7 @@ describe('buildResponseObject', () => {
     assert.equal(out[0]!.type, 'message')
   })
 
-  it('requires_action when tool calls present; message first then function_call (approach b)', () => {
+  it('completed when tool calls present; message first then function_call', () => {
     const o = buildResponseObject({
       id: 'resp_t',
       modelAlias: 'm',
@@ -79,7 +85,7 @@ describe('buildResponseObject', () => {
       previousResponseId: null,
       store: false
     })
-    assert.equal(o['status'], 'requires_action')
+    assert.equal(o['status'], 'completed')
     assert.equal(o['output_text'], 'hi')
     const out = o['output'] as Array<{ type: string; id?: string }>
     assert.ok(Array.isArray(out))
@@ -164,7 +170,12 @@ describe('buildResponseObject', () => {
       stats: { promptTokens: 120, cacheTokens: 80, emittedTokens: 7 }
     })
     // cacheTokens is cache occupancy, not this request's reuse, so it is not reported.
-    assert.deepEqual(o['usage'], { input_tokens: 120, output_tokens: 7, total_tokens: 127 })
+    assert.deepEqual(o['usage'], {
+      input_tokens: 120,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 7,
+      total_tokens: 127
+    })
   })
 
   it('puts reasoning in its own output item ahead of the message', () => {
@@ -220,8 +231,13 @@ describe('buildResponseObject', () => {
       emittedTokens: 6
     })
     const warm = usage({ promptTokens: 14, cacheTokens: 268, generatedTokens: 6, emittedTokens: 6 })
-    assert.deepEqual(cold, { input_tokens: 262, output_tokens: 6, total_tokens: 268 })
-    assert.deepEqual(warm, cold)
+    assert.deepEqual(cold, {
+      input_tokens: 262,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 6,
+      total_tokens: 268
+    })
+    assert.deepEqual(warm, { ...cold, input_tokens_details: { cached_tokens: 248 } })
     // Overlapping requests inflate the scheduler-wide cacheTokens; the request's
     // own promptTokens is used then.
     const overlapped = usage({
@@ -254,7 +270,7 @@ describe('buildResponseObject', () => {
     assert.deepEqual(o['incomplete_details'], { reason: 'max_output_tokens' })
   })
 
-  it('tool calls take precedence over length truncation (requires_action, no incomplete_details)', () => {
+  it('tool calls take precedence over length truncation (completed, no incomplete_details)', () => {
     const o = buildResponseObject({
       id: 'resp_len_tc',
       modelAlias: 'm',
@@ -270,7 +286,7 @@ describe('buildResponseObject', () => {
       store: false,
       stopReason: 'length'
     })
-    assert.equal(o['status'], 'requires_action')
+    assert.equal(o['status'], 'completed')
     assert.equal(o['incomplete_details'], undefined)
   })
 
@@ -446,7 +462,7 @@ describe('writeBlockingResponse', () => {
     })
 
     const obj = await writeBlockingResponse(res, p, () => result)
-    assert.equal(obj['status'], 'requires_action')
+    assert.equal(obj['status'], 'completed')
     assert.ok((obj['required_action'] as { submit_tool_outputs: unknown }).submit_tool_outputs)
     const parsed = JSON.parse(bodyStr) as {
       required_action: { submit_tool_outputs: { tool_calls: unknown[] } }
@@ -492,7 +508,12 @@ describe('writeBlockingResponse', () => {
       { type: 'reasoning_text', text: 'The user wants a greeting.' }
     ])
     assert.equal(JSON.stringify(parsed.output[1]).includes('greeting'), false)
-    assert.deepEqual(parsed.usage, { input_tokens: 31, output_tokens: 9, total_tokens: 40 })
+    assert.deepEqual(parsed.usage, {
+      input_tokens: 31,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 9,
+      total_tokens: 40
+    })
   })
 })
 

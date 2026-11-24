@@ -75,7 +75,7 @@ export interface BuildResponseObjectParams {
    * Terminal `stopReason` from the SDK. `length` maps to OpenAI's
    * `status: 'incomplete'` + `incomplete_details.reason: 'max_output_tokens'`
    * (the Responses-API analogue of chat's `finish_reason: 'length'`), unless
-   * tool calls take precedence with `requires_action`.
+   * the model called tools, which is a `completed` response.
    */
   stopReason?: string
   /**
@@ -83,6 +83,8 @@ export interface BuildResponseObjectParams {
    * Wins over the stats, whose counts are summed before that guard could run.
    */
   inputTokens?: number
+  /** The part of `inputTokens` the KV cache already held. */
+  cachedInputTokens?: number
   /** The request named a KV cache session; only then is `qvac_cache_tokens` reported. */
   kvCached?: boolean
   /** SDK cacheTokens of the last generation round; the stats sum every round. */
@@ -124,10 +126,17 @@ function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
 export function responseUsage(
   params: Pick<
     BuildResponseObjectParams,
-    'text' | 'stats' | 'completionTokens' | 'inputTokens' | 'kvCached' | 'cacheOccupancy'
+    | 'text'
+    | 'stats'
+    | 'completionTokens'
+    | 'inputTokens'
+    | 'cachedInputTokens'
+    | 'kvCached'
+    | 'cacheOccupancy'
   >
 ): {
   input_tokens: number
+  input_tokens_details: { cached_tokens: number }
   qvac_cache_tokens?: number
   output_tokens: number
   total_tokens: number
@@ -137,11 +146,13 @@ export function responseUsage(
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
   const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
+  const cachedTokens = params.cachedInputTokens ?? cachedTokensFromStats(params.stats)
   // SDK cacheTokens is what the context holds, not what this request reused,
   // so it is only a QVAC diagnostic.
   const cacheTokens = params.cacheOccupancy
   return {
     input_tokens: inputTokens,
+    input_tokens_details: { cached_tokens: Math.min(cachedTokens, inputTokens) },
     ...(params.kvCached &&
     typeof cacheTokens === 'number' &&
     Number.isFinite(cacheTokens) &&
@@ -177,7 +188,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const usage = responseUsage(params)
 
   const truncated = !hasToolCalls && params.stopReason === 'length'
-  const status = hasToolCalls ? 'requires_action' : truncated ? 'incomplete' : 'completed'
+  const status = truncated ? 'incomplete' : 'completed'
 
   const base: Record<string, unknown> = {
     id: params.id,
@@ -235,6 +246,10 @@ export function inputTokensFromStats(stats: CompletionStats | undefined): number
   if (typeof held !== 'number' || typeof generated !== 'number') return prompt
   if ((stats?.avgConcurrentSeq ?? 1) > 1) return prompt
   return Math.max(prompt, held - generated)
+}
+
+export function cachedTokensFromStats(stats: CompletionStats | undefined): number {
+  return Math.max(0, inputTokensFromStats(stats) - (stats?.promptTokens ?? 0))
 }
 
 export function functionCallItem(

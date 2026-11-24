@@ -34,6 +34,10 @@ import {
 import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
 import { openaiState } from '@/serve/extensions/openai/state'
 import {
+  cachedTokensFromStats,
+  inputTokensFromStats
+} from '@/serve/extensions/openai/adapters/responses-shape'
+import {
   buildUsage,
   chatCompletionChunk,
   chatCompletionResponse,
@@ -118,6 +122,17 @@ function formatStats(stats: CompletionStats | undefined): string {
     parts.push(`backend=${stats.backendDevice}`)
   }
   return parts.length > 0 ? ` ${parts.join(' ')}` : ''
+}
+
+function promptUsage(stats: CompletionStats | undefined): {
+  promptTokens?: number
+  cachedTokens?: number
+} {
+  if (stats?.promptTokens === undefined) return {}
+  return {
+    promptTokens: inputTokensFromStats(stats),
+    cachedTokens: cachedTokensFromStats(stats)
+  }
 }
 
 // What the named cache holds after the last turn; unkeyed requests report nothing.
@@ -300,7 +315,7 @@ async function runBlocking(
         ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(stats),
         ...cacheOccupancy(p, drained),
         finishReason
       })
@@ -403,7 +418,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(stats),
         ...cacheOccupancy(p, drained)
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))

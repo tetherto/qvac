@@ -20,6 +20,7 @@ import type {
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
+  cachedTokensFromStats,
   functionCallItem,
   clientToolName,
   functionCallOutputItemId,
@@ -233,6 +234,7 @@ export async function writeBlockingResponse(
   let drained
   let total: DrainedOpenAICompletion | undefined
   let inputTokens = 0
+  let cachedInputTokens = 0
   const timeline = createOutputTimeline(p.tools, p.toolNamespaces)
   for (let round = 0; ; round++) {
     if (round > 0) timeline.endRound()
@@ -245,6 +247,7 @@ export async function writeBlockingResponse(
     total = accumulateUsage(total, drained)
     // Per round: the overlap guard needs each round's own concurrency.
     inputTokens += inputTokensFromStats(drained.stats)
+    cachedInputTokens += cachedTokensFromStats(drained.stats)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -282,6 +285,7 @@ export async function writeBlockingResponse(
       : {}),
     completionTokens,
     inputTokens,
+    cachedInputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -356,6 +360,7 @@ export async function writeStreamingResponse(
   let drained
   let total: DrainedOpenAICompletion | undefined
   let inputTokens = 0
+  let cachedInputTokens = 0
   for (let round = 0; ; round++) {
     // A search turn's preamble stays in the response object: it was streamed at
     // its own output_index, which must match its position in `output`.
@@ -369,6 +374,7 @@ export async function writeStreamingResponse(
     total = accumulateUsage(total, drained)
     // Per round: the overlap guard needs each round's own concurrency.
     inputTokens += inputTokensFromStats(drained.stats)
+    cachedInputTokens += cachedTokensFromStats(drained.stats)
 
     const extended =
       round >= MAX_TOOL_SEARCH_ROUNDS
@@ -411,6 +417,7 @@ export async function writeStreamingResponse(
       : {}),
     completionTokens,
     inputTokens,
+    cachedInputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })

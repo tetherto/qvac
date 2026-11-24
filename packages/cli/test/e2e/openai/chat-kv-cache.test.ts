@@ -113,6 +113,7 @@ describe('serve: chat completions KV cache', () => {
         assert.deepEqual(retention, { acquired: [expected], released: 1 })
         assert.deepEqual(usageOf(res.payload, stream), {
           prompt_tokens: 144,
+          prompt_tokens_details: { cached_tokens: 0 },
           qvac_cache_tokens: 128,
           completion_tokens: 2,
           total_tokens: 146
@@ -147,6 +148,7 @@ describe('serve: chat completions KV cache', () => {
       // Occupancy is reported only for a named session.
       assert.deepEqual(usageOf(res.payload, stream), {
         prompt_tokens: 144,
+        prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens: 2,
         total_tokens: 146
       })
