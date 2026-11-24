@@ -306,6 +306,34 @@ backend use the shared runtime. The existing four Linux boundary tests also
 pass after making the probe's intentionally throwing C-linkage function
 explicitly `noexcept(false)`, as required by Windows `/EHsc` assumptions.
 
+### Packaged Bare inference
+
+`packaged-inference.js` is the consumer smoke app used for CPU and CUDA
+validation. Copy it into an empty directory as `index.js`, install locally
+packed llm-llamacpp, fabric and platform tarballs (using npm overrides for
+fabric and its platform package), and create `config.json`:
+
+```json
+{"model":"/absolute/path/to/model.gguf","device":"cpu"}
+```
+
+For NVIDIA testing, use `"device":"gpu","backend":"cuda"`. Run the app
+with the pinned Bare runtime. It checks two nonempty responses, the reported
+device, and clean model unload. Native logging is explicitly registered so
+the runner can require a positive GPU layer-offload count. Inspect loaded
+module paths separately: exactly one shared base and all qvac modules must
+come from the installed app, without build-tree search paths. On Windows,
+restrict PATH to System32 and verify the packaged MSVC runtime DLLs load from
+the app too. CUDA dependencies may come from the installed toolkit/driver.
+
+The pre-rebase Windows `/MD` experiment passed this installed-package test
+with Bare 1.36.0: CPU with SmolLM2 135M, and CUDA with Gemma 3 1B (27/27
+layers) and Qwen 3.5 2B (26/26 layers), using an RTX 3080 Ti Laptop GPU and
+CUDA 13.2. Both GPU runs completed two requests and unloaded with exit zero.
+The module audit found one base and app-local qvac/MSVC DLLs. These results
+used isolated build overrides; they do not establish production `/MD`
+packaging or validation of a later rebase.
+
 The strict runtime-binding audit remains required: versioned imports alone
 have not eliminated Bare's allocator interposition. Windows stream/vector
 ownership, Android APK loading, bare-sidecar, coexistence and GPU/NPU execution
