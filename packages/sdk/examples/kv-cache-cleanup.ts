@@ -9,7 +9,7 @@ import {
 
 try {
   console.log('▸ KV Cache Cleanup Demo\n')
-  console.log('▸ Cache structure: {kvCacheKey}/{modelId}/{configHash}.bin\n')
+  console.log('▸ Cache structure: {kvCacheKey}/{modelFolder}/{configHash}.bin\n')
   console.log('▸ ' + '='.repeat(70) + '\n')
 
   const modelId = await loadModel({

@@ -35,9 +35,7 @@ runs:
     - name: Fetch target branch
       shell: bash
       id: fetch_pr
-      if: |
-        github.event_name == 'pull_request_target' ||
-        github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request'
       continue-on-error: true
       env:
         PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -48,9 +46,7 @@ runs:
     - name: Check PR status vs. target branch
       shell: bash
       id: target_branch_checks
-      if: |
-        github.event_name == 'pull_request_target' ||
-        github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request'
       continue-on-error: true
       run: |
         TARGET_SHA=${{ github.event.pull_request.base.sha }}
