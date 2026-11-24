@@ -339,7 +339,8 @@ export async function downloadModelFromRegistry(
               wait: 'download',
               signal: ctx.signal
             })
-            return findRegistryCoremlBundleSet(lease.client, coremlBundle)
+            // Await inside the scope so the lease outlives the lookup.
+            return await findRegistryCoremlBundleSet(lease.client, coremlBundle)
           },
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
