@@ -148,6 +148,91 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
+// What @qvac/decision-ggml's statically linked server-context leaves undefined
+// in libcommon's jinja engine: four functions, and the vtables and typeinfo of
+// the value classes it constructs and catches. ELF names; Mach-O adds a '_'.
+const SERVER_CONTEXT_JINJA = [
+  '_ZN5jinja16global_from_jsonI11common_jsonEEvRNS_7contextERKT_b',
+  '_ZN5jinja6string6appendERKS0_',
+  '_ZNK5jinja6string3strEv',
+  '_ZNK5jinja9statement7executeERNS_7contextE',
+  '_ZTIN5jinja11value_int_tE',
+  '_ZTIN5jinja12value_bool_tE',
+  '_ZTIN5jinja13value_array_tE',
+  '_ZTIN5jinja13value_float_tE',
+  '_ZTIN5jinja14value_string_tE',
+  '_ZTVN5jinja11value_int_tE',
+  '_ZTVN5jinja12value_bool_tE',
+  '_ZTVN5jinja12value_none_tE',
+  '_ZTVN5jinja13value_array_tE',
+  '_ZTVN5jinja14value_object_tE',
+  '_ZTVN5jinja14value_string_tE'
+]
+
+test('the runtime exports exactly the jinja symbols server-context needs', () => {
+  // @qvac/decision-ggml links upstream server-context statically and resolves
+  // its libcommon references (these jinja symbols, two helpers) from this
+  // runtime. Exact names, not the namespace.
+  const mapLines = read('symbols.map')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+  const mapJinja = mapLines.filter((line) => /^_Z\w*N?5jinja/.test(line))
+  assert.deepEqual(mapJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => name + ';').sort())
+  assert.ok(mapLines.includes('fs_validate_filename*;'))
+  assert.ok(mapLines.includes('glob_match*;'))
+  // A demangled-name pattern misses function templates, whose demangled names
+  // start with the return type, so common_json::get<T>() is matched mangled.
+  assert.ok(mapLines.includes('_ZNK11common_json3getI*;'))
+
+  const exportsTxt = read('exports.txt').split(/\r?\n/)
+  const exportsJinja = exportsTxt.filter((line) => line.includes('5jinja'))
+  assert.deepEqual(exportsJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => '_' + name).sort())
+  assert.ok(exportsTxt.includes('__Z*fs_validate_filename*'))
+  assert.ok(exportsTxt.includes('__Z*glob_match*'))
+
+  // MSVC decorates differently: the same functions and the value classes by
+  // decorated scope, never the whole "@jinja@@" namespace.
+  const def = read('cmake/generate-windows-def.cmake')
+  for (const fragment of [
+    '"global_from_json@"',
+    '"@string@jinja@@"',
+    '"@statement@jinja@@"',
+    '"@value_[a-z_]*t@jinja@@"',
+    '"fs_validate_filename"',
+    '"glob_match"'
+  ]) {
+    assert.ok(def.includes(fragment), fragment)
+  }
+  assert.ok(!def.includes('"@jinja@@"'))
+})
+
+test('fabric neither builds nor ships server-context', () => {
+  // The decision addon builds it from the qvac-fabric port itself.
+  assert.ok(
+    !vcpkgJson.dependencies.some(
+      (dep) => dep.name === 'qvac-fabric' && (dep.features || []).includes('server-context')
+    )
+  )
+  assert.doesNotMatch(read('CMakeLists.txt'), /server-context/)
+})
+
+test('the qvac-fabric port the runtime is built from is recorded', () => {
+  // package.json records the pinned port; the build checks the record against
+  // the port it installed and writes it into the CMake config, where
+  // qvac_addon_link_fabric_server_context() compares an addon's own port build.
+  const pinned = vcpkgJson.dependencies.find((dep) => dep.name === 'qvac-fabric')['version>=']
+  assert.equal(packageJson.qvac['qvac-fabric'], pinned)
+  const cmake = read('CMakeLists.txt')
+  assert.match(
+    cmake,
+    /qvac_fabric_installed_port_version\("\$\{VCPKG_INSTALLED_PATH\}" QVAC_FABRIC_PORT_VERSION\)/
+  )
+  assert.match(cmake, /cmake\/qvac-fabric-port\.cmake\s+DESTINATION share\/qvac-fabric\/cmake/)
+  const config = read('cmake/qvac-fabricConfig.cmake.in')
+  assert.match(config, /set\(QVAC_FABRIC_PORT_VERSION "@QVAC_FABRIC_PORT_VERSION@"\)/)
+  assert.match(config, /include\("\$\{CMAKE_CURRENT_LIST_DIR\}\/qvac-fabric-port\.cmake"\)/)
+})
+
 test('the Mach-O export list does not re-export host symbols', () => {
   const imports = new Set()
   for (const file of fs.readdirSync(path.join(packageRoot, 'addon'))) {

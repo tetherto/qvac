@@ -256,6 +256,33 @@ A standard consumer map exports only `bare_*` / `napi_*`:
 The large `llama_* / ggml_* / common_*` export surface lives in `@qvac/fabric`'s
 own `symbols.map` / `exports.txt`, not in the consumer.
 
+### Upstream server-context (decision addon only)
+
+`@qvac/decision-ggml` runs upstream llama.cpp's `server-context` (decision
+execution without the HTTP server). It is not part of this package: the addon
+builds the `qvac-fabric` port with the `server-context` feature in its own
+`vcpkg.json` and links the archive statically after `qvac_addon_use_fabric()`:
+
+```cmake
+qvac_addon_link_fabric_server_context(${my-addon})
+```
+
+Only the archive is linked. Its `llama` / `common` / `mtmd` references resolve
+from the shared runtime, which exports exactly the libcommon symbols it needs
+(the `jinja` entries, `fs_validate_filename` and `glob_match` in `symbols.map`,
+`exports.txt` and `cmake/generate-windows-def.cmake`).
+
+The archive and the runtime must come from the same port version:
+
+- This package's build writes the port it installed into its CMake config
+  (`QVAC_FABRIC_PORT_VERSION`), so the value travels with the prebuilds. The
+  helper fails configure when the addon's own vcpkg build installed another
+  version.
+- `package.json` records the port as `qvac["qvac-fabric"]`, and the addon
+  records the same. This package's build fails unless its record is the port it
+  installed, and CI (`verify-qvac-fabric-lockstep`) checks both records against
+  the `vcpkg.json` pins.
+
 ---
 
 ## Step 4 — Pre-loading and binding @qvac/fabric

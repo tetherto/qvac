@@ -432,6 +432,74 @@ function(qvac_addon_link_fabric addon_target fabric_target)
 endfunction()
 
 # ---------------------------------------------------------------------------
+# qvac_addon_link_fabric_server_context(<target>)
+#
+# Link upstream llama.cpp's server-context (decision execution, without the
+# HTTP server) statically into <target>. The archive comes from the addon's own
+# vcpkg build of the qvac-fabric port with the server-context feature
+# (default-features off, so the port builds no GPU backends). Only that archive
+# is linked, never the port's llama / ggml libraries: its llama / common / mtmd
+# references resolve from the shared @qvac/fabric runtime, which exports them.
+# The server-context symbols are hidden and stay inside <target>.
+#
+# Headers: the port installs the same llama / ggml / common / mtmd headers as
+# @qvac/fabric ships, into the vcpkg include root that already precedes
+# @qvac/fabric's (system) include directories. Each header must come from one
+# copy, or a header reached by two spellings (<common.h>,
+# <llama/common/common.h>) is defined twice, so <target> compiles against the
+# port's copy throughout. It is the version the runtime was built from (checked
+# below); only qvac-fabric.h still comes from @qvac/fabric.
+#
+# The archive and the runtime must come from the same port version. The
+# installed @qvac/fabric's CMake config records the port its runtime was built
+# from (QVAC_FABRIC_PORT_VERSION, from that build's vcpkg install, so it travels
+# with the prebuilds); configure fails here unless this addon's vcpkg build
+# installed the same version. The packages' package.json records
+# (qvac["qvac-fabric"]) are checked against the vcpkg.json pins by
+# verify-qvac-fabric-lockstep. Call after qvac_addon_use_fabric(). Only the
+# decision addon needs this.
+# ---------------------------------------------------------------------------
+function(qvac_addon_link_fabric_server_context target)
+  if(NOT qvac-fabric_DIR OR NOT TARGET qvac-fabric::headers)
+    message(FATAL_ERROR "qvac-addon: call qvac_addon_use_fabric() before qvac_addon_link_fabric_server_context().")
+  endif()
+
+  find_package(llama CONFIG REQUIRED)
+  if(NOT TARGET llama::server-context)
+    message(FATAL_ERROR
+      "qvac-addon: the installed qvac-fabric port has no server-context. Add qvac-fabric "
+      "with the server-context feature to this addon's vcpkg.json.")
+  endif()
+
+  # The port this addon's vcpkg build installed, against the port the
+  # installed @qvac/fabric runtime was built from, which its CMake config
+  # records (with the reader, qvac-fabric-port.cmake).
+  get_filename_component(_installed "${llama_DIR}/../.." ABSOLUTE)
+  if(NOT DEFINED QVAC_FABRIC_PORT_VERSION OR NOT COMMAND qvac_fabric_installed_port_version)
+    message(FATAL_ERROR
+      "qvac-addon: the installed @qvac/fabric (${qvac-fabric_DIR}) does not record the "
+      "qvac-fabric port it was built from (QVAC_FABRIC_PORT_VERSION), so the "
+      "server-context archive cannot be matched to it. Use an @qvac/fabric build that does.")
+  endif()
+  qvac_fabric_installed_port_version("${_installed}" _port_version)
+  if(NOT _port_version STREQUAL QVAC_FABRIC_PORT_VERSION)
+    message(FATAL_ERROR
+      "qvac-addon: server-context comes from qvac-fabric ${_port_version}, but the installed "
+      "@qvac/fabric runtime was built from qvac-fabric ${QVAC_FABRIC_PORT_VERSION}. Pin "
+      "qvac-fabric ${QVAC_FABRIC_PORT_VERSION} in vcpkg.json, or install the @qvac/fabric "
+      "built from ${_port_version}.")
+  endif()
+  message(STATUS "qvac-addon: server-context from qvac-fabric ${_port_version}, matching @qvac/fabric")
+
+  target_include_directories(${target} PRIVATE
+    "${_installed}/include/llama"
+    "${_installed}/include/llama/common"
+    "${_installed}/include/llama/mtmd"
+    "${_installed}/include/llama/server-context")
+  target_link_libraries(${target} PRIVATE "$<TARGET_LINKER_FILE:llama::server-context>")
+endfunction()
+
+# ---------------------------------------------------------------------------
 # qvac_addon_finalize(<addon_target>)
 #
 # Apply the settings every addon module needs:
