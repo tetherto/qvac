@@ -112,6 +112,13 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     /default of "n" changed/
   ],
   [
+    'request: a field named like an annotation changes type',
+    'request',
+    object({ description: text, title: text }),
+    object({ description: { type: 'number' }, title: text }),
+    /"description" no longer accepts string/
+  ],
+  [
     'request: default removed',
     'request',
     object({ n: { type: 'number', default: 1 } }),
@@ -409,6 +416,29 @@ test('the capability baseline records every contract operation', function (t) {
   vlaRequest['required'] = [...(vlaRequest['required'] as string[]), 'noise']
   t.alike(findMajorProblems(baseline(), changed), [
     'vision-language-action@1: vlaRun request: field "noise" became required'
+  ])
+})
+
+test('the capability baseline compares completionOrchestrate under completion', function (t) {
+  const current = baseline()
+  const completion = current.capabilities.contracts.find((contract) => contract.id === 'completion')
+  t.alike(completion?.runtimeOperations, ['completionOrchestrate'])
+
+  const changed = baseline()
+  const orchestrate = defOf(changed, 'completionOrchestrate.request')
+  orchestrate['properties'] = { ...(orchestrate['properties'] as Schema), turnLimit: text }
+  orchestrate['required'] = [
+    ...((orchestrate['required'] as string[] | undefined) ?? []),
+    'turnLimit'
+  ]
+  t.alike(findMajorProblems(baseline(), changed), [
+    'completion@1: completionOrchestrate request: field "turnLimit" became required'
+  ])
+
+  const removed = baseline()
+  for (const contract of removed.capabilities.contracts) delete contract.runtimeOperations
+  t.alike(findMajorProblems(baseline(), removed), [
+    'completion@1: runtime operation completionOrchestrate was removed'
   ])
 })
 

@@ -34,6 +34,16 @@ const PLUGIN_HANDLER_OPERATIONS: Record<
 }
 
 /**
+ * Operations the runtime implements on top of a contract's operations, keyed by
+ * contract ID. No plugin declares them, but their schemas are part of the
+ * contract: `completionOrchestrate` runs `completionStream` turns with tool
+ * results in between.
+ */
+const RUNTIME_OPERATIONS: Record<string, string[]> = {
+  completion: ['completionOrchestrate']
+}
+
+/**
  * The capability baseline: the QVAC capability contract table, and the call
  * shape and wire schemas of every operation the contracts list. `npm run build`
  * writes it to `dist/contract/capability-baseline.json`, so each published
@@ -50,12 +60,17 @@ export function buildCapabilityBaseline(): ContractSnapshot {
       id: contract.id,
       version: contract.version,
       operations: [...contract.operations],
-      optionalOperations: [...contract.optionalOperations]
+      optionalOperations: [...contract.optionalOperations],
+      runtimeOperations: [...(RUNTIME_OPERATIONS[contract.id] ?? [])]
     }))
     .sort((a, b) => (a.id === b.id ? a.version - b.version : a.id < b.id ? -1 : 1))
 
   const operations = new Set(
-    contracts.flatMap((contract) => [...contract.operations, ...contract.optionalOperations])
+    contracts.flatMap((contract) => [
+      ...contract.operations,
+      ...contract.optionalOperations,
+      ...contract.runtimeOperations
+    ])
   )
   const { schemaDocument, manifest } = buildContract({ markStrict: true })
   const wireMethods = manifest.methods.filter((method) => operations.has(method.name))

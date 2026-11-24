@@ -100,6 +100,10 @@ function resolve(node: unknown, side: Side): { node: unknown; ref: string | unde
   return { node: current, ref }
 }
 
+// Keywords whose value maps names to schemas. Their keys are field or
+// definition names, not keywords, so a field called `description` is kept.
+const SCHEMA_MAPS = new Set(['properties', 'patternProperties', '$defs', 'dependentSchemas'])
+
 // The schema with annotations removed and references inlined, as a stable
 // string, so that two schemas that only differ in descriptions compare equal.
 function canonical(node: unknown, side: Side, stack: string[] = []): string {
@@ -113,7 +117,21 @@ function canonical(node: unknown, side: Side, stack: string[] = []): string {
   const keys = Object.keys(node)
     .filter((key) => !ANNOTATIONS.has(key))
     .sort()
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonical(node[key], side, stack)}`).join(',')}}`
+  return `{${keys
+    .map((key) => {
+      const value = node[key]
+      const rendered =
+        SCHEMA_MAPS.has(key) && isNode(value)
+          ? canonicalMap(value, side, stack)
+          : canonical(value, side, stack)
+      return `${JSON.stringify(key)}:${rendered}`
+    })
+    .join(',')}}`
+}
+
+function canonicalMap(map: Node, side: Side, stack: string[]): string {
+  const keys = Object.keys(map).sort()
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonical(map[key], side, stack)}`).join(',')}}`
 }
 
 function isAnything(node: unknown): boolean {

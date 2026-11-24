@@ -23,6 +23,8 @@ export interface CapabilityContractEntry {
   version: number
   operations: string[]
   optionalOperations: string[]
+  /** Operations the runtime implements on top of the contract; no plugin declares them. */
+  runtimeOperations?: string[]
 }
 
 /** The shape of `capability-baseline.json`, and of the working tree's contracts. */
@@ -85,9 +87,19 @@ export function findMajorProblems(
       )
     }
 
-    const kept = [...before.operations, ...before.optionalOperations].filter(
+    const runtimeBefore = before.runtimeOperations ?? []
+    const runtimeAfter = after.runtimeOperations ?? []
+    for (const operation of runtimeBefore) {
+      if (!runtimeAfter.includes(operation)) {
+        problems.push(`${key}: runtime operation ${operation} was removed`)
+      }
+    }
+
+    const kept = [...before.operations, ...before.optionalOperations, ...runtimeBefore].filter(
       (operation) =>
-        after.operations.includes(operation) || after.optionalOperations.includes(operation)
+        after.operations.includes(operation) ||
+        after.optionalOperations.includes(operation) ||
+        runtimeAfter.includes(operation)
     )
     for (const operation of kept) {
       const old = publishedMethods.get(operation)
