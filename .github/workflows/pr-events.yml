@@ -1,0 +1,25 @@
+name: PR events
+
+# Only a trigger: Check Approvals runs from the default branch's copy when this is requested, on main's events, a
+# retarget's edited included. It holds no secrets and checks out nothing, so a fork's run reaches nothing.
+on:
+  pull_request:
+    types: [opened, labeled, synchronize, ready_for_review, reopened, edited]
+    branches: [main, release-*]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-events:
+    name: PR events
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record the head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: echo "Check Approvals runs for $HEAD_SHA"

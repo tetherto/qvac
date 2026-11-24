@@ -85,19 +85,19 @@ jobs:
         row: ${{ fromJSON(inputs.rows) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       # Data only, from the ref the build will use; nothing here is executed.
       - name: Checkout test groups
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           ref: ${{ inputs.ref || github.sha }}
           sparse-checkout: ${{ matrix.row.dir }}/test/mobile
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -153,7 +153,7 @@ jobs:
       - run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
         shell: bash
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
@@ -164,14 +164,14 @@ jobs:
           persist-credentials: false
       - run: node .github/scripts/pr-comment.mjs mobile
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           ref: ${{ inputs.ref || github.sha }}
           path: src
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Checkout mobile test framework
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
@@ -179,13 +179,13 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
-        uses: tetherto/qvac-actions/runner-free-disk@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/runner-free-disk@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           keep-android: "true"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: ${{ contains(matrix.row.setup, 'node22') && '22' || 'lts/*' }}
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       # Nx only: test:mobile runs a package script on Node built-ins, so the workspace root is enough.
@@ -203,7 +203,7 @@ jobs:
           platform: ${{ inputs.platform }}
           github-token: ${{ github.token }}
       - if: matrix.row.hasBuild && inputs.prebuild_run_id != ''
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           artifact-ids: ${{ steps.run.outputs.artifact-id }}
           run-id: ${{ steps.run.outputs.source-run-id }}
@@ -224,7 +224,7 @@ jobs:
           expected-dirs: ${{ steps.run.outputs.expected-dirs }}
           source: ${{ inputs.prebuild_run_id != '' && format('run {0}', steps.run.outputs.source-run-id) || inputs.package || 'npm latest' }}
       # Manifest models the mobile suite bundles, from the same bucket as the desktop tests.
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -234,7 +234,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: test:mobile
       # Device Farm lives in us-west-2, and the package presigns its models there; the session spans build and wait.
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -256,7 +256,7 @@ jobs:
         run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       # The provider's bundle from the named run, else from prebuild_run_id's run when it built the provider too.
       - if: matrix.row.providers[0] != null && (inputs.dependency_prebuild_run_id != '' || inputs.prebuild_run_id != '')
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ inputs.dependency_prebuild_run_id != '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
           pattern: ${{ inputs.dependency_prebuild_run_id == '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
@@ -273,18 +273,18 @@ jobs:
           dependency-prebuilds: ${{ hashFiles('dep-prebuilds/**') != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, github.workspace) || '' }}
           per-test-timeout-minutes: ${{ steps.prepare.outputs.per-test-timeout-minutes || matrix.row.meta.mobile.perTestTimeoutMinutes[inputs.platform] || '' }}
       - if: inputs.platform == 'Android'
-        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-java@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           java-version: "17"
       - if: inputs.platform == 'Android'
-        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-android@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - id: android
         if: inputs.platform == 'Android'
         uses: ./.github/actions/android-build-app
         with:
           app-dir: test-framework
       - if: inputs.platform == 'iOS'
-        uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-xcode@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           # As main's #5607: ibtool needs the iOS runtime matching the SDK, and macos-15 ships only iOS 18.5+ runtimes.
           xcode-versions: "26.3"
@@ -294,7 +294,7 @@ jobs:
           sdk: iphoneos
       - id: signing
         if: inputs.platform == 'iOS'
-        uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/ios-import-signing@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
@@ -328,20 +328,20 @@ jobs:
           perf-warmup-runs: ${{ inputs.perf_warmup_runs }}
           bundle-id: ${{ env.BUNDLE_ID }}
       - id: app
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: ${{ steps.android.outputs.app-type || steps.ios.outputs.app-type }}
           files: ${{ steps.android.outputs.app-path || steps.ios.outputs.app-path }}
           name: ${{ steps.android.outputs.app-name || steps.ios.outputs.app-name }}
       - id: package
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_PACKAGE
           files: ${{ steps.specs.outputs.test-package }}
       - id: spec-uploads
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_SPEC
@@ -368,7 +368,7 @@ jobs:
         run: echo "minutes=$(( (LIMIT * 60 - ($(date +%s) - JOB_START)) / 60 - 15 ))" >> "$GITHUB_OUTPUT"
       - id: wait
         timeout-minutes: ${{ fromJSON(steps.budget.outputs.minutes) }}
-        uses: tetherto/qvac-actions/devicefarm-wait-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-wait-runs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           specs: ${{ steps.spec-uploads.outputs.uploads }}
@@ -376,17 +376,17 @@ jobs:
           accept-stopped: "true"
       # Fresh credentials before the cancel: an expired session fails the wait and would leave the runs billing.
       - if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
-        uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
       - if: (failure() || cancelled()) && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
       - id: logs
         if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
-        uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-download-logs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           platform: ${{ inputs.platform }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
@@ -399,7 +399,7 @@ jobs:
             ${{ steps.prepare.outputs.after-hook-pulls && format('{0}/*', join(fromJSON(steps.prepare.outputs.after-hook-pulls).*.artifact_name, '/* ')) || '' }}
           skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/devicefarm-summarize-results@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-summarize-results@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           title: ${{ format('{0} ({1})', matrix.row.npm, inputs.platform) }}
           console-dir: ${{ steps.logs.outputs.console-dir }}
@@ -412,7 +412,7 @@ jobs:
           DETAILS: ${{ steps.logs.outputs.console-dir }}/test-case-details.json
         run: node .github/scripts/pr-comment.mjs mobile
       - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: console-logs-${{ matrix.row.slug }}-${{ inputs.platform }}
           path: ${{ steps.logs.outputs.console-dir }}
@@ -429,7 +429,7 @@ jobs:
           title: ${{ format('{0} ({1})', matrix.row.meta.mobile.perfReport.title, inputs.platform) }}
           merge: ${{ matrix.row.meta.mobile.perfReport.merge == true }}
       - if: always() && steps.perf.outputs.extracted == 'true'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-perf-mobile-${{ inputs.platform }}-${{ github.run_number }}
           path: ${{ runner.temp }}/perf-report
