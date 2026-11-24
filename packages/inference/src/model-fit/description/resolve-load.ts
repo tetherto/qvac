@@ -175,7 +175,8 @@ function stubSetFor(registryPath: string): FitStubSet | undefined {
 const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([
   ModelType.nmtcppTranslation,
   ModelType.ggmlClassification,
-  ModelType.ggmlImageEmbedding
+  ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth
 ])
 
 class NoStubError extends Error {

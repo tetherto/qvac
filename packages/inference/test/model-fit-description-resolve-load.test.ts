@@ -429,7 +429,11 @@ test('resolve load: a partly downloaded model in the cache is not read', async (
   t.is(resolved.reason, 'files-only-engine')
 })
 
-for (const modelType of [ModelType.ggmlClassification, ModelType.ggmlImageEmbedding]) {
+for (const modelType of [
+  ModelType.ggmlClassification,
+  ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth
+]) {
   test(`resolve load: a ${modelType} source not on disk fetches no stub`, async (t) => {
     clearPlugins()
     t.teardown(clearPlugins)

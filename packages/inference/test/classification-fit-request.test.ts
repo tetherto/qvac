@@ -1,8 +1,11 @@
 import test from 'brittle'
 import path from 'bare-path'
+import { assessFit as classificationAssessFit } from '@qvac/classification-ggml'
 
 import { classificationFitRequest } from '@/plugins/builtin/ggml-classification/fit'
 import { imageEmbeddingFitRequest } from '@/plugins/builtin/ggml-image-embedding/fit'
+import { stereoDepthFitRequest } from '@/plugins/builtin/ggml-stereo-depth/fit'
+import { stereoDepthPlugin } from '@/plugins/builtin/ggml-stereo-depth/plugin'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
 function load(modelPath: string, modelConfig: unknown): FitLoad {
@@ -56,4 +59,28 @@ test('image embedding: an empty config leaves placement to the addon', (t) => {
   t.alike(requestOf(imageEmbeddingFitRequest(load('/models/megaloc.gguf', undefined))), {
     modelPath: '/models/megaloc.gguf'
   })
+})
+
+test('stereo depth: carries the model and the load placement', (t) => {
+  const plan = stereoDepthFitRequest(
+    load('/models/bridgedepth.gguf', { backend: 'MTL0', threads: 4, backendsDir: '/backends' })
+  )
+
+  t.alike(requestOf(plan), {
+    modelPath: '/models/bridgedepth.gguf',
+    backend: 'MTL0',
+    threads: 4,
+    backendsDir: '/backends'
+  })
+})
+
+test('stereo depth: an empty config leaves placement and input size to the addon', (t) => {
+  t.alike(requestOf(stereoDepthFitRequest(load('/models/bridgedepth.gguf', undefined))), {
+    modelPath: '/models/bridgedepth.gguf'
+  })
+})
+
+test('stereo depth: the plugin sizes loads with the classification fitter', (t) => {
+  t.is(stereoDepthPlugin.fitRequest, stereoDepthFitRequest)
+  t.is(stereoDepthPlugin.assessFit, classificationAssessFit)
 })
