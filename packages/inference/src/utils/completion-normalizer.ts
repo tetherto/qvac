@@ -523,15 +523,14 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   function stepAfterTool(events: CompletionEvent[], buf: string) {
     let rest = buf
     for (;;) {
+      // Whitespace joins the held group as it arrives, so it is never rescanned.
       const trimmed = rest.trimStart()
-      if (!trimmed) {
-        afterToolTail = rest
-        return ''
-      }
+      trailingCalls!.raw += rest.slice(0, rest.length - trimmed.length)
+      rest = trimmed
+      if (!trimmed) return ''
       const opener = toolOpeners.find((m) => trimmed.startsWith(m))
       if (opener) {
         // The next frame joins the held group; the text after it decides them all.
-        trailingCalls!.raw += rest.slice(0, rest.length - trimmed.length)
         openToolFrame(opener, markerToEntry.get(opener)!.spec, false)
         return trimmed.slice(opener.length)
       }

@@ -641,3 +641,18 @@ test('whitespace after a bare opener is not held without limit', (t) => {
     'a short gap is a call'
   )
 })
+
+test('whitespace after a held call is consumed as it arrives', (t) => {
+  const block = '<function=login><parameter=password>a</parameter></function>'
+  const pad = ' \n'.repeat(512 * 1024)
+  const started = Date.now()
+  const made = run([block, ...chunks(pad, 16)], [LOGIN])
+  const elapsed = Date.now() - started
+  t.alike(argsOf(made), [['login', { password: 'a' }]])
+  t.is(made.content, '')
+  t.ok(elapsed < BUDGET_MS, `${pad.length} chars in ${elapsed}ms`)
+
+  const example = run([block, ...chunks(' \n'.repeat(8), 3), 'and prose'], [LOGIN])
+  t.is(example.content, `${block}${' \n'.repeat(8)}and prose`, 'whitespace kept in order')
+  t.is(example.calls.length + example.finalCalls.length, 0)
+})
