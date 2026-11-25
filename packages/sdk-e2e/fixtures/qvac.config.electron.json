@@ -13,7 +13,8 @@
     "@qvac/sdk/ggml-ocr/plugin",
     "@qvac/sdk/ggml-classification/plugin",
     "@qvac/sdk/ggml-image-embedding/plugin",
-    "custom-echo-plugin/plugin"
+    "custom-echo-plugin/plugin",
+    "rag-e2e-plugin/plugin"
   ],
   "loggerLevel": "debug",
   "loggerConsoleOutput": true,

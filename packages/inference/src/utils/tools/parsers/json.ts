@@ -1,8 +1,8 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
-  generateStableToolCallId,
+  acceptToolCall,
   isValidToolCall,
-  validateToolArguments,
+  withObjectArguments,
   type ParserResult
 } from '@/utils/tools/shared'
 
@@ -26,7 +26,8 @@ export function parseGemmaFormat(text: string, tools: Tool[]): ParserResult {
     return { matched: false, toolCalls, errors }
   }
 
-  for (const callItem of (parsed as { tool_calls: unknown[] }).tool_calls) {
+  for (const entry of (parsed as { tool_calls: unknown[] }).tool_calls) {
+    const callItem = withObjectArguments(entry)
     if (!isValidToolCall(callItem)) {
       errors.push({
         code: 'PARSE_ERROR',
@@ -36,24 +37,9 @@ export function parseGemmaFormat(text: string, tools: Tool[]): ParserResult {
       continue
     }
 
-    const call = callItem
-
-    const validation = validateToolArguments(call.name, call.arguments, tools)
-
-    if (!validation.isValid && validation.error) {
-      errors.push({
-        ...validation.error,
-        raw: JSON.stringify(call)
-      })
-      continue
-    }
-
-    toolCalls.push({
-      id: call.id || generateStableToolCallId(call.name, call.arguments),
-      name: call.name,
-      arguments: call.arguments,
-      raw: JSON.stringify(call)
-    })
+    const accepted = acceptToolCall(callItem, tools, JSON.stringify(callItem))
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   return { matched: true, toolCalls, errors }
@@ -65,7 +51,7 @@ export function parseLlamacppFormat(text: string, tools: Tool[]): ParserResult {
 
   let parsedItem: unknown
   try {
-    parsedItem = JSON.parse(text)
+    parsedItem = withObjectArguments(JSON.parse(text))
   } catch {
     return { matched: false, toolCalls, errors }
   }
@@ -74,23 +60,9 @@ export function parseLlamacppFormat(text: string, tools: Tool[]): ParserResult {
     return { matched: false, toolCalls, errors }
   }
 
-  const parsed = parsedItem
-
-  const validation = validateToolArguments(parsed.name, parsed.arguments, tools)
-
-  if (!validation.isValid && validation.error) {
-    errors.push({
-      ...validation.error,
-      raw: text
-    })
-  } else {
-    toolCalls.push({
-      id: parsed.id || generateStableToolCallId(parsed.name, parsed.arguments),
-      name: parsed.name,
-      arguments: parsed.arguments,
-      raw: text
-    })
-  }
+  const accepted = acceptToolCall(parsedItem, tools, text)
+  if (accepted.error) errors.push(accepted.error)
+  else toolCalls.push(accepted.call)
 
   return { matched: true, toolCalls, errors }
 }
@@ -102,32 +74,20 @@ export function parseGenericFormat(text: string, tools: Tool[]): ParserResult {
   const errors: ToolCallError[] = []
 
   const jsonObjectRegex = /\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}/g
-  let match: RegExpExecArray | null
+  const matches = Array.from(text.matchAll(jsonObjectRegex))
   let matched = false
 
-  while ((match = jsonObjectRegex.exec(text)) !== null) {
+  for (const [i, match] of matches.entries()) {
+    // A call followed by more prose is an example, not a call made at the end of the turn.
+    const end = match.index + match[0].length
+    if (text.slice(end, matches[i + 1]?.index ?? text.length).trim()) continue
     matched = true
     try {
-      const objItem = JSON.parse(match[0]) as unknown
+      const objItem = withObjectArguments(JSON.parse(match[0]))
       if (isValidToolCall(objItem)) {
-        const obj = objItem
-
-        const validation = validateToolArguments(obj.name, obj.arguments, tools)
-
-        if (!validation.isValid && validation.error) {
-          errors.push({
-            ...validation.error,
-            raw: match[0]
-          })
-          continue
-        }
-
-        toolCalls.push({
-          id: obj.id || generateStableToolCallId(obj.name, obj.arguments),
-          name: obj.name,
-          arguments: obj.arguments,
-          raw: match[0]
-        })
+        const accepted = acceptToolCall(objItem, tools, match[0])
+        if (accepted.error) errors.push(accepted.error)
+        else toolCalls.push(accepted.call)
       }
     } catch (error) {
       errors.push({

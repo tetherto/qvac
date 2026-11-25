@@ -1,6 +1,6 @@
 ---
 name: release
-description: Release a package to NPM. Validates version bump, changelog, creates release branch, monitors CI, verifies publish.
+description: Release a package to NPM. Validates version bump and changelog, finds or starts the release run (addon-auto-release.yml for addons on main, a release branch for patches), monitors CI, verifies publish.
 argument-hint: "<package-name> [base-branch]"
 disable-model-invocation: true
 ---
@@ -17,7 +17,12 @@ The package is identified by the `<package-name>` argument, which is the directo
 
 Where:
 - `<package-name>` is the directory name under `packages/` (e.g., `ocr-ggml`, `tts-onnx`)
-- `[base-branch]` is optional — the branch to create the release from. Defaults to `main`. Use this for patches, e.g., `/release ocr-ggml release-ocr-ggml-0.11.0`
+- `[base-branch]` is optional — the branch to release from. Defaults to `main`. Use this for patches, e.g., `/release ocr-ggml release-ocr-ggml-0.11.0`
+
+For a native addon on `main`, merging the version bump is what starts the release:
+`addon-auto-release.yml` cuts `release-<package>-<version>` and starts `publish-npm.yml`
+(see `docs/gitflow.md`, "Native addon releases from `main`"). This skill then finds that run
+rather than cutting the branch itself.
 
 ## Workflow
 
@@ -59,14 +64,44 @@ Release summary:
 Proceed? (y/n)
 ```
 
-### Step 3: Create release branch
+### Step 3: Find or start the release run
+
+**Native addon on `main`:** the automation covers a package that is not private, has a `publish`
+target, and is tagged `ci:addons` in `packages/<package>/project.json`. Do not cut the branch or
+dispatch `publish-npm.yml` yourself.
+
+1. Find the merge commit that bumped the version (the second command must print `<version>`)
+   and the auto-release run for it:
+   ```bash
+   git fetch origin main
+   git log --first-parent -1 --format=%H -S'"version": "<version>"' origin/main -- packages/<package>/package.json
+   git show <merge-commit>:packages/<package>/package.json | grep '"version"'
+   gh run list --repo tetherto/qvac --workflow addon-auto-release.yml --limit 10
+   gh run list --repo tetherto/qvac --workflow publish-npm.yml --branch release-<package>-<version> --limit 1
+   ```
+2. If a `publish-npm.yml` run exists on `release-<package>-<version>`, go to Step 4 with it.
+3. If the branch exists but has no run, read the reason in the latest auto-release summary.
+   - Waiting for a `@qvac/*` dependency: report it and stop. It starts on its own once the
+     dependency publishes.
+   - Any other reason, for example a branch cut by hand: if the branch is at `<merge-commit>`,
+     recover it with the commands in item 4. Otherwise report the reason and stop. A reused
+     hand-cut branch never starts on its own: if the recovery waits for a dependency, run it
+     again once the dependency publishes.
+4. If there is no branch, the bump merged before the automation existed or its run failed.
+   Show the plan, then start it. A branch already at `<merge-commit>` is reused:
+   ```bash
+   gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit> -f dry_run=true
+   gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit>
+   ```
+
+**Any other package on `main` (for example `ci:libs`), or a patch on `release-*`:**
 
 1. Ensure we're on the base branch and up to date:
    ```bash
    git checkout <base-branch>
    git pull origin <base-branch>
    ```
-   Where `<base-branch>` is determined in Step 1 (`main` for new releases, `release-<package>-<base-version>` for patches).
+   Where `<base-branch>` is `main`, or `release-<package>-<base-version>` for a patch.
 2. Create the release branch:
    ```bash
    git checkout -b release-<package>-<version>
@@ -75,7 +110,7 @@ Proceed? (y/n)
    ```bash
    git push origin release-<package>-<version>
    ```
-4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. Every native addon publishes through `publish-npm.yml`:
+4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. These packages publish through `publish-npm.yml`:
    ```bash
    gh workflow run publish-npm.yml --repo tetherto/qvac --ref release-<package>-<version> -f packages=<package>
    ```
@@ -162,13 +197,14 @@ git checkout main
 
 ## Error handling
 
-- If `release-merge-guard` fails: the version or changelog is missing/incorrect. Fix and re-trigger the workflow.
+- If `release-merge-guard` fails: the version or changelog is missing/incorrect. Fix it on `main` with a new bump PR; the merge starts a new release.
 - If prebuild jobs fail: check the failing platform logs with `gh run view <run-id> --log-failed`.
 - If npm publish fails: check if the version already exists (`npm view`), or if `NPM_TOKEN` is valid.
-- If the release branch already exists: ask the user whether to use the existing branch or abort.
+- If a patch release branch already exists: ask the user whether to use the existing branch or abort.
+- If the publish run failed or was cancelled: re-run it from its run page; `addon-auto-release.yml` does not restart it.
 
 ## Important notes
 
-- This skill creates a local release branch, pushes it to remote, and triggers CI manually.
+- For addons on `main` this skill only finds or starts `addon-auto-release.yml`; for patches it creates the release branch, pushes it, and dispatches `publish-npm.yml`.
 - `publish-npm.yml` handles building and publishing; do not publish by hand.
 - Release branches are never merged back to main automatically. If main needs the changes, a separate PR is required.
