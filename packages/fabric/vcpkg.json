@@ -77,7 +77,7 @@
     {
       "name": "qvac-fabric",
       "version": "12032.0.1",
-      "port-version": 1
+      "port-version": 2
     }
   ]
 }
