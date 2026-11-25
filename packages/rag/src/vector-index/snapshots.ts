@@ -59,12 +59,16 @@ export function createSnapshotStore(
     return qvacCrypto.createHash('sha256').update(namespace).digest('hex').slice(0, 32) as string
   }
 
+  // Null when there is no sidecar; any other read or parse failure throws.
   async function readSidecar(namespace: string): Promise<Sidecar | null> {
+    let text: string
     try {
-      return JSON.parse(await files.readFile(`${root}/${base(namespace)}.json`, 'utf8')) as Sidecar
-    } catch {
-      return null
+      text = await files.readFile(`${root}/${base(namespace)}.json`, 'utf8')
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'ENOENT') return null
+      throw error
     }
+    return JSON.parse(text) as Sidecar
   }
 
   return {
@@ -89,7 +93,8 @@ export function createSnapshotStore(
     async write(identity, start) {
       await files.mkdir(root, { recursive: true })
       const name = base(identity.namespace)
-      const previous = await readSidecar(identity.namespace)
+      // An unreadable sidecar is replaced below.
+      const previous = await readSidecar(identity.namespace).catch(() => null)
       const fileFor = (revision: number) => `${name}.${revision}.tvec`
       const { revision, written } = start((revision) => `${root}/${fileFor(revision)}`)
       const file = fileFor(revision)
@@ -113,7 +118,7 @@ export function createSnapshotStore(
     },
 
     async remove(namespace, createdAt) {
-      const sidecar = await readSidecar(namespace)
+      const sidecar = await readSidecar(namespace).catch(() => null)
       if (sidecar && sidecar.createdAt !== createdAt) return
       await files.unlink(`${root}/${base(namespace)}.json`).catch(() => {})
       if (sidecar && typeof sidecar.file === 'string' && !sidecar.file.includes('/')) {

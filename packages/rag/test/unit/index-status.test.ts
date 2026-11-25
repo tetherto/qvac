@@ -181,7 +181,73 @@ test('a file system that fails to load keeps the index in memory', async (t) => 
     snapshot: { error: cause }
   })
   t.is(snapshotCount(dir), 0)
+
+  await rag.ingest({ namespace: 'ns', documents: [doc('c', spaceId, [['c', [0, 0, 1]]])] })
+  t.alike(
+    await rag.indexStatus({ namespace: 'ns' }),
+    { mode: 'index', revision: 3, snapshot: { error: cause } },
+    'a commit past snapshotEvery keeps the error'
+  )
   t.alike(events, [], 'not a fallback')
+})
+
+test('an unreadable snapshot is reported until a snapshot is written', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close(), { order: 1 })
+  const dir = await tmp(t)
+
+  async function reopen(index: IndexOptions = {}): Promise<{ rag: Rag; spaceId: string }> {
+    const rag = createRag({ corestore: store, index: { dir, ...index } })
+    await rag.ready()
+    t.teardown(() => rag.close())
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    return { rag, spaceId }
+  }
+  function files(suffix: string): string[] {
+    const found: string[] = []
+    for (const core of fs.readdirSync(dir)) {
+      for (const file of fs.readdirSync(`${dir}/${core}`)) {
+        if (file.endsWith(suffix)) found.push(`${dir}/${core}/${file}`)
+      }
+    }
+    return found
+  }
+
+  const first = await reopen()
+  await first.rag.ingest({
+    namespace: 'ns',
+    documents: [doc('a', first.spaceId, [['a', [1, 0, 0]]])]
+  })
+  await searchIds(first.rag, first.spaceId)
+  await first.rag.close()
+
+  for (const file of files('.tvec')) fs.writeFileSync(file, 'truncated')
+  const second = await reopen()
+  t.alike(await searchIds(second.rag, second.spaceId), ['a'])
+  const unloadable = await second.rag.indexStatus({ namespace: 'ns' })
+  t.is(unloadable.mode, 'index', 'rebuilt from HyperDB')
+  t.ok(
+    unloadable.mode === 'index' && typeof unloadable.snapshot === 'object',
+    'a snapshot the provider cannot load is reported'
+  )
+  await second.rag.close()
+
+  for (const file of files('.json')) fs.writeFileSync(file, 'not json')
+  const third = await reopen({ snapshotEvery: 2 })
+  t.alike(await searchIds(third.rag, third.spaceId), ['a'])
+  const unreadable = await third.rag.indexStatus({ namespace: 'ns' })
+  t.ok(
+    unreadable.mode === 'index' &&
+      typeof unreadable.snapshot === 'object' &&
+      unreadable.snapshot.error instanceof SyntaxError,
+    'an unreadable sidecar is reported'
+  )
+  await third.rag.ingest({
+    namespace: 'ns',
+    documents: [doc('b', third.spaceId, [['b', [0, 1, 0]]])]
+  })
+  const written = await third.rag.indexStatus({ namespace: 'ns' })
+  t.is(written.mode === 'index' && written.snapshot, 'ok', 'cleared once a snapshot is written')
 })
 
 test('a snapshot write failure through a supplied fs keeps the index and is reported', async (t) => {
