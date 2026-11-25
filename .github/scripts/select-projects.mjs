@@ -279,26 +279,6 @@ export function parseRunnerLabels(yaml) {
   )
 }
 
-// The gate's status key is the pr-gate-merge.yml filter key whose first path is the package (packages/<dir> or
-// plugins/<dir>); later paths are dependencies.
-export function gateKeys(gateYaml) {
-  const keys = {}
-  let key = null
-  for (const line of gateYaml.split('\n')) {
-    const k = line.match(/^ {12}([a-z0-9-]+):\s*$/)
-    if (k) {
-      key = k[1]
-      continue
-    }
-    const p = line.match(/^ {14}- "([^"]+)"/)
-    if (!p || !key) continue
-    const dir = p[1].match(/^(?:packages|plugins)\/([^/]+)\/\*\*$/)
-    if (dir) keys[dir[1]] ??= key
-    key = null
-  }
-  return keys
-}
-
 // A build with configurations builds native prebuilds; one without is a JavaScript build, which gets no build row and
 // no prebuilds to restore, and which the publish groups run before packing.
 export const nativeBuild = (n) =>
@@ -313,7 +293,6 @@ export function select({
   affected,
   targets,
   labels,
-  gate,
   configs = [],
   prLabels = [],
   baseRef = '',
@@ -329,17 +308,11 @@ export function select({
   const common = (n) => {
     const dir = n.data.root.split('/').pop()
     const slug = slugOf(n)
-    // Without a key no status is posted, and Merge Guard waits for one until its deadline. Only builds and C++ tests
-    // post one, so a package with neither needs no key.
-    if (!gate[dir] && (nativeBuild(n) || n.data.targets['cpp:tests']))
-      throw new Error(
-        `${n.name}: no pr-gate-merge.yml filter starts with "${n.data.root}/**", so it has no Merge Guard key`
-      )
     const providers = providersOf(graph, n.name)
     return {
       slug,
       npm: npmName(n),
-      key: gate[dir] ?? '',
+      key: dir,
       // The npm name whose platform packages provide the addon's symbols, and the slugs whose prebuilds it restores.
       provider: providers.length ? npmName(graph.nodes[providers[0]]) : '',
       providers: releasedProviders ? [] : providers.map((p) => graph.nodes[p].data.root.split('/').pop()),
@@ -508,6 +481,20 @@ export function combine(matrices, spec = '') {
 
 const git = (args) =>
   execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim()
+
+// Whether a changed path matches one of the globs (* within a directory, ** across them).
+export function touchesAny(globs, paths) {
+  const res = globs.map(
+    (g) =>
+      new RegExp(
+        `^${g
+          .split('**')
+          .map((part) => part.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*'))
+          .join('.*')}$`
+      )
+  )
+  return paths.some((p) => res.some((re) => re.test(p)))
+}
 const ZERO = /^0+$/
 
 // Which commits a run compares. A pull request, on either PR event, is compared from its common ancestor with the
@@ -659,6 +646,15 @@ function main(env) {
       )
     }
   }
+  // Shared CI files belong to no package, so nx affects none; a caller that lists them checks every package, as main's
+  // Merge Guard ran sanity checks across every addon for them.
+  const allOn = (env.ALL_ON || '').split(/[\s,]+/).filter(Boolean)
+  if (affected !== null && allOn.length && compared.base) {
+    if (touchesAny(allOn, git(['diff', '--name-only', compared.base, compared.head]).split('\n'))) {
+      console.log('::notice::shared CI files changed; selecting every tagged package')
+      affected = null
+    }
+  }
   const labels = parseRunnerLabels(
     readFileSync('.github/workflows/reusable-runner-names.yml', 'utf8')
   )
@@ -680,8 +676,7 @@ function main(env) {
     dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
     tags: (env.TAGS || TAG).split(/[\s,]+/).filter(Boolean),
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
-    releasedProviders: env.RELEASED_PROVIDERS === 'true',
-    gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
+    releasedProviders: env.RELEASED_PROVIDERS === 'true'
   })
   Object.assign(result.matrices, combine(result.matrices, env.COMBINE))
   for (const [t, r] of Object.entries(result.matrices))
