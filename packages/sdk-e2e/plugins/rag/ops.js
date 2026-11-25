@@ -121,6 +121,37 @@ export function createRagOps(host) {
       return { hits: await rag.search(params) }
     },
 
+    // Closes the Corestore under an open RAG, as a host shutting down in the wrong order
+    // does, then tries a write and closes the RAG. Reports the write's error and whether
+    // close() settled within `closeWithinMs`, instead of hanging the worker.
+    async closeStoreFirst({ store, namespace, closeWithinMs = 5000 }) {
+      const { rag, corestore } = storeOf(store)
+      stores.delete(store)
+      await corestore.close()
+      let writeError = null
+      try {
+        await rag.ingest({ namespace, documents: [{ id: 'after-close', text: 'Too late.' }] })
+      } catch (err) {
+        writeError = {
+          name: err?.name ?? '',
+          code: err?.code === undefined ? '' : String(err.code)
+        }
+      }
+      let timer
+      const deadline = new Promise((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), closeWithinMs)
+      })
+      const close = await Promise.race([
+        rag.close().then(
+          () => 'settled',
+          () => 'rejected'
+        ),
+        deadline
+      ])
+      clearTimeout(timer)
+      return { writeError, close }
+    },
+
     // Snapshots live under `<index>/<core key>/`: a `.json` sidecar per namespace and the
     // `.tvec` file it names.
     async snapshotFiles({ store }) {
@@ -263,6 +294,7 @@ export const RAG_OPS = [
   'reset',
   'snapshotFiles',
   'searchAfterClose',
+  'closeStoreFirst',
   'createNamespace',
   'ingest',
   'deleteDocuments',

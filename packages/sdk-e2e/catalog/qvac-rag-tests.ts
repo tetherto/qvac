@@ -57,6 +57,12 @@ function op(driver: Driver, name: string, params: Record<string, unknown>, as?: 
     : { call: { method: 'ragLocal', params: { op: name, params }, ...(as && { as }) } }
 }
 
+/** `op`, started without waiting, so a later `settle` can bound how long it takes. */
+function startOp(driver: Driver, name: string, params: Record<string, unknown>, as: string): Step {
+  const { call } = op(driver, name, params) as { call: { method: string; params: unknown } }
+  return { start: { method: call.method, params: call.params, as } } as Step
+}
+
 /** Loads the models and opens a fresh store named `main` with the `docs` namespace. */
 function setup(driver: Driver): Step[] {
   return [
@@ -817,6 +823,37 @@ const CASES: Case[] = [
       ),
       project('$found', 'result.hits[0].documentId', 'top'),
       { assert: { on: '$top', use: 'expectation' } }
+    ]
+  },
+  {
+    id: 'close-after-store-close',
+    about:
+      'with the Corestore closed first, a write fails typed, close() settles, and the SDK still shuts down',
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      // Load the index, then commit once more so close() has a snapshot and pruning to do.
+      op(d, 'search', { store: 'main', scope: { namespace: NS }, query: 'cats', k: 1 }),
+      op(d, 'ingest', {
+        store: 'main',
+        namespace: NS,
+        documents: [{ id: 'late', text: 'A commit after the index loaded.' }]
+      }),
+      startOp(d, 'closeStoreFirst', { store: 'main', namespace: NS }, 'closing'),
+      { settle: { of: '$closing', expect: 'resolve', withinMs: 15000, as: 'closed' } },
+      project('$closed', 'result.writeError', 'writeError'),
+      named('$writeError', 'fieldsMatch', {
+        fields: ['name'],
+        expected: { name: 'DB_OPERATION_FAILED' }
+      }),
+      project('$closed', 'result', 'outcome'),
+      named('$outcome', 'fieldsMatch', { fields: ['close'], expected: { close: 'settled' } }),
+      // Delete the store's files while this worker still runs, then stop the worker.
+      op(d, 'reset', {}),
+      { start: { method: 'close', as: 'shutdown' } },
+      { settle: { of: '$shutdown', expect: 'resolve', withinMs: 30000 } },
+      // A worker for the teardown's reset.
+      ...(d === 'bare' ? [{ useModel: { deps: ['rag-e2e'], as: 'rag' } } as Step] : [])
     ]
   }
 ]
