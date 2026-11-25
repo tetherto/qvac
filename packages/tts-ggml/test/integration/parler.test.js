@@ -13,7 +13,15 @@ const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const { ensureParlerModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
-const { NO_GPU, SKIP_PARLER_GPU_ONLY, PARLER_GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
+const {
+  NO_GPU,
+  SKIP_PARLER_GPU_ONLY,
+  PARLER_GPU_ONLY_USE_GPU,
+  SKIP_PARLER_DETERMINISM,
+  PARLER_DETERMINISM_USE_GPU,
+  PARLER_DETERMINISM_PINNED_BACKEND
+} = require('../utils/gpuOnly')
+const { assertDesktopGpuBackend } = require('../utils/desktopGpuBackend')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -300,50 +308,70 @@ test(
   }
 )
 
+const PARLER_DETERMINISM_CHUNKING = { streamChunkTokens: 43, streamFirstChunkTokens: 20 }
+
+async function assertParlerDeterminism(t, engineParams) {
+  const baseDir = getBaseDir()
+  const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
+  if (!download.success) {
+    t.fail(MODEL_MISSING)
+    return
+  }
+
+  const model = await loadParlerTTS({
+    threads: TTS_TEST_THREADS,
+    parlerModelPath: download.path,
+    voice: 'Laura',
+    emotion: 'neutral',
+    seed: 42,
+    useGPU: PARLER_DETERMINISM_USE_GPU,
+    ...engineParams
+  })
+  try {
+    const text = 'Deterministic synthesis check.'
+    const a = await runParlerTTS(model, { text })
+    if (PARLER_DETERMINISM_PINNED_BACKEND) {
+      assertDesktopGpuBackend(
+        t,
+        `parler determinism/${platform}`,
+        a.data.stats?.backendDevice,
+        a.data.stats?.backendId,
+        PARLER_DETERMINISM_PINNED_BACKEND
+      )
+    }
+    // The engine reseeds from EngineOptions::seed on every synthesize
+    // call, so a same-instance repeat must be bit-identical.
+    const b = await runParlerTTS(model, { text })
+    t.is(a.data.sampleCount, b.data.sampleCount, 'repeat run has identical length')
+    t.ok(
+      a.data.samples.every((v, i) => v === b.data.samples[i]),
+      'repeat run is bit-identical (fixed seed)'
+    )
+
+    await model.reload({ emotion: 'neutral' })
+    const c = await runParlerTTS(model, { text })
+    t.is(a.data.sampleCount, c.data.sampleCount, 'post-reload run has identical length')
+    t.ok(
+      a.data.samples.every((v, i) => v === c.data.samples[i]),
+      'post-reload run is bit-identical'
+    )
+  } finally {
+    try {
+      await model.unload()
+    } catch (_e) {}
+  }
+}
+
 test(
   'Parler TTS (ggml): fixed seed is deterministic across runs and reload',
-  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(MODEL_MISSING)
-      return
-    }
+  { timeout: 600000, skip: SKIP_PARLER_DETERMINISM },
+  (t) => assertParlerDeterminism(t, {})
+)
 
-    const model = await loadParlerTTS({
-      threads: TTS_TEST_THREADS,
-      parlerModelPath: download.path,
-      voice: 'Laura',
-      emotion: 'neutral',
-      seed: 42,
-      useGPU: PARLER_GPU_ONLY_USE_GPU
-    })
-    try {
-      const text = 'Deterministic synthesis check.'
-      const a = await runParlerTTS(model, { text })
-      // The engine reseeds from EngineOptions::seed on every synthesize
-      // call, so a same-instance repeat must be bit-identical.
-      const b = await runParlerTTS(model, { text })
-      t.is(a.data.sampleCount, b.data.sampleCount, 'repeat run has identical length')
-      t.ok(
-        a.data.samples.every((v, i) => v === b.data.samples[i]),
-        'repeat run is bit-identical (fixed seed)'
-      )
-
-      await model.reload({ emotion: 'neutral' })
-      const c = await runParlerTTS(model, { text })
-      t.is(a.data.sampleCount, c.data.sampleCount, 'post-reload run has identical length')
-      t.ok(
-        a.data.samples.every((v, i) => v === c.data.samples[i]),
-        'post-reload run is bit-identical'
-      )
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
+test(
+  'Parler TTS (ggml): fixed seed is deterministic across runs and reload with chunked decode',
+  { timeout: 600000, skip: SKIP_PARLER_DETERMINISM },
+  (t) => assertParlerDeterminism(t, PARLER_DETERMINISM_CHUNKING)
 )
 
 test(
