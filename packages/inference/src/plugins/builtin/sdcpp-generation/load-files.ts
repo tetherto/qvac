@@ -36,6 +36,11 @@ export function imageFilesFor(modelPath: string, artifacts: Artifacts): Diffusio
     ...(artifacts?.['llmModelPath'] && { llm: artifacts['llmModelPath'] }),
     ...(artifacts?.['projectionModelPath'] && { llmVision: artifacts['projectionModelPath'] }),
     ...(artifacts?.['vaeModelPath'] && { vae: artifacts['vaeModelPath'] }),
+    ...(artifacts?.['taesdModelPath'] && { taesd: artifacts['taesdModelPath'] }),
+    ...(artifacts?.['coremlUnetModelPath'] && { coremlUnet: artifacts['coremlUnetModelPath'] }),
+    ...(artifacts?.['coremlTaeDecoderModelPath'] && {
+      coremlTaeDecoder: artifacts['coremlTaeDecoderModelPath']
+    }),
     ...(artifacts?.['uncondModelPath'] && {
       uncondModel: artifacts['uncondModelPath']
     }),
@@ -160,6 +165,9 @@ export function videoConfigFor(config: SdcppConfig): SdConfig {
     tokenizerSrc,
     audioVaeModelSrc,
     embeddingsConnectorsModelSrc,
+    taesdModelSrc,
+    coremlUnetModelSrc,
+    coremlTaeDecoderModelSrc,
     upscaler,
     mode,
     ...rest
