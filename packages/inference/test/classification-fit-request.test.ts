@@ -30,17 +30,13 @@ test('classification: carries the load model and no placement', (t) => {
 })
 
 test('classification: a config modelPath wins over the load model', (t) => {
-  const plan = classificationFitRequest(
-    load(MOBILENET, { modelPath: CUSTOM_MOBILENET })
-  )
+  const plan = classificationFitRequest(load(MOBILENET, { modelPath: CUSTOM_MOBILENET }))
 
   t.is(requestOf(plan)?.['modelPath'], CUSTOM_MOBILENET)
 })
 
 test('classification: a relative config modelPath is made absolute', (t) => {
-  const plan = classificationFitRequest(
-    load(MOBILENET, { modelPath: 'custom/mobilenet.gguf' })
-  )
+  const plan = classificationFitRequest(load(MOBILENET, { modelPath: 'custom/mobilenet.gguf' }))
 
   t.is(requestOf(plan)?.['modelPath'], path.resolve('custom/mobilenet.gguf'))
 })
