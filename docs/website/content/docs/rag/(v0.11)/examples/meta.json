@@ -1,0 +1,8 @@
+{
+  "title": "Examples",
+  "pages": [
+    "built-in-vector-store",
+    "turbovec-index",
+    "external-vector-db"
+  ]
+}

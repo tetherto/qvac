@@ -94,6 +94,14 @@ export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
       { version: 'v0.16', folder: 'v0.16' },
     ],
   },
+  {
+    package: '@qvac/rag',
+    kind: 'collection',
+    path: '/rag',
+    versions: [
+      { version: 'v0.11', folder: '(v0.11)' },
+    ],
+  },
 ];
 
 /** True when the folder is written as a Fumadocs folder group. */
