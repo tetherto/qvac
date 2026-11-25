@@ -419,6 +419,44 @@ test('llm: does not duplicate params already present in the model name', (t) => 
 })
 
 // ---------------------------------------------------------------------------
+// LLM: models QVAC trained (`qvac` tag)
+// ---------------------------------------------------------------------------
+
+const qvacToolCallingTags = ['generation', 'tool-calling', 'qwen3.5', 'instruct', 'qvac']
+const qvacToolCallingRepo =
+  'am17an/Qwen3.5-9B-toolcall-preview-GGUF/resolve/02fe3b87e1c2ccd5989edadbde131a33bb3ae601'
+
+test('llm: the qvac tag prefixes the export name with QVAC_', (t) => {
+  const name = (tags: string[]): string =>
+    generateExportName({
+      path: `${qvacToolCallingRepo}/Qwen3.5-9B-9b-v5s1-imat-Q4_K_M.gguf`,
+      engine: 'llamacpp-completion',
+      name: '',
+      quantization: 'q4_k_m',
+      params: '9B',
+      tags,
+      usedNames: new Set<string>()
+    })
+
+  t.is(name(qvacToolCallingTags), 'QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M')
+  t.is(name(qvacToolCallingTags.filter((tag) => tag !== 'qvac')), 'QWEN3_5_9B_TOOL_CALLING_Q4_K_M')
+})
+
+test('llm: a qvac-tagged projector keeps MMPROJ_ ahead of QVAC_', (t) => {
+  const exportName = generateExportName({
+    path: `${qvacToolCallingRepo}/mmproj-Qwen3.5-9B-F16.gguf`,
+    engine: 'llamacpp-completion',
+    name: '',
+    quantization: 'f16',
+    params: '9B',
+    tags: qvacToolCallingTags,
+    usedNames: new Set<string>()
+  })
+
+  t.is(exportName, 'MMPROJ_QVAC_QWEN3_5_9B_TOOL_CALLING_F16')
+})
+
+// ---------------------------------------------------------------------------
 // LLM: Llama 3.2 (tag strips engine suffix for version recovery)
 // ---------------------------------------------------------------------------
 
