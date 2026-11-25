@@ -20,7 +20,7 @@ The folder name also ignores other settings that do not change what a cache file
 
 A load with sharing off, `verbosity` omitted or `0`, and neither `openclCacheDir` nor `cache_ram_mib` keeps the folder it had on 0.24.0. That covers the SDK defaults and callers that send `verbosity: 0` on every load.
 
-A load that already had `cache_share_across_keys` on, sent a non-zero `verbosity`, or sent `openclCacheDir` or `cache_ram_mib` moves to a new folder once. The next turn of each of its chats reprocesses the history once, and the old folder stays on disk. `deleteCache` with that model id no longer reaches it; `deleteCache` with only the `kvCacheKey` still removes it.
+A load that already had `cache_share_across_keys` on, sent a non-zero `verbosity`, or sent `openclCacheDir` or `cache_ram_mib` moves to a new folder once. The next turn of each of its chats reprocesses the history once, and the old folder stays on disk. `deleteCache` with that model id no longer reaches it, but `deleteCache` with only the `kvCacheKey` still removes it.
 
 ## Dependencies
 

@@ -170,9 +170,10 @@ jobs:
   pear-e2e:
     name: Pear e2e
     needs: [build]
+    # No dist artifact: the e2e installs and builds the package itself. With only a
+    # prebuilt dist, its `npm pack` fails, because npm 10 runs `prepare` (tsc) even
+    # under --ignore-scripts and no dependencies are installed.
     uses: ./.github/workflows/test-inference-pear-e2e.yml
-    with:
-      dist-artifact: dist-inference
 
   publish-npm:
     name: Publish @qvac/inference to NPM
