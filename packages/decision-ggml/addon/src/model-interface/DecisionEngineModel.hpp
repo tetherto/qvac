@@ -19,7 +19,8 @@
 #include "inference-addon-cpp/job/JobId.hpp"
 #include "utils/JobCancelRegistry.hpp"
 
-/// @brief One upstream decision response, serialized as JSON.
+/// @brief Upstream's decision response JSON: one response, or an array of one
+/// per state for a batch (`states`).
 ///
 /// A distinct type so the JS side can recognize the output event by its type
 /// name.
@@ -34,8 +35,8 @@ struct DecisionEngineResult {
 /// Structured like llm-llamacpp's LlamaModel: load options go straight into
 /// common_params, the DecisionContext owns the upstream objects, errors are
 /// the addon's own, and per-job cancellation goes through a JobCancelRegistry.
-/// A request is upstream's /v1/systemone JSON for one state; the result is
-/// upstream's response JSON.
+/// A request is upstream's /v1/systemone JSON for one state, or with `states`
+/// for a batch; the result is upstream's response JSON, or an array of them.
 ///
 /// Driven by a MultiJobScheduler (see makeDecisionEngineScheduler): the
 /// scheduler announces each job (jobStarting) under its admission lock before
@@ -73,7 +74,8 @@ public:
   /// Untagged path (no scheduler id): runs one job.
   std::any process(const std::any& input) final;
 
-  /// @param input std::string holding upstream's request JSON for one state.
+  /// @param input std::string holding upstream's request JSON (one state, or
+  /// `states` for a batch).
   /// @param id The job announced by jobStarting(id).
   /// @returns DecisionEngineResult holding upstream's response JSON.
   std::any process(const std::any& input, JobId id) final;

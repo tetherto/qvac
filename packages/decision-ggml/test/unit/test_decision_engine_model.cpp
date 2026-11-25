@@ -55,26 +55,6 @@ params(const std::unordered_map<std::string, std::string>& config) {
   return DecisionEngineModel::loadParams("/m.gguf", config);
 }
 
-/// First existing candidate, relative to the working directory or the build
-/// tree (build/test/unit), or empty.
-std::string findModel(const std::string& relative) {
-  fs::path binaryDir;
-#ifdef TEST_BINARY_DIR
-  binaryDir = fs::path(TEST_BINARY_DIR);
-#else
-  binaryDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-  for (const fs::path& path :
-       {fs::path{relative},
-        fs::path{"../../.."} / relative,
-        binaryDir.parent_path().parent_path().parent_path() / relative}) {
-    if (fs::exists(path)) {
-      return fs::absolute(path).string();
-    }
-  }
-  return "";
-}
-
 /// The tiny upstream fixtures (ggml-org/tinyopenjev-for-testing-gguf):
 /// DECISION_TEST_MODELS names their directory. scripts/run-cpp-tests.js sets it
 /// to test/model, where CI stages them for cpp:tests from the model manifest;
@@ -290,9 +270,10 @@ TEST(DecisionEngineConfigTest, ConstructorRejectsBadOptionsBeforeLoading) {
 }
 
 TEST(DecisionEngineLoadTest, RejectsAModelWithoutDecisionMetadata) {
-  const std::string path = findModel("models/unit-test/test-model.gguf");
+  // A small encoder GGUF without decision metadata.
+  const std::string path = fixture("jina-reranker-v1-tiny-en-f16.gguf");
   if (path.empty()) {
-    FAIL() << "Test model not found: models/unit-test/test-model.gguf";
+    FAIL() << "Test model not found: jina-reranker-v1-tiny-en-f16.gguf";
   }
   DecisionEngineModel model(path, {{"device", "cpu"}});
   EXPECT_EQ(

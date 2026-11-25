@@ -138,7 +138,7 @@ Any other key fails the load. Multi-word keys take either spelling
 | `code` | When |
 |--------|------|
 | `[ Decision :: InvalidConfiguration ]` | A missing or unknown `device`, a key outside the list above, or a value out of range |
-| `[ Decision :: UnsupportedModel ]` | The GGUF has no decision metadata, or names a decision type this build does not know (detected from its header, before loading) |
+| `[ Decision :: UnsupportedModel ]` | The GGUF has no decision metadata, names a decision type this build does not know, or its header cannot be read (detected before loading) |
 | `[ Decision :: UnableToLoadModel ]` | The file is missing or cannot be loaded |
 
 `run()` rejects a request the model does not accept with

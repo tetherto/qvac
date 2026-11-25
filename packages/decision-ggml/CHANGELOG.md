@@ -31,8 +31,8 @@
     question types allow omitted or `null` instructions, for the models that
     take none (openbmb-minicpm-ocr-jev).
   - Runtime stats count a batch's input tokens over all its states. A batch
-    serializes each state's request when a worker claims it, so it holds one
-    copy of the shared inputs, not one per state.
+    serializes each state's request when a worker claims it, so its memory
+    is the request once plus one request per worker, not one per state.
   - A non-causal model (Laya) reads up to `batch_size` tokens (2048 by
     default) in one pass; a longer input is rejected with
     `DECISION_INVALID_REQUEST`, not reported as an execution failure.

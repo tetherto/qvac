@@ -144,7 +144,7 @@ std::string errorMessage(const std::string& payload) {
 // Whether every value a request carries is nested at most
 // DECISION_MAX_JSON_DEPTH containers deep, measured from where the value
 // starts: a state (or each of "states"), each question's instructions and
-// each criteria entry, as the SDK and upstream count them. The containers
+// each criteria entry, as the SDK counts them. The containers
 // that frame those values -- the body, "questions", each question, "criteria"
 // and "states" -- are recognised only at their fixed places and do not count.
 // Any other value is held to the same limit from where it starts, so the
@@ -493,8 +493,11 @@ void shutdown(State& d) {
 // GGML_ABORT in llama_context::output_reserve during warmup), and an abort
 // cannot be caught.
 void checkModelFile(const std::string& path) {
+  // The path is UTF-8 from JS. A std::string converts with the ANSI code page
+  // on Windows, so build the path from UTF-8 text, as llama's file reads do.
+  const std::u8string utf8(path.begin(), path.end());
   std::error_code ec;
-  if (!std::filesystem::is_regular_file(path, ec)) {
+  if (!std::filesystem::is_regular_file(std::filesystem::path(utf8), ec)) {
     fail(UnableToLoadModel, "model file not found: " + path);
   }
   const common_gguf_info gguf = common_get_gguf_info(path);
@@ -527,7 +530,11 @@ DecisionContext::DecisionContext(
   checkModelFile(d.params.model.path);
 
   try {
-    qvac_fabric_load_backends();
+    // The backends are loaded by whoever holds the backends handle
+    // (DecisionEngineModel's LlamaBackendsHandle, from backendsDir or
+    // @qvac/fabric's own); loading @qvac/fabric's here as well would register
+    // them twice next to a custom backendsDir. llama_backend_init() may run
+    // again.
     llama_backend_init();
 
     d.ctx = std::make_unique<server_context>();
@@ -657,9 +664,15 @@ std::string runOne(
                                           std::to_string(res->status)
                                     : errorMessage(res->data);
     // 400 is a rejected request; 501 is "not supported" (e.g. images on a
-    // model without image input), also a property of the request.
+    // model without image input), also a property of the request. Upstream's
+    // 501 text names llama-server's flag; here the projector is a load option.
     if (res->status == 400 || res->status == 501) {
-      failRequest(at(where) + message);
+      std::string text = message;
+      const std::string flag = "start it with `--mmproj`";
+      if (const size_t at = text.find(flag); at != std::string::npos) {
+        text.replace(at, flag.size(), "load it with the `mmproj` option");
+      }
+      failRequest(at(where) + text);
     }
     if (const std::string tooLarge = tooLargeForOnePass(message);
         !tooLarge.empty()) {

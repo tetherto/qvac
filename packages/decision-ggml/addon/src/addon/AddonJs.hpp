@@ -84,7 +84,7 @@ inline js_value_t* decisionInfo(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /// Args: [instance, { type: "text", input }]. The input is upstream's request
-/// JSON for one state.
+/// JSON: one state, or `states` for a batch.
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 

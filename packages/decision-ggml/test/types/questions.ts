@@ -1,6 +1,13 @@
 // Compile-only checks of the published request and info types (tsc --strict,
 // npm run test:types:consumer): shapes upstream accepts must type-check.
-import type { DecisionEngineInfo, DecisionEngineQuestion, DecisionEngineRequest } from '../..'
+import type {
+  DecisionEngine,
+  DecisionEngineBatchRequest,
+  DecisionEngineInfo,
+  DecisionEngineQuestion,
+  DecisionEngineRequest,
+  DecisionEngineResult
+} from '../..'
 
 // openbmb-minicpm-ocr-jev: one fixed question, no instructions.
 export const ocrNoul: DecisionEngineQuestion = { type: 'noul' }
@@ -32,4 +39,13 @@ export const oneLevel: DecisionEngineQuestion = {
 export function scoreLimits(info: DecisionEngineInfo): string {
   if (info.score_levels === null || info.score === null) return 'no score questions'
   return `${info.score_levels.min}-${info.score_levels.max} levels, ${info.score}`
+}
+
+// A request typed as either shape still goes through run().
+export async function runEither(
+  engine: DecisionEngine,
+  request: DecisionEngineRequest | DecisionEngineBatchRequest
+): Promise<DecisionEngineResult | DecisionEngineResult[]> {
+  const [result] = await (await engine.run(request)).await()
+  return result
 }

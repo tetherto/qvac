@@ -15,8 +15,10 @@ export interface DecisionEngineConfig {
     ubatch_size?: NumericLike;
     threads?: NumericLike;
     /**
-     * Upstream slots. Upstream schedules the questions and option-order variants
-     * of a request over them; it does not change how many requests run at once.
+     * Upstream slots, at least 1. A request's questions and option-order
+     * variants, and a batch's states, run over them together; the engine still
+     * takes one request at a time. Unset, llama-server's default: 4 slots
+     * sharing one KV cache. Set, each slot has its own share of the context.
      */
     parallel?: NumericLike;
     /** Projector GGUF path, for models that take images or audio. */
@@ -155,11 +157,11 @@ export interface DecisionEngineInfo {
     n_ctx: number;
     /**
      * The longest input a request can have, in tokens: a state with one
-     * question and its options. For a non-causal model (Laya) it is the batch
-     * size (`batch_size`, 2048 unless set); a longer one is rejected with
-     * {@link DECISION_INVALID_REQUEST}. For a causal model it is each slot's
-     * share of the context (`n_ctx / parallel`, but one token), which every
-     * question of every state gets even when all slots are busy.
+     * question and its options. For a non-causal model (Laya) it is what one
+     * pass reads (`ubatch_size`, which follows `batch_size`, 2048, unless set);
+     * a longer one is rejected with {@link DECISION_INVALID_REQUEST}. For a
+     * causal model it is each slot's share of the context, but one token, which
+     * every question of every state gets even when all slots are busy.
      */
     max_input_tokens: number;
     model: string;
@@ -228,6 +230,7 @@ export declare class DecisionEngine extends ModelRunner<DecisionEngineConfig, De
      */
     run(request: DecisionEngineRequest): Promise<QvacResponse<DecisionEngineResult>>;
     run(request: DecisionEngineBatchRequest): Promise<QvacResponse<DecisionEngineResult[]>>;
+    run(request: DecisionEngineRequest | DecisionEngineBatchRequest): Promise<QvacResponse<DecisionEngineResult | DecisionEngineResult[]>>;
     /** The loaded model's decision capabilities. Throws before load(). */
     info(): DecisionEngineInfo;
     protected _createAddon(binding: unknown, configurationParams: ModelConfigurationParams<DecisionEngineConfig>, outputCb: AddonOutputCallback): DecisionEngineInterface;

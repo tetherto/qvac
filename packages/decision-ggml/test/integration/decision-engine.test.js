@@ -22,7 +22,8 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
 
 const CPU = { device: 'cpu' }
-// As the other embed tests: these runners load on the CPU.
+// These runners have no usable GPU backend in CI, so they load on the CPU, as
+// in the other llama.cpp addons' tests.
 const GPU = isDarwinX64 || isLinuxArm64 || isMobile ? CPU : { device: 'gpu', gpu_layers: '99' }
 
 const QUESTIONS = {
