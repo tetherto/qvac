@@ -8,8 +8,12 @@ import {
 } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
+import { RESOURCE_TABLE } from '../../../../catalog/resource-table.js'
 import {
+  speculativeDecodingAuto,
+  speculativeDecodingAutoUndetectedRejected,
   speculativeDecodingDraftNMaxOutOfRangeRejected,
+  speculativeDecodingDspark,
   speculativeDecodingMtp,
   speculativeDecodingMtpExternalHead,
   speculativeDecodingNone,
@@ -17,7 +21,14 @@ import {
 } from '../../../../catalog/speculative-decoding-tests.js'
 
 type CompletesParams = { prompt: string }
-type Source = typeof QWEN3_5_0_8B_MTP_Q4_K_M | typeof QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+type Source = typeof QWEN3_5_0_8B_MTP_Q4_K_M | typeof QWEN3_5_0_8B_MULTIMODAL_Q4_K_M | string
+type SpecType = 'none' | 'draft-mtp' | 'draft-dspark' | 'auto'
+
+// The DSpark pair is pinned by URL in the resource table, not a registry constant.
+const DSPARK_TARGET = RESOURCE_TABLE['llm-dspark']!.modelSrc!
+const DSPARK_DRAFT = RESOURCE_TABLE['llm-dspark-draft']!.modelSrc!
+// The drafter's block is 9 tokens; the default n_max of 3 would use a third of it.
+const DSPARK_DRAFT_N_MAX = 9
 
 /** The executor body of the step-defined tests, for consumers without the step interpreter. */
 export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
@@ -29,7 +40,10 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
     [speculativeDecodingMtp.testId]: this.mtp.bind(this),
     [speculativeDecodingMtpExternalHead.testId]: this.mtpExternalHead.bind(this),
     [speculativeDecodingNone.testId]: this.none.bind(this),
-    [speculativeDecodingDraftNMaxOutOfRangeRejected.testId]: this.rejectDraftNMax.bind(this)
+    [speculativeDecodingDraftNMaxOutOfRangeRejected.testId]: this.rejectDraftNMax.bind(this),
+    [speculativeDecodingDspark.testId]: this.dspark.bind(this),
+    [speculativeDecodingAuto.testId]: this.auto.bind(this),
+    [speculativeDecodingAutoUndetectedRejected.testId]: this.rejectAutoUndetected.bind(this)
   } as never
 
   async mtp(params: unknown, expectation: unknown): Promise<TestResult> {
@@ -44,6 +58,27 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
       await this.completesWith(params as CompletesParams, expectation, 'draft-mtp', {
         modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
         draftModelSrc: QWEN3_5_0_8B_MTP_Q4_K_M
+      })
+    )
+  }
+
+  async dspark(params: unknown, expectation: unknown): Promise<TestResult> {
+    return this.drafts(
+      await this.completesWith(params as CompletesParams, expectation, 'draft-dspark', {
+        modelSrc: DSPARK_TARGET,
+        draftModelSrc: DSPARK_DRAFT,
+        draftNMax: DSPARK_DRAFT_N_MAX
+      })
+    )
+  }
+
+  // `auto` reads `draft-dspark` from the drafter's header.
+  async auto(params: unknown, expectation: unknown): Promise<TestResult> {
+    return this.drafts(
+      await this.completesWith(params as CompletesParams, expectation, 'auto', {
+        modelSrc: DSPARK_TARGET,
+        draftModelSrc: DSPARK_DRAFT,
+        draftNMax: DSPARK_DRAFT_N_MAX
       })
     )
   }
@@ -94,21 +129,43 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
     }
   }
 
+  // A plain model has no DFlash, DSpark or MTP header for `auto` to read.
+  async rejectAutoUndetected(_params: unknown, expectation: unknown): Promise<TestResult> {
+    try {
+      const modelId = await loadModel({
+        modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+        modelType: 'llamacpp-completion',
+        modelConfig: {
+          ctx_size: 2048,
+          spec_type: 'auto',
+          draftModelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+        }
+      })
+      await unloadModel({ modelId })
+      return { passed: false, output: 'auto with an undetectable draft model should have failed' }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      return ValidationHelpers.validate(errorMsg, expectation as Expectation)
+    }
+  }
+
   private async completesWith(
     p: CompletesParams,
     expectation: unknown,
-    specType: string,
+    specType: SpecType,
     {
       modelSrc = QWEN3_5_0_8B_MTP_Q4_K_M,
-      draftModelSrc
-    }: { modelSrc?: Source; draftModelSrc?: Source } = {}
+      draftModelSrc,
+      draftNMax
+    }: { modelSrc?: Source; draftModelSrc?: Source; draftNMax?: number } = {}
   ) {
     const modelId = await loadModel({
       modelSrc,
       modelType: 'llamacpp-completion',
       modelConfig: {
         ctx_size: 2048,
-        spec_type: specType as 'draft-mtp' | 'none',
+        spec_type: specType,
+        ...(draftNMax !== undefined ? { spec_draft_n_max: draftNMax } : {}),
         ...(draftModelSrc ? { draftModelSrc } : {})
       }
     })
