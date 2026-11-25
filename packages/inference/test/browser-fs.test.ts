@@ -1,6 +1,7 @@
 import test from 'brittle'
 import Buffer from 'bare-buffer'
 import fs, { hydrate, mountFile } from '@/browser/fs'
+import { resolveMediaContent } from '@/browser/media-content'
 
 class FakeBlob {
   protected readonly bytes: Uint8Array
@@ -442,4 +443,67 @@ test('browser file lifecycle remains ordered across 20 iterations', async (t) =>
     await fs.promises.rm(directory, { recursive: true })
     t.is(fs.existsSync(final), false)
   }
+})
+
+test('media paths reach the engine as bytes, from a mounted file or from OPFS', async (t) => {
+  const mounted = '/.qvac/mounted/media/photo.jpg'
+  mountFile(mounted, new FakeFile('photo.jpg', encode('picked-image'), 3))
+  await fs.promises.writeFile('/.qvac/stored.png', encode('stored-image'))
+  const bytes = new Uint8Array([1, 2, 3])
+  const prompt: Array<{ role: string; type?: string; content: unknown }> = [
+    { role: 'system', content: 'Describe images.' },
+    { role: 'user', type: 'media', content: '/.qvac/stored.png' },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'A: ' },
+        { type: 'media', content: mounted },
+        { type: 'media', content: bytes }
+      ]
+    }
+  ]
+  const resolved = await resolveMediaContent(prompt)
+  t.alike(resolved[0], prompt[0], 'text messages pass through')
+  t.is(decode(resolved[1]!.content as Uint8Array), 'stored-image', 'an attachment message is read')
+  const parts = resolved[2]!.content as Array<{ type: string; content?: unknown; text?: string }>
+  t.alike(parts[0], { type: 'text', text: 'A: ' })
+  t.is(decode(parts[1]!.content as Uint8Array), 'picked-image', 'a mounted part is read in place')
+  t.is(parts[2]!.content, bytes, 'bytes the caller passed are kept')
+  t.is(prompt[1]!.content, '/.qvac/stored.png', "the caller's prompt is not mutated")
+  await t.exception(
+    resolveMediaContent([{ role: 'user', type: 'media', content: '/.qvac/missing.jpg' }]),
+    /not found|ENOENT/
+  )
+  await fs.promises.unlink(mounted)
+  await fs.promises.unlink('/.qvac/stored.png')
+})
+
+test('media resolution keeps each prompt in order across 20 concurrent calls', async (t) => {
+  const paths = Array.from({ length: 20 }, (_, index) => `/.qvac/mounted/stress/${index}.jpg`)
+  paths.forEach((path, index) =>
+    mountFile(path, new FakeFile(`${index}.jpg`, encode(`image-${index}`), 1))
+  )
+  const resolved = await Promise.all(
+    paths.map((path) =>
+      resolveMediaContent<Array<{ type: string; content: unknown }>>([
+        { type: 'media', content: path }
+      ])
+    )
+  )
+  resolved.forEach((prompt, index) =>
+    t.is(decode(prompt[0]!.content as Uint8Array), `image-${index}`)
+  )
+  for (const path of paths) await fs.promises.unlink(path)
+})
+
+test('the browser build swaps in the media reader; native passes media paths as is', async (t) => {
+  const { readFile } = await import('bare-fs/promises')
+  const pkg = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8'))
+  t.is(
+    pkg.browser['./dist/plugins/builtin/llamacpp-completion/ops/media-content.js'],
+    './dist/browser/media-content.js'
+  )
+  const native = await import('@/plugins/builtin/llamacpp-completion/ops/media-content')
+  const prompt = [{ role: 'user', type: 'media', content: '/photos/cat.jpg' }]
+  t.is(await native.resolveMediaContent(prompt), prompt)
 })

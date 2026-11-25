@@ -196,7 +196,8 @@
     "./dist/runtime/cache-lock.js": "./dist/browser/cache-lock.js",
     "./dist/runtime/registry-client.js": "./dist/browser/registry-client.js",
     "./dist/resources/native.js": "./dist/browser/resources.js",
-    "./dist/handlers/load-model/registry.js": "./dist/browser/registry.js"
+    "./dist/handlers/load-model/registry.js": "./dist/browser/registry.js",
+    "./dist/plugins/builtin/llamacpp-completion/ops/media-content.js": "./dist/browser/media-content.js"
   },
   "files": [
     "dist/**/*",
