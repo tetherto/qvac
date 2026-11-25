@@ -265,6 +265,9 @@ function generateVadName({ filename, tagType, tagName }: BaseNameInput): string 
 function generateNmtName(input: BaseNameInput): string {
   const { lowerPath, lowerFilename } = input
 
+  const translatePsyNano = generateNmtTranslatePsyNanoName(input)
+  if (translatePsyNano) return translatePsyNano
+
   if (lowerPath.includes('salamandra') || lowerFilename.includes('salamandra')) {
     return generateNmtSalamandraName(input)
   }
@@ -277,6 +280,36 @@ function generateNmtName(input: BaseNameInput): string {
 
   const nameParts = [input.modelName, input.quantization].filter((p) => p && p !== '')
   return `NMT_${nameParts.map(cleanPart).join('_')}`
+}
+
+// TranslatePsy-AfriNano / -EuroNano publish one multilingual Bergamot pack per
+// direction and size, all with the same pair-less filenames
+// (`<repo>/resolve/<sha>/<en-xx|xx-en>/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`
+// beside `vocab.spm` and `lex.50.50.<enxx|xxen>.s2t.bin`), so the name comes from
+// the path: TRANSLATEPSY_AFRINANO_EN_XX_BASE, its _VOCAB / _LEX companions, etc.
+const TRANSLATEPSY_NANO_PATH_RE =
+  /(?:^|\/)translatepsy-(afrinano|euronano)\/(?:.+\/)?(en-xx|xx-en)\/(base|basememory|tiny)\/intgemm\/[^/]+$/
+const TRANSLATEPSY_NANO_SIZES: Record<string, string> = {
+  base: 'BASE',
+  basememory: 'BASE_MEMORY',
+  tiny: 'TINY'
+}
+
+function generateNmtTranslatePsyNanoName({ lowerPath, lowerFilename }: BaseNameInput): string {
+  const match = lowerPath.match(TRANSLATEPSY_NANO_PATH_RE)
+  if (!match?.[1] || !match[2] || !match[3]) return ''
+
+  let suffix = ''
+  if (lowerFilename === 'vocab.spm') {
+    suffix = '_VOCAB'
+  } else if (lowerFilename.startsWith('lex.')) {
+    suffix = '_LEX'
+  } else if (lowerFilename !== 'model.intgemm.alphas.bin') {
+    suffix = `_${cleanPart(lowerFilename.replace(/\.\w+$/, ''))}`
+  }
+
+  const direction = match[2] === 'en-xx' ? 'EN_XX' : 'XX_EN'
+  return `TRANSLATEPSY_${match[1].toUpperCase()}_${direction}_${TRANSLATEPSY_NANO_SIZES[match[3]]}${suffix}`
 }
 
 function generateNmtSalamandraName({ filename }: BaseNameInput): string {
