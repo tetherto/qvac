@@ -1,7 +1,7 @@
 """Fail on unknown wire keys/types in the handwritten common API.
 
-This deliberately checks vocabulary, not path-sensitive schema validation. Actual
-serialization and worker conformance tests cover shapes. Supplemental plugin and
+This deliberately checks vocabulary, not path-sensitive schema validation. The
+serialization tests and the shared e2e catalog cover shapes. Supplemental plugin and
 worker-control vocabulary must have a checked-in upstream source anchor.
 """
 import json

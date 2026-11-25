@@ -16,17 +16,6 @@ export { finetune, type FinetuneHandle } from './finetune'
 export { translate } from './translate'
 export { cancel } from './cancel'
 export {
-  ragChunk,
-  ragIngest,
-  ragSaveEmbeddings,
-  ragSearch,
-  ragDeleteEmbeddings,
-  ragReindex,
-  ragListWorkspaces,
-  ragCloseWorkspace,
-  ragDeleteWorkspace
-} from './rag'
-export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,

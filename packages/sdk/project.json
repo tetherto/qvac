@@ -130,36 +130,6 @@
             }
           }
         },
-        "linux-x64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "linux_ubuntu2204_x64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
-        "darwin-arm64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "macos_arm64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
-        "win32-x64-python": {
-          "args": "python",
-          "ci": {
-            "runner": "win_2025_x64_gpu",
-            "setup": ["node22"],
-            "labels": {
-              "test-e2e-python": "smoke"
-            }
-          }
-        },
         "linux-x64-electron": {
           "args": "electron",
           "ci": {

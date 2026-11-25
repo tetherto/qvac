@@ -176,7 +176,7 @@ def test_progress_capable_methods_get_a_with_progress_stub(
     }
 
     progress_methods = {m["name"] for m in manifest_methods if m.get("progress")}
-    assert progress_methods == {"loadModel", "downloadAsset", "rag", "finetune"}
+    assert progress_methods == {"loadModel", "downloadAsset", "finetune"}
 
     for method in manifest_methods:
         name = method["name"]

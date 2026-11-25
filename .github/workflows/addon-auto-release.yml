@@ -1,0 +1,56 @@
+name: Addon auto-release
+
+# A main commit that bumps an addon's version cuts release-<dir>-<x.y.z> from it and starts publish-npm.yml there.
+# Nothing reaches npm until the npm environment approval, which stays the one human step.
+# An addon whose @qvac dependency is not on npm yet gets its branch now; the scan starts it once the dependency publishes.
+on:
+  push:
+    branches: [main]
+    paths: ["packages/*/package.json"]
+  # Starts waiting releases. Not workflow_run: the repo reserves that trigger for fork-gated PR CI.
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Main commit whose version bumps to release, compared with its parent; empty starts the waiting releases
+        type: string
+        default: ""
+      dry_run:
+        description: Report what would happen without creating branches or starting publishes
+        type: boolean
+        default: false
+
+permissions: {}
+
+# Real scans share one group so two never start the same branch; a dropped pending scan loses nothing.
+# Recoveries of the same sha share a group too. Pushes and dry runs get their own, so none displaces a scan.
+concurrency:
+  group: >-
+    ${{ (github.event_name == 'push' || inputs.dry_run) && format('addon-auto-release-{0}', github.run_id)
+    || inputs.sha != '' && format('addon-auto-release-sha-{0}', inputs.sha) || 'addon-auto-release-scan' }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ (github.event_name == 'push' || inputs.sha != '') && 'bump' || 'scan' }}
+          SHA: ${{ inputs.sha }}
+          BEFORE: ${{ github.event.before }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+        run: node .github/scripts/addon-auto-release.mjs

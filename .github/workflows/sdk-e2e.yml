@@ -3,32 +3,20 @@ name: SDK e2e
 # The SDK pod's end-to-end suites (packages tagged ci:sdk). plan routes a run as main's on-pr-test-sdk.yml did: a label
 # or base branch picks the desktop rows (_desktop.yml) and the SDK's Device Farm app; report posts the results.
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, labeled, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*]
-    # main's paths: nx affected would also pick every addon and registry change through the SDK's dependencies.
-    paths:
-      - packages/sdk/**
-      - packages/sdk-e2e/**
-      - packages/inference/**
-      - packages/test-suite/**
-      - packages/sdk-python/**
-      - packages/sdk-kotlin/**
+  # PR checks starting on a PR, a label included: main's copy of this file runs the PR head that context finds.
+  workflow_run:
+    workflows: [PR checks]
+    types: [requested]
   workflow_dispatch:
     inputs:
-      packages:
-        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+      languages:
+        description: "Comma-separated languages: js, python, kotlin"
         type: string
-        default: ""
-      labels:
-        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        default: js,python,kotlin
+      platforms:
+        description: "Comma-separated platforms: linux, mac, windows, android, ios, electron, snap"
         type: string
-        default: ""
-      platform:
-        description: Device Farm platform; none runs the desktop configurations only
-        type: choice
-        options: [none, Android, iOS, both]
-        default: none
+        default: linux,mac,windows,android,ios
       suite:
         description: Test suite for every leg
         type: choice
@@ -62,39 +50,109 @@ on:
 
 permissions: {}
 
-# One group per kind of run, as main's on-pr-test-sdk.yml: a label this workflow ignores cancels nothing, and the Python
-# probe runs beside the smoke or full run instead of replacing it. Dispatches never cancel each other.
-concurrency:
-  group: >-
-    sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{ inputs.platform || 'none' }}-${{
-      github.event.action != 'labeled' && 'base'
-      || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
-      || (github.event.label.name == 'test-e2e-smoke' && 'base')
-      || (github.event.label.name == 'test-e2e-full' && 'base')
-      || (github.event.label.name == 'test-e2e-python' && 'probe')
-      || format('ignored-{0}', github.event.label.name) }}
-  cancel-in-progress: true
+# PR code never saves to the default branch's Actions cache.
+cache-mode: read
+
+# No workflow-level group: the label is known only after context, so desktop and mobile take one group per kind of
+# run (context's kind, main's on-pr-test-sdk.yml mapping). An ignored label runs no suite and cancels nothing.
 
 jobs:
+  # The PR from the API, if it touches main's SDK paths; nothing else in the trigger is read.
+  context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      ok: ${{ steps.pr.outputs.ok }}
+      pr: ${{ steps.pr.outputs.pr }}
+      sha: ${{ steps.pr.outputs.sha }}
+      repository: ${{ steps.pr.outputs.repository }}
+      fork: ${{ steps.pr.outputs.fork }}
+      draft: ${{ steps.pr.outputs.draft }}
+      labels: ${{ steps.pr.outputs.labels }}
+      base-ref: ${{ steps.pr.outputs.base-ref }}
+      action: ${{ steps.pr.outputs.action }}
+      label: ${{ steps.pr.outputs.label }}
+      event: ${{ steps.pr.outputs.event }}
+      kind: ${{ steps.kind.outputs.kind }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # main's paths: nx affected would also pick every addon and registry change through the SDK's dependencies.
+      - id: pr
+        uses: ./.github/actions/workflow-run-pr
+        with:
+          github-token: ${{ github.token }}
+          branches: main, release-*, feature-*, tmp-*
+          paths: packages/sdk/ packages/sdk-e2e/ packages/inference/ packages/test-suite/ packages/sdk-python/ packages/sdk-kotlin/
+      # main's kinds of run: a newer run of the same kind cancels this one's tests.
+      - id: kind
+        if: steps.pr.outputs.ok == 'true'
+        env:
+          ACTION: ${{ steps.pr.outputs.action }}
+          LABEL: ${{ steps.pr.outputs.label }}
+        run: |
+          kind=base
+          if [ "$ACTION" = labeled ]; then
+            case "$LABEL" in
+              test-e2e-rerun-failed) kind=rerun ;;
+              test-e2e-smoke | test-e2e-full) kind=base ;;
+              *) kind="ignored-$LABEL" ;;
+            esac
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+      # Only a PR's base or rerun run reports qvac/sdk-e2e, so an ignored label or a dispatch never replaces
+      # its result; report, which finishes the status, also needs the PR.
+      - if: >-
+          steps.pr.outputs.refused != '' ||
+          (steps.pr.outputs.ok == 'true' && steps.pr.outputs.pr != '' &&
+          contains(fromJSON('["base","rerun"]'), steps.kind.outputs.kind))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          REFUSED: ${{ steps.pr.outputs.refused }}
+          FORK: ${{ steps.pr.outputs.fork }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=pending; description=Running
+          [ "$FORK" != true ] || description="Waiting for fork-ci approval"
+          [ -z "$REFUSED" ] || { state=failure; description="${REFUSED:0:140}"; }
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=qvac/sdk-e2e \
+            -f description="$description" -f target_url="$RUN_URL" > /dev/null
+
   select:
+    needs: context
+    if: needs.context.outputs.ok == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: test:integration,test:mobile
-      packages: ${{ inputs.packages }}
-      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
+      # Every language's e2e configurations; plan keeps the languages and platforms the label or dispatch names.
+      packages: sdk,sdk-python,sdk-kotlin
+      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,electron,snap' || '' }}
       tags: ci:sdk
+      event: ${{ needs.context.outputs.event }}
 
   fork-approval:
-    needs: select
+    needs: [context, select]
     if: needs.select.outputs.any == 'true'
     permissions:
       statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
+    with:
+      fork: ${{ needs.context.outputs.fork == 'true' }}
+      head-sha: ${{ needs.context.outputs.sha }}
 
   route:
-    needs: select
+    needs: [context, select]
     if: needs.select.outputs.any == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -104,15 +162,19 @@ jobs:
       run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       - id: route
         uses: ./.github/actions/ci-route-stages
+        with:
+          labels: ${{ needs.context.outputs.labels }}
+          head-repo: ${{ needs.context.outputs.repository }}
+          draft: ${{ needs.context.outputs.draft }}
 
   trust:
-    needs: [select, fork-approval]
+    needs: [context, select, fork-approval]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -123,7 +185,7 @@ jobs:
       allowed: ${{ steps.trust.outputs.allowed }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
@@ -131,13 +193,18 @@ jobs:
         uses: ./.github/actions/pr-check-trust
         with:
           github-token: ${{ github.token }}
+          action: ${{ needs.context.outputs.action }}
+          head-sha: ${{ needs.context.outputs.sha }}
+          head-repo: ${{ needs.context.outputs.repository }}
+          draft: ${{ needs.context.outputs.draft }}
+          labels: ${{ needs.context.outputs.labels }}
 
   # main's resolve-impacted: the testIds a smoke run's PR touched. PR code runs here, so read-only; plan validates the ids.
   impacted:
-    needs: [route, trust]
+    needs: [context, route, trust]
     if: >-
       needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
-      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), github.event.label.name)
+      && needs.context.outputs.label == 'test-e2e-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -147,10 +214,12 @@ jobs:
       include: ${{ steps.impacted.outputs.include }}
       json: ${{ steps.impacted.outputs.impacted-json }}
     steps:
-      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.sha }}
+          allow-unsafe-pr-checkout: ${{ needs.context.outputs.fork == 'true' }}
           sparse-checkout: |
             packages/sdk-e2e
             packages/sdk/src/client/api
@@ -158,14 +227,14 @@ jobs:
             packages/inference/src/registry.ts
           sparse-checkout-cone-mode: "false"
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: "22"
       - id: impacted
         working-directory: packages/sdk-e2e
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ needs.context.outputs.pr }}
           ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[] | {filename, patch}' | jq -s . > "$RUNNER_TEMP/pr-files.json"
@@ -175,7 +244,7 @@ jobs:
   # The SDK router: the run's mode, each leg's rows and the running comments. Only base-branch code runs here, since
   # it holds pull-requests: write.
   plan:
-    needs: [select, route, trust, impacted]
+    needs: [context, select, route, trust, impacted]
     if: >-
       always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
     runs-on: ubuntu-latest
@@ -193,21 +262,21 @@ jobs:
       comments: ${{ steps.plan.outputs.comments }}
     steps:
       - name: Checkout actions and the report script
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             packages/sdk/ci
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
-          PACKAGES: ${{ inputs.packages }}
-          PLATFORM: ${{ inputs.platform }}
+          LANGUAGES: ${{ inputs.languages }}
+          PLATFORMS: ${{ inputs.platforms }}
           SUITE: ${{ inputs.suite }}
           FILTER: ${{ inputs.filter }}
           EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
@@ -216,12 +285,18 @@ jobs:
           IMPACTED: ${{ needs.impacted.result }}
           IMPACTED_INCLUDE: ${{ needs.impacted.outputs.include }}
           IMPACTED_JSON: ${{ needs.impacted.outputs.json }}
+          PR_EVENT: ${{ needs.context.outputs.event }}
         run: node packages/sdk/ci/e2e-report.mjs plan
 
   desktop:
-    needs: plan
+    needs: [context, plan]
     # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
+    # A newer run of the same kind cancels this one; a dispatch's group is its own run.
+    concurrency:
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-desktop
+      cancel-in-progress: true
+    cache-mode: read
     permissions:
       contents: read
       actions: read
@@ -232,14 +307,20 @@ jobs:
     with:
       rows: ${{ needs.plan.outputs.desktop }}
       toolchain: false
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.sha }}
+      base-ref: ${{ needs.context.outputs.base-ref }}
 
   # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
   # drives it over MQTT, as main's SDK Device Farm workflows did.
   mobile:
-    needs: plan
+    needs: [context, plan]
     # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    concurrency:
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.row.runner }}
     environment: release
     timeout-minutes: ${{ matrix.row.timeout || 280 }}
@@ -272,43 +353,46 @@ jobs:
       MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
       MQTT_PORT: ${{ vars.MQTT_PORT }}
       GITHUB_TOKEN: ${{ github.token }}
+      # The PR's base for the baseline comparison; a workflow_run build has no GITHUB_BASE_REF.
+      CI_BASE_REF: ${{ needs.context.outputs.base-ref }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             .github/scripts
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ needs.context.outputs.repository || github.repository }}
+          ref: ${{ needs.context.outputs.sha }}
+          allow-unsafe-pr-checkout: ${{ needs.context.outputs.fork == 'true' }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: "22"
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-pnpm@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           package-json-file: src/package.json
       - name: Install
         working-directory: src
         run: pnpm install --frozen-lockfile --ignore-scripts --filter .
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: "7200"
       - if: env.PLATFORM == 'Android'
-        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-java@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           java-version: "17"
       - if: env.PLATFORM == 'Android'
-        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-android@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
       - if: env.PLATFORM == 'iOS'
-        uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/setup-xcode@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           # Expo 58's expo-modules-jsi does not compile with the Swift in Xcode 26.3.
           xcode-versions: "26.6"
@@ -318,7 +402,7 @@ jobs:
           sdk: iphoneos
       - id: signing
         if: env.PLATFORM == 'iOS'
-        uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/ios-import-signing@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
@@ -334,7 +418,7 @@ jobs:
           IOS_SIGNING: ${{ env.PLATFORM == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
         run: pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       - id: app
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: ${{ steps.prepare.outputs.app-type }}
@@ -342,13 +426,13 @@ jobs:
           name: ${{ steps.prepare.outputs.app-name }}
           max-wait-seconds: "600"
       - id: package
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_PACKAGE
           files: ${{ steps.prepare.outputs.test-package }}
       - id: spec
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-upload@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_SPEC
@@ -370,12 +454,12 @@ jobs:
           pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       # Fresh credentials before the cancel: an expired session fails the run step and would leave the run billing.
       - if: always() && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/configure-aws-credentials@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
       - if: (failure() || cancelled()) && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           run-arns: ${{ steps.pool.outputs.run-arns }}
       - if: always() && steps.pool.outputs.run-count == '1'
@@ -384,7 +468,7 @@ jobs:
         run: node .github/scripts/devicefarm-pool-run.mjs stop
       - id: logs
         if: always() && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/devicefarm-download-logs@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           platform: ${{ env.PLATFORM }}
           run-arns: ${{ steps.pool.outputs.run-arns }}
@@ -396,46 +480,65 @@ jobs:
             appium.log
           skip-extensions: ${{ env.PLATFORM == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: console-logs-${{ matrix.row.slug }}-${{ env.PLATFORM }}
           path: ${{ steps.logs.outputs.console-dir }}
           retention-days: "30"
           if-no-files-found: ignore
       - if: always()
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/test/results/e2e/
           if-no-files-found: ignore
 
   # main's report jobs: each leg's comment from its results, a base run's failures recorded and e2e-tested on green,
-  # a rerun checked to have run what it planned. Base-branch code only, as plan.
+  # a rerun checked to have run what it planned. Base-branch code only, as plan. Also sets qvac/sdk-e2e on the PR head.
   report:
-    needs: [plan, desktop, mobile]
-    if: always() && !cancelled() && contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode)
+    needs: [context, fork-approval, trust, impacted, plan, desktop, mobile]
+    if: always() && needs.context.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       actions: read
       pull-requests: write
+      statuses: write
+    env:
+      REPORTED: ${{ contains(fromJSON('["base","rerun"]'), needs.plan.outputs.mode) }}
     steps:
       - name: Checkout actions and the report script
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             .github/actions
             packages/sdk/ci
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      # A later push can leave this run going, so results and e2e-tested go on the PR only while it is still at this
+      # run's commit; the status below stays on that commit either way.
+      - id: head
+        if: "!cancelled() && env.REPORTED == 'true'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.context.outputs.pr }}
+          SHA: ${{ needs.context.outputs.sha }}
+        run: |
+          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha)
+          current=$([ "$head" = "$SHA" ] && echo true || echo false)
+          [ "$current" = true ] || echo "::notice::PR moved from $SHA to $head; not reporting this run on it"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
+        uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
+        uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           pattern: "*-results-*"
           path: results
-      - env:
+      - if: "!cancelled() && steps.head.outputs.current == 'true'"
+        env:
           GITHUB_TOKEN: ${{ github.token }}
           MODE: ${{ needs.plan.outputs.mode }}
           SUITE: ${{ needs.plan.outputs.suite }}
@@ -443,4 +546,17 @@ jobs:
           COMMENTS: ${{ needs.plan.outputs.comments }}
           RESULTS_DIR: results
           LEGS_OK: ${{ !contains(fromJSON('["failure","cancelled"]'), needs.desktop.result) && !contains(fromJSON('["failure","cancelled"]'), needs.mobile.result) }}
+          PR_EVENT: ${{ needs.context.outputs.event }}
         run: node packages/sdk/ci/e2e-report.mjs report
+      - if: >-
+          !cancelled() && needs.context.outputs.pr != '' && contains(fromJSON('["base","rerun"]'), needs.context.outputs.kind)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.sha }}
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=success; description="Passed or skipped by routing"
+          if [ "$FAILED" = "true" ]; then state=failure; description="A job failed or was cancelled"; fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$state" -f context=qvac/sdk-e2e \
+            -f description="$description" -f target_url="$RUN_URL" > /dev/null

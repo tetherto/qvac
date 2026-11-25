@@ -40,91 +40,61 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/sdk-python",
-        "commands": [
-          {
-            "command": "node ci/python.mjs e2e",
-            "forwardAllArgs": true
-          }
-        ]
+        "command": "node ../sdk/ci/e2e.mjs python"
       },
       "configurations": {
         "linux-x64": {
           "ci": {
-            "runner": "ubuntu_latest",
-            "setup": ["python"],
-            "labels": {
-              "test-e2e-smoke": "fast"
-            }
-          }
-        },
-        "linux-x64-gpu": {
-          "ci": {
             "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
             "labels": {
-              "test-e2e-full": "full"
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         },
-        "darwin-arm64-gpu": {
+        "darwin-arm64": {
           "ci": {
             "runner": "macos_arm64_gpu",
+            "setup": ["node22"],
             "labels": {
-              "test-e2e-full": "full"
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         },
-        "win32-x64-gpu": {
+        "win32-x64": {
           "ci": {
             "runner": "win_2025_x64_gpu",
+            "setup": ["node22"],
             "labels": {
-              "test-e2e-full": "full"
-            }
-          }
-        },
-        "linux-x64-wheel": {
-          "args": "--platform manylinux_2_35_x86_64",
-          "ci": {
-            "runner": "linux_ubuntu2204_x64_gpu",
-            "labels": {
-              "test-wheel-e2e": "wheel"
-            }
-          }
-        },
-        "darwin-arm64-wheel": {
-          "args": "--platform macosx_13_0_arm64",
-          "ci": {
-            "runner": "macos_arm64_gpu",
-            "labels": {
-              "test-wheel-e2e": "wheel"
-            }
-          }
-        },
-        "win32-x64-wheel": {
-          "args": "--platform win_amd64",
-          "ci": {
-            "runner": "win_2025_x64_gpu",
-            "labels": {
-              "test-wheel-e2e": "wheel"
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         }
       },
       "metadata": {
-        "timeoutMinutes": 60,
+        "secrets": [
+          "GITHUB_TOKEN",
+          "MQTT_HOST",
+          "MQTT_USERNAME",
+          "MQTT_PASSWORD",
+          "MQTT_CA_CERT",
+          "MQTT_CLIENT_CERT",
+          "MQTT_CLIENT_KEY"
+        ],
+        "timeoutMinutes": 360,
         "modelCache": {
           "path": "../sdk-e2e/.qvac-cache",
-          "keyFiles": ["../inference/src/models/registry/models.ts"]
+          "plan": true
         }
-      }
-    },
-    "cache:models": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/sdk-python",
-        "command": "node ../sdk/ci/e2e.mjs cache"
-      },
-      "metadata": {
-        "secrets": ["GITHUB_TOKEN"]
       }
     }
   }

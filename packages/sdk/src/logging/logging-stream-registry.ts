@@ -14,10 +14,10 @@
 import type { LogLevel } from '@qvac/logging'
 import { SDK_ALL_LOG_ID } from './namespaces'
 
-// `sourceId` is the id the log was emitted under (a model id, SDK_LOG_ID, a RAG
-// workspace key, …). It usually equals the subscription id, but for the global
-// SDK_ALL_LOG_ID stream it carries the real origin so subscribers can tell which
-// model/SDK/RAG source produced each line instead of always seeing "__all__".
+// `sourceId` is the id the log was emitted under (a model id, SDK_LOG_ID, …).
+// It usually equals the subscription id, but for the global SDK_ALL_LOG_ID
+// stream it carries the real origin so subscribers can tell which model or SDK
+// source produced each line instead of always seeing "__all__".
 type StreamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => void
 
 const loggingStreams = new Map<string, Set<StreamHandler>>()

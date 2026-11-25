@@ -40,7 +40,6 @@ export type RequestKind =
   | 'loadModel'
   | 'downloadAsset'
   | 'modelRegistry'
-  | 'rag'
   | 'rpcServer'
   | 'rpcDiscovery'
 
