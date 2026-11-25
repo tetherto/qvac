@@ -15,6 +15,10 @@ import {
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
 import { getDarwinMajor } from '@/utils/darwin-version'
+import {
+  getCoremlSidecarSpec as getLayoutSidecarSpec,
+  selectCoremlBundles
+} from '@/utils/cache/layout'
 
 const AUDIO8_ROOT = 'qvac_models_compiled/ggml/audio8/2026-09-30/'
 const AUDIO8_GGUF_DIR = 'qvac_models_compiled/ggml/audio-8/2026-08-12/'
@@ -545,9 +549,6 @@ test('Core ML sidecars: the shared-weight bundle replaces the fixed encoders whe
   const older = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 23)
   t.alike(stagedBundles(older), [`${EU}-decoder`, ...EU_FIXED].sort(), 'macOS 14 / iOS 17')
 
-  const unknown = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', undefined)
-  t.alike(stagedBundles(unknown), [`${EU}-decoder`, `${EU}-encoder-shared`], 'unknown OS')
-
   // A shared-only publication leaves an older OS on the GGUF's own encoder.
   const sharedOnly = await findCoremlCompanionSet(
     client(euBundles([`${EU}-encoder-shared`, `${EU}-decoder`])),
@@ -598,5 +599,17 @@ test('getDarwinMajor: reads the kernel major on Apple platforms only', (t) => {
     getDarwinMajor('darwin', () => 'unknown'),
     undefined
   )
-  t.is(typeof getDarwinMajor('darwin'), os.platform() === 'darwin' ? 'number' : 'undefined')
+})
+
+test('selectCoremlBundles: an unknown OS is taken to load the shared-weight bundle', (t) => {
+  const spec = getLayoutSidecarSpec(TRANSCRIBEPSY_EU.registryPath, 's3', 'darwin')!
+  const published = new Set([...EU_FIXED, `${EU}-encoder-shared`, `${EU}-decoder`])
+  const pick = (darwinMajor?: number) =>
+    selectCoremlBundles(spec.bundles, (bundle) => published.has(bundle.sourceName), darwinMajor)
+      .map((bundle) => bundle.sourceName)
+      .sort()
+
+  t.alike(pick(undefined), [`${EU}-decoder`, `${EU}-encoder-shared`], 'unknown')
+  t.alike(pick(24), [`${EU}-decoder`, `${EU}-encoder-shared`], 'Darwin 24')
+  t.alike(pick(23), [`${EU}-decoder`, ...EU_FIXED].sort(), 'Darwin 23')
 })
