@@ -940,9 +940,29 @@ const COMPARISONS: Record<
   /** The two runs produced exactly the same data. */
   identicalBytes(left, right) {
     if (!sameBytes(left, right)) {
+      // DIAGNOSTIC (not for merge): how far the two runs drift, read as 16-bit little-endian PCM.
+      const a = asBytes(left)
+      const b = asBytes(right)
+      const n = Math.min(a.byteLength, b.byteLength) >> 1
+      let differing = 0
+      let first = -1
+      let maxAbs = 0
+      let sumAbs = 0
+      for (let i = 0; i < n; i++) {
+        const x = (a[2 * i] | (a[2 * i + 1] << 8)) << 16 >> 16
+        const y = (b[2 * i] | (b[2 * i + 1] << 8)) << 16 >> 16
+        const d = Math.abs(x - y)
+        if (d !== 0) {
+          differing++
+          if (first < 0) first = i
+          if (d > maxAbs) maxAbs = d
+          sumAbs += d
+        }
+      }
+      const detail = `int16 samples=${n} differing=${differing} firstDiff=${first} maxAbsDiff=${maxAbs} meanAbsDiff=${differing ? (sumAbs / differing).toFixed(1) : 0}`
       return {
         passed: false,
-        output: `expected identical output, got ${byteLength(left)} and ${byteLength(right)} byte(s) that differ`
+        output: `expected identical output, got ${byteLength(left)} and ${byteLength(right)} byte(s) that differ; ${detail}`
       }
     }
     return { passed: true, output: `identical, ${byteLength(left)} byte(s)` }

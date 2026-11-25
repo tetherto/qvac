@@ -9,7 +9,7 @@
 // The run comes from the framework's env (QVAC_RUN_ID, QVAC_MQTT_BROKER_URL, ...).
 
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -95,20 +95,44 @@ function run() {
     `-D${stream}.encoding=UTF-8`,
     `-Dsun.${stream}.encoding=UTF-8`
   ])
-  const child = spawn(java(), [...utf8, '-cp', path.join(installDir, 'lib', '*'), mainClass], {
-    cwd: projectDir,
-    stdio: ['inherit', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      QVAC_MQTT_BROKER_URL: brokerUrl(),
-      QVAC_E2E_FIXTURES: path.join(e2eRoot, 'assets')
+  // DIAGNOSTIC (not for merge): JVM crash files land in the uploaded results folder.
+  const crashDir = path.join(sdkKotlin, 'test/results/e2e/jvm-crash')
+  mkdirSync(crashDir, { recursive: true })
+  const diag = [
+    `-XX:ErrorFile=${path.join(crashDir, 'hs_err_pid%p.log')}`,
+    '-XX:+UnlockDiagnosticVMOptions',
+    '-XX:+LogVMOutput',
+    `-XX:LogFile=${path.join(crashDir, 'jvm-%p.log')}`
+  ]
+  // DIAGNOSTIC: chain HotSpot's signal handlers, so Marian's sigaction(SIGSEGV) no longer replaces them.
+  const libjsig = process.env.JAVA_HOME && path.join(process.env.JAVA_HOME, 'lib', 'libjsig.so')
+  const preload =
+    process.platform === 'linux' && libjsig && existsSync(libjsig) ? { LD_PRELOAD: libjsig } : {}
+  console.error(`[diag] java=${java()} preload=${preload.LD_PRELOAD ?? 'none'} crashDir=${crashDir}`)
+  const child = spawn(
+    java(),
+    [...utf8, ...diag, '-cp', path.join(installDir, 'lib', '*'), mainClass],
+    {
+      cwd: projectDir,
+      stdio: ['inherit', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...preload,
+        QVAC_MQTT_BROKER_URL: brokerUrl(),
+        QVAC_E2E_FIXTURES: path.join(e2eRoot, 'assets')
+      }
     }
-  })
+  )
+  console.error(`[diag] JVM pid ${child.pid}`)
   child.stdout.pipe(process.stdout)
   child.stderr.pipe(process.stderr)
   child.on('error', (error) => fail(`could not start java: ${error.message}`))
   // The framework stops the consumer with a signal; the program's shutdown hook leaves the broker.
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal))
+  child.on('exit', (code, signal) => {
+    const hex = code == null ? '' : ` (0x${(code >>> 0).toString(16).toUpperCase()})`
+    console.error(`[diag] JVM pid ${child.pid} exited: code=${code}${hex} signal=${signal}`)
+  })
   child.on('close', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))
 }
 
