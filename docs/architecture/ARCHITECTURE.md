@@ -49,14 +49,16 @@ The worker bridge adapts the language-neutral RPC contract to the engine's `send
 
 ## Worker Generation & Bundle System
 
-`qvac bundle sdk` reads the plugin list and optional RPC server provider from `qvac.config.{json,js,ts}`. It writes `qvac/worker.entry.mjs`, which imports the selected plugins and calls `startWorker` from `@qvac/sdk/worker`. Bare-stow packages that entry with a target-specific launcher and a harness for the host language. The target determines how to launch the worker and deliver native addons.
+The SDK's `bundleSdk` function reads the plugin list and optional RPC server provider from `qvac.config.{json,js,ts}`. It writes `qvac/worker.entry.mjs`, which imports the selected plugins and calls `startWorker` from `@qvac/sdk/worker`. Bare-stow packages the entry with a launcher and harness for the selected target and host language.
+
+`qvac bundle sdk` accepts `bare-sidecar`, `react-native`, and `pear-runtime` for `--target`, and `javascript` and `python` for `--language`. The Kotlin runtime build scripts call `bundleSdk` directly with `target: 'bare-kit'` and `language: 'kotlin'`.
 
 | Target | Host and launcher | Native addon packaging |
 |---|---|---|
 | `bare-sidecar` | JavaScript desktop or Python starts a Bare subprocess | Prebuilds accompany the bundle |
 | `pear-runtime` | The JavaScript harness launches the bundle through the registered Pear runtime | Prebuilds accompany the bundle |
 | `react-native` | Expo starts a BareKit worklet through the generated JavaScript harness | Expo prebuild links the selected addons into BareKit |
-| `bare-kit` | The Kotlin harness starts a BareKit worklet on Android or desktop JVM | Android links addons into the selected profile's AAR. The experimental JVM host embeds the bundle and desktop native resources |
+| `bare-kit` (Kotlin build scripts) | The Kotlin harness starts a BareKit worklet on Android or desktop JVM | Android links addons into the selected profile's AAR. The experimental JVM host embeds the bundle and desktop native resources |
 
 The JavaScript harness is written under `qvac/worker/` by default, with its entry module, manifest, and bundle. Python can use a generated harness for a custom bundle or the worker shipped in the release wheel. Kotlin profile builds generate the Kotlin harness and package it with their worker and selected addons. The bundle verifier checks native prebuilds for the selected targets before replacing an existing bundle. Split addon packages resolve their platform-specific prebuilds through `#host-addon`.
 
