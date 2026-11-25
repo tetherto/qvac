@@ -489,7 +489,7 @@ export const LLM_CONFIG_DEFAULTS = {
 // Checked on the config merged with device defaults, before the draft model is downloaded.
 export const llmConfigSchema = llmConfigBaseSchema
   .superRefine((data, ctx) => {
-    if (data.draftModelSrc !== undefined && (data.spec_type ?? 'none') === 'none') {
+    if (data.draftModelSrc && (data.spec_type ?? 'none') === 'none') {
       ctx.addIssue({
         code: 'custom',
         path: ['draftModelSrc'],
@@ -499,7 +499,7 @@ export const llmConfigSchema = llmConfigBaseSchema
     }
     // The addon rejects these without a drafter too, but only after the target is downloaded.
     if (
-      data.draftModelSrc === undefined &&
+      !data.draftModelSrc &&
       (data.spec_type === 'draft-dflash' ||
         data.spec_type === 'draft-dspark' ||
         data.spec_type === 'auto')

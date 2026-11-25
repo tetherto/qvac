@@ -644,10 +644,12 @@ test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t
 
 test('llmConfigSchema: rejects a drafter spec_type without a draftModelSrc', (t) => {
   for (const spec_type of ['draft-dflash', 'draft-dspark', 'auto'] as const) {
-    const result = llmConfigSchema.safeParse({ spec_type })
-    t.is(result.success, false)
-    t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
-    t.is(result.error?.issues[0]?.message, `spec_type '${spec_type}' requires draftModelSrc.`)
+    for (const config of [{ spec_type }, { spec_type, draftModelSrc: '' }]) {
+      const result = llmConfigSchema.safeParse(config)
+      t.is(result.success, false)
+      t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+      t.is(result.error?.issues[0]?.message, `spec_type '${spec_type}' requires draftModelSrc.`)
+    }
   }
 })
 
