@@ -30,8 +30,20 @@ export class ParakeetExecutor extends AbstractModelExecutor<typeof parakeetTests
         return validateParakeetSegments(segments)
       }
 
-      const text = await transcribe({ modelId, audioChunk: audioPath })
+      const operation = transcribe({ modelId, audioChunk: audioPath })
+      const text = await operation
       const trimmedText = text.trim()
+
+      // The full TranscribePsy EU constant stages its Core ML bundles on macOS.
+      if (testId.startsWith('parakeet-transcribepsy-eu-coreml-')) {
+        const stats = await operation.stats
+        if (stats?.encoderUsedCoreml !== 1) {
+          return {
+            passed: false,
+            output: `Expected Core ML encoder use during batch transcription, got ${JSON.stringify(stats)}`
+          }
+        }
+      }
 
       if (exp.validation === 'throws-error') {
         return { passed: false, output: 'Expected error but transcription succeeded' }

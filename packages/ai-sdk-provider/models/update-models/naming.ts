@@ -64,6 +64,14 @@ export function generateExportName({
 
   exportName = exportName.replace(/^_+|_+$/g, '').replace(/_+/g, '_')
 
+  // Models QVAC trained carry the shared `qvac` tag. Prefix their names so they
+  // stay apart from the upstream builds they were tuned from.
+  if (tags.includes('qvac')) {
+    exportName = exportName.startsWith('MMPROJ_')
+      ? `MMPROJ_QVAC_${exportName.slice('MMPROJ_'.length)}`
+      : `QVAC_${exportName}`
+  }
+
   // Add suffix for metadata files (tensors.txt are shard metadata, not actual models)
   if (lowerFilename.endsWith('.tensors.txt')) {
     exportName = `${exportName}_TENSORS`
