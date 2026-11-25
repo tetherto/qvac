@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <qvac-fabric-server-context-port.h>
 #include <qvac-fabric.h>
 
 #include "model-interface/utils.hpp"
