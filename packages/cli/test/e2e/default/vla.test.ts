@@ -340,13 +340,24 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
   it('maps a single-embodiment GGUF refusing the switch to 400', async () => {
     stubHparams(GROOT)
     state().vlaSetEmbodimentOverride = () =>
-      Promise.reject(addonError('model has a single embodiment', 30001))
+      Promise.reject(
+        addonError('GrootModel::setEmbodiment: this GGUF stores a single embodiment row', 30001)
+      )
     const res = await server().inject({
       method: 'POST',
       url: `${MODELS}/smolvla/embodiment`,
       payload: { embodiment: 'libero_sim' }
     })
     assertStatusAndError(res, 400, 'invalid_embodiment')
+
+    state().vlaSetEmbodimentOverride = () =>
+      Promise.reject(addonError('grootFillEmbodimentRow: short read for embodiment row 3', 30001))
+    const failed = await server().inject({
+      method: 'POST',
+      url: `${MODELS}/smolvla/embodiment`,
+      payload: { embodiment: 'libero_sim' }
+    })
+    assert.equal(failed.statusCode, 500, failed.body)
   })
 
   it('refuses a second action request on a busy model, without running it', async () => {
@@ -373,7 +384,7 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
     assert.equal((await first).statusCode, 200)
   })
 
-  it('rejects a π₀.₅ mask with a hole and maps an inference failure to 400', async () => {
+  it('rejects a π₀.₅ mask with a hole, and leaves an inference failure a server error', async () => {
     stubHparams({ ...HPARAMS, stateInputMode: 'discrete' })
     const calls: VlaClientRunParams[] = []
     stubRun(calls)
@@ -389,15 +400,8 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
     )
     assert.equal(calls.length, 0)
 
-    stubRun([], () => Promise.reject(addonError('token id out of range', 30010)))
-    assertStatusAndError(
-      await server().inject({
-        method: 'POST',
-        url: ACTIONS,
-        payload: { ...BODY, tokens: [7, 8, 999999], noise }
-      }),
-      400,
-      'invalid_vla_request'
-    )
+    stubRun([], () => Promise.reject(addonError('graph allocation failed', 30010)))
+    const res = await server().inject({ method: 'POST', url: ACTIONS, payload: { ...BODY, noise } })
+    assert.equal(res.statusCode, 500, res.body)
   })
 })

@@ -32,12 +32,12 @@ const ACTIONS = '/qvac/v1/vla/actions'
 const MODELS = '/qvac/v1/vla/models'
 
 // `@qvac/vla-ggml` error codes, which reach the client on the SDK error.
-const ADDON_FAILED_TO_LOAD_WEIGHTS = 30001
 const ADDON_INVALID_CONFIG = 30004
 const ADDON_INVALID_INPUT = 30006
 const ADDON_JOB_ALREADY_RUNNING = 30007
-// The native forward pass reports a malformed prompt (an out-of-vocabulary ID) this way.
-const ADDON_INFERENCE_FAILED = 30010
+// A single-embodiment GGUF refuses a switch with this native message, under the
+// load-failure code it shares with real read and allocation failures.
+const SINGLE_EMBODIMENT = 'stores a single embodiment row'
 
 const MODEL_ERRORS = {
   503: {
@@ -158,9 +158,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
         const run = (state.vlaOverride ?? vla)({ modelId: sdkModelId, ...params })
         bindClientDisconnectCancel(reply.raw, run.requestId, app.qvac.logger, state.cancelOverride)
-        result = await run.catch((err: unknown) =>
-          rethrow(err, 'invalid_vla_request', ADDON_INFERENCE_FAILED)
-        )
+        result = await run.catch((err: unknown) => rethrow(err, 'invalid_vla_request'))
       } finally {
         release()
       }
@@ -255,7 +253,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           throw new HttpError(400, 'invalid_embodiment', 'The model is not GR00T.')
         }
         app.qvac.logger.info(`  vla_embodiment model=${alias} to=${JSON.stringify(embodiment)}`)
-        // A single-embodiment GGUF refuses the switch with the load-failure code.
         const result = await callSdk(
           'invalid_embodiment',
           () =>
@@ -263,7 +260,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               modelId: sdkModelId,
               embodiment
             }),
-          ADDON_FAILED_TO_LOAD_WEIGHTS
+          SINGLE_EMBODIMENT
         )
         return { object: 'vla.model' as const, model: alias, hparams: result.hparams }
       } finally {
@@ -439,16 +436,16 @@ function invalid(field: string, detail: string): HttpError {
   return new HttpError(400, code, `${field}: ${detail}`)
 }
 
-async function callSdk<T>(code: string, call: () => Promise<T>, inputCode?: number): Promise<T> {
+async function callSdk<T>(code: string, call: () => Promise<T>, inputMarker?: string): Promise<T> {
   try {
     return await call()
   } catch (err) {
-    return rethrow(err, code, inputCode)
+    return rethrow(err, code, inputMarker)
   }
 }
 
-// `inputCode` is an addon code that means a bad request on this route only.
-function rethrow(err: unknown, code: string, inputCode?: number): never {
+// `inputMarker` is native message text that means a bad request on this route only.
+function rethrow(err: unknown, code: string, inputMarker?: string): never {
   const errCode = (err as { code?: unknown } | null)?.code
   const message = err instanceof Error ? err.message : String(err)
   if (
@@ -456,7 +453,7 @@ function rethrow(err: unknown, code: string, inputCode?: number): never {
     errCode === SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED ||
     errCode === ADDON_INVALID_CONFIG ||
     errCode === ADDON_INVALID_INPUT ||
-    (inputCode !== undefined && errCode === inputCode)
+    (inputMarker !== undefined && message.includes(inputMarker))
   ) {
     throw new HttpError(400, code, message)
   }
