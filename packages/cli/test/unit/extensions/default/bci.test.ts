@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   BCI_FIELD_CODES,
+  BCI_MAX_BATCH_TIMESTEPS,
   bciTranscriptionsBody,
   neuralDataProblem
 } from '@/serve/extensions/default/schemas/bci'
@@ -16,6 +17,12 @@ function neural(timesteps: number, channels: number, samples = timesteps * chann
   bytes.writeUInt32LE(timesteps, 0)
   bytes.writeUInt32LE(channels, 4)
   return bytes
+}
+
+function assertProblem(bytes: Buffer, stream: boolean, code: string, message: RegExp): void {
+  const problem = neuralDataProblem(bytes, stream)
+  assert.equal(problem?.code, code)
+  assert.match(problem.message, message)
 }
 
 function failedPaths(result: {
@@ -114,15 +121,23 @@ describe('neuralDataProblem', () => {
     assert.equal(neuralDataProblem(neural(3, 2), false), null)
   })
 
-  it('rejects a short header, zero channels and a length mismatch', () => {
-    assert.match(neuralDataProblem(Buffer.alloc(4), false)!, /8-byte header/)
-    assert.match(neuralDataProblem(neural(3, 0), false)!, /0 channels/)
-    assert.match(neuralDataProblem(neural(3, 2, 5), false)!, /3x2 samples/)
+  it('rejects a short header, zero channels or timesteps, and a length mismatch', () => {
+    assertProblem(Buffer.alloc(4), false, 'invalid_neural_data', /8-byte header/)
+    assertProblem(neural(3, 0), false, 'invalid_neural_data', /0 channels/)
+    assertProblem(neural(0, 2), false, 'invalid_neural_data', /0 timesteps/)
+    assertProblem(neural(3, 2, 5), false, 'invalid_neural_data', /3x2 samples/)
+  })
+
+  it('sends a batch recording over the decode window to streaming', () => {
+    const over = BCI_MAX_BATCH_TIMESTEPS + 1
+    assertProblem(neural(over, 1), false, 'neural_data_too_large', /stream: true/)
+    assert.equal(neuralDataProblem(neural(over, 1), true), null)
   })
 
   it('ignores the timestep count for a stream but wants whole timesteps', () => {
     assert.equal(neuralDataProblem(neural(0, 2, 8), true), null)
-    assert.match(neuralDataProblem(neural(0, 2, 7), true)!, /whole number/)
+    assertProblem(neural(0, 2, 7), true, 'invalid_neural_data', /whole number/)
+    assertProblem(neural(0, 2, 0), true, 'invalid_neural_data', /no samples/)
   })
 })
 

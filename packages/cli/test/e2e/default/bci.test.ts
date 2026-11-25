@@ -328,8 +328,8 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
       onCancel = resolve
     })
     let drained = false
-    state().cancelOverride = ({ requestId }: { requestId?: string }) => {
-      cancelled.push(String(requestId))
+    state().cancelOverride = (opts) => {
+      cancelled.push('requestId' in opts ? String(opts.requestId) : '')
       onCancel()
       return Promise.resolve()
     }
