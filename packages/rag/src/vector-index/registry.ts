@@ -322,7 +322,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     let native: NativeIndex
     try {
       native = await module.load(stored.path)
-    } catch {
+    } catch (error) {
+      entry.snapshotError = { error }
       return
     }
     if (native.dim !== identity.dimensions || native.bitWidth !== BIT_WIDTHS[identity.storage]) {
@@ -441,11 +442,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
 
   // Snapshot failures are not fatal: the mutations stay, and the next open
   // replays them.
-  function persist(entry: Entry): Promise<void> {
+  function persist(entry: Entry): Promise<boolean> {
     const next = entry.persisting.then(() => write(entry))
     entry.persisting = next.then(
-      () => {
-        entry.snapshotError = null
+      (wrote) => {
+        if (wrote) entry.snapshotError = null
       },
       (error: unknown) => {
         entry.snapshotError = { error }
@@ -454,10 +455,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     return next
   }
 
-  async function write(entry: Entry): Promise<void> {
+  // Resolves whether a snapshot was written.
+  async function write(entry: Entry): Promise<boolean> {
     const { store, native, identity } = entry
-    if (!store || !native || !identity) return
-    if (entry.revision <= entry.persistedRevision) return
+    if (!store || !native || !identity) return false
+    if (entry.revision <= entry.persistedRevision) return false
     const revision = await onDisk(entry.namespace, () =>
       store.write(identity, (pathFor) => {
         // A rebuild may swap the index while the store awaits the filesystem.
@@ -466,9 +468,10 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         return { revision, written: writeSettled(native, pathFor(revision), entry.settled) }
       })
     )
-    if (entry.native !== native || dropped.has(entry)) return
+    if (entry.native !== native || dropped.has(entry)) return true
     entry.persistedRevision = Math.max(entry.persistedRevision, revision)
     prunable.set(entry.namespace, Math.max(prunable.get(entry.namespace) ?? 0, revision))
+    return true
   }
 
   async function persistAndPrune(entry: Entry): Promise<void> {
