@@ -1,10 +1,7 @@
 import { z } from 'zod'
-import { randomBytes } from 'node:crypto'
-import { writeFile, unlink } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
 import { namedKvCacheKey } from '@/serve/lib/named-kv-cache'
+import { removePrivateTempFile, writePrivateTempFile } from '@/serve/lib/temp-file'
 import {
   chatMessage,
   responseFormat,
@@ -203,17 +200,16 @@ function decodeImageUrl(url: string): ImageAttachment {
   return { ext, bytes }
 }
 
-// Materialize each media part's image to a flat temp file (mirrors
-// routes/audio.ts's writeTempAudio) and return the SDK history plus the temp paths the caller must
-// unlink in a `finally`. Atomic: if a write fails partway, the files already written this call are
-// removed.
+// Materialize each media part's image to a private temp file (mirrors routes/audio.ts's
+// writeTempAudio) and return the SDK history plus the temp paths the caller must remove with
+// removePrivateTempFile in a `finally`. Atomic: if a write fails partway, the files already
+// written this call are removed.
 export async function writeChatImages(
   history: ChatHistoryItem[]
 ): Promise<{ history: SdkHistoryItem[]; tmpPaths: string[] }> {
   const tmpPaths: string[] = []
   const writeImage = async (image: ImageAttachment): Promise<string> => {
-    const path = join(tmpdir(), `qvac-image-${randomBytes(8).toString('hex')}.${image.ext}`)
-    await writeFile(path, image.bytes)
+    const path = await writePrivateTempFile(`image.${image.ext}`, image.bytes)
     tmpPaths.push(path)
     return path
   }
@@ -227,7 +223,7 @@ export async function writeChatImages(
     }
     return { history: sdkHistory, tmpPaths }
   } catch (err) {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
     throw err
   }
 }
