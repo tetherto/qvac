@@ -281,14 +281,16 @@ test('isAddonContextOverflowError: detects a cache file over the slot limit', (t
   )
 })
 
-test('parseContextOverflowMessage: extracts from cache-file limit refusals', (t) => {
-  t.alike(parseContextOverflowMessage(CACHE_LIMIT_REFUSALS[0]!), { ctxSize: 8192 })
-  t.alike(parseContextOverflowMessage(CACHE_LIMIT_REFUSALS[2]!), { ctxSize: 8192 })
-  t.alike(parseContextOverflowMessage(CACHE_LIMIT_REFUSALS[3]!), {
-    cachedTokens: 9000,
-    requiredTokens: 9000,
-    ctxSize: 8192
-  })
+test('cache-file overflows parse only the counts after the quoted path', (t) => {
+  for (const refusal of CACHE_LIMIT_REFUSALS) {
+    const message = refusal.replace('a b', "room's (12 tokens, max 30)\narchive")
+    t.ok(isAddonContextOverflowError(new Error(message)))
+    t.alike(parseContextOverflowMessage(message), {
+      cacheFileOverflow: true,
+      ctxSize: 8192,
+      ...(refusal.startsWith('acceptLoadedState:') && { cachedTokens: 9000, requiredTokens: 9000 })
+    })
+  }
 })
 
 test('parseContextOverflowMessage: empty result when numbers are absent', (t) => {

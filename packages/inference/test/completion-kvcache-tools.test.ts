@@ -798,12 +798,13 @@ function registerSecondTurnThrowingModel(
   cachePaths: string[],
   thrown: Error | ((cacheKey: string | undefined) => Error),
   throwOnRun = 2
-): void {
+): ReturnType<typeof heldConversations> {
   let runCount = 0
   const conversations = heldConversations()
   registerModel(modelId, {
     model: {
       saveCache: conversations.saveCache,
+      discardCache: conversations.discardCache,
       run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
@@ -830,6 +831,7 @@ function registerSecondTurnThrowingModel(
     config: {},
     modelType: ModelType.llamacppCompletion
   })
+  return conversations
 }
 
 // Turn one commits, turn two fails or stops early, turn three retries the same
@@ -1102,7 +1104,7 @@ test('completion: kv-cache drops a cache file over the slot limit as a context o
   const modelId = `kvcache-over-limit-${Date.now()}`
   const calls: RecordedCall[] = []
   const cachePaths: string[] = []
-  registerSecondTurnThrowingModel(
+  const conversations = registerSecondTurnThrowingModel(
     modelId,
     calls,
     cachePaths,
@@ -1119,6 +1121,8 @@ test('completion: kv-cache drops a cache file over the slot limit as a context o
   )
   t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  t.ok(refusal instanceof Error && /saved KV cache.*8192.*Retry the request/.test(refusal.message))
+  t.alike(conversations.discarded, [cachePaths[1]], 'rollback discards the held conversation')
   t.is((refusal as { ctxSize?: number }).ctxSize, 8192, 'the limit is the slot limit')
   t.is(turnCalls.length, 3, 'the retry reaches the model')
   t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')

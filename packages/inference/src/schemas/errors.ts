@@ -414,7 +414,8 @@ const errorDefinitions: ErrorCodesMap = {
       ctxSize: string,
       modelId: string,
       cachedTokens?: string,
-      requiredTokens?: string
+      requiredTokens?: string,
+      source?: string
     ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
       // Ambiguous totals can be KV cells, and the guards trigger at equality —
@@ -422,6 +423,11 @@ const errorDefinitions: ErrorCodesMap = {
       const capacity = ctxSize
         ? `the effective context capacity (${ctxSize} units)`
         : "the model's context capacity"
+      if (source === 'cacheFile') {
+        const size = cachedTokens ? ` holds ${cachedTokens} tokens and` : ''
+        const limit = ctxSize ? `the ${ctxSize}-token slot limit` : 'the slot limit'
+        return `The saved KV cache${size} exceeds ${limit}${model}. Retry the request. If the oversized file is a seed, omit or rebuild that seed first.`
+      }
       if (requiredTokens && cachedTokens) {
         return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctx_size.`
       }

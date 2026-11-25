@@ -205,7 +205,7 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
     )
   },
   CONTEXT_OVERFLOW: (response) => {
-    return new ContextOverflowError(
+    const error = new ContextOverflowError(
       {
         promptTokens: readOptionalNumberField(response.typedFields, 'promptTokens'),
         cachedTokens: readOptionalNumberField(response.typedFields, 'cachedTokens'),
@@ -215,6 +215,16 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readOptionalStringField(response.typedFields, 'modelId'),
       response.cause
     )
+    // Only the worker knows whether the prompt or a saved cache exceeded the limit.
+    if (error.message !== response.message) {
+      const header = error.toString()
+      error.message = response.message
+      // QvacErrorBase may already have captured the stack when it attached the cause.
+      if (error.stack?.startsWith(header)) {
+        error.stack = error.toString() + error.stack.slice(header.length)
+      }
+    }
+    return error
   },
   // Source-language autodetect now fails server-side (translate detection moved
   // into the worker), so this crosses the RPC and reconstructs as the typed

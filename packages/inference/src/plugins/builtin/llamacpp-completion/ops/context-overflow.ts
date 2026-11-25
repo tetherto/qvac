@@ -18,8 +18,14 @@
  * + extraction logic without a real model load.
  */
 
-// The guards' emitted starts; the numeric tails vary across addon
-// generations, so the forms are start-anchored and single-line.
+// The quoted path can contain quotes, line breaks, and text that looks like a token count.
+const CACHE_LIMIT =
+  /^(?:TextLlmContext::|MtmdLlmContext::)?loadCache: cache (?:file )?'.*' exceeds the context limit of (\d+) tokens$/s
+const CACHE_LIMIT_WITH_COUNT =
+  /^acceptLoadedState: cache file '.*' contains (\d+) tokens, which exceeds the context limit of (\d+) tokens$/s
+
+// Match the native guard at the start of the message. Older addon versions
+// report different counts for the same prefill failure.
 const CONTEXT_OVERFLOW_FORMS = [
   /^\[TextLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
   /^\[MtmdLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
@@ -32,9 +38,8 @@ const CONTEXT_OVERFLOW_FORMS = [
   /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  // A cache file over the slot limit, refused as the request loads it.
-  /^(?:TextLlmContext::|MtmdLlmContext::)?loadCache: cache (?:file )?'[^\r\n]*' exceeds the context limit of \d+ tokens$/,
-  /^acceptLoadedState: cache file '[^\r\n]*' contains \d+ tokens, which exceeds the context limit of \d+ tokens$/
+  CACHE_LIMIT,
+  CACHE_LIMIT_WITH_COUNT
 ]
 
 // Both detectors classify raw addon errors only — an already-typed QvacError
@@ -60,6 +65,7 @@ export function isAddonContextOverflowError(err: unknown): boolean {
 }
 
 export type ContextOverflowSizes = {
+  cacheFileOverflow?: true
   /** The prompt alone, in tokens; unset when the guard reports KV cells. */
   promptTokens?: number
   /** Cached conversation on a warm-cache guard, in `ctxSize` units. */
@@ -79,6 +85,19 @@ type PatternEntry = {
 // One entry per number-formatting guard, most specific first; keep in step
 // with TextLlmContext.cpp / MtmdLlmContext.cpp or fields silently vanish.
 const MESSAGE_PATTERNS: PatternEntry[] = [
+  {
+    pattern: CACHE_LIMIT,
+    map: ([ctx]) => ({ cacheFileOverflow: true, ctxSize: ctx! })
+  },
+  {
+    pattern: CACHE_LIMIT_WITH_COUNT,
+    map: ([cached, ctx]) => ({
+      cacheFileOverflow: true,
+      cachedTokens: cached!,
+      requiredTokens: cached!,
+      ctxSize: ctx!
+    })
+  },
   {
     // "cached tokens C plus prompt tokens N exceed the max context tokens M"
     pattern: /cached tokens (\d+) plus prompt tokens (\d+) exceeds? the max context tokens (\d+)/i,
@@ -138,26 +157,15 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     // reservation plus the prompt is the space the request needs.
     pattern: /n_predict (\d+) \+ prompt (\d+) KV cells exceeds per-sequence cap (\d+)/,
     map: ([predict, cells, cap]) => ({ requiredTokens: predict! + cells!, ctxSize: cap! })
-  },
-  {
-    // "cache file '<path>' contains N tokens, which exceeds the context limit
-    // of M tokens" — the file is all of it, so it is also the total.
-    pattern: /contains (\d+) tokens, which exceeds the context limit of (\d+) tokens/,
-    map: ([cached, ctx]) => ({ cachedTokens: cached!, requiredTokens: cached!, ctxSize: ctx! })
-  },
-  {
-    // "cache '<path>' exceeds the context limit of M tokens" — the file's
-    // length is not reported.
-    pattern: /exceeds the context limit of (\d+) tokens/,
-    map: ([ctx]) => ({ ctxSize: ctx! })
   }
 ]
 
 // Best-effort extraction of the overflow sizes; the bare processPromptImpl
 // path carries no numbers, and undefined fields degrade gracefully.
 export function parseContextOverflowMessage(message: string): ContextOverflowSizes {
+  const trimmed = message.trim()
   for (const { pattern, map } of MESSAGE_PATTERNS) {
-    const match = message.match(pattern)
+    const match = trimmed.match(pattern)
     if (!match) continue
     const numbers = match.slice(1).map(Number)
     if (!numbers.every(Number.isFinite)) continue

@@ -290,6 +290,8 @@ export class CompletionFailedError extends QvacErrorBase {
 
 /** The overflow sizes as one record; fields admit explicit `undefined` so a parser result assigns directly. */
 export type ContextOverflowErrorSizes = {
+  /** The saved KV cache exceeded the slot limit before the addon evaluated the prompt. */
+  cacheFileOverflow?: true | undefined
   promptTokens?: number | undefined
   cachedTokens?: number | undefined
   requiredTokens?: number | undefined
@@ -382,7 +384,8 @@ export class ContextOverflowError extends QvacErrorBase {
           n.ctxSize !== undefined ? String(n.ctxSize) : '',
           n.modelId ?? '',
           n.cachedTokens !== undefined ? String(n.cachedTokens) : '',
-          n.requiredTokens !== undefined ? String(n.requiredTokens) : ''
+          n.requiredTokens !== undefined ? String(n.requiredTokens) : '',
+          n.cacheFileOverflow ? 'cacheFile' : ''
         ],
         n.cause
       )
