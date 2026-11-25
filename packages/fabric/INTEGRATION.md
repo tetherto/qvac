@@ -24,7 +24,8 @@ build against the forked llama.cpp + ggml runtime:
   mtmd_*` C API plus their C++-linkage variants (the qvac-fabric fork adds C++
   extensions such as `llama_model_meta_from_file`), the `common_*` /
   `string_*` / `json_schema_to_grammar` / cpu-params libcommon helpers, and
-  `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()`
+  `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()` /
+  `qvac_fabric_port_version()`
 - **ggml compute backends** — on **Linux, Android, and Windows**, shipped as
   shared libraries under `prebuilds/<host>/<module>/` in the platform package,
   or the CUDA backend package on Linux x64
@@ -80,7 +81,9 @@ On **macOS and iOS** the backends are static inside the runtime and
 self-register on load.
 
 Consumer addons do **not** need `qvac-fabric` in their own `vcpkg.json`. The
-runtime comes bundled with `@qvac/fabric`.
+runtime comes bundled with `@qvac/fabric`. The one exception is an addon that
+links upstream's `server-context` (see below): it builds that archive from the
+port itself, at the version the runtime records.
 
 ---
 
@@ -256,6 +259,41 @@ A standard consumer map exports only `bare_*` / `napi_*`:
 The large `llama_* / ggml_* / common_*` export surface lives in `@qvac/fabric`'s
 own `symbols.map` / `exports.txt`, not in the consumer.
 
+### Upstream server-context (decision addon only)
+
+`@qvac/decision-ggml` runs upstream llama.cpp's `server-context` (decision
+execution without the HTTP server). It is not part of this package: the addon
+builds the `qvac-fabric` port with the `server-context` feature in its own
+`vcpkg.json` and links the archive statically after `qvac_addon_use_fabric()`:
+
+```cmake
+qvac_addon_link_fabric_server_context(${my-addon})
+```
+
+Only the archive is linked. Its `llama` / `common` / `mtmd` references resolve
+from the shared runtime, which exports the libcommon symbols it needs by name
+(the `jinja` entries, `fs_validate_filename`, `glob_match`,
+`common_json::get<T>()` and `common_json_error`'s typeinfo and vtable in
+`symbols.map`, `exports.txt` and `cmake/generate-windows-def.cmake`).
+
+The archive and the runtime must come from the same port version:
+
+- This package's build writes the port it installed into its CMake config
+  (`QVAC_FABRIC_PORT_VERSION`), so the value travels with the prebuilds. The
+  helper fails configure when the addon's own vcpkg build installed another
+  version.
+- The runtime reports the same port from `qvac_fabric_port_version()`. The
+  helper gives the addon its own port as `QVAC_FABRIC_SERVER_CONTEXT_PORT`, in
+  a generated `<qvac-fabric-server-context-port.h>` on its include path, and
+  the addon compares the two in its exports function, after
+  `qvacAddonBindFabric()`, refusing to load on a mismatch: a later
+  `@qvac/fabric` release in the addon's range may ship another port.
+- `package.json` records the pinned port as `qvac["qvac-fabric"]`, and the
+  addon records the same. `verify-qvac-fabric-lockstep`, run by `pr-checks.yml`
+  on every pull request, checks both records against the `vcpkg.json` pins.
+  This package's build only warns when it installs another port, as a port
+  overlay under validation does.
+
 ---
 
 ## Step 4 — Pre-loading and binding @qvac/fabric
@@ -370,7 +408,7 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 | # | Step | What to verify |
 |---|------|----------------|
 | 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` at the `@qvac/fabric` caret range when building mobile prebuilds |
-| 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
+| 2 | `vcpkg.json` | `qvac-fabric` is **not** listed, unless the addon links `server-context` (`qvac-fabric[llama,server-context]` at the runtime's port); `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; no runtime or backend install |
 | 4 | `binding.js`, exports function | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS; the exports function calls `qvacAddonBindFabric()` and throws if it fails |
 | 5 | Backends | native code calls `qvac_fabric_load_backends()` unless the caller passed `backendsDir` |

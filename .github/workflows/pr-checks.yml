@@ -53,6 +53,21 @@ jobs:
           node-version: lts/*
       - run: node scripts/ci/check-workspace-ranges.mjs
 
+  # Every package that builds the qvac-fabric port pins one version, and records it in package.json as qvac["qvac-fabric"].
+  # On every pull request, since a pin or a record lives in any package's vcpkg.json or package.json.
+  fabric-lockstep:
+    name: qvac-fabric version lockstep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/verify-qvac-fabric-lockstep
+
   # No git URLs and no dev or tmp prerelease pins in a contract package's dependencies.
   disallowed-deps:
     if: github.event.action != 'labeled'

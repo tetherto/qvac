@@ -199,6 +199,15 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   also gets `<qvac-addon/fabric-bind.h>` and `QVAC_FABRIC_MODULE_NAME`
   (`qvac_fabric_soname`), which the addon's exports function needs to bind
   fabric (see below).
+- `qvac_addon_link_fabric_server_context(<target>)` — for an addon that runs
+  upstream llama.cpp's `server-context` (`@qvac/decision-ggml`): links only the
+  `server-context` archive from the addon's own `qvac-fabric[llama,server-context]`
+  vcpkg build, its other references resolving from the shared runtime. Fails
+  configure unless that port is the one the installed `@qvac/fabric` records,
+  and writes the port into a generated `<qvac-fabric-server-context-port.h>`
+  (`QVAC_FABRIC_SERVER_CONTEXT_PORT`), which the addon compares with the loaded
+  runtime's `qvac_fabric_port_version()`. Call after `qvac_addon_use_fabric()`.
+  See `packages/fabric/INTEGRATION.md`.
 - `qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)` — Linux only: link `<target>`
   with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
   static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
@@ -349,9 +358,10 @@ packaging was ready. `finalize` folds in the Android page-size + Apple
 `compiler-rt` fixes unconditionally — a deliberate behavior change that
 normalizes the drift, so addons that lacked them now get them.
 
-`packages/fabric` itself is the one remaining `qvac-fabric` vcpkg consumer: it
-builds the port into the shared runtime the others load. That is also what keeps
-`verify-qvac-fabric-lockstep` meaningful now that no addon declares the port.
+`packages/fabric` builds the port into the shared runtime the others load. The
+only addon that also declares the port is one that links upstream's
+`server-context` from its own build of it, at the runtime's version;
+`verify-qvac-fabric-lockstep` keeps every declaration on one version.
 
 ## Open questions
 

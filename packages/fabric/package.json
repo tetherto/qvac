@@ -2,6 +2,9 @@
   "name": "@qvac/fabric",
   "version": "0.33.0",
   "description": "Shared bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons",
+  "qvac": {
+    "qvac-fabric": "12032.0.0"
+  },
   "engines": {
     "bare": ">=1.24.0"
   },

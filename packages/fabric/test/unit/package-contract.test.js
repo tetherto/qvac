@@ -137,7 +137,11 @@ test('the native module is named after the platform package that ships it', asyn
 
 test('fabric exports its own C API on every platform', () => {
   const header = read('include/qvac-fabric.h')
-  for (const symbol of ['qvac_fabric_load_backends', 'qvac_fabric_backends_dir']) {
+  for (const symbol of [
+    'qvac_fabric_load_backends',
+    'qvac_fabric_backends_dir',
+    'qvac_fabric_port_version'
+  ]) {
     assert.match(header, new RegExp(`QVAC_FABRIC_API [^;(]+\\b${symbol}\\(void\\);`), symbol)
   }
   assert.match(read('symbols.map'), /^\s*qvac_fabric_\*;/m)
@@ -146,6 +150,130 @@ test('fabric exports its own C API on every platform', () => {
     read('CMakeLists.txt'),
     /install\(FILES include\/qvac-fabric\.h DESTINATION include\)/
   )
+})
+
+// What @qvac/decision-ggml's statically linked server-context leaves undefined
+// in libcommon's jinja engine: four functions, and the vtables and typeinfo of
+// the value classes it constructs and catches. ELF names; Mach-O adds a '_'.
+const SERVER_CONTEXT_JINJA = [
+  '_ZN5jinja16global_from_jsonI11common_jsonEEvRNS_7contextERKT_b',
+  '_ZN5jinja6string6appendERKS0_',
+  '_ZNK5jinja6string3strEv',
+  '_ZNK5jinja9statement7executeERNS_7contextE',
+  '_ZTIN5jinja11value_int_tE',
+  '_ZTIN5jinja12value_bool_tE',
+  '_ZTIN5jinja13value_array_tE',
+  '_ZTIN5jinja13value_float_tE',
+  '_ZTIN5jinja14value_string_tE',
+  '_ZTVN5jinja11value_int_tE',
+  '_ZTVN5jinja12value_bool_tE',
+  '_ZTVN5jinja12value_none_tE',
+  '_ZTVN5jinja13value_array_tE',
+  '_ZTVN5jinja14value_object_tE',
+  '_ZTVN5jinja14value_string_tE'
+]
+
+test('the runtime exports exactly the jinja symbols server-context needs', () => {
+  // @qvac/decision-ggml links upstream server-context statically and resolves
+  // its libcommon references (these jinja symbols, two helpers) from this
+  // runtime. Exact names, not the namespace.
+  const mapLines = read('symbols.map')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+  // Every entry that mentions jinja, a pattern included, is one of the names.
+  const mapJinja = mapLines.filter((line) => !line.startsWith('#') && /jinja/.test(line))
+  assert.deepEqual(mapJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => name + ';').sort())
+  assert.ok(mapLines.includes('fs_validate_filename*;'))
+  assert.ok(mapLines.includes('glob_match*;'))
+  // A demangled-name pattern misses function templates, whose demangled names
+  // start with the return type, so common_json::get<T>() is matched mangled.
+  assert.ok(mapLines.includes('_ZNK11common_json3getI*;'))
+  // common_json_error's typeinfo and vtable, which libcommon throws and
+  // server-context catches; on Mach-O *common_* covers them, and MSVC needs
+  // no export (it matches a catch by type name).
+  for (const name of [
+    '_ZTI17common_json_error',
+    '_ZTS17common_json_error',
+    '_ZTV17common_json_error'
+  ]) {
+    assert.ok(mapLines.includes(name + ';'), name)
+  }
+  assert.ok(read('exports.txt').split(/\r?\n/).includes('*common_*'))
+
+  const exportsTxt = read('exports.txt').split(/\r?\n/)
+  const exportsJinja = exportsTxt.filter((line) => !line.startsWith('#') && line.includes('jinja'))
+  assert.deepEqual(exportsJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => '_' + name).sort())
+  assert.ok(exportsTxt.includes('__Z*fs_validate_filename*'))
+  assert.ok(exportsTxt.includes('__Z*glob_match*'))
+
+  // MSVC decorates differently: the same functions and the value classes by
+  // decorated scope, never the whole "@jinja@@" namespace.
+  const def = read('cmake/generate-windows-def.cmake')
+  for (const fragment of [
+    '"global_from_json@"',
+    '"@string@jinja@@"',
+    '"@statement@jinja@@"',
+    '"@value_[a-z_]*t@jinja@@"',
+    '"fs_validate_filename"',
+    '"glob_match"'
+  ]) {
+    assert.ok(def.includes(fragment), fragment)
+  }
+  assert.ok(!def.includes('"@jinja@@"'))
+  // No other allow-list entry names jinja.
+  const allow = def
+    .slice(def.indexOf('set(_allow'), def.indexOf('string(JOIN'))
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n')
+  const defJinja = [...allow.matchAll(/"([^"\n]*)"/g)]
+    .map((m) => m[1])
+    .filter((entry) => entry.includes('jinja'))
+  assert.deepEqual(defJinja.sort(), [
+    '@statement@jinja@@',
+    '@string@jinja@@',
+    '@value_[a-z_]*t@jinja@@'
+  ])
+})
+
+test('fabric neither builds nor ships server-context', () => {
+  // The decision addon builds it from the qvac-fabric port itself.
+  assert.ok(
+    !vcpkgJson.dependencies.some(
+      (dep) => dep.name === 'qvac-fabric' && (dep.features || []).includes('server-context')
+    )
+  )
+  assert.doesNotMatch(read('CMakeLists.txt'), /server-context/)
+})
+
+test('the qvac-fabric port the runtime is built from is recorded', () => {
+  // package.json records the pinned port; the build checks the record against
+  // the port it installed and writes it into the CMake config, where
+  // qvac_addon_link_fabric_server_context() compares an addon's own port build.
+  const pinned = vcpkgJson.dependencies.find((dep) => dep.name === 'qvac-fabric')['version>=']
+  assert.equal(packageJson.qvac['qvac-fabric'], pinned)
+  const cmake = read('CMakeLists.txt')
+  assert.match(
+    cmake,
+    /qvac_fabric_installed_port_version\("\$\{VCPKG_INSTALLED_PATH\}" QVAC_FABRIC_PORT_VERSION\)/
+  )
+  assert.match(cmake, /cmake\/qvac-fabric-port\.cmake\s+DESTINATION share\/qvac-fabric\/cmake/)
+  // The runtime reports the same port, for the check when an addon loads,
+  // from a generated header: CMake drops a compile definition holding '#'.
+  assert.match(cmake, /target_sources\(\$\{qvac-fabric\} PRIVATE [^)]*addon\/port\.cpp/)
+  // qvac_fabric_write_port_header() is the helper's too, where
+  // port-version.test.js checks what it writes.
+  assert.match(
+    cmake,
+    /qvac_fabric_write_port_header\(\s+"\$\{CMAKE_CURRENT_BINARY_DIR\}\/generated\/qvac-fabric-port-version\.h"\s+QVAC_FABRIC_PORT_VERSION "\$\{QVAC_FABRIC_PORT_VERSION\}"\)/
+  )
+  assert.doesNotMatch(cmake, /QVAC_FABRIC_PORT_VERSION="/)
+  const port = read('addon/port.cpp')
+  assert.match(port, /#include "qvac-fabric-port-version\.h"/)
+  assert.match(port, /qvac_fabric_port_version\(void\) \{\s+return QVAC_FABRIC_PORT_VERSION;/)
+  const config = read('cmake/qvac-fabricConfig.cmake.in')
+  assert.match(config, /set\(QVAC_FABRIC_PORT_VERSION "@QVAC_FABRIC_PORT_VERSION@"\)/)
+  assert.match(config, /include\("\$\{CMAKE_CURRENT_LIST_DIR\}\/qvac-fabric-port\.cmake"\)/)
 })
 
 test('the Mach-O export list does not re-export host symbols', () => {

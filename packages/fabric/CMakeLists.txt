@@ -84,6 +84,26 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
 configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
+# The qvac-fabric port this runtime is built from, read from what vcpkg
+# installed. It goes into the CMake config (QVAC_FABRIC_PORT_VERSION) and the
+# runtime (qvac_fabric_port_version()), so an addon that links code from its
+# own build of the port can check it is the same when it configures and when it
+# loads. The same on every triplet.
+#
+# package.json records the pinned port (qvac["qvac-fabric"]), which
+# verify-qvac-fabric-lockstep checks against the vcpkg.json pin. A build that
+# installs another port only warns: a rollout's overlay validation installs the
+# new port while the pin and the record stay at the old one.
+include(cmake/qvac-fabric-port.cmake)
+qvac_fabric_installed_port_version("${VCPKG_INSTALLED_PATH}" QVAC_FABRIC_PORT_VERSION)
+string(JSON _pkg_port ERROR_VARIABLE _pkg_port_error GET "${_pkg_json}" qvac qvac-fabric)
+if(_pkg_port_error OR NOT _pkg_port STREQUAL QVAC_FABRIC_PORT_VERSION)
+  message(WARNING
+    "qvac-fabric: package.json records qvac[\"qvac-fabric\"] '${_pkg_port}', but this "
+    "build installed qvac-fabric ${QVAC_FABRIC_PORT_VERSION}. The runtime records "
+    "${QVAC_FABRIC_PORT_VERSION}. Expected only while validating a port overlay.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -161,8 +181,14 @@ if(GGML_XDNA_KERNEL_FILES)
   install(FILES ${GGML_XDNA_KERNEL_FILES} DESTINATION ${_fabric_host}/${_fabric_module_name})
 endif()
 
-target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp)
-target_include_directories(${qvac-fabric} PRIVATE include)
+# The port for qvac_fabric_port_version() (addon/port.cpp), in a generated
+# header: a compile definition would lose a port-version suffix ('#').
+qvac_fabric_write_port_header(
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/qvac-fabric-port-version.h"
+  QVAC_FABRIC_PORT_VERSION "${QVAC_FABRIC_PORT_VERSION}")
+
+target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp addon/port.cpp)
+target_include_directories(${qvac-fabric} PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(${qvac-fabric} PRIVATE
   QVAC_FABRIC_BUILD
   QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}")
@@ -467,6 +493,7 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfigVersion.cmake
   cmake/qvac-fabric-hosts.cmake
+  cmake/qvac-fabric-port.cmake
   DESTINATION share/qvac-fabric/cmake)
 
 # --- Platform-specific -------------------------------------------------------
