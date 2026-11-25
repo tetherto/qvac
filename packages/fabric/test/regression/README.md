@@ -197,6 +197,13 @@ XDNA keeps system shared libstdc++/XRT. GNU runtime selection and symbol export
 maps live in the fork; installed binary ownership checks live in the port.
 Android retains NDK `libc++_shared.so`.
 
+The loader no longer forwards loggers between ggml-base copies or exports
+per-backend logger setters. Backend scoring, initialization and later logs use
+the shared core's callback directly. The source loader tests cover callback
+replacement, userdata, error/continuation messages and reset. Port runtime
+fixtures exercise CUDA-only, XDNA-only and combined shared-core linkage; the
+old helper that built a separate GNU ggml-base is removed.
+
 The libraries ship in fabric's existing platform package, with `$ORIGIN`
 lookup on Linux/Android. Windows core DLLs sit beside the `.bare` entry point;
 import libraries and backend DLLs stay in its companion directory. Platform
