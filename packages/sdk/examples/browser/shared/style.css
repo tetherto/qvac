@@ -157,3 +157,58 @@ pre {
     align-self: flex-start;
   }
 }
+
+nav a {
+  color: #36758b;
+  font-size: 13px;
+}
+
+.pages {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.pages a {
+  display: block;
+  padding: 16px;
+  border: 1px solid #d8e0e3;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  background: white;
+}
+
+.pages a:hover {
+  border-color: #36758b;
+}
+
+.pages strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.columns h3 {
+  margin: 16px 0 0;
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  padding: 8px;
+  border-bottom: 1px solid #d8e0e3;
+  text-align: left;
+}

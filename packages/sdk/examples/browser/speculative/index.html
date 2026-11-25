@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Speculative decoding · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>Speculative decoding</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <label for="model-files">Or a local GGUF file</label>
+        <input id="model-files" type="file" accept=".gguf" />
+        <label for="draft-url">Draft model URL (MTP head)</label>
+        <input id="draft-url" type="url" />
+        <label for="draft-files">Or a local draft GGUF</label>
+        <input id="draft-files" type="file" accept=".gguf" />
+        <div class="row">
+          <button id="load">Load model</button>
+          <button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="detail">
+          Loads with <code>spec_type: 'draft-mtp'</code>. The draft model proposes tokens and the
+          main model verifies each one, so the output matches plain decoding.
+        </p>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Run a completion</h2>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="2">
+Count from one to twenty in words, comma separated.</textarea>
+        <button id="run" disabled>Run completion</button>
+        <pre id="output"></pre>
+        <pre id="stats"></pre>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
