@@ -29,6 +29,7 @@ const {
   getTestPaths,
   ensureWhisperModel,
   createAudioStream,
+  setupJsLogger,
   NO_GPU
 } = require('./helpers.js')
 
@@ -72,12 +73,13 @@ async function ensureTinyModel() {
   return result && result.success ? modelPath : null
 }
 
-function buildConfig(useGpu) {
+function buildConfig(useGpu, flashAttn) {
   return {
     engine: 'whisper',
     contextParams: {
       use_gpu: !!useGpu,
-      gpu_device: 0
+      gpu_device: 0,
+      ...(flashAttn === undefined ? {} : { flash_attn: flashAttn })
     },
     whisperConfig: {
       language: 'en',
@@ -88,14 +90,15 @@ function buildConfig(useGpu) {
   }
 }
 
-async function loadAndTranscribe({ modelPath, samplePath, useGpu }) {
+async function loadAndTranscribe({ modelPath, samplePath, useGpu, flashAttn }) {
   const constructorArgs = {
     files: { model: modelPath }
   }
-  const config = buildConfig(useGpu)
+  const config = buildConfig(useGpu, flashAttn)
   config.path = modelPath
 
   const model = new ASRGgml({ ...constructorArgs, config })
+  const logger = setupJsLogger()
   try {
     await model.load()
     const audioStream = createAudioStream(samplePath)
@@ -118,6 +121,7 @@ async function loadAndTranscribe({ modelPath, samplePath, useGpu }) {
     } catch (_) {
       /* ignore */
     }
+    logger.releaseLogger()
   }
 }
 
@@ -197,7 +201,7 @@ function assertCpuBackend(t, label, stats) {
   )
 }
 
-async function runCase(t, { useGpu, label }) {
+async function runCase(t, { useGpu, label, flashAttn }) {
   const modelPath = await ensureTinyModel()
   if (!modelPath) {
     t.pass(`${label}: skipped — ggml-tiny.bin not available locally`)
@@ -209,7 +213,7 @@ async function runCase(t, { useGpu, label }) {
     return null
   }
 
-  const result = await loadAndTranscribe({ modelPath, samplePath, useGpu })
+  const result = await loadAndTranscribe({ modelPath, samplePath, useGpu, flashAttn })
   console.log(`[${label}] segments=${result.segments.length}`)
   assertStatsShape(t, label, result.stats)
   t.ok(
@@ -232,6 +236,20 @@ test(
     const gpuRun = await runCase(t, { useGpu: true, label: 'GPU' })
     if (!gpuRun) return
     assertGpuBackend(t, 'GPU', gpuRun.stats)
+  }
+)
+
+test(
+  'Whisper Metal - GPU transcription without flash attention',
+  { timeout: 600000, skip: NO_GPU || platform !== 'darwin' },
+  async (t) => {
+    const gpuRun = await runCase(t, {
+      useGpu: true,
+      flashAttn: false,
+      label: 'GPU-no-flash'
+    })
+    if (!gpuRun) return
+    assertGpuBackend(t, 'GPU-no-flash', gpuRun.stats)
   }
 )
 
