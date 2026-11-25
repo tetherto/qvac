@@ -204,6 +204,23 @@ export function createRagOps(host) {
       return await storeOf(store).rag.dropNamespace({ name })
     },
 
+    // Errors become their message, so the status crosses the transport as JSON.
+    async indexStatus({ store, namespace }) {
+      const status = await storeOf(store).rag.indexStatus({ namespace })
+      const message = (error) => (error instanceof Error ? error.message : String(error))
+      if (status.mode === 'scan') {
+        return {
+          mode: 'scan',
+          reason: status.reason,
+          ...(status.error !== undefined && { error: message(status.error) })
+        }
+      }
+      if (status.mode === 'index' && typeof status.snapshot === 'object') {
+        return { ...status, snapshot: 'error', error: message(status.snapshot.error) }
+      }
+      return status
+    },
+
     // Exports a namespace from one open store and imports it into another, optionally
     // aborting the import after `abortAfterChunks` chunks of the stream.
     async transfer({ from, to, namespace, documentIds, targetNamespace, abortAfterChunks }) {
@@ -272,6 +289,7 @@ export const RAG_OPS = [
   'listDocuments',
   'listNamespaces',
   'dropNamespace',
+  'indexStatus',
   'transfer',
   'importBytes'
 ]
