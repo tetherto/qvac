@@ -764,7 +764,8 @@ async def _completion_stream(
         return {
             "text": await streamed if streamed else await run.text(),
             "toolCalls": [
-                {"name": call.name, "arguments": call.arguments} for call in calls
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in calls
             ],
             "stats": _jsonable(final.stats),
             "stopReason": final.stop_reason,
@@ -1722,11 +1723,10 @@ class Interpreter:
         self, params: dict[str, Any] | None, scope: dict[str, Any]
     ) -> dict[str, Any]:
         """Resolve a call's parameters, dropping the ones that resolved to nothing."""
-        resolved = self._resolve(params or {}, scope)
-        return {k: v for k, v in resolved.items() if v is not _MISSING}
+        return self._resolve(params or {}, scope)
 
     def _resolve(self, value: Any, scope: dict[str, Any]) -> Any:
-        """Replace `$name` / `$params.x` references, recursively."""
+        """Replace `$name` / `$params.x` references, recursively; a missing `$x?` drops its key."""
         if isinstance(value, str) and value.startswith("$"):
             if value.endswith("?"):
                 try:
@@ -1735,7 +1735,8 @@ class Interpreter:
                     return _MISSING
             return _walk(scope, value[1:])
         if isinstance(value, dict):
-            return {k: self._resolve(v, scope) for k, v in value.items()}
+            resolved = {k: self._resolve(v, scope) for k, v in value.items()}
+            return {k: v for k, v in resolved.items() if v is not _MISSING}
         if isinstance(value, list):
             return [self._resolve(v, scope) for v in value]
         return value

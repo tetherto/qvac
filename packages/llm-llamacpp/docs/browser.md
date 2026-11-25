@@ -10,12 +10,12 @@ Emscripten against Fabric's WebGPU backend and exposed through the same
 The package's `browser` field swaps these modules when a bundler targets the
 browser:
 
-| Module | Browser replacement |
-|--------|---------------------|
-| `binding.js` (Bare addon) | `binding.browser.js` (WebAssembly build) |
-| `@qvac/infer-base` | `browser/infer-base.js` (browser-safe inference helpers) |
-| `bare-fs` | `browser/fs.js` (native-only filesystem operations reject) |
-| `bare-path` | `browser/path.js` (POSIX subset) |
+| Module                    | Browser replacement                                        |
+| ------------------------- | ---------------------------------------------------------- |
+| `binding.js` (Bare addon) | `binding.browser.js` (WebAssembly build)                   |
+| `@qvac/infer-base`        | `browser/infer-base.js` (browser-safe inference helpers)   |
+| `bare-fs`                 | `browser/fs.js` (native-only filesystem operations reject) |
+| `bare-path`               | `browser/path.js` (POSIX subset)                           |
 
 `binding.browser.js` selects the 32-bit engine or the Memory64 engine at
 runtime. A bundler emits both variants, but the browser fetches only the one
@@ -58,6 +58,14 @@ For a sharded GGUF, pass the first shard path only. Every shard must be in the
 same OPFS directory with its original `*-00001-of-000NN.gguf` name. The
 binding verifies that the set is complete before loading it.
 
+`files.projectionModel`, `config.lora`, and
+`config.spec_draft_model`/`config['spec-draft-model']` use the same absolute
+OPFS path rules. Every path's form (absolute, first shard) is checked before
+the engine starts; whether the file exists is checked when it is mounted. For a
+sharded draft model, pass its first shard path. `config.lora` takes one adapter
+path, which may contain commas; `lora-scaled`, `control-vector` and
+`control-vector-scaled` are rejected at load.
+
 ```js
 import LlmLlamacpp from '@qvac/llm-llamacpp'
 
@@ -75,6 +83,7 @@ await model.unload()
 ## Current browser binding scope
 
 Supported:
+
 - Completion and streaming
 - Reasoning models
 - Tool calling
@@ -84,18 +93,19 @@ Supported:
 - `saveCache`/`discardCache` (cache files live in memory)
 - `calcTokens` while the engine is idle
 - Single-file and sharded GGUF models
+- Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
 
-| Outside the current binding scope | Behaviour |
-|-----------------------------------|-----------|
-| `parallel` > 1 and batch `run()` | Rejected at load/run |
-| `load_mode` other than `auto`/`none` | Rejected at load; weights are read, never memory-mapped |
-| Media input | Rejected at run |
-| Projection models | Rejected at load |
-| LoRA files, RPC servers and native backend/cache directories | Rejected at load |
-| External speculative draft models (`spec-draft-model`) | Rejected at load |
-| `finetune()` | Throws: not exposed by the browser binding |
-| `assessFit()` | Rejects |
+| Outside the current binding scope                      | Behaviour                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `parallel` > 1 and batch `run()`                       | Rejected at load/run                                                      |
+| `load_mode` other than `auto`/`none`                   | Rejected at load; weights are read, never memory-mapped                   |
+| Media input and projection-backed multimodal inference | Media is rejected; the projector is loaded but unused until media support |
+| RPC servers and native backend/cache directories       | Rejected at load                                                          |
+| `lora-scaled` and control vectors                      | Rejected at load                                                          |
+| Multiple LoRAs                                         | Not supported; a comma-separated `lora` is read as one path               |
+| `finetune()`                                           | Throws: not exposed by the browser binding                                |
+| `assessFit()`                                          | Rejects                                                                   |
 
 Requests run one at a time per Worker. A second `run()` either fails
 fast (`rejectWhenBusy`, the default) or waits its turn.

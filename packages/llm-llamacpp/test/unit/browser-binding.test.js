@@ -382,21 +382,6 @@ test('browser unload cancels a job waiting for admission', async (t) => {
   }
 })
 
-test('destroying an instance with no resources does not load the engine', async (t) => {
-  let loads = 0
-  const isolated = isolatedBinding(() => {
-    loads++
-    return {}
-  })
-
-  for (let iteration = 0; iteration < 20; iteration++) {
-    const handle = isolated.createInstance({}, { projectionPath: '/projection.gguf' }, () => {})
-    await t.exception.all(() => isolated.activate(handle), /Projection model is not supported/)
-    await isolated.destroyInstance(handle)
-    t.is(loads, 0, `iteration ${iteration + 1}`)
-  }
-})
-
 test('invalid parallel configuration does not retain or load an engine', async (t) => {
   let loads = 0
   const isolated = isolatedBinding(() => {
@@ -412,14 +397,54 @@ test('invalid parallel configuration does not retain or load an engine', async (
   }
 })
 
-test('healthy unload reports filesystem cleanup errors and detaches the handle', async (t) => {
+test('invalid browser load config does not load an engine', async (t) => {
   let loads = 0
+  const isolated = isolatedBinding(() => {
+    loads++
+    return {}
+  })
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    for (const [params, message] of [
+      [{ config: { mmap: 'true' } }, /mmap is not supported/],
+      [{ config: { 'lora-scaled': '/m/lora.gguf:0.5' } }, /lora-scaled is not supported/],
+      [
+        { config: { spec_draft_model: undefined, 'spec-draft-model': '/m/d.gguf' } },
+        /must not both be set/
+      ],
+      [{ path: 'model.gguf' }, /absolute OPFS path, got: model\.gguf/],
+      [{ projectionPath: 'mmproj.gguf' }, /absolute OPFS path, got: mmproj\.gguf/],
+      [{ config: { lora: 'adapter.gguf' } }, /absolute OPFS path, got: adapter\.gguf/],
+      [{ config: { spec_draft_model: 'draft.gguf' } }, /absolute OPFS path, got: draft\.gguf/],
+      [
+        { config: { spec_draft_model: '/m/draft-00002-of-00002.gguf' } },
+        /must be loaded from its first shard/
+      ]
+    ]) {
+      const handle = isolated.createInstance(
+        {},
+        { path: '/m/model.gguf', config: {}, ...params },
+        () => {}
+      )
+      await t.exception.all(() => isolated.activate(handle), message)
+      await isolated.destroyInstance(handle)
+    }
+    t.is(loads, 0, `iteration ${iteration + 1}`)
+  }
+})
+
+test('healthy unload retains failed filesystem cleanup for retry', async (t) => {
+  let loads = 0
+  let failUnmount = false
   const isolated = isolatedBinding(() => {
     loads++
     return {
       FS: {
         unmount: () => {
-          throw new Error('unmount failed')
+          if (failUnmount) {
+            failUnmount = false
+            throw new Error('unmount failed')
+          }
         },
         rmdir: () => {}
       },
@@ -435,8 +460,17 @@ test('healthy unload reports filesystem cleanup errors and detaches the handle',
     const failed = isolated.createInstance({}, {}, () => {})
     await isolated.activate(failed)
     failed.mounts.push(`/qvac-files/${iteration}`)
+    failUnmount = true
     await t.exception.all(() => isolated.destroyInstance(failed), /unmount failed/)
-    t.is(failed.engine, null, `detached iteration ${iteration + 1}`)
+    t.ok(failed.engine, `engine retained iteration ${iteration + 1}`)
+    t.alike(
+      failed.mounts,
+      [{ mountpoint: `/qvac-files/${iteration}`, mounted: true }],
+      `mount retained iteration ${iteration + 1}`
+    )
+    await isolated.destroyInstance(failed)
+    t.is(failed.engine, null, `retry detached iteration ${iteration + 1}`)
+    t.alike(failed.mounts, [], `retry cleared mount iteration ${iteration + 1}`)
 
     const recovered = isolated.createInstance({}, {}, () => {})
     await isolated.activate(recovered)
@@ -446,7 +480,7 @@ test('healthy unload reports filesystem cleanup errors and detaches the handle',
   t.is(loads, 1)
 })
 
-test('ordinary destroy failures detach resources and preserve the engine', async (t) => {
+test('ordinary destroy failures retain native resources and remain retryable', async (t) => {
   let failDestroy = false
   let loads = 0
   const isolated = isolatedBinding(() => {
@@ -471,8 +505,17 @@ test('ordinary destroy failures detach resources and preserve the engine', async
     failed.mounts.push(`/qvac-files/${iteration}`)
     failDestroy = true
     await t.exception.all(() => isolated.destroyInstance(failed), /destroy failed/)
-    t.is(failed.engine, null, `detached iteration ${iteration + 1}`)
-    t.is(failed.mounts.length, 0, `mounts cleared iteration ${iteration + 1}`)
+    t.ok(failed.engine, `engine retained iteration ${iteration + 1}`)
+    t.is(failed.native, 1, `native handle retained iteration ${iteration + 1}`)
+    t.alike(
+      failed.mounts,
+      [`/qvac-files/${iteration}`],
+      `mount retained iteration ${iteration + 1}`
+    )
+    await isolated.destroyInstance(failed)
+    t.is(failed.engine, null, `retry detached iteration ${iteration + 1}`)
+    t.is(failed.native, 0, `retry cleared native handle iteration ${iteration + 1}`)
+    t.alike(failed.mounts, [], `retry cleared mount iteration ${iteration + 1}`)
 
     const recovered = isolated.createInstance({}, {}, () => {})
     await isolated.activate(recovered)
@@ -645,17 +688,6 @@ test('browser binding rejects path and ordered-part media before admission', asy
       t.is(binding.activeJobs(handle), 0)
     }
   }
-})
-
-test('browser binding rejects projection models before loading the engine', async (t) => {
-  const handle = binding.createInstance(
-    {},
-    { path: '/model.gguf', projectionPath: '/projection.gguf' },
-    () => {}
-  )
-
-  await t.exception.all(() => binding.activate(handle), /Projection model is not supported/)
-  t.is(binding.activeJobs(handle), 0)
 })
 
 test('browser calcTokens fails fast while the engine queue is busy', async (t) => {
