@@ -59,6 +59,8 @@ _CODE_SESSION_NOT_OPEN = _CODES["SESSION_NOT_OPEN"]
 _CODE_MODEL_LEASED = _CODES["MODEL_LEASED"]
 _CODE_OWNER_ONLY = _CODES["OWNER_ONLY"]
 _CODE_MODEL_RECONFIGURED = _CODES["MODEL_RECONFIGURED"]
+_CODE_CAPABILITY_NOT_GRANTED = _CODES["CAPABILITY_NOT_GRANTED"]
+_CODE_SESSION_GRANT_INVALID = _CODES["SESSION_GRANT_INVALID"]
 _CODE_SESSION_INVALIDATED = _CODES["SESSION_INVALIDATED"]
 _CODE_MODEL_HANDLE_INVALIDATED = _CODES["MODEL_HANDLE_INVALIDATED"]
 _CODE_MODEL_SRC_TYPE_MISMATCH = _CODES["MODEL_SRC_TYPE_MISMATCH"]
@@ -543,6 +545,62 @@ class OwnerOnlyError(QvacError):
         )
 
 
+class CapabilityNotGrantedError(QvacError):
+    """A session with a grant called an operation the grant does not cover.
+
+    `required` is the permission the call needs, or None for a plugin handler
+    that no capability contract of its plugin lists, which no grant can cover.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        session_id: str,
+        required: str | None,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.operation = operation
+        self.session_id = session_id
+        self.required = required
+        reason = (
+            "no capability contract lists it, so no grant covers it"
+            if required is None
+            else f'it needs the permission "{required}"'
+        )
+        super().__init__(
+            message or f'Session "{session_id}" may not call "{operation}": {reason}',
+            name="CAPABILITY_NOT_GRANTED",
+            code=_CODE_CAPABILITY_NOT_GRANTED,
+            cause=cause,
+        )
+
+
+class SessionGrantInvalidError(QvacError):
+    """An open_session whose grant names a permission the worker does not have."""
+
+    def __init__(
+        self,
+        session_id: str,
+        permission: str,
+        details: str,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.session_id = session_id
+        self.permission = permission
+        self.details = details
+        super().__init__(
+            message
+            or f'Session "{session_id}" was not opened: its grant is invalid: {details}',
+            name="SESSION_GRANT_INVALID",
+            code=_CODE_SESSION_GRANT_INVALID,
+            cause=cause,
+        )
+
+
 class ModelReconfiguredError(QvacError):
     """A load whose configuration names a model that a reload has since
     reconfigured, from a session that holds no lease on it."""
@@ -845,6 +903,28 @@ def _reconstruct_owner_only(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_capability_not_granted(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return CapabilityNotGrantedError(
+        _str_field(fields, "operation"),
+        _str_field(fields, "sessionId"),
+        _opt_str_field(fields, "required"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
+def _reconstruct_session_grant_invalid(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return SessionGrantInvalidError(
+        _str_field(fields, "sessionId"),
+        _str_field(fields, "permission"),
+        _str_field(fields, "details"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
 def _reconstruct_model_reconfigured(response: dict[str, Any]) -> QvacError:
     return ModelReconfiguredError(
         _str_field(_typed_fields(response), "modelId"),
@@ -858,6 +938,8 @@ _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
     "SESSION_NOT_OPEN": _reconstruct_session_not_open,
     "MODEL_LEASED": _reconstruct_model_leased,
     "OWNER_ONLY": _reconstruct_owner_only,
+    "CAPABILITY_NOT_GRANTED": _reconstruct_capability_not_granted,
+    "SESSION_GRANT_INVALID": _reconstruct_session_grant_invalid,
     "MODEL_RECONFIGURED": _reconstruct_model_reconfigured,
     "INFERENCE_CANCELLED": _reconstruct_inference_cancelled,
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
@@ -934,6 +1016,8 @@ __all__ = [
     "ModelLeasedError",
     "ModelReconfiguredError",
     "OwnerOnlyError",
+    "CapabilityNotGrantedError",
+    "SessionGrantInvalidError",
     "SessionInvalidatedError",
     "ModelHandleInvalidatedError",
     "reconstruct_error",
