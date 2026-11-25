@@ -3,12 +3,17 @@ import type { RegistryItem } from '@/models/registry/models'
 import { generateShortHash } from '@/utils/formatting'
 import {
   COREML_COMPONENTS,
+  coremlBundleComponents,
+  coremlOsSelection,
   getCatalogCoremlSidecars,
   getCoremlSetKeySource,
   getCoremlSidecarSpec,
+  getSingleFileCacheName,
+  selectCoremlBundles,
   type CoremlSidecarSpec
 } from '@/utils/cache/layout'
-import { getModelsCacheDir } from '@/utils/cache/paths'
+import { getDarwinMajor } from '@/utils/darwin-version'
+import { getModelsCacheDir, hasFileOfSize } from '@/utils/cache/paths'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
@@ -18,6 +23,7 @@ import { z } from 'zod'
 export { getCoremlSidecarSpec, type CoremlSidecarSpec }
 
 type CompanionSet = NonNullable<RegistryItem['companionSet']>
+type BundleSpec = CoremlSidecarSpec['bundles'][number]
 const CACHE_METADATA_NAME = '.coreml-companions.json'
 const checksumSchema = z.string().regex(/^[a-f0-9]{64}$/i)
 const cachedFileSchema = z.object({
@@ -36,7 +42,9 @@ const cachedFileSchema = z.object({
 const cachedSetSchema = z.object({
   setKey: z.string(),
   primaryKey: z.literal('modelPath'),
-  files: z.array(cachedFileSchema)
+  files: z.array(cachedFileSchema),
+  // The OS-dependent bundle choice the set was staged under; absent for ''.
+  osSelection: z.string().optional()
 })
 
 /**
@@ -144,16 +152,29 @@ function isValidCachedSet(
 
   for (const bundle of spec.bundles) {
     const prefix = `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/`
-    const count = actual.filter((file) => file.targetName.startsWith(prefix)).length
-    if (count !== 0 && count !== COREML_COMPONENTS.length) return false
+    const components = new Set(
+      actual
+        .filter((file) => file.targetName.startsWith(prefix))
+        .map((file) => file.targetName.slice(prefix.length))
+    )
+    const complete = coremlBundleComponents((component) =>
+      components.has(component) ? component : undefined
+    )
+    if (components.size !== 0 && complete === undefined) return false
   }
   return true
 }
 
+/**
+ * The set saved when the model's bundles were last staged from live registry
+ * metadata. A set staged under another OS-dependent choice is not reused: a
+ * device that staged the fixed encoders on macOS 14 looks again on macOS 15.
+ */
 export async function readCachedCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined,
-  cacheDir = getModelsCacheDir()
+  cacheDir = getModelsCacheDir(),
+  darwinMajor = getDarwinMajor(platform)
 ): Promise<CompanionSet | undefined> {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
@@ -161,52 +182,72 @@ export async function readCachedCoremlCompanionSet(
   try {
     const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, spec, cacheDir), 'utf8')
     const parsed = cachedSetSchema.safeParse(JSON.parse(raw))
-    if (!parsed.success || !isValidCachedSet(parsed.data, model, spec)) return undefined
-    return parsed.data
+    if (!parsed.success) return undefined
+    const { osSelection = '', ...set } = parsed.data
+    if (osSelection !== coremlOsSelection(spec.bundles, darwinMajor)) return undefined
+    return isValidCachedSet(set, model, spec) ? set : undefined
   } catch {
     return undefined
   }
 }
 
+/** The OS-dependent bundle choice for `model` on this device, saved with its staged set. */
+export function getCoremlOsSelection(
+  model: RegistryItem,
+  platform: string | undefined,
+  darwinMajor = getDarwinMajor(platform)
+): string {
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? coremlOsSelection(spec.bundles, darwinMajor) : ''
+}
+
 export async function writeCachedCoremlCompanionSet(
   set: CompanionSet,
-  cacheDir = getModelsCacheDir()
+  cacheDir = getModelsCacheDir(),
+  osSelection = ''
 ): Promise<void> {
   const setDir = validateAndJoinPath(cacheDir, 'sets', set.setKey)
   await fsPromises.mkdir(setDir, { recursive: true })
-  await fsPromises.writeFile(validateAndJoinPath(setDir, CACHE_METADATA_NAME), JSON.stringify(set))
+  await fsPromises.writeFile(
+    validateAndJoinPath(setDir, CACHE_METADATA_NAME),
+    JSON.stringify(osSelection === '' ? set : { ...set, osSelection })
+  )
 }
 
 export function findCatalogCoremlCompanionSet(
   model: RegistryItem,
-  platform: string | undefined
+  platform: string | undefined,
+  darwinMajor = getDarwinMajor(platform)
 ): CompanionSet | undefined {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
 
-  const sidecarFiles = getCatalogCoremlSidecars(spec).map(({ key, targetName, entry }) => ({
-    key,
-    registryPath: entry.registryPath,
-    registrySource: entry.registrySource,
-    targetName,
-    expectedSize: entry.expectedSize,
-    sha256Checksum: entry.sha256Checksum,
-    blobCoreKey: entry.blobCoreKey,
-    blobBlockOffset: entry.blobBlockOffset,
-    blobBlockLength: entry.blobBlockLength,
-    blobByteOffset: entry.blobByteOffset
-  }))
+  const sidecarFiles = getCatalogCoremlSidecars(spec, darwinMajor).map(
+    ({ key, targetName, entry }) => ({
+      key,
+      registryPath: entry.registryPath,
+      registrySource: entry.registrySource,
+      targetName,
+      expectedSize: entry.expectedSize,
+      sha256Checksum: entry.sha256Checksum,
+      blobCoreKey: entry.blobCoreKey,
+      blobBlockOffset: entry.blobBlockOffset,
+      blobBlockLength: entry.blobBlockLength,
+      blobByteOffset: entry.blobByteOffset
+    })
+  )
   return createCompanionSet(model, spec, sidecarFiles)
 }
 
 export async function findLocallyCachedCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined,
-  cacheDir = getModelsCacheDir()
+  cacheDir = getModelsCacheDir(),
+  darwinMajor = getDarwinMajor(platform)
 ): Promise<CompanionSet | undefined> {
   const set =
-    (await readCachedCoremlCompanionSet(model, platform, cacheDir)) ??
-    findCatalogCoremlCompanionSet(model, platform)
+    (await readCachedCoremlCompanionSet(model, platform, cacheDir, darwinMajor)) ??
+    findCatalogCoremlCompanionSet(model, platform, darwinMajor)
   if (!set) return undefined
 
   for (const file of set.files) {
@@ -219,6 +260,33 @@ export async function findLocallyCachedCoremlCompanionSet(
     }
   }
   return set
+}
+
+/**
+ * Where the loader keeps a Core ML family's model when the catalog does not
+ * list its bundles: the set it staged from live registry metadata, or the GGUF
+ * alone when the registry had no bundles for it then. `undefined` when neither
+ * is fully on disk, and for every other model.
+ */
+export async function findCachedLiveCoremlModelPath(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir(),
+  darwinMajor = getDarwinMajor(platform)
+): Promise<string | undefined> {
+  if (!getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)) return undefined
+
+  const set = await findLocallyCachedCoremlCompanionSet(model, platform, cacheDir, darwinMajor)
+  const primary = set?.files.find((file) => file.key === set.primaryKey)
+  if (set && primary) {
+    return validateAndJoinPath(cacheDir, 'sets', set.setKey, primary.targetName)
+  }
+
+  const single = validateAndJoinPath(
+    cacheDir,
+    getSingleFileCacheName(model.registryPath, generateShortHash)
+  )
+  return (await hasFileOfSize(single, model.expectedSize)) ? single : undefined
 }
 
 function createCompanionSet(
@@ -258,33 +326,42 @@ function createCompanionSet(
 export async function findCoremlCompanionSet(
   client: Pick<QVACRegistryClient, 'findModels'>,
   model: RegistryItem,
-  platform: string | undefined
+  platform: string | undefined,
+  darwinMajor = getDarwinMajor(platform)
 ): Promise<CompanionSet | undefined> {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
 
-  const sidecarFiles: CompanionSet['files'][number][] = []
-  for (const bundle of spec.bundles) {
-    const sourcePrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
-    const registryEntries = await client.findModels({
-      gte: { path: sourcePrefix },
-      lte: { path: `${sourcePrefix}￿` }
-    })
-    const byPath = new Map<string, QVACModelEntry>()
-    for (const entry of registryEntries) {
-      if (entry.source === spec.source && entry.path.startsWith(sourcePrefix)) {
-        byPath.set(entry.path, entry)
-      }
+  // One range query covers every bundle of the model: they share the family
+  // root and the longest common prefix of their names.
+  const queryPrefix = spec.root + commonPrefix(spec.bundles.map((bundle) => bundle.sourceName))
+  const registryEntries = await client.findModels({
+    gte: { path: queryPrefix },
+    lte: { path: `${queryPrefix}\uffff` }
+  })
+  const byPath = new Map<string, QVACModelEntry>()
+  for (const entry of registryEntries) {
+    if (entry.source === spec.source && entry.path.startsWith(queryPrefix)) {
+      byPath.set(entry.path, entry)
     }
+  }
 
-    // A partially ingested .mlmodelc is not a usable bundle. Other complete
-    // bundles (notably Sortformer's batch/AOSC pair) may still be staged.
-    const entries = COREML_COMPONENTS.map((component) => byPath.get(sourcePrefix + component))
-    if (entries.some((entry) => !entry?.blobBinding?.sha256)) continue
+  // A partially ingested .mlmodelc is not a usable bundle. Other complete
+  // bundles (notably Sortformer's batch/AOSC pair) may still be staged.
+  const componentsOf = (bundle: BundleSpec) =>
+    coremlBundleComponents((component) => {
+      const entry = byPath.get(`${spec.root}${bundle.sourceName}.mlmodelc/${component}`)
+      return entry?.blobBinding?.sha256 ? entry : undefined
+    })
+  const staged = selectCoremlBundles(
+    spec.bundles,
+    (bundle) => componentsOf(bundle) !== undefined,
+    darwinMajor
+  )
 
-    for (let i = 0; i < COREML_COMPONENTS.length; i++) {
-      const component = COREML_COMPONENTS[i]!
-      const entry = entries[i]!
+  const sidecarFiles: CompanionSet['files'][number][] = []
+  for (const bundle of staged) {
+    for (const { component, entry } of componentsOf(bundle)!) {
       const binding = entry.blobBinding
       sidecarFiles.push({
         key: `${bundle.sourceName}/${component}`,
@@ -303,4 +380,12 @@ export async function findCoremlCompanionSet(
   }
 
   return createCompanionSet(model, spec, sidecarFiles)
+}
+
+function commonPrefix(names: readonly string[]): string {
+  let prefix = names[0] ?? ''
+  for (const name of names) {
+    while (!name.startsWith(prefix)) prefix = prefix.slice(0, -1)
+  }
+  return prefix
 }
