@@ -177,8 +177,17 @@ export function prepare(env, afterSdkBuild = () => {}) {
     const last = readdirSync(logs).filter((f) => f.endsWith('-debug-0.log')).sort().pop()
     const text = readFileSync(join(logs, last), 'utf8').split(/\r?\n/)
     console.log(`::group::DIAG ${last} lines mentioning sdk-e2e`)
-    text.forEach((l, i) => { if (/sdk-e2e|sdk-tests/i.test(l)) console.log(`${i}: ${l}`) })
+    text.forEach((l, i) => { if (/sdk-e2e|sdk-tests/i.test(l)) console.log(text.slice(Math.max(0, i - 12), i + 4).map((x, k) => `${i - 12 + k}: ${x}`).join('\n') + '\n---') })
     console.log('::endgroup::')
+    const rag = join(ROOT, 'packages', 'rag')
+    for (const f of ['package.json', 'package-lock.json']) {
+      const p = join(rag, f)
+      const body = existsSync(p) ? readFileSync(p, 'utf8') : '(missing)'
+      console.log(`::group::DIAG rag/${f}`)
+      console.log(f === 'package.json' ? body : body.split(/\r?\n/).filter((l) => /sdk-e2e|sdk-tests|"file:|"link"/.test(l)).join('\n'))
+      console.log('::endgroup::')
+    }
+    console.log('DIAG rag/node_modules has sdk-tests link:', existsSync(join(rag, 'node_modules', 'sdk-tests')), ls(join(rag, 'node_modules', '@qvac')))
     console.log(`::group::DIAG ${last} last 400 lines`)
     console.log(text.slice(-400).join('\n'))
     console.log('::endgroup::')
