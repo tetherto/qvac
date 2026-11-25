@@ -230,6 +230,41 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.reason, 'unresolvable-ref')
 })
 
+// No fitter reads a compiled Core ML bundle, and the registry has no stub of a
+// directory: the plugin's fit request answers for the load instead.
+test('resolve load: a Core ML bundle source is passed through without a stub', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.llamacppCompletion))
+  const model = scratchFile('model.gguf')
+  const looked: string[] = []
+
+  for (const bundle of [
+    'registry://s3/qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sdxs_unet_fp16.mlmodelc',
+    '/missing/models/taesd_decoder.mlmodelc/'
+  ]) {
+    const resolved = await resolveLoadFromStubs(
+      {
+        modelSrc: model,
+        modelType: ModelType.llamacppCompletion,
+        modelConfig: { companionSrc: bundle }
+      },
+      {
+        getEntry: async (registryPath) => {
+          looked.push(registryPath)
+          return null
+        }
+      }
+    )
+
+    t.is(resolved.status, 'resolved', bundle)
+    if (resolved.status !== 'resolved') continue
+    t.alike(resolved.artifacts, { companionPath: bundle })
+    await resolved.release()
+  }
+  t.alike(looked, [], 'the registry is never asked for a bundle stub')
+})
+
 test('resolve load: a registry address names its catalog entry to the registry', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)

@@ -15,6 +15,7 @@ import { getPlugin } from '@/plugins/registry'
 import { getConfiguredCacheDir, getRuntimeContext } from '@/runtime/state'
 import {
   acceptsLegacyFlatCache,
+  coremlBundleNameOf,
   getModelCacheLayout,
   getSingleFileCacheName
 } from '@/utils/cache/layout'
@@ -227,6 +228,9 @@ export async function resolveLoadFromStubs(
     // Fitters take absolute paths only, while a load also takes one relative
     // to the working directory.
     if (location !== '' && fs.existsSync(location)) return path.resolve(location)
+    // No fitter reads a compiled Core ML bundle: a plugin that takes one
+    // answers `unknown` for the load, so the bundle needs no description.
+    if (coremlBundleNameOf(location) !== undefined) return location
 
     const entry = catalogEntryFor(src)
     const cached = entry === undefined ? undefined : await cachedCatalogPath(entry)

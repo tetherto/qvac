@@ -35,6 +35,11 @@ import {
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
 import {
+  downloadCoremlBundleFromRegistry,
+  findRegistryCoremlBundleSet,
+  getCoremlBundle
+} from '@/handlers/load-model/coreml-bundle'
+import {
   DownloadCancelledError,
   ModelNotFoundError,
   ModelRegistryBusyError,
@@ -321,6 +326,38 @@ export async function downloadModelFromRegistry(
         createRegistryCacheKey(registryPath),
         ctx.signal
       )
+      // A compiled Core ML bundle is a directory of component files, staged
+      // with its layout for an addon that takes the bundle's path.
+      const coremlBundle = getCoremlBundle(registrySource, registryPath)
+      if (coremlBundle) {
+        return await downloadCoremlBundleFromRegistry({
+          bundle: coremlBundle,
+          downloadKey,
+          findInRegistry: async () => {
+            // Released before the bundle downloads, which lease the client per file.
+            await using lease = await acquireRegistryClient({
+              wait: 'download',
+              signal: ctx.signal
+            })
+            // Await inside the scope so the lease outlives the lookup.
+            return await findRegistryCoremlBundleSet(lease.client, coremlBundle)
+          },
+          progressCallback: ctx.broadcastProgress,
+          signal: ctx.signal,
+          hooks: {
+            ...hooks,
+            markCacheHit: () => {
+              hooks?.markCacheHit?.()
+              ctx.setCacheHit(true)
+            },
+            markCacheMiss: () => {
+              hooks?.markCacheMiss?.()
+              ctx.setCacheHit(false)
+            }
+          },
+          shouldClearCache: ctx.shouldClearCache
+        })
+      }
       if (shardInfo.isSharded) {
         const cacheKey = generateShortHash(registryPath)
         const localShardMeta = modelMetadata?.shardMetadata
