@@ -3,6 +3,8 @@ import qvacCrypto from '#crypto'
 
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
 import {
+  DEFAULT_VECTOR_ENCODING,
+  F16_MAX,
   MAX_NATIVE_ID,
   decodeNativeId,
   encodeNativeId,
@@ -26,7 +28,7 @@ import { DEFAULT_INDEX_STORAGE, type IndexRegistry } from './vector-index/regist
 import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type { ValidDocument } from './input.js'
 import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from './db/db-types.js'
-import type { IndexStorage } from './types.js'
+import type { IndexStorage, VectorEncoding } from './types.js'
 
 // Writes `document` as `generation`, replacing `previous` when there is one,
 // and commits the batch. Shared by ingest and import, so both keep native
@@ -41,6 +43,7 @@ export async function writeGeneration(
   previous: DocumentRecord | null
 ): Promise<{ revision: number; removedChunks: number }> {
   const namespace = ns.name
+  const encoding = encodingOf(ns)
   const removed = previous ? await deleteGeneration(tx, previous) : []
 
   let nextId = decodeNativeId(ns.nextNativeId)
@@ -63,7 +66,7 @@ export async function writeGeneration(
       content: chunk.content,
       metadataJson: chunk.metadataJson,
       nativeId,
-      vector: encodeVector(chunk.embedding)
+      vector: encodeVector(chunk.embedding, encoding)
     })
     await tx.insert(NATIVE_IDS, {
       namespace,
@@ -163,6 +166,10 @@ export function storageOf(ns: NamespaceRecord): IndexStorage {
   return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
 }
 
+export function encodingOf(ns: NamespaceRecord): VectorEncoding {
+  return (ns.vectorEncoding as VectorEncoding | null | undefined) ?? DEFAULT_VECTOR_ENCODING
+}
+
 export function checkChunks(
   namespace: string,
   ns: NamespaceRecord,
@@ -170,6 +177,7 @@ export function checkChunks(
   document: ValidDocument
 ): void {
   const turbovec = storageOf(ns).startsWith('turbovec-')
+  const f16 = encodingOf(ns) === 'f16'
   for (const chunk of document.chunks) {
     if (chunk.spaceId !== space.spaceId) {
       throw new QvacErrorRAG({
@@ -187,6 +195,12 @@ export function checkChunks(
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
         adds: `chunk '${chunk.id}' has a component of magnitude 1e16 or more, which '${storageOf(ns)}' storage can't index`
+      })
+    }
+    if (f16 && chunk.embedding.some((value) => Math.abs(value) > F16_MAX)) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `chunk '${chunk.id}' has a component above ${F16_MAX} in magnitude, which 'f16' vectors can't hold`
       })
     }
   }

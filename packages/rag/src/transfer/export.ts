@@ -8,8 +8,17 @@ import {
   type SpaceRecord,
   type TombstoneRecord
 } from '../db/records.js'
-import { FORMAT_VERSION, FRAME, MAGIC, chunkFrame, jsonFrame } from './frames.js'
+import {
+  FORMAT_VERSION,
+  FORMAT_VERSION_ENCODED,
+  FRAME,
+  MAGIC,
+  chunkFrame,
+  jsonFrame
+} from './frames.js'
+import { encodingOf } from '../writes.js'
 import type { HyperDBReader } from '../db/db-types.js'
+import type { VectorEncoding } from '../types.js'
 
 export interface ExportHeader {
   format: number
@@ -18,6 +27,8 @@ export interface ExportHeader {
   space: Omit<SpaceRecord, 'spaceId'>
   lineageId: string
   revision: number
+  // Format 2 only; format 1 vectors are 'f32'.
+  vectorEncoding?: VectorEncoding
 }
 
 // Yields one frame at a time from `reader`, so memory holds a single chunk;
@@ -31,13 +42,15 @@ export async function* exportFrames(
 ): AsyncGenerator<Uint8Array> {
   const namespace = ns.name
   const { spaceId, ...fingerprint } = space
+  const vectorEncoding = encodingOf(ns)
   const header: ExportHeader = {
-    format: FORMAT_VERSION,
+    format: vectorEncoding === 'f32' ? FORMAT_VERSION : FORMAT_VERSION_ENCODED,
     namespace,
     spaceId,
     space: fingerprint,
     lineageId: toHex(ns.lineageId as Uint8Array),
-    revision: ns.revision
+    revision: ns.revision,
+    ...(vectorEncoding === 'f32' ? {} : { vectorEncoding })
   }
   check()
   yield MAGIC.slice()

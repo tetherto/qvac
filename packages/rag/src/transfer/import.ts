@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
-import { FIRST_NATIVE_ID, decodeVectorInto, encodeNativeId } from '../db/encoding.js'
+import { FIRST_NATIVE_ID, decodeVectorInto, encodeNativeId, vectorBytes } from '../db/encoding.js'
 import {
   DOCUMENTS,
   NAMESPACES,
@@ -19,6 +19,7 @@ import {
   appendMutation,
   checkChunks,
   deleteDocument,
+  encodingOf,
   getNamespace,
   hashContent,
   sameLineage,
@@ -28,6 +29,7 @@ import {
 import { fromHex } from './export.js'
 import {
   FORMAT_VERSION,
+  FORMAT_VERSION_ENCODED,
   FRAME,
   createFrameReader,
   invalid,
@@ -44,7 +46,8 @@ import type {
   ImportedDocument,
   ImportOptions,
   ImportResult,
-  ImportSkip
+  ImportSkip,
+  VectorEncoding
 } from '../types.js'
 
 export interface ImportTarget {
@@ -61,6 +64,7 @@ interface Header {
   space: EmbeddingSpace
   spaceId: string
   lineageId: Uint8Array
+  vectorEncoding: VectorEncoding
 }
 
 interface IncomingDocument {
@@ -74,13 +78,21 @@ type Outcome =
   | { skip: ImportSkip; revision: number }
   | { revision: number }
 
-const headerSchema = z.object({
-  format: z.literal(FORMAT_VERSION),
+const headerFields = {
   spaceId: z.string().min(1),
   space: z.unknown(),
   lineageId: z.string().regex(/^[0-9a-f]{32}$/),
   revision: z.number().int().nonnegative()
-})
+}
+
+const headerSchema = z.discriminatedUnion('format', [
+  z.object({ format: z.literal(FORMAT_VERSION), ...headerFields }),
+  z.object({
+    format: z.literal(FORMAT_VERSION_ENCODED),
+    ...headerFields,
+    vectorEncoding: z.enum(['f32', 'f16'])
+  })
+])
 
 const documentSchema = z.object({
   id: z.string().min(1),
@@ -242,7 +254,12 @@ function parseHeader(payload: Uint8Array): Header {
   if (computeSpaceId(space) !== fields.spaceId) {
     throw invalid(`the header space hashes to ${computeSpaceId(space)}, not ${fields.spaceId}`)
   }
-  return { space, spaceId: fields.spaceId, lineageId: fromHex(fields.lineageId) }
+  return {
+    space,
+    spaceId: fields.spaceId,
+    lineageId: fromHex(fields.lineageId),
+    vectorEncoding: 'vectorEncoding' in fields ? fields.vectorEncoding : 'f32'
+  }
 }
 
 // Creates the namespace with the export's space and lineage, or checks an
@@ -265,7 +282,8 @@ async function prepareNamespace(
       nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
       createdAt: new Date(),
       indexStorage: storage,
-      lineageId: header.lineageId
+      lineageId: header.lineageId,
+      vectorEncoding: header.vectorEncoding
     }
     await tx.insert(NAMESPACES, created)
     await tx.flush()
@@ -273,6 +291,7 @@ async function prepareNamespace(
   }
 
   checkSpace(ns, header)
+  checkEncoding(ns, header)
   if (sameLineage(ns.lineageId, header.lineageId)) return ns
   const range = { gte: { namespace }, lte: { namespace } }
   const hasDocuments = (await tx.find(DOCUMENTS, range, { limit: 1 }).toArray()).length > 0
@@ -295,6 +314,7 @@ async function readDocument(
   seen.add(fields.id)
 
   const dims = header.space.dimensions
+  const vectorLength = dims * vectorBytes(header.vectorEncoding)
   const chunkIds = new Set<string>()
   const chunks: ValidChunk[] = []
   for (let ordinal = 0; ordinal < fields.chunkCount; ordinal++) {
@@ -312,13 +332,13 @@ async function readDocument(
       throw invalid(`document '${fields.id}' repeats chunk id '${chunk.chunkId}'`)
     }
     chunkIds.add(chunk.chunkId)
-    if (vector.byteLength !== dims * 4) {
+    if (vector.byteLength !== vectorLength) {
       throw invalid(
-        `document '${fields.id}' chunk ${ordinal} has ${vector.byteLength} vector bytes, expected ${dims * 4}`
+        `document '${fields.id}' chunk ${ordinal} has ${vector.byteLength} vector bytes, expected ${vectorLength}`
       )
     }
     const embedding = new Float32Array(dims)
-    decodeVectorInto(vector, embedding, 0)
+    decodeVectorInto(vector, embedding, 0, dims)
     if (!embedding.every(Number.isFinite)) {
       throw invalid(`document '${fields.id}' chunk ${ordinal} has a non-finite component`)
     }
@@ -433,6 +453,7 @@ async function applyTombstone(
 // The namespace may have been dropped and re-created since the import began.
 function checkTarget(ns: NamespaceRecord, header: Header): void {
   checkSpace(ns, header)
+  checkEncoding(ns, header)
   if (!sameLineage(ns.lineageId, header.lineageId)) throw lineageMismatch(ns.name)
 }
 
@@ -441,6 +462,18 @@ function checkSpace(ns: NamespaceRecord, header: Header): void {
     throw new QvacErrorRAG({
       code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
       adds: `the export is in space ${header.spaceId}, namespace '${ns.name}' is in ${ns.spaceId}`
+    })
+  }
+}
+
+// Converting would store vectors that no longer match their content hashes,
+// so the encodings must agree.
+function checkEncoding(ns: NamespaceRecord, header: Header): void {
+  const encoding = encodingOf(ns)
+  if (encoding !== header.vectorEncoding) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.NAMESPACE_EXISTS,
+      adds: `the export holds '${header.vectorEncoding}' vectors, namespace '${ns.name}' stores '${encoding}'`
     })
   }
 }

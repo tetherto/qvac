@@ -104,7 +104,7 @@ export async function scanSearch(
   for (const range of ranges) {
     for await (const chunk of reader.find<ChunkRecord>(CHUNKS, range)) {
       checkStoredVector(chunk, dims)
-      decodeVectorInto(chunk.vector, vectors, batch.length * dims)
+      decodeVectorInto(chunk.vector, vectors, batch.length * dims, dims)
       batch.push(chunk)
       if (batch.length === SCAN_BATCH_SIZE) {
         scoreBatch()
@@ -168,8 +168,9 @@ export function checkQuery(
   }
 }
 
+// A namespace stores 4 bytes per dimension, or 2 for 'f16'.
 export function checkStoredVector(chunk: ChunkRecord, dims: number): void {
-  if (chunk.vector.byteLength !== dims * 4) {
+  if (chunk.vector.byteLength !== dims * 4 && chunk.vector.byteLength !== dims * 2) {
     throw new QvacErrorRAG({
       code: ERR_CODES.DB_OPERATION_FAILED,
       adds: `stored vector for '${chunk.documentId}' chunk ${chunk.ordinal} has the wrong size`

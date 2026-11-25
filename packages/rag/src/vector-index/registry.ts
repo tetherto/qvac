@@ -316,7 +316,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       for (let i = 0; i < added.length; i++) {
         if (present[i]) continue
         // Absent rows were removed by a later mutation in this range.
-        const vector = await readVector(reader, namespace, added[i])
+        const vector = await readVector(reader, namespace, added[i], native.dim)
         if (vector) {
           ids.push(added[i])
           vectors.push(vector)
@@ -354,7 +354,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       const stream = reader.find<ChunkRecord>(CHUNKS, { gte: { namespace }, lte: { namespace } })
       for await (const chunk of stream) {
         checkStoredVector(chunk, dims)
-        decodeVectorInto(chunk.vector, vectors, rows * dims)
+        decodeVectorInto(chunk.vector, vectors, rows * dims, dims)
         ids[rows++] = decodeNativeId(chunk.nativeId)
         if (rows === REBUILD_BATCH_SIZE) await flush()
       }
@@ -597,7 +597,8 @@ async function writeSettled(
 async function readVector(
   reader: HyperDBReader,
   namespace: string,
-  id: bigint
+  id: bigint,
+  dims: number
 ): Promise<Float32Array | null> {
   const nativeId = new Uint8Array(8)
   new DataView(nativeId.buffer).setBigUint64(0, id, false)
@@ -610,8 +611,9 @@ async function readVector(
     ordinal: row.ordinal
   })
   if (!chunk) return null
-  const vector = new Float32Array(chunk.vector.byteLength / 4)
-  decodeVectorInto(chunk.vector, vector, 0)
+  checkStoredVector(chunk, dims)
+  const vector = new Float32Array(dims)
+  decodeVectorInto(chunk.vector, vector, 0, dims)
   return vector
 }
 

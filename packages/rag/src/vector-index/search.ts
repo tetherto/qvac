@@ -113,7 +113,7 @@ export async function indexSearch(
       const chunk = await readChunk(reader, namespace, id)
       if (!chunk || (allowed && !allowed.has(chunk.documentId))) continue
       checkStoredVector(chunk, dims)
-      decodeVectorInto(chunk.vector, stored, 0)
+      decodeVectorInto(chunk.vector, stored, 0, dims)
       let score = dot(query.vector, stored, 0)
       if (cosine) {
         const denominator = queryNorm * norm(stored, 0, dims)

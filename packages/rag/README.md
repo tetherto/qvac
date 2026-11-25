@@ -109,9 +109,9 @@ The port must be in the namespace's space: `computeSpaceId(port.space)` has to e
 
 The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
 
-### `createNamespace({ name, space, index? })`
+### `createNamespace({ name, space, index?, vectorEncoding? })`
 
-Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision, index: { storage } }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
+Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision, index: { storage }, vectorEncoding }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
 `documentEncoding`, `queryEncoding` and `preprocessing` only identify the space; `@qvac/rag` never applies them. Add the document and query prefixes yourself before embedding, or in your embeddings port. Nothing checks that you did, and skipping them only makes results worse.
 
@@ -124,6 +124,8 @@ Creates a namespace pinned to one embedding space and returns `{ name, spaceId, 
 | `q8` (default)               | any                           | 8-bit quantized                                                  |
 | `f32`                        | any                           | full precision                                                   |
 | `turbovec-q4`, `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 4- and 2-bit; embedding components must stay below 1e16 |
+
+`vectorEncoding` sets how chunk vectors are stored in HyperDB and in exports: `f32` (default) or `f16`. It is fixed at creation like `index.storage`. `f16` halves the vector bytes; for 10,400 chunks × 768 dimensions with 1 KB of text each, the store shrinks from 49.3 MB to 33.0 MB, and with the `q8` index snapshot from 57.4 MB to 41.1 MB (see [Disk](#disk)). Search scores come from the stored vectors, so an `f16` namespace scores the rounded values: on synthetic 768-dimension sets, scores moved by 2e-6 to 6e-6 on average and at most 3e-5, the top hit never changed, and recall@10 against `f32` was 0.9975–1.0, with the near-tied uniform random set at 0.999. Embedding components above 65,504 in magnitude fail with `INVALID_INPUT` in an `f16` namespace.
 
 ### `ingest({ namespace, documents }, { signal?, onProgress? }?)`
 
@@ -141,6 +143,7 @@ Within one document, either every chunk has an `embedding` or none does. Chunk I
 - `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written or found unchanged).
 - Ingesting an existing document ID replaces it: the new chunks get a new generation and the old chunks are deleted in the same batch.
 - Re-ingesting a document whose content is unchanged writes nothing: no new generation and no revision bump, and its text is not sent to the port. Content is the chunk IDs, text and `metadataJson` after chunking, the precomputed vectors, the document `metadata` and the namespace's space. So new `chunking` options count as a change, while the `indexedAt` timestamp in `rag-extract`'s chunk metadata does not. An `indexedAt` key in any other chunk metadata is compared like every other field.
+- In an `f16` namespace, vectors are rounded to float16 before they are hashed and indexed, so re-ingesting the same float32 input is still `unchanged`.
 - There is no content deduplication. Identical text in two documents is stored and returned twice.
 
 Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced` (with `removedChunks`, the previous generation's chunk count) or `unchanged`.
@@ -198,7 +201,7 @@ Lists a namespace's documents in document ID order. Returns `{ documents, next }
 
 ### `exportNamespace({ namespace, documentIds? }, { signal? }?)`
 
-Returns an `AsyncIterable<Uint8Array>` of the namespace in the `QVRAGX1` format: a header with the full embedding space, its `spaceId` and the namespace's lineage, then each document with its chunks (IDs, text, metadata and float32 vectors), then the delete records of deleted documents, then a trailer with counts. Native IDs, index snapshots and quantized vectors are not exported; the target builds its own index.
+Returns an `AsyncIterable<Uint8Array>` of the namespace in the `QVRAGX1` format: a header with the full embedding space, its `spaceId` and the namespace's lineage, then each document with its chunks (IDs, text, metadata and vectors in the namespace's `vectorEncoding`), then the delete records of deleted documents, then a trailer with counts. Native IDs, index snapshots and quantized vectors are not exported; the target builds its own index. An `f32` namespace exports format 1, which earlier versions import; an `f16` namespace exports format 2, which names the encoding in the header and which versions before it refuse.
 
 The stream reads one database snapshot, so commits made while it runs don't appear in it, and it yields one chunk at a time: memory stays flat whatever the namespace size, and a slow consumer slows the export. With `documentIds`, only those documents and their delete records are exported; IDs the namespace doesn't have are left out. Bad input throws at the call; an aborted `signal` fails the iteration with `OPERATION_CANCELLED`, and `close()` ends an open export with `NOT_READY`. A chunk or document that encodes to more than 64 MiB fails the iteration with `INVALID_INPUT`, since import would refuse it.
 
@@ -209,9 +212,9 @@ for await (const bytes of rag.exportNamespace({ namespace: 'handbook' })) out.wr
 
 ### `importNamespace({ namespace, source, index? }, { signal?, onProgress? }?)`
 
-Reads a `QVRAGX1` stream from `source` (any `AsyncIterable<Uint8Array>`) into `namespace`. A missing namespace is created with the export's space and lineage, and `index` sets its storage as in `createNamespace`. Returns `{ documents, skipped, cancelled, revision }`.
+Reads a `QVRAGX1` stream from `source` (any `AsyncIterable<Uint8Array>`) into `namespace`. A missing namespace is created with the export's space, lineage and `vectorEncoding`, and `index` sets its storage as in `createNamespace`. Returns `{ documents, skipped, cancelled, revision }`.
 
-Before writing anything, the import checks that the header's space hashes to its `spaceId` (`IMPORT_INVALID` otherwise), that an existing namespace is in the same space (`EMBEDDING_SPACE_MISMATCH`), and that it has the same lineage (`IMPORT_LINEAGE_MISMATCH`). An empty namespace takes the export's lineage. Two namespaces with different lineages are never merged; to combine them, `ingest` the exported chunks with their vectors and `spaceId`, which gives them fresh generations.
+Before writing anything, the import checks that the header's space hashes to its `spaceId` (`IMPORT_INVALID` otherwise), that an existing namespace is in the same space (`EMBEDDING_SPACE_MISMATCH`) and uses the same `vectorEncoding` (`NAMESPACE_EXISTS`; converting would break the documents' content hashes), and that it has the same lineage (`IMPORT_LINEAGE_MISMATCH`). An empty namespace takes the export's lineage. Two namespaces with different lineages are never merged; to combine them, `ingest` the exported chunks with their vectors and `spaceId`, which gives them fresh generations.
 
 Documents keep their exported generation and commit one at a time, like `ingest`. For each document:
 
@@ -232,7 +235,7 @@ An export of a namespace that has since been dropped imports like any other: int
 
 ### `listNamespaces()`
 
-Returns every namespace as `{ name, spaceId, space, index: { storage }, revision, documentCount, chunkCount }`, by name. The counts read one row per document.
+Returns every namespace as `{ name, spaceId, space, index: { storage }, vectorEncoding, revision, documentCount, chunkCount }`, by name. The counts read one row per document.
 
 ### `dropNamespace({ name })`
 
@@ -292,6 +295,28 @@ bare scripts/bench-transfer.ts export /tmp/rag-bench
 bare scripts/bench-transfer.ts import /tmp/rag-bench
 ```
 
+## Disk
+
+On-disk size of one namespace of 10,400 chunks × 768 dimensions with 1,000 bytes of text per chunk and the default `q8` index, measured with `scripts/bench-disk.ts` after a reopen (MB = 10^6 bytes):
+
+| Component                                  | `f32` vectors | `f16` vectors |
+| ------------------------------------------ | ------------- | ------------- |
+| Vectors                                    | 31.9 MB       | 16.0 MB       |
+| Chunk text                                 | 10.4 MB       | 10.4 MB       |
+| Keys, other fields and rows, Hyperbee tree | 3.3 MB        | 3.3 MB        |
+| Hypercore and RocksDB storage              | 3.7 MB        | 3.3 MB        |
+| **Store**                                  | **49.3 MB**   | **33.0 MB**   |
+| `q8` index snapshot (`index.dir`)          | 8.1 MB        | 8.1 MB        |
+| **Total**                                  | **57.4 MB**   | **41.1 MB**   |
+
+Nothing is compressed. Without `index.dir` there is no snapshot, at the cost of a rebuild on every open (see [Memory](#memory)). An `f32` index snapshot takes 32.0 MB instead of 8.1 MB. Right after `close()` the store can read about 5 MB larger until RocksDB flushes its write-ahead log on the next open.
+
+```bash
+npm run build
+bare scripts/bench-disk.ts /tmp/rag-disk --chunks 10400 --dims 768 --encoding f16
+bare scripts/bench-f16.ts  /tmp/rag-f16 --clusters 200 --noise 0.05   # recall@10 and score change against f32
+```
+
 ## Errors
 
 Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`. An index that can't be built or searched is never an error: that namespace's searches scan until the RAG is reopened.
@@ -305,6 +330,8 @@ npm run lint
 npm run test:unit                      # index tests need @qvac/turbovec-ggml to load
 bare scripts/bench-index.ts --help     # index RAM and open-time benchmark, not run in CI
 bare scripts/bench-transfer.ts --help  # export/import time and RAM, not run in CI
+bare scripts/bench-disk.ts --help      # on-disk size by component, not run in CI
+bare scripts/bench-f16.ts --help       # f16 recall and score change, not run in CI
 ```
 
 ## License
