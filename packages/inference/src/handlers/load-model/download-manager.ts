@@ -373,7 +373,13 @@ export function hasActiveTransfer(resourceKey: string): boolean {
 // The registry cache is laid out by path alone, so every source of a path
 // writes the same files.
 export function createRegistryCacheKey(registryPath: string): string {
-  return `registry-cache:${registryPath}`
+  return `registry-cache:${withoutTrailingSlash(registryPath)}`
+}
+
+// A Core ML bundle directory stages to the same files with or without a
+// trailing slash, so both spellings share one download, lock and deletion.
+function withoutTrailingSlash(registryPath: string): string {
+  return registryPath.replace(/\/+$/, '')
 }
 
 function getCacheResourceKey(downloadKey: string): string {
@@ -425,7 +431,7 @@ export function createHttpDownloadKey(url: string): string {
 }
 
 export function createRegistryDownloadKey(registrySource: string, registryPath: string): string {
-  return `registry:${registrySource}:${registryPath}`
+  return `registry:${registrySource}:${withoutTrailingSlash(registryPath)}`
 }
 
 export function applyJoinedDownloadStats(
