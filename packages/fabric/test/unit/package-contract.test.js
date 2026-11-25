@@ -180,7 +180,8 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
   const mapLines = read('symbols.map')
     .split(/\r?\n/)
     .map((line) => line.trim())
-  const mapJinja = mapLines.filter((line) => /^_Z\w*N?5jinja/.test(line))
+  // Every entry that mentions jinja, a pattern included, is one of the names.
+  const mapJinja = mapLines.filter((line) => !line.startsWith('#') && /jinja/.test(line))
   assert.deepEqual(mapJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => name + ';').sort())
   assert.ok(mapLines.includes('fs_validate_filename*;'))
   assert.ok(mapLines.includes('glob_match*;'))
@@ -188,7 +189,8 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
   // start with the return type, so common_json::get<T>() is matched mangled.
   assert.ok(mapLines.includes('_ZNK11common_json3getI*;'))
   // common_json_error's typeinfo and vtable, which libcommon throws and
-  // server-context catches; on Mach-O and Windows common_ covers them.
+  // server-context catches; on Mach-O *common_* covers them, and MSVC needs
+  // no export (it matches a catch by type name).
   for (const name of [
     '_ZTI17common_json_error',
     '_ZTS17common_json_error',
@@ -199,7 +201,7 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
   assert.ok(read('exports.txt').split(/\r?\n/).includes('*common_*'))
 
   const exportsTxt = read('exports.txt').split(/\r?\n/)
-  const exportsJinja = exportsTxt.filter((line) => line.includes('5jinja'))
+  const exportsJinja = exportsTxt.filter((line) => !line.startsWith('#') && line.includes('jinja'))
   assert.deepEqual(exportsJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => '_' + name).sort())
   assert.ok(exportsTxt.includes('__Z*fs_validate_filename*'))
   assert.ok(exportsTxt.includes('__Z*glob_match*'))
@@ -218,6 +220,20 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
     assert.ok(def.includes(fragment), fragment)
   }
   assert.ok(!def.includes('"@jinja@@"'))
+  // No other allow-list entry names jinja.
+  const allow = def
+    .slice(def.indexOf('set(_allow'), def.indexOf('string(JOIN'))
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n')
+  const defJinja = [...allow.matchAll(/"([^"\n]*)"/g)]
+    .map((m) => m[1])
+    .filter((entry) => entry.includes('jinja'))
+  assert.deepEqual(defJinja.sort(), [
+    '@statement@jinja@@',
+    '@string@jinja@@',
+    '@value_[a-z_]*t@jinja@@'
+  ])
 })
 
 test('fabric neither builds nor ships server-context', () => {
@@ -245,14 +261,11 @@ test('the qvac-fabric port the runtime is built from is recorded', () => {
   // The runtime reports the same port, for the check when an addon loads,
   // from a generated header: CMake drops a compile definition holding '#'.
   assert.match(cmake, /target_sources\(\$\{qvac-fabric\} PRIVATE [^)]*addon\/port\.cpp/)
+  // qvac_fabric_write_port_header() is the helper's too, where
+  // port-version.test.js checks what it writes.
   assert.match(
     cmake,
-    /file\(CONFIGURE\s+OUTPUT "\$\{CMAKE_CURRENT_BINARY_DIR\}\/generated\/qvac-fabric-port-version\.h"/
-  )
-  assert.ok(
-    cmake.includes(
-      'inline constexpr const char* QVAC_FABRIC_PORT_VERSION = \\"@QVAC_FABRIC_PORT_VERSION@\\";'
-    )
+    /qvac_fabric_write_port_header\(\s+"\$\{CMAKE_CURRENT_BINARY_DIR\}\/generated\/qvac-fabric-port-version\.h"\s+QVAC_FABRIC_PORT_VERSION "\$\{QVAC_FABRIC_PORT_VERSION\}"\)/
   )
   assert.doesNotMatch(cmake, /QVAC_FABRIC_PORT_VERSION="/)
   const port = read('addon/port.cpp')

@@ -57,7 +57,8 @@
     napi_*;
     js_*;
 
-    # Fabric's own C API (include/qvac-fabric.h): backend discovery.
+    # Fabric's own C API (include/qvac-fabric.h): backend discovery and the
+    # port the runtime is built from.
     qvac_fabric_*;
 
     # llama.cpp public C API.
@@ -112,8 +113,10 @@
     # only in this runtime, and an addon catches this type, not a local copy
     # that an address comparison of typeinfo misses. Earlier ports emit weak
     # copies, which these entries export to no effect. Listed for Android and
-    # the ASan build; the destructor matches common_* below, and Mach-O and
-    # Windows match common_ in their mangled or decorated names.
+    # the ASan build; the destructor matches common_* below, and Mach-O's
+    # *common_* matches the mangled names. Windows exports only the destructor
+    # (code): MSVC emits RTTI and vtables in each module and matches a catch by
+    # type name.
     _ZTI17common_json_error;
     _ZTS17common_json_error;
     _ZTV17common_json_error;

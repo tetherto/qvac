@@ -1928,6 +1928,21 @@ test("the fabric CMake layout script runs when its inputs change", () => {
   );
 });
 
+// port-version.test.js is the only check of qvac_addon_link_fabric_server_context() and the port record that runs
+// when cmake/qvac-addon changes alone (fabric's test:unit runs only when fabric is selected).
+test("the qvac-fabric port helper tests run when their inputs change", () => {
+  const source = read(".github/workflows/on-pr-shared-ci-infra.yml");
+  for (const path of [
+    "cmake/qvac-addon/qvac-addon.cmake",
+    "packages/fabric/cmake/qvac-fabric-port.cmake",
+    "packages/fabric/cmake/qvac-fabricConfig.cmake.in",
+    "packages/fabric/test/unit/port-version.test.js",
+  ]) {
+    assert.ok(source.includes(`- "${path}"`), `on-pr-shared-ci-infra.yml does not run on ${path}`);
+  }
+  assert.match(source, /run: node --test packages\/fabric\/test\/unit\/port-version\.test\.js/);
+});
+
 // The contract's cache writers run PR-head code once fork approval and the trust check pass, so a cache WRITE must
 // happen only on a trusted run: _cpp-tests.yml gates each write on its env.TRUSTED, and cache-warm.yml has no
 // pull-request trigger at all. Easy to undo by accident, so pin it here. See .github/AGENTS.md.

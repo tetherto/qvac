@@ -37,6 +37,9 @@ on:
       - ".github/scripts/test/fabric-cmake-layout.sh"
       - "cmake/qvac-addon/qvac-addon.cmake"
       - "packages/fabric/cmake/qvac-fabric-hosts.cmake"
+      - "packages/fabric/cmake/qvac-fabric-port.cmake"
+      - "packages/fabric/cmake/qvac-fabricConfig.cmake.in"
+      - "packages/fabric/test/unit/port-version.test.js"
   workflow_dispatch:
 
 permissions:
@@ -187,3 +190,8 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Resolve the runtime across install layouts
         run: .github/scripts/test/fabric-cmake-layout.sh packages/fabric/node_modules
+      # qvac_addon_link_fabric_server_context() and the port record, against
+      # fixture installs: fabric's own test:unit runs them only when fabric is
+      # selected, which a change to cmake/qvac-addon alone does not do.
+      - name: Check the qvac-fabric port helpers
+        run: node --test packages/fabric/test/unit/port-version.test.js

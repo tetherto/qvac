@@ -7,7 +7,7 @@
 - The runtime exports what upstream llama.cpp's `server-context` uses from
   libcommon, for `@qvac/decision-ggml`, which links `server-context`
   statically from its own build of the `qvac-fabric` port: four functions and
-  six value classes' vtables and typeinfo of the `jinja` engine, named
+  seven value classes' vtables and typeinfo of the `jinja` engine, named
   exactly, plus `fs_validate_filename` and `glob_match`, on ELF, Mach-O and
   Windows. On ELF it also exports libcommon's `common_json::get<T>()`
   specializations, which the existing `common_*` pattern missed there, and
@@ -23,6 +23,7 @@
   as `qvac["qvac-fabric"]`, which `pr-checks.yml` now checks against the
   `vcpkg.json` pins on every pull request; the build warns if it installed
   another port.
+
 ## [0.33.0] - 2026-11-23
 
 ### Breaking

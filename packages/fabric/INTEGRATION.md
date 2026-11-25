@@ -81,7 +81,9 @@ On **macOS and iOS** the backends are static inside the runtime and
 self-register on load.
 
 Consumer addons do **not** need `qvac-fabric` in their own `vcpkg.json`. The
-runtime comes bundled with `@qvac/fabric`.
+runtime comes bundled with `@qvac/fabric`. The one exception is an addon that
+links upstream's `server-context` (see below): it builds that archive from the
+port itself, at the version the runtime records.
 
 ---
 
@@ -269,9 +271,10 @@ qvac_addon_link_fabric_server_context(${my-addon})
 ```
 
 Only the archive is linked. Its `llama` / `common` / `mtmd` references resolve
-from the shared runtime, which exports exactly the libcommon symbols it needs
-(the `jinja` entries, `fs_validate_filename` and `glob_match` in `symbols.map`,
-`exports.txt` and `cmake/generate-windows-def.cmake`).
+from the shared runtime, which exports the libcommon symbols it needs by name
+(the `jinja` entries, `fs_validate_filename`, `glob_match`,
+`common_json::get<T>()` and `common_json_error`'s typeinfo and vtable in
+`symbols.map`, `exports.txt` and `cmake/generate-windows-def.cmake`).
 
 The archive and the runtime must come from the same port version:
 
@@ -405,7 +408,7 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 | # | Step | What to verify |
 |---|------|----------------|
 | 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` at the `@qvac/fabric` caret range when building mobile prebuilds |
-| 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
+| 2 | `vcpkg.json` | `qvac-fabric` is **not** listed, unless the addon links `server-context` (`qvac-fabric[llama,server-context]` at the runtime's port); `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; no runtime or backend install |
 | 4 | `binding.js`, exports function | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS; the exports function calls `qvacAddonBindFabric()` and throws if it fails |
 | 5 | Backends | native code calls `qvac_fabric_load_backends()` unless the caller passed `backendsDir` |

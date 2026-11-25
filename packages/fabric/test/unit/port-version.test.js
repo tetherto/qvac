@@ -2,8 +2,9 @@
 
 // The qvac-fabric port checks, run against fixtures instead of a native build:
 // qvac_fabric_installed_port_version() reads the port from vcpkg's SPDX
-// document, and qvac_addon_link_fabric_server_context() compares an addon's
-// own port build with the one the @qvac/fabric runtime records.
+// document, the CMake config generated from qvac-fabricConfig.cmake.in records
+// the runtime's port, and qvac_addon_link_fabric_server_context() compares an
+// addon's own port build with it and writes it into a generated header.
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
@@ -14,6 +15,8 @@ const { spawnSync } = require('node:child_process')
 const { packageRoot } = require('./helpers')
 
 const portCmake = path.join(packageRoot, 'cmake/qvac-fabric-port.cmake')
+const hostsCmake = path.join(packageRoot, 'cmake/qvac-fabric-hosts.cmake')
+const configTemplate = path.join(packageRoot, 'cmake/qvac-fabricConfig.cmake.in')
 const addonCmake = path.resolve(packageRoot, '../../cmake/qvac-addon/qvac-addon.cmake')
 
 function executable(binary) {
@@ -41,7 +44,7 @@ function cmakePath(file) {
 }
 
 // A vcpkg_installed/<triplet> directory holding the SPDX document vcpkg writes
-// for qvac-fabric, listing `packages` (another package first, as vcpkg does).
+// for qvac-fabric, listing `packages`.
 function writeInstalled(root, packages) {
   const share = path.join(root, 'share/qvac-fabric')
   fs.mkdirSync(share, { recursive: true })
@@ -64,8 +67,10 @@ function readPort(t, installed) {
 }
 
 test('the installed port is read from its SPDX entry, port version included', (t) => {
+  // vcpkg lists the port, then "qvac-fabric:<triplet>" with a hash; the
+  // near-miss name goes first here, so only the exact name can match.
   const installed = writeInstalled(tempDir(t), [
-    { name: 'qvac-fabric_x64-linux@12032.0.0#1', versionInfo: 'ignored' },
+    { name: 'qvac-fabric:x64-linux', versionInfo: 'a3f9c2e1b0d4' },
     { name: 'qvac-fabric', versionInfo: '12032.0.0#1' }
   ])
   const result = readPort(t, installed)
@@ -85,9 +90,29 @@ test('reading the port fails without the SPDX document or its qvac-fabric entry'
 })
 
 // Configures a consumer that links server-context from `addonPort`, against a
-// @qvac/fabric whose CMake config records `runtimePort` (none when null).
+// @qvac/fabric whose CMake config records `runtimePort`: the config is
+// generated from the real qvac-fabricConfig.cmake.in, as fabric's build does,
+// and found with find_package(). With `runtimePort` null, the config of a
+// @qvac/fabric from before the port record.
 function configureAddon(t, { addonPort, runtimePort }) {
   const root = tempDir(t)
+  const fabricCmake = path.join(root, 'fabric/prebuilds/share/qvac-fabric/cmake')
+  fs.mkdirSync(fabricCmake, { recursive: true })
+  fs.copyFileSync(hostsCmake, path.join(fabricCmake, 'qvac-fabric-hosts.cmake'))
+  fs.copyFileSync(portCmake, path.join(fabricCmake, 'qvac-fabric-port.cmake'))
+  fs.writeFileSync(
+    path.join(fabricCmake, 'qvac-fabricTargets.cmake'),
+    'if(NOT TARGET qvac-fabric::headers)\n' +
+      '  add_library(qvac-fabric::headers INTERFACE IMPORTED)\n' +
+      'endif()\n'
+  )
+  if (runtimePort === null) {
+    fs.writeFileSync(
+      path.join(fabricCmake, 'qvac-fabricConfig.cmake'),
+      'include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabricTargets.cmake")\n' +
+        'include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabric-hosts.cmake")\n'
+    )
+  }
   const installed = writeInstalled(path.join(root, 'vcpkg_installed'), [
     { name: 'qvac-fabric', versionInfo: addonPort }
   ])
@@ -104,10 +129,18 @@ function configureAddon(t, { addonPort, runtimePort }) {
 
   const source = path.join(root, 'src')
   fs.mkdirSync(source)
+  // Fabric's build writes the config from the template with the port it
+  // installed; the variable is unset again, so the consumer sees only what
+  // the config records.
   const runtime =
     runtimePort === null
       ? ''
-      : `set(QVAC_FABRIC_PORT_VERSION "${runtimePort}")\ninclude("${cmakePath(portCmake)}")\n`
+      : 'include(CMakePackageConfigHelpers)\n' +
+        `set(QVAC_FABRIC_PORT_VERSION "${runtimePort}")\n` +
+        `configure_package_config_file("${cmakePath(configTemplate)}"\n` +
+        `  "${cmakePath(fabricCmake)}/qvac-fabricConfig.cmake"\n` +
+        '  INSTALL_DESTINATION share/qvac-fabric/cmake)\n' +
+        'unset(QVAC_FABRIC_PORT_VERSION)\n'
   fs.writeFileSync(
     path.join(source, 'CMakeLists.txt'),
     'cmake_minimum_required(VERSION 3.25)\n' +
@@ -120,10 +153,9 @@ function configureAddon(t, { addonPort, runtimePort }) {
       '  message(STATUS "fixture: link ${ARGN}")\n' +
       'endfunction()\n' +
       `include("${cmakePath(addonCmake)}")\n` +
-      // What qvac_addon_use_fabric() and the runtime's CMake config leave.
-      `set(qvac-fabric_DIR "${cmakePath(root)}/fabric")\n` +
-      'add_library(qvac-fabric::headers INTERFACE IMPORTED)\n' +
       runtime +
+      // What qvac_addon_use_fabric() does first.
+      `find_package(qvac-fabric CONFIG REQUIRED PATHS "${cmakePath(fabricCmake)}" NO_DEFAULT_PATH)\n` +
       `set(llama_DIR "${cmakePath(llamaDir)}")\n` +
       'qvac_addon_link_fabric_server_context(addon)\n'
   )

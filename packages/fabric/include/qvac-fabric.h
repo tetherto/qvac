@@ -2,9 +2,9 @@
 
 // The part of @qvac/fabric's C API that is fabric's own rather than llama.cpp's
 // or ggml's: locating and loading the ggml backend modules shipped with this
-// runtime. Consumers call it instead of computing a backends directory in
-// JavaScript, which bare-pack cannot follow and which has no answer inside a
-// bundle or an APK.
+// runtime, and the qvac-fabric port it is built from. Consumers call the first
+// instead of computing a backends directory in JavaScript, which bare-pack
+// cannot follow and which has no answer inside a bundle or an APK.
 
 #include <stddef.h>
 
