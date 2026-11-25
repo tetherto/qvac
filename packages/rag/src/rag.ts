@@ -51,9 +51,9 @@ import {
   sameLineage,
   storageOf,
   withSnapshot,
-  withTransaction,
   writeGeneration
 } from './writes.js'
+import { withTransaction } from './db/transactions.js'
 import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
 import { dropNamespaceRows, listNamespaceSummaries } from './namespaces.js'
 import { exportFrames } from './transfer/export.js'

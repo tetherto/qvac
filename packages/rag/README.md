@@ -104,14 +104,14 @@ The port must be in the namespace's space: `computeSpaceId(port.space)` has to e
 
 `index` configures the vector index, used only when `@qvac/turbovec-ggml` loads:
 
-- `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only.
+- `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only. Snapshots go under `<dir>/<core key>/`; files there that follow the snapshot naming but aren't the namespace's current snapshot, such as the temp file of a killed write, are deleted when the namespace's index opens, after each snapshot, and by `dropNamespace`. Other files are left alone.
 - `snapshotEvery`: committed batches between snapshots, default 256. A snapshot is also written on `close()`.
 
 `ready()` loads `@qvac/turbovec-ggml` and `bare-fs` before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
 
 `onIndexFallback(event)` is called when a namespace's searches switch to the scan, once per namespace and reason, with `{ namespace, reason, error? }`. The reasons are the ones `indexStatus` reports. An error thrown by the callback is ignored.
 
-The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
+The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. If the host closes the Corestore first, writes fail with `DB_OPERATION_FAILED` and `close()` still resolves, skipping the mutation pruning it can no longer write. Call `ready()` before any other method.
 
 ### `createNamespace({ name, space, index? })`
 

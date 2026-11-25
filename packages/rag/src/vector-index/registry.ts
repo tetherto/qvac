@@ -13,6 +13,7 @@ import {
   type SpaceRecord
 } from '../db/records.js'
 import { checkStoredVector, throwIfAborted } from '../search.js'
+import { withTransaction } from '../db/transactions.js'
 import {
   BIT_WIDTHS,
   type NativeIndex,
@@ -311,7 +312,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (!entry.store) return
     let stored: Awaited<ReturnType<SnapshotStore['read']>>
     try {
-      stored = await entry.store.read(identity)
+      const store = entry.store
+      stored = await onDisk(entry.namespace, async () => {
+        await store.clean(identity.namespace)
+        return await store.read(identity)
+      })
     } catch (error) {
       entry.snapshotError = { error }
       return
@@ -478,7 +483,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     try {
       await persist(entry)
       if (!prunable.has(entry.namespace)) return
-      await withTransaction(async (tx) => {
+      await withTransaction(db, async (tx) => {
         await prune(tx, entry.namespace)
         await tx.flush()
       })
@@ -541,15 +546,6 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     }
     entries.clear()
     await Promise.all(retiring)
-  }
-
-  async function withTransaction(run: (tx: HyperDBTransaction) => Promise<void>): Promise<void> {
-    const tx = await db.exclusiveTransaction()
-    try {
-      await run(tx)
-    } finally {
-      await tx.close()
-    }
   }
 
   function retire(native: NativeIndex): void {

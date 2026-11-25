@@ -163,6 +163,19 @@ export async function rejectsWithCode(
   }
 }
 
+// A hang fails the test instead of stalling the run.
+export async function settles<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} did not settle`)), 5000)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Forces the scan path for one test, as if the addon were not installed.
 export function useScan(t: Test): void {
   setNativeIndexLoader(() => Promise.resolve(null))
