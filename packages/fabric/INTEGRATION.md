@@ -280,7 +280,8 @@ The archive and the runtime must come from the same port version:
   helper fails configure when the addon's own vcpkg build installed another
   version.
 - The runtime reports the same port from `qvac_fabric_port_version()`. The
-  helper gives the addon its own port as `QVAC_FABRIC_SERVER_CONTEXT_PORT`, and
+  helper gives the addon its own port as `QVAC_FABRIC_SERVER_CONTEXT_PORT`, in
+  a generated `<qvac-fabric-server-context-port.h>` on its include path, and
   the addon compares the two in its exports function, after
   `qvacAddonBindFabric()`, refusing to load on a mismatch: a later
   `@qvac/fabric` release in the addon's range may ship another port.

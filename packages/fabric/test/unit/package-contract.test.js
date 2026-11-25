@@ -242,13 +242,22 @@ test('the qvac-fabric port the runtime is built from is recorded', () => {
     /qvac_fabric_installed_port_version\("\$\{VCPKG_INSTALLED_PATH\}" QVAC_FABRIC_PORT_VERSION\)/
   )
   assert.match(cmake, /cmake\/qvac-fabric-port\.cmake\s+DESTINATION share\/qvac-fabric\/cmake/)
-  // The runtime reports the same port, for the check when an addon loads.
+  // The runtime reports the same port, for the check when an addon loads,
+  // from a generated header: CMake drops a compile definition holding '#'.
   assert.match(cmake, /target_sources\(\$\{qvac-fabric\} PRIVATE [^)]*addon\/port\.cpp/)
-  assert.match(cmake, /QVAC_FABRIC_PORT_VERSION="\$\{QVAC_FABRIC_PORT_VERSION\}"/)
   assert.match(
-    read('addon/port.cpp'),
-    /qvac_fabric_port_version\(void\) \{\s+return QVAC_FABRIC_PORT_VERSION;/
+    cmake,
+    /file\(CONFIGURE\s+OUTPUT "\$\{CMAKE_CURRENT_BINARY_DIR\}\/generated\/qvac-fabric-port-version\.h"/
   )
+  assert.ok(
+    cmake.includes(
+      'inline constexpr const char* QVAC_FABRIC_PORT_VERSION = \\"@QVAC_FABRIC_PORT_VERSION@\\";'
+    )
+  )
+  assert.doesNotMatch(cmake, /QVAC_FABRIC_PORT_VERSION="/)
+  const port = read('addon/port.cpp')
+  assert.match(port, /#include "qvac-fabric-port-version\.h"/)
+  assert.match(port, /qvac_fabric_port_version\(void\) \{\s+return QVAC_FABRIC_PORT_VERSION;/)
   const config = read('cmake/qvac-fabricConfig.cmake.in')
   assert.match(config, /set\(QVAC_FABRIC_PORT_VERSION "@QVAC_FABRIC_PORT_VERSION@"\)/)
   assert.match(config, /include\("\$\{CMAKE_CURRENT_LIST_DIR\}\/qvac-fabric-port\.cmake"\)/)

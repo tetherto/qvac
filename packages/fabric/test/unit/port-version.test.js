@@ -119,9 +119,6 @@ function configureAddon(t, { addonPort, runtimePort }) {
       'function(target_link_libraries)\n' +
       '  message(STATUS "fixture: link ${ARGN}")\n' +
       'endfunction()\n' +
-      'function(target_compile_definitions)\n' +
-      '  message(STATUS "fixture: define ${ARGN}")\n' +
-      'endfunction()\n' +
       `include("${cmakePath(addonCmake)}")\n` +
       // What qvac_addon_use_fabric() and the runtime's CMake config leave.
       `set(qvac-fabric_DIR "${cmakePath(root)}/fabric")\n` +
@@ -130,11 +127,13 @@ function configureAddon(t, { addonPort, runtimePort }) {
       `set(llama_DIR "${cmakePath(llamaDir)}")\n` +
       'qvac_addon_link_fabric_server_context(addon)\n'
   )
-  return spawnSync(
+  const build = path.join(root, 'build')
+  const result = spawnSync(
     cmake,
-    ['-S', source, '-B', path.join(root, 'build'), '-G', 'Ninja', `-DCMAKE_MAKE_PROGRAM=${ninja}`],
+    ['-S', source, '-B', build, '-G', 'Ninja', `-DCMAKE_MAKE_PROGRAM=${ninja}`],
     { encoding: 'utf8' }
   )
+  return { ...result, build }
 }
 
 test('an addon links server-context when its port matches the runtime', (t) => {
@@ -149,10 +148,20 @@ test('an addon links server-context when its port matches the runtime', (t) => {
     /fixture: link addon;PRIVATE;\$<TARGET_LINKER_FILE:llama::server-context>/
   )
   assert.match(result.stdout, /fixture: include addon;PRIVATE;.*\/include\/llama\/server-context/)
-  // For the check when the addon loads, against qvac_fabric_port_version().
-  assert.match(
-    result.stdout,
-    /fixture: define addon;PRIVATE;QVAC_FABRIC_SERVER_CONTEXT_PORT="12032\.0\.0#1"/
+  // For the check when the addon loads, against qvac_fabric_port_version():
+  // a generated header on the addon's include path, which keeps the '#' that
+  // CMake drops from a compile definition.
+  const headerDir = path.join(result.build, 'addon-fabric-port')
+  assert.ok(
+    result.stdout.includes(`fixture: include addon;PRIVATE;${cmakePath(headerDir)};`),
+    result.stdout
+  )
+  const header = fs.readFileSync(path.join(headerDir, 'qvac-fabric-server-context-port.h'), 'utf8')
+  assert.ok(
+    header.includes(
+      'inline constexpr const char* QVAC_FABRIC_SERVER_CONTEXT_PORT = "12032.0.0#1";'
+    ),
+    header
   )
 })
 
