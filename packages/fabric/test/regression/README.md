@@ -180,10 +180,11 @@ pnpm exec nx run @qvac/fabric:cpp:tests:linux-x64
 ## Shared-core packaging (step 2)
 
 Dynamic-backend builds now use shared ggml core libraries by default. The
-checked-in `vcpkg-overlays/ports/qvac-fabric` is an exact copy of draft registry
-PR #504. It pins the source fork's `feat/shared-core-12032` branch by commit,
-based on `tetherto/temp-12032`, with no source patches or shared-core feature.
-Replace this temporary source pin after the fabric branch merges.
+checked-in `vcpkg-overlays/ports/qvac-fabric` is an exact copy of registry
+PR #504 at `a2afce1877deea9c547f3862c6d8c276b4b11616`. It uses the signed
+upstream `v12032.1.0` tag at merge commit
+`d067e8bd0f7fea2a0ec60ceb20dae42b8ba48f1c`, with no source patches or
+shared-core feature. Remove the overlay after adopting the merged registry release.
 
 Top-level `BUILD_SHARED_LIBS` remains off: enabling it also changes llama and
 mtmd into shared libraries. The source instead sets it within ggml when
@@ -343,8 +344,8 @@ from `temp-12032`:
 | Android arm64 | NDK 29 CPU build, allocation/logger/abort probes on a Pixel 10 Pro XL, and two Qwen 3 0.6B CPU requests with clean unload under Bare 1.36.0 over ADB. The shell app loads from local npm tarballs without LD_LIBRARY_PATH; the NDK's libc++_shared.so is included in this test fixture. This does not test APK packaging or its linker namespace. |
 
 That validation used source `b21b1ce813`, including the Android RUNPATH fix.
-The current draft port pins `9918014b76442a3da8e63c470221e167dc3b8209`, rebased
-onto the latest `temp-12032` and including the logger cleanup. CMake suppresses Android
+The current port uses upstream `v12032.1.0`, including the logger cleanup,
+the optional Windows nm check and the documented linkage-generation policy. CMake suppresses Android
 INSTALL_RPATH, so the source explicitly emits `$ORIGIN` for core and backend
 libraries, and Fabric emits the companion directory on its `.bare` module.
 `ci/verify-android-shared-core.mjs` checks the emitted binaries and rejects

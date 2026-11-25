@@ -1,9 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO jpgaribotti/qvac-fabric-llm.cpp
-  REF 9918014b76442a3da8e63c470221e167dc3b8209
-  HEAD_REF feat/shared-core-12032
-  SHA512 949a873000fab1c323e31bf83b0330da4f55592f209d40f98318d168c69ae366ef2517e48146d7de2d1cf5cd852f8a2cd8b0a4f13f0720ba40d6abad03cae96d
+  REPO tetherto/qvac-fabric-llm.cpp
+  REF v${VERSION}
+  SHA512 559f6b0a6c81db8cee0e3fc3c8ffd5afbf4a4e79d10cc33605a37ca88d71c881d2996f621848ee8cdfc87826dab0732d73c6151e38179e903127bc4139ff1a14
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
