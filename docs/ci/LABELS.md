@@ -12,7 +12,7 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 
 | | |
 |---|---|
-| **Mechanism** | The `fork-approval` job in each privileged `pull_request_target` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
+| **Mechanism** | The `fork-approval` job in each privileged `workflow_run` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
 | **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (read by unprivileged `pull_request` jobs before they run fork code). |
 | **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
 | **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
@@ -22,7 +22,7 @@ There is **no self-service path** for external contributors — a merge/release 
 
 ### Native stages on a fork PR
 
-The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml), a `pull_request_target` workflow that loads from the default branch and checks out the PR head. Every run goes through the same three gates before a stage job starts:
+The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml), a `workflow_run` workflow that runs the default branch's copy and checks out the PR head. Every run goes through the same three gates before a stage job starts:
 
 1. `fork-approval` pauses on the `fork-ci` environment for a fork PR, and records `qvac/fork-verified` on the head SHA once a merge or release team member approves.
 2. `trust` ([`pr-check-trust`](../../.github/actions/pr-check-trust)) allows a same-repo PR, blocks a draft, and allows a fork PR only with that SHA-bound approval.
