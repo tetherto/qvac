@@ -20,6 +20,7 @@ import {
   getSingleFileCacheName
 } from '@/utils/cache/layout'
 import { hasFileOfSize } from '@/utils/cache/paths'
+import { getDarwinMajor } from '@/utils/darwin-version'
 import { generateShortHash } from '@/utils/formatting'
 import { joinWithinBase } from '@/utils/path-security'
 import { formatZodError } from '@/utils/zod-error'
@@ -106,7 +107,8 @@ async function cachedCatalogPath(entry: RegistryItem): Promise<string | undefine
   const flat = await legacyFlatCachePath(entry, cacheDir)
   if (flat !== undefined) return flat
 
-  const layout = getModelCacheLayout(entry, getRuntimeContext().platform, generateShortHash)
+  const { platform } = getRuntimeContext()
+  const layout = getModelCacheLayout(entry, platform, generateShortHash, getDarwinMajor(platform))
   if (layout === undefined) return undefined
 
   for (const file of layout.files) {

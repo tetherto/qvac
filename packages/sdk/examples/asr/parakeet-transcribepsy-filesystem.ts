@@ -15,7 +15,9 @@
  *
  * `--eu` loads the full 25-language TranscribePsy-250M-EU instead
  * (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`): one GGUF with its CAFE language
- * adapters and gate embedded, ggml on every platform, no Core ML distribution.
+ * adapters and gate embedded, ggml on every platform. On macOS and iOS the SDK
+ * also stages the model's own Core ML bundles when the registry publishes
+ * them, with no flag to pass, and the script reports which stages ran there.
  * `--language` picks its route: `en` for the English trunk, `other` for the
  * non-English adapters, or `auto` (the default) to let the gate decide from
  * the first seconds of the recording.
@@ -123,9 +125,13 @@ try {
 
   console.log(text)
   if (stats) {
+    const reportCoreml = useCoreml || (useEu && process.platform === 'darwin')
+    const coreml = (value: number | undefined) => (value === 1 ? 'yes' : 'no')
     console.log(
       `▸ ${stats.audioDuration?.toFixed(1) ?? '?'} s of audio, real-time factor ${stats.realTimeFactor?.toFixed(3) ?? '?'}` +
-        (useCoreml ? `, encoder on Core ML: ${stats.encoderUsedCoreml === 1 ? 'yes' : 'no'}` : '')
+        (reportCoreml
+          ? `, Core ML encoder: ${coreml(stats.encoderUsedCoreml)}, decoder: ${coreml(stats.decoderUsedCoreml)}`
+          : '')
     )
   }
 

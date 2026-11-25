@@ -14,6 +14,7 @@ import {
   readCachedCoremlCompanionSet,
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
+import { getDarwinMajor } from '@/utils/darwin-version'
 
 const AUDIO8_ROOT = 'qvac_models_compiled/ggml/audio8/2026-09-30/'
 const AUDIO8_GGUF_DIR = 'qvac_models_compiled/ggml/audio-8/2026-08-12/'
@@ -438,4 +439,164 @@ test('Core ML sidecars: the encoder-less GGUF is refused off Apple with the ggml
     getRegistryModelPlatformRefusal('/models/transcribepsy-250m-eu-sub-coreml.gguf', 'linux')
   )
   t.absent(getRegistryModelPlatformRefusal('', 'linux'))
+})
+
+// ---------------------------------------------------------------------------
+// Full TranscribePsy EU: optional bundles beside the S3 GGUF
+// ---------------------------------------------------------------------------
+
+const TRANSCRIBEPSY_EU = models.find(
+  (model) => model.name === 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'
+)!
+const TRANSCRIBEPSY_EU_DIR = TRANSCRIBEPSY_EU.registryPath.slice(
+  0,
+  TRANSCRIBEPSY_EU.registryPath.lastIndexOf('/') + 1
+)
+const EU = 'transcribepsy-250m-eu'
+const EU_FIXED = [`${EU}-encoder`, `${EU}-encoder-other`, `${EU}-encoder-gate`]
+const EU_FLEXIBLE = [
+  `${EU}-encoder-flexible`,
+  `${EU}-encoder-other-flexible`,
+  `${EU}-encoder-gate-flexible`
+]
+
+function euBundles(names: string[]): QVACModelEntry[] {
+  return names.flatMap((name) => bundle(name, TRANSCRIBEPSY_EU_DIR))
+}
+
+function stagedBundles(set: Awaited<ReturnType<typeof findCoremlCompanionSet>>): string[] {
+  const names = new Set(
+    (set?.files ?? []).slice(1).map((file) => file.targetName.split('.mlmodelc/')[0]!)
+  )
+  return [...names].sort()
+}
+
+test('Core ML sidecars: the full TranscribePsy EU GGUF looks for its bundles beside it on Apple', (t) => {
+  t.ok(TRANSCRIBEPSY_EU, 'the catalog lists the full EU GGUF')
+  for (const platform of ['darwin', 'ios']) {
+    const spec = getCoremlSidecarSpec(TRANSCRIBEPSY_EU.registryPath, 's3', platform)
+    t.is(spec?.root, TRANSCRIBEPSY_EU_DIR, `${platform}: the GGUF's own directory`)
+    t.is(spec?.modelStem, EU)
+    t.alike(
+      spec?.bundles.map((bundle) => bundle.targetSuffix),
+      [
+        '-encoder',
+        '-encoder-other',
+        '-encoder-gate',
+        '-encoder-shared',
+        '-decoder',
+        '-encoder-flexible',
+        '-encoder-other-flexible',
+        '-encoder-gate-flexible'
+      ]
+    )
+  }
+  for (const platform of ['linux', 'win32', 'android', undefined]) {
+    t.absent(getCoremlSidecarSpec(TRANSCRIBEPSY_EU.registryPath, 's3', platform), `${platform}`)
+  }
+  t.absent(
+    getCoremlOnlyAlternative(TRANSCRIBEPSY_EU.registryPath, 's3'),
+    'the GGUF keeps its encoder, so it loads everywhere'
+  )
+  t.absent(
+    getRegistryModelPlatformRefusal(`registry://s3/${TRANSCRIBEPSY_EU.registryPath}`, 'linux'),
+    'and is not refused off Apple'
+  )
+})
+
+test('Core ML sidecars: nothing published for full TranscribePsy EU keeps GGUF-only loading', async (t) => {
+  t.absent(findCatalogCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', 24), 'no catalog bundles')
+  t.absent(await findCoremlCompanionSet(client([]), TRANSCRIBEPSY_EU, 'darwin', 24))
+  // EU-sub bundles are another model's: the addon rejects them for full EU.
+  t.absent(
+    await findCoremlCompanionSet(
+      client(euBundles(['transcribepsy-250m-eu-sub-coreml-encoder'])),
+      TRANSCRIBEPSY_EU,
+      'darwin',
+      24
+    )
+  )
+})
+
+test('Core ML sidecars: full TranscribePsy EU stages its fixed encoders, decoder and FP32 programs', async (t) => {
+  const published = [...EU_FIXED, `${EU}-decoder`, ...EU_FLEXIBLE]
+  const set = await findCoremlCompanionSet(
+    client(euBundles(published)),
+    TRANSCRIBEPSY_EU,
+    'ios',
+    24
+  )
+
+  t.is(set?.files[0]?.targetName, `${EU}.gguf`)
+  t.is(set?.files.length, 1 + published.length * COMPONENTS.length)
+  t.alike(stagedBundles(set), [...published].sort())
+  for (const name of published) {
+    const file = set?.files.find((file) => file.targetName === `${name}.mlmodelc/coremldata.bin`)
+    t.is(file?.registryPath, `${TRANSCRIBEPSY_EU_DIR}${name}.mlmodelc/coremldata.bin`, name)
+  }
+})
+
+test('Core ML sidecars: the shared-weight bundle replaces the fixed encoders where the OS loads it', async (t) => {
+  const registry = client(euBundles([...EU_FIXED, `${EU}-encoder-shared`, `${EU}-decoder`]))
+
+  const modern = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 24)
+  t.alike(stagedBundles(modern), [`${EU}-decoder`, `${EU}-encoder-shared`], 'macOS 15 / iOS 18')
+
+  const older = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 23)
+  t.alike(stagedBundles(older), [`${EU}-decoder`, ...EU_FIXED].sort(), 'macOS 14 / iOS 17')
+
+  const unknown = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', undefined)
+  t.alike(stagedBundles(unknown), [`${EU}-decoder`, `${EU}-encoder-shared`], 'unknown OS')
+
+  // A shared-only publication leaves an older OS on the GGUF's own encoder.
+  const sharedOnly = await findCoremlCompanionSet(
+    client(euBundles([`${EU}-encoder-shared`, `${EU}-decoder`])),
+    TRANSCRIBEPSY_EU,
+    'ios',
+    23
+  )
+  t.alike(stagedBundles(sharedOnly), [`${EU}-decoder`])
+})
+
+test('Core ML sidecars: one registry query covers every bundle of a model', async (t) => {
+  const queries: { gte?: { path?: string }; lte?: { path?: string } }[] = []
+  const entries = euBundles([...EU_FIXED, `${EU}-decoder`])
+  const counting = {
+    findModels: async (query: { gte?: { path?: string }; lte?: { path?: string } }) => {
+      queries.push(query)
+      return client(entries).findModels(query as never)
+    }
+  } as unknown as Pick<QVACRegistryClient, 'findModels'>
+
+  const set = await findCoremlCompanionSet(counting, TRANSCRIBEPSY_EU, 'darwin', 24)
+  t.is(queries.length, 1)
+  t.is(queries[0]?.gte?.path, `${TRANSCRIBEPSY_EU_DIR}${EU}-`)
+  t.is(stagedBundles(set).length, 4)
+})
+
+test('getDarwinMajor: reads the kernel major on Apple platforms only', (t) => {
+  t.is(
+    getDarwinMajor('darwin', () => '24.1.0'),
+    24,
+    'macOS 15'
+  )
+  t.is(
+    getDarwinMajor('ios', () => '24.0.0'),
+    24,
+    'iOS 18'
+  )
+  t.is(
+    getDarwinMajor('darwin', () => '23.6.0'),
+    23,
+    'macOS 14'
+  )
+  t.is(
+    getDarwinMajor('linux', () => '6.8.0'),
+    undefined
+  )
+  t.is(
+    getDarwinMajor('darwin', () => 'unknown'),
+    undefined
+  )
+  t.is(typeof getDarwinMajor('darwin'), os.platform() === 'darwin' ? 'number' : 'undefined')
 })

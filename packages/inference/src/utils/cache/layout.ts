@@ -39,7 +39,18 @@ export function coremlBundleNameOf(location: string): string | undefined {
     : undefined
 }
 
-type BundleSpec = { sourceName: string; targetSuffix: string }
+type BundleSpec = {
+  sourceName: string
+  targetSuffix: string
+  /**
+   * Set on a bundle that stands in for others: the target suffixes of the
+   * bundles it replaces. It is staged in their place where the OS can load it
+   * (see `minDarwinMajor`) and is left out everywhere else.
+   */
+  replaces?: readonly string[]
+  /** The oldest Darwin kernel major that loads the bundle: 24 is macOS 15 and iOS 18. */
+  minDarwinMajor?: number
+}
 
 /**
  * A model family whose GGUFs the native addon pairs with compiled Core ML
@@ -109,10 +120,10 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
     // TranscribePsy EU-sub's Core ML distribution is published on Hugging Face
     // as an encoder-less GGUF with its encoder and decoder bundles beside it;
     // the ASR addon runs both stages on the Neural Engine. The full EU-sub GGUF
-    // (`transcribepsy-250m-eu-sub.gguf`) has no sidecar and runs on ggml, and
-    // so does the 25-language TranscribePsy-250M-EU GGUF
-    // (`transcribepsy-250m-eu.gguf`, published from S3): its CAFE adapters and
-    // language gate are not in these bundles, so it has no Core ML family.
+    // (`transcribepsy-250m-eu-sub.gguf`) has no sidecar and runs on ggml. The
+    // 25-language TranscribePsy-250M-EU has a family of its own below: these
+    // bundles lack its CAFE adapters and language gate, and the addon rejects
+    // them for it.
     source: 'hf',
     pathPattern: /^qvac\/TranscribePsy-250M-EU-sub-coreml\/resolve\//,
     stemPattern: /^(transcribepsy-250m-eu-sub-coreml)\.gguf$/,
@@ -123,6 +134,46 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
       ]
     },
     withoutBundlesUse: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0'
+  },
+  {
+    // The 25-language TranscribePsy-250M-EU GGUF keeps every encoder weight, so
+    // each bundle is optional and the addon falls back to ggml without them. It
+    // runs `run()` on three fixed 15 s programs (the English trunk, the CAFE
+    // adapter route and the language gate), or on one shared-weight bundle on
+    // macOS 15 and iOS 18 or later; the decoder bundle batches long offline
+    // inputs; streaming and unwindowed runs need the FP32 `-flexible` programs.
+    // The bundles are staged from the GGUF's own registry directory once they
+    // are published there. The optional macOS-only `-fp32-<frames>` programs
+    // carry their capacity in their names and are not staged.
+    source: 's3',
+    pathPattern: /\/ggml\/transcribepsy\//,
+    stemPattern: /^(transcribepsy-250m-eu)\.gguf$/,
+    bundlesByStem: {
+      'transcribepsy-250m-eu': [
+        { sourceName: 'transcribepsy-250m-eu-encoder', targetSuffix: '-encoder' },
+        { sourceName: 'transcribepsy-250m-eu-encoder-other', targetSuffix: '-encoder-other' },
+        { sourceName: 'transcribepsy-250m-eu-encoder-gate', targetSuffix: '-encoder-gate' },
+        {
+          sourceName: 'transcribepsy-250m-eu-encoder-shared',
+          targetSuffix: '-encoder-shared',
+          replaces: ['-encoder', '-encoder-other', '-encoder-gate'],
+          minDarwinMajor: 24
+        },
+        { sourceName: 'transcribepsy-250m-eu-decoder', targetSuffix: '-decoder' },
+        {
+          sourceName: 'transcribepsy-250m-eu-encoder-flexible',
+          targetSuffix: '-encoder-flexible'
+        },
+        {
+          sourceName: 'transcribepsy-250m-eu-encoder-other-flexible',
+          targetSuffix: '-encoder-other-flexible'
+        },
+        {
+          sourceName: 'transcribepsy-250m-eu-encoder-gate-flexible',
+          targetSuffix: '-encoder-gate-flexible'
+        }
+      ]
+    }
   },
   {
     // The TTS addon runs the Audio8 codec's synthesis stack on this bundle when
@@ -181,29 +232,69 @@ export function getCoremlSidecarSpec(
   return undefined
 }
 
+/**
+ * The bundles to stage, given which of them are published completely. A
+ * bundle that replaces others is staged in their place when it is complete
+ * and the OS loads it, and is left out otherwise, so a device never downloads
+ * both. `darwinMajor` is the Darwin kernel major of the device that loads the
+ * model; when it is unknown the OS is taken to load every bundle.
+ */
+export function selectCoremlBundles(
+  bundles: readonly BundleSpec[],
+  isComplete: (bundle: BundleSpec) => boolean,
+  darwinMajor?: number
+): BundleSpec[] {
+  const complete = bundles.filter(isComplete)
+  const replaced = new Set<string>()
+  const staged: BundleSpec[] = []
+  for (const bundle of complete) {
+    if (!bundle.replaces) continue
+    const loads =
+      bundle.minDarwinMajor === undefined ||
+      darwinMajor === undefined ||
+      darwinMajor >= bundle.minDarwinMajor
+    if (loads) bundle.replaces.forEach((suffix) => replaced.add(suffix))
+    else replaced.add(bundle.targetSuffix)
+  }
+  for (const bundle of complete) {
+    if (!replaced.has(bundle.targetSuffix)) staged.push(bundle)
+  }
+  return staged
+}
+
 /** The string a Core ML companion set's key is the short hash of. */
 export function getCoremlSetKeySource(model: RegistryItem, spec: CoremlSidecarSpec): string {
   return `${model.registrySource}:${model.registryPath}:coreml:${spec.root}`
 }
 
 /**
- * The catalog entries of every bundle the catalog publishes completely, each
+ * The catalog entries of every bundle the loader stages from the catalog, each
  * with the name it takes in the set directory. A bundle missing a component
- * is left out: a partial `.mlmodelc` is not usable.
+ * is left out: a partial `.mlmodelc` is not usable. `darwinMajor` picks
+ * between a shared-weight bundle and the ones it replaces, as
+ * `selectCoremlBundles` describes.
  */
 export function getCatalogCoremlSidecars(
-  spec: CoremlSidecarSpec
+  spec: CoremlSidecarSpec,
+  darwinMajor?: number
 ): { key: string; targetName: string; entry: RegistryItem }[] {
-  const sidecars: { key: string; targetName: string; entry: RegistryItem }[] = []
-  for (const bundle of spec.bundles) {
+  const entriesOf = (bundle: BundleSpec) => {
     const registryPrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
-    const entries = COREML_COMPONENTS.map((component) =>
+    return COREML_COMPONENTS.map((component) =>
       models.find(
         (entry) =>
           entry.registrySource === spec.source && entry.registryPath === registryPrefix + component
       )
     )
-    if (entries.some((entry) => !entry)) continue
+  }
+  const sidecars: { key: string; targetName: string; entry: RegistryItem }[] = []
+  const staged = selectCoremlBundles(
+    spec.bundles,
+    (bundle) => entriesOf(bundle).every((entry) => entry !== undefined),
+    darwinMajor
+  )
+  for (const bundle of staged) {
+    const entries = entriesOf(bundle)
     entries.forEach((entry, index) =>
       sidecars.push({
         key: `${bundle.sourceName}/${COREML_COMPONENTS[index]}`,
@@ -243,12 +334,16 @@ export type ModelCacheLayout = {
  * Where the loader keeps `model`, or `undefined` for a sharded model (its
  * `sharded/` directory is not described here) or a Core ML model whose bundles
  * the catalog lacks (the loader asks the live registry). `shortHash` is
- * generateShortHash, passed in to avoid bare-crypto.
+ * generateShortHash, passed in to avoid bare-crypto. `darwinMajor` is the
+ * Darwin kernel major of the Apple device, which picks between a shared-weight
+ * Core ML bundle and the bundles it replaces; leave it out to assume an OS that
+ * loads the shared one (macOS 15 and iOS 18 or later).
  */
 export function getModelCacheLayout(
   model: RegistryItem,
   platform: string | undefined,
-  shortHash: (input: string) => string
+  shortHash: (input: string) => string,
+  darwinMajor?: number
 ): ModelCacheLayout | undefined {
   const filename = basename(model.registryPath)
   if (SHARD_FILENAME_PATTERN.test(filename)) return undefined
@@ -264,7 +359,7 @@ export function getModelCacheLayout(
 
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (spec) {
-    const sidecars = getCatalogCoremlSidecars(spec)
+    const sidecars = getCatalogCoremlSidecars(spec, darwinMajor)
     if (sidecars.length === 0) return undefined
     return set(shortHash(getCoremlSetKeySource(model, spec)), [
       { targetName: filename, size: model.expectedSize, sha256: model.sha256Checksum },

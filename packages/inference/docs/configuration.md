@@ -79,8 +79,13 @@ itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
 25 European languages) loads the same way from one GGUF that embeds its CAFE
 adapters and language gate; `language` selects `en` (English trunk), `other`
 (non-English adapters) or `auto` (the gate routes the recording; also the default
-when omitted). It runs on ggml only: the EU-sub Core ML bundles do not contain its
-adapters. `longFormWindowFrames` and `longFormContextFrames` bound the offline
+when omitted). On macOS and iOS the loader also stages the model's own Core ML
+bundles from its registry directory when the registry publishes them: the fixed
+`-encoder`, `-encoder-other` and `-encoder-gate` programs, or `-encoder-shared` in
+their place on Darwin 24 or later (macOS 15, iOS 18), plus `-decoder` and the FP32
+`-flexible` programs. Each bundle is optional and the model runs on ggml without
+them; the EU-sub bundles do not contain its adapters and are not used.
+`longFormWindowFrames` and `longFormContextFrames` bound the offline
 encoder window on long recordings in 80 ms encoder frames; the default `0` takes
 the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
 Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an

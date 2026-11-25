@@ -123,6 +123,12 @@ export const transcribeStatsSchema = z.object({
     .describe(
       'Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.'
     ),
+  decoderUsedCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parakeet offline ASR: `1` when every transcription in the run decoded on the Core ML TDT decoder sidecar, `0` when any decoded on ggml.'
+    ),
   aoscActive: z
     .number()
     .optional()
