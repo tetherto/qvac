@@ -100,6 +100,11 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   }
 
   assertUpscalerResolved(config, artifacts)
+  // The addon's fitter answers `unknown` for these too: Core ML places and sizes
+  // the sidecars itself, outside the ggml planner the fitter runs.
+  if (artifacts?.['coremlUnetModelPath'] || artifacts?.['coremlTaeDecoderModelPath']) {
+    return { unknown: 'the fitter cannot size Core ML sidecars, which Core ML places itself' }
+  }
   const request: DiffusionFitRequest = {
     files: imageFilesFor(load.modelPath, artifacts),
     config: imageConfigFor(config),

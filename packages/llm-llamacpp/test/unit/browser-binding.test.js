@@ -8,6 +8,7 @@ const {
   ensureMessageCacheDirectories,
   ensureParentDirectory
 } = require('../../browser/cache-files.js')
+const { MOUNTED_FILES_KEY } = require('../../browser/model-files.js')
 const { prepareRunData } = require('../../browser/run-data.js')
 
 function instance(output = () => {}) {
@@ -769,6 +770,54 @@ test('invalid browser load config does not load an engine', async (t) => {
       await isolated.destroyInstance(handle)
     }
     t.is(loads, 0, `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser engine creation receives the mounted load asset paths', async (t) => {
+  globalThis[MOUNTED_FILES_KEY] = new Map([
+    ['/m/model.gguf', { name: 'model.gguf' }],
+    ['/m/mmproj.gguf', { name: 'mmproj.gguf' }],
+    ['/m/a,b.gguf', { name: 'a,b.gguf' }],
+    ['/m/draft.gguf', { name: 'draft.gguf' }]
+  ])
+  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  const created = []
+  const isolated = isolatedBinding(() => ({
+    FS: {
+      filesystems: { WORKERFS: { stream_ops: { read() {} } } },
+      mkdirTree() {},
+      mount() {},
+      unmount() {},
+      rmdir() {}
+    },
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') {
+        created.push(args)
+        return 1
+      }
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance(
+      {},
+      {
+        path: '/m/model.gguf',
+        projectionPath: '/m/mmproj.gguf',
+        config: { lora: '/m/a,b.gguf', spec_draft_model: '/m/draft.gguf', parallel: '2' }
+      },
+      () => {}
+    )
+    await isolated.activate(handle)
+    const [modelPath, projectionPath, configJson] = created.pop()
+    const config = JSON.parse(configJson)
+    t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
+    t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
+    t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
+    t.ok(/^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model), config.spec_draft_model)
+    t.is(config.parallel, '2')
+    await isolated.destroyInstance(handle)
   }
 })
 

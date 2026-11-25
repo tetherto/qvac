@@ -130,6 +130,8 @@ function installReadAhead(module) {
       buffer.set(window.bytes.subarray(from, from + length), offset)
       count = length
     } else if (
+      // Any other WORKERFS node layout falls back to emscripten's own read.
+      typeof file?.slice === 'function' &&
       length < READ_AHEAD_BYTES &&
       position < size &&
       file === state.lastFile &&
