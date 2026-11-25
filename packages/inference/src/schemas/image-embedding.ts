@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { base64ByteLength, rawRgbByteLength, validateRawRgbDimensions } from '@/schemas/raw-rgb'
 import { ggmlModelConfigShape } from '@/schemas/ggml-model-config'
+import { base64String } from '@/schemas/base64'
 
 export const imageEmbeddingConfigSchema = z.object({ ...ggmlModelConfigShape })
 
@@ -27,7 +28,7 @@ const imageFields = {
 export const imageEmbeddingInputSchema = z
   .object({
     ...imageFields,
-    image: z.base64().min(1).describe('JPEG/PNG bytes, or packed RGB bytes, encoded as base64.')
+    image: base64String().min(1).describe('JPEG/PNG bytes, or packed RGB bytes, encoded as base64.')
   })
   .superRefine(validateRawRgbDimensions)
   .superRefine((input, ctx) => {
