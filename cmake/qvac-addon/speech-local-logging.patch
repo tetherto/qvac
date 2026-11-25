@@ -18,11 +18,19 @@
  const char * whisper_version(void) {
 --- a/engines/parakeet/src/parakeet_log.cpp
 +++ b/engines/parakeet/src/parakeet_log.cpp
-@@ -22,7 +22,6 @@
- void log_set_callback(ggml_log_callback cb, void * user_data) {
-     g_user_data = user_data;
-     g_callback.store(cb, std::memory_order_release);
--    ggml_log_set(cb, user_data);
+@@ -58,7 +58,6 @@
+     g_idle.notify_all();
  }
-
- void log_impl(ggml_log_level level, const char * fmt, ...) {
+ 
+-void forward_ggml(ggml_log_level level, const char * text, void *) { dispatch(level, text); }
+ 
+ }
+ 
+@@ -72,7 +71,6 @@
+             g_sink->callback = cb;
+             g_sink->user_data = user_data;
+         }
+-        ggml_log_set(cb ? &forward_ggml : nullptr, nullptr);
+         if (replaced) {
+             const Sink * old = replaced.get();
+             g_idle.wait(lock, [&] {
