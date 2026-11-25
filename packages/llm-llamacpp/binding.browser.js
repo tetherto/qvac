@@ -287,12 +287,22 @@ async function call(handle, name, types, args, prepare) {
   }
 }
 
+// Only for exports that never suspend. Under Asyncify a suspended sync ccall
+// returns a Promise while the engine is still running, so treat that as fatal
+// rather than let the next call in.
 function callSync(handle, name, types, args, prepare) {
   const engine = usableEngine(handle)
   const { module } = engine
   try {
     if (prepare) prepare(module)
-    return check(module, module.ccall(name, 'number', types, args))
+    const status = module.ccall(name, 'number', types, args)
+    if (typeof status?.then === 'function') {
+      status.then(null, () => {})
+      const error = new Error(`${name} suspended in a synchronous engine call`)
+      poison(engine, error)
+      throw error
+    }
+    return check(module, status)
   } catch (error) {
     if (isFatalWasmError(error)) poison(engine, error)
     throw error
@@ -667,7 +677,7 @@ function runLegacyJob(handle, id, job, prepared) {
   void execution.then((finished) => finalizeFinishedJob(handle, id, finished))
 }
 
-function runJob(handle, data, rejectWhenBusy = true) {
+function runJob(handle, data, rejectWhenBusy = false) {
   if (handle.destroying) return Promise.reject(new Error('Model is not loaded'))
   if (handle.finetuneJobId !== null || handle.pendingFinetuneAdmission) {
     return Promise.reject(busyError())
@@ -718,7 +728,7 @@ function runJob(handle, data, rejectWhenBusy = true) {
       try {
         await hydrateJobFiles(handle, prepared)
         job.cachePaths = prepared.cachePaths
-        await callSync(
+        await call(
           handle,
           'qvac_web_submit',
           ['number', 'number', 'number', 'string'],
@@ -730,7 +740,7 @@ function runJob(handle, data, rejectWhenBusy = true) {
         )
         job.submitted = true
         if (job.cancelled) {
-          callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+          await call(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
         }
         handle.activeSlots = callSync(handle, 'qvac_web_active_slots', ['number'], [handle.native])
       } catch (error) {
@@ -760,8 +770,10 @@ async function cancelJob(
     return
   }
   if (handle.cooperative && handle.native) {
+    // Cancelling an admitted job tears its slot down, which synchronizes with
+    // the GPU and so may suspend.
     await enqueue(() =>
-      callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+      call(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
     )
     schedulePump()
   }
@@ -972,7 +984,9 @@ function cacheOperation(handle, cacheKey, discard) {
           if (await hydrateFile(module, cacheKey)) handle.hydratedPaths.add(cacheKey)
         }
         if (!discard) ensureParentDirectory(module, cacheKey)
-        callSync(
+        // A cooperative save runs in this call and reads state back from the
+        // GPU, which can suspend.
+        await call(
           handle,
           'qvac_web_cache_request',
           ['number', 'number', 'string', 'number'],
@@ -1049,7 +1063,9 @@ function destroyInstance(handle) {
               }
               await persistTree(engine.module, path)
             }
-            callSync(handle, 'qvac_web_destroy', ['number'], [native])
+            // Destroying flushes resident caches, reading state back from the
+            // GPU, which can suspend.
+            await call(handle, 'qvac_web_destroy', ['number'], [native])
           } catch (error) {
             if (!handle.failure) throw error
           }

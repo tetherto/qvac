@@ -478,7 +478,8 @@ interface LlmLlamacpp {
    * and queued, across all concurrent `run()` calls — plus any finetuning in
    * progress (its pause checkpoint is removed so the next `finetune()` starts
    * fresh). For cancelling a single request or batch group, use
-   * `response.cancel()` on that call's response instead.
+   * `response.cancel()` on that call's response instead. Resolves once the
+   * cancelled work has stopped, so a following `run()` is not refused as busy.
    */
   cancel(): Promise<void>;
   pause(): Promise<void>;
@@ -995,7 +996,8 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   /**
    * Cancel finetuning and remove the pause checkpoint so the next
    * `finetune()` call starts fresh instead of resuming. Also cancels
-   * any inference job in flight.
+   * any inference job in flight. Resolves once the cancelled work has
+   * stopped, so a following `run()` is not refused as busy.
    */
   async cancel(): Promise<void> {
     if (this.addon?.cancel) {

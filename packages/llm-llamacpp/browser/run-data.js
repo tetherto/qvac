@@ -4,6 +4,40 @@ const { pathParts } = require('./persistent-files.js')
 
 let nextBatchPromptId = 1n
 
+function isMediaPath(item) {
+  return (
+    item !== null &&
+    typeof item === 'object' &&
+    item.type === 'media' &&
+    typeof item.content === 'string' &&
+    item.content !== ''
+  )
+}
+
+// The engine cannot open a media path in the browser: its files live in the
+// worker, not the engine's filesystem. Bytes arrive as top-level media items
+// and leave content-less markers in the text, so only a path is rejected.
+function rejectMediaPaths(input) {
+  if (typeof input !== 'string') return
+  let messages
+  try {
+    messages = JSON.parse(input)
+  } catch {
+    return
+  }
+  if (!Array.isArray(messages)) return
+  for (const message of messages) {
+    if (
+      isMediaPath(message) ||
+      (Array.isArray(message?.content) && message.content.some(isMediaPath))
+    ) {
+      throw new TypeError(
+        'Media paths are not supported in the browser build; pass the media bytes as a Uint8Array'
+      )
+    }
+  }
+}
+
 function prepareMessages(messages) {
   const media = []
   const jsonMessages = []
@@ -12,6 +46,7 @@ function prepareMessages(messages) {
 
   for (const message of messages) {
     if (message.type !== 'media') {
+      if (message.type === 'text') rejectMediaPaths(message.input)
       const normalized = { ...message }
       if (typeof message.cacheKey === 'string' && message.cacheKey.length > 0) {
         normalized.cacheKey = `/${pathParts(message.cacheKey).join('/')}`
