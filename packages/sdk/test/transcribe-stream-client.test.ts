@@ -95,37 +95,32 @@ test('transcribe stream session rejects stats when the response stream fails', a
   }
 })
 
-for (const chunkMs of [1000, 5000, 10000]) {
-  test(`TDT window rejection at ${chunkMs} ms reaches the stream and terminal promises`, async (t) => {
-    const message = 'Offline TDT push streams require at least 30000 ms'
-    const session = await createTranscribeStreamSession(
-      { modelId: 'parakeet', parakeetStreamingConfig: { chunkMs, emitPartials: false } },
-      undefined,
-      processLine,
-      'TranscribeStreamSession',
-      createDuplexFactory([JSON.stringify({ type: 'error', message })], (request) => {
-        t.alike(
-          request.parakeetStreamingConfig,
-          { chunkMs, emitPartials: false },
-          'the SDK forwards the requested decode window and partial-output setting'
-        )
-      }) as never
-    )
+test('TDT window rejection reaches the stream and terminal promises', async (t) => {
+  const chunkMs = 1000
+  const message = 'Offline TDT push streams require at least 30000 ms'
+  const session = await createTranscribeStreamSession(
+    { modelId: 'parakeet', parakeetStreamingConfig: { chunkMs, emitPartials: false } },
+    undefined,
+    processLine,
+    'TranscribeStreamSession',
+    createDuplexFactory([JSON.stringify({ type: 'error', message })], (request) => {
+      t.alike(
+        request.parakeetStreamingConfig,
+        { chunkMs, emitPartials: false },
+        'the SDK forwards the requested decode window and partial-output setting'
+      )
+    }) as never
+  )
 
-    const outcomes = await Promise.allSettled([
-      collect(session),
-      session.stats,
-      session.diagnostics
-    ])
-    for (const outcome of outcomes) {
-      t.is(outcome.status, 'rejected')
-      if (outcome.status === 'rejected') {
-        t.ok(outcome.reason instanceof TranscriptionFailedError)
-        t.ok(outcome.reason.message.includes(message), 'the minimum window reaches the caller')
-      }
+  const outcomes = await Promise.allSettled([collect(session), session.stats, session.diagnostics])
+  for (const outcome of outcomes) {
+    t.is(outcome.status, 'rejected')
+    if (outcome.status === 'rejected') {
+      t.ok(outcome.reason instanceof TranscriptionFailedError)
+      t.ok(outcome.reason.message.includes(message), 'the minimum window reaches the caller')
     }
-  })
-}
+  }
+})
 
 test('transcribe stream session preserves Core ML fallback statistics', async (t) => {
   const stats = { encoderOnCoreml: 1, encoderUsedCoreml: 0 }

@@ -383,7 +383,7 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>
  * Per-call overrides for parakeet's duplex streaming session.
  *
  * Each field maps to its `streaming*`-prefixed counterpart in
- * `parakeetConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
+ * `modelConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
  * prefix is intentionally dropped here because every field on this
  * object is already namespaced under the `parakeetStreamingConfig`
  * field of `transcribeStream({ ... })`. Any field omitted falls back
