@@ -2,16 +2,19 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
 import {
   getLoadedModelInfo,
+  getRuntimeCapabilities,
   resume,
   state,
   suspend,
   type LifecycleState,
-  type LoadedModelInfo
+  type LoadedModelInfo,
+  type RuntimeCapability
 } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { isLifecycleBlockedError } from '@/serve/core/lifecycle'
 import { errorResponses } from '@/serve/lib/error-responses'
 import {
+  runtimeCapabilitiesResult,
   runtimeModelsResult,
   runtimeState,
   type RuntimeModel
@@ -32,19 +35,29 @@ Read the runtime lifecycle state, backed by the SDK's \`state()\`. Answers
 while the runtime is suspended.
 
 \`active\` serves every request. While \`suspending\`, \`suspended\` or
-\`resuming\`, every route except this one, suspend and resume answers
-\`503 runtime_suspended\`.
+\`resuming\`, every route except this one, capabilities, suspend and resume
+answers \`503 runtime_suspended\`.
 `.trim(),
   models: `
 List the \`serve.models\` aliases whose model is loaded, with the SDK's
 \`getLoadedModelInfo()\` for each. Aliases that are configured but not loaded
 are left out; \`/v1/models\` lists those.
 `.trim(),
+  capabilities: `
+List the capability contracts the runtime's registered plugins declare, with
+the major version of each, backed by the SDK's \`getRuntimeCapabilities()\`.
+Reads plugin registration only, so it answers while the runtime is suspended
+and loads no model.
+
+An entry means a registered plugin declares the contract; a call still uses
+the plugin of the model it names, so an operation in \`partialOperations\` can
+fail for a given model.
+`.trim(),
   suspend: `
 Suspend the runtime, backed by the SDK's \`suspend()\`. **Admin-only:** needs
 \`--enable-admin\`.
 
-P2P resources pause and every route except state, suspend and resume
+P2P resources pause and every route except state, capabilities, suspend and resume
 answers \`503 runtime_suspended\` until \`POST /qvac/v1/runtime/resume\`. A
 request whose SDK call is already running finishes; one still waiting, on a
 model load say, gets \`503 runtime_suspended\`. Idempotent.
@@ -65,9 +78,16 @@ export interface RuntimeOperations {
   suspend: () => Promise<void>
   resume: () => Promise<void>
   getLoadedModelInfo: (params: { modelId: string }) => Promise<LoadedModelInfo>
+  getRuntimeCapabilities: () => Promise<RuntimeCapability[]>
 }
 
-const SDK_OPERATIONS: RuntimeOperations = { state, suspend, resume, getLoadedModelInfo }
+const SDK_OPERATIONS: RuntimeOperations = {
+  state,
+  suspend,
+  resume,
+  getLoadedModelInfo,
+  getRuntimeCapabilities: () => getRuntimeCapabilities()
+}
 
 export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyPluginAsyncZod {
   // lunte-disable-next-line require-await
@@ -135,6 +155,32 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
         }
       },
       async () => ({ object: 'runtime.state' as const, state: await readState() })
+    )
+
+    app.get(
+      '/qvac/v1/runtime/capabilities',
+      {
+        config: { allowWhileSuspended: true },
+        schema: {
+          response: {
+            200: runtimeCapabilitiesResult,
+            ...errorResponses({
+              500: { runtime_query_failed: 'The SDK could not report runtime capabilities' }
+            })
+          },
+          tags: ['Runtime'],
+          summary: 'List the runtime capability contracts',
+          description: descriptions.capabilities
+        }
+      },
+      async () => {
+        try {
+          return { object: 'list' as const, data: await ops.getRuntimeCapabilities() }
+        } catch (err) {
+          qvac.logger.error(`  runtime capabilities failed: ${errorMessage(err)}`)
+          throw new HttpError(500, 'runtime_query_failed', 'Failed to report runtime capabilities.')
+        }
+      }
     )
 
     app.get(

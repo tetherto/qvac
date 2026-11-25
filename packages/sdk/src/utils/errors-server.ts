@@ -414,6 +414,60 @@ export class RequestRejectedByPolicyError extends QvacErrorBase {
   }
 }
 
+/** The limit a request ran past: see `DeadlineExceededError`. */
+export type DeadlineBoundary = 'queue' | 'load' | 'run' | 'idle'
+
+/**
+ * Thrown when a request runs past a deadline the runtime enforces. The caller
+ * receives it when the deadline passes; the request's native work is told to
+ * stop and keeps its admission slot until it has stopped.
+ *
+ * `boundary` names the limit: `queue` (waiting for an admission slot), `load`
+ * (loading a model), `run` (from admission to the end) or `idle` (time since
+ * the last progress). `capability` is the capability contract the limit was
+ * configured under; it is absent for `loadModel` and for a plugin handler
+ * outside every contract.
+ */
+export class DeadlineExceededError extends QvacErrorBase {
+  readonly requestId: string
+  readonly boundary: DeadlineBoundary
+  readonly timeoutMs: number
+  readonly capability: string | undefined
+  readonly modelId: string | undefined
+
+  constructor(
+    requestId: string,
+    boundary: DeadlineBoundary,
+    timeoutMs: number,
+    capability?: string,
+    modelId?: string,
+    cause?: unknown
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DEADLINE_EXCEEDED,
+        [requestId, boundary, timeoutMs],
+        cause
+      )
+    )
+    this.requestId = requestId
+    this.boundary = boundary
+    this.timeoutMs = timeoutMs
+    this.capability = capability
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      requestId: this.requestId,
+      boundary: this.boundary,
+      timeoutMs: this.timeoutMs,
+      ...(this.capability !== undefined && { capability: this.capability }),
+      ...(this.modelId !== undefined && { modelId: this.modelId })
+    }
+  }
+}
+
 /**
  * Thrown when a long-running inference request was cancelled before
  * completion. The `events` stream on `CompletionRun` ends normally with
@@ -1023,6 +1077,60 @@ export class ModelLeasedError extends QvacErrorBase {
 
   toErrorResponseFields(): Record<string, unknown> {
     return { modelId: this.modelId, leaseCount: this.leaseCount }
+  }
+}
+
+/**
+ * A session with a grant called an operation the grant does not cover.
+ * `required` is the permission the call needs, or `null` for a plugin handler
+ * that no capability contract of its plugin lists, which no grant can cover.
+ */
+export class CapabilityNotGrantedError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+  readonly required: string | null
+
+  constructor(operation: string, sessionId: string, required: string | null, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CAPABILITY_NOT_GRANTED,
+        [
+          operation,
+          sessionId,
+          required === null
+            ? 'no capability contract lists it, so no grant covers it'
+            : `it needs the permission "${required}"`
+        ],
+        cause
+      )
+    )
+    this.operation = operation
+    this.sessionId = sessionId
+    this.required = required
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId, required: this.required }
+  }
+}
+
+/** An `openSession` whose grant names a permission the runtime does not have. */
+export class SessionGrantInvalidError extends QvacErrorBase {
+  readonly sessionId: string
+  readonly permission: string
+  readonly details: string
+
+  constructor(sessionId: string, permission: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.SESSION_GRANT_INVALID, [sessionId, details], cause)
+    )
+    this.sessionId = sessionId
+    this.permission = permission
+    this.details = details
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId, permission: this.permission, details: this.details }
   }
 }
 

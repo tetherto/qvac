@@ -7,12 +7,14 @@ const logger = getEngineLogger()
 // `closeSession` only releases local state (requests, vector indexes, model
 // leases), so a session can end while the runtime is suspended. Refusing it
 // would leave the session's resources held, since the client has already
-// ended the handle.
+// ended the handle. `getRuntimeCapabilities` only reads the plugin registry,
+// and a host reports capabilities while it is paused.
 const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set([
   'suspend',
   'resume',
   'state',
-  'closeSession'
+  'closeSession',
+  'getRuntimeCapabilities'
 ])
 
 export interface SuspendableSwarm {

@@ -38,6 +38,8 @@ import kotlin.concurrent.Volatile
 class QvacSession internal constructor(
     val sessionId: String,
     val name: String?,
+    /** The permissions the session was opened with; `null` when it is unrestricted. */
+    val grant: List<String>?,
     private val owner: QvacClient,
     private val transport: SessionTransport,
     json: Json,
@@ -206,13 +208,23 @@ class QvacOwnerOnlyException(val operation: String, val sessionId: String) :
 /**
  * Opens a caller session and returns its handle at once. The `openSession`
  * round trip runs in the background; calls on the handle wait for it.
+ *
+ * [grant] limits the session to the listed permissions, one per operation:
+ * `<capability ID>/<operation>`, such as `transcription/transcribe`, or
+ * `runtime/<operation>` for an operation the runtime serves itself, such as
+ * `runtime/loadModel` (the sessions docs page lists them). `null` leaves the session
+ * unrestricted; an empty list allows only operations that need no
+ * permission. The worker fails the open with `SESSION_GRANT_INVALID` for a
+ * permission it does not have, and a call outside the grant with
+ * `CAPABILITY_NOT_GRANTED`.
  */
-fun QvacClient.openSession(name: String? = null): QvacSession {
+fun QvacClient.openSession(name: String? = null, grant: List<String>? = null): QvacSession {
     val sessionId = qvacRequestId()
+    val granted = grant?.toList()
     // The handle is registered before the open starts, so a worker loss or an
     // owner close during the open ends it too.
     val opened = scope.async(start = CoroutineStart.LAZY) {
-        openSession(OpenSessionRequest(sessionId = sessionId, name = name))
+        openSession(OpenSessionRequest(sessionId = sessionId, name = name, grant = granted))
         Unit
     }
     val transport = SessionTransport(transportForSessions, sessionId, opened)
@@ -221,5 +233,5 @@ fun QvacClient.openSession(name: String? = null): QvacSession {
     // for its later calls, and the client lets it go.
     opened.invokeOnCompletion { cause -> if (cause != null) unregisterSession(transport) }
     opened.start()
-    return QvacSession(sessionId, name, this, transport, json)
+    return QvacSession(sessionId, name, granted, this, transport, json)
 }

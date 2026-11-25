@@ -292,7 +292,8 @@ export function registeredToolWaits(
         sessionId: request.sessionId,
         kind: 'completion',
         modelId: request.modelId,
-        maxConcurrentPerModel: Infinity
+        maxConcurrentPerModel: Infinity,
+        waitsOnCaller: true
       })
       return await reader.waitFor(callId, undefined, ctx.signal)
     }
