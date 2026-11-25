@@ -78,6 +78,7 @@ module.exports = {
       /^\/\.env\.bak-/, // env backups
       /^\/\.npmrc$/, // registry credentials — required only while installing host dependencies
       /^\/snap\//, // Snapcraft outputs — never recursively package previous revisions
+      /^\/\.qvac-cache(\/|$)/, // CI model cache — the app reads models from its configured cache directory
       /^\/\.qvac-worker-backup\// // desktop worker snapshot, restored in postPackage
     ]
   },
