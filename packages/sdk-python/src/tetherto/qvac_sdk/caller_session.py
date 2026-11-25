@@ -20,7 +20,7 @@ session management calls (`open_session`, `close_session`) raise
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterable, AsyncIterator, Callable
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Sequence
 from typing import Any
 
 from ._api import generate_client_request_id
@@ -148,11 +148,14 @@ class Session:
         session_id: str,
         name: str | None,
         on_closed: Callable[[Session], None] | None = None,
+        grant: tuple[str, ...] | None = None,
     ) -> None:
         self._owner = owner
         self._on_closed = on_closed
         self.session_id = session_id
         self.name = name
+        # The permissions the session was opened with; None when unrestricted.
+        self.grant = grant
         self._transport = SessionTransport(owner, session_id)
 
     @property
@@ -192,12 +195,22 @@ async def open_session(
     owner: Transport,
     name: str | None = None,
     *,
+    grant: Sequence[str] | None = None,
     on_closed: Callable[[Session], None] | None = None,
 ) -> Session:
     """Registers a new session on the worker and returns its handle. `owner`
     is the client's own transport: a session's transport stamps its id over
     every call, so a session opened through another session would run as
-    its parent. `on_closed` runs when the handle's own `close()` ends it."""
+    its parent. `on_closed` runs when the handle's own `close()` ends it.
+
+    `grant` limits the session to the listed permissions, one per operation:
+    "<capability ID>/<operation>", such as "transcription/transcribe", or
+    "runtime/<operation>" for an operation the runtime serves itself, such as
+    "runtime/loadModel" (the sessions docs page lists them). None leaves the session
+    unrestricted; an empty list allows only operations that need no
+    permission. The worker raises `SessionGrantInvalidError` for a permission
+    it does not have, and `CapabilityNotGrantedError` for a call outside the
+    grant."""
     if isinstance(owner, SessionTransport):
         raise ValueError(
             f'session "{owner.session_id}" cannot open a session; '
@@ -207,7 +220,10 @@ async def open_session(
     payload: dict[str, Any] = {"type": "openSession", "sessionId": session_id}
     if name is not None:
         payload["name"] = name
-    session = Session(owner, session_id, name, on_closed)
+    granted = tuple(grant) if grant is not None else None
+    if granted is not None:
+        payload["grant"] = list(granted)
+    session = Session(owner, session_id, name, on_closed, granted)
     # The owner transport ends its sessions when it closes or loses its worker,
     # including ones opened here directly rather than through `Client`. The
     # handle is tracked before the open is sent, so a close or a lost worker

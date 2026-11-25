@@ -2,6 +2,7 @@ import type RPC from 'bare-rpc'
 import {
   requestSchema,
   responseSchema,
+  UNTRACKED_REQUEST_TYPES,
   PROFILING_TRAILER_KEY,
   nowMs,
   shouldProfile,
@@ -326,6 +327,16 @@ async function stampSessionRequest<T extends Request>(
   return { ...request, sessionId }
 }
 
+/**
+ * `rpcOptions.deadline` travels on the request body, where the worker reads it
+ * and enforces it. Request types that register no work take no deadline.
+ */
+function stampDeadline<T extends Request>(request: T, options?: RPCOptions): T {
+  const deadline = options?.deadline
+  if (deadline === undefined || UNTRACKED_REQUEST_TYPES.has(request.type)) return request
+  return { ...request, deadline }
+}
+
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
   return value instanceof Promise
 }
@@ -405,7 +416,7 @@ export async function send<T extends Request>(
   options?: RPCOptions,
   rpc?: RPC
 ): Promise<Response> {
-  const stamped = stampSession(input, options)
+  const stamped = stampSession(stampDeadline(input, options), options)
   const request = isPromise(stamped) ? await stamped : stamped
   assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
@@ -513,7 +524,7 @@ export async function* stream<T extends Request>(
   rpc?: RPC
 ): AsyncGenerator<Response> {
   if (options.signal?.aborted) return
-  const stamped = stampSession(input, options)
+  const stamped = stampSession(stampDeadline(input, options), options)
   const request = isPromise(stamped) ? await stamped : stamped
   assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
@@ -721,7 +732,7 @@ export async function duplex<T extends Request>(
   input: T,
   options?: RPCOptions
 ): Promise<DuplexSession> {
-  const stamped = stampSession(input, options)
+  const stamped = stampSession(stampDeadline(input, options), options)
   const request = isPromise(stamped) ? await stamped : stamped
   assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling)

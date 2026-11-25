@@ -7,12 +7,12 @@ schemaType: HowTo
 
 ## Overview
 
-Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). Cancellation behavior depends on the model and operation. See the coverage callout below.
+Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`) and resource-acquisition calls (`loadModel()`, `downloadAsset()`). Cancellation behavior depends on the model and operation. See the coverage callout below.
 
 Use `requestId` to stop a specific call when the operation exposes one. Use `modelId` for model unload, app shutdown, or admin sweeps. Whether cancellation interrupts native computation depends on the operation's addon.
 
 <Callout title="Coverage" type="info">
-**Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, `startRpcServer()`, `discoverRpcServers()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+**Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, `startRpcServer()`, and `discoverRpcServers()`.
 
 **Accepted by `requestId` but also aborts other in-flight calls on the same model**: `embed()` and `embedBatch()` with llama.cpp embedding models, and `transcribe()`.
 
@@ -36,7 +36,7 @@ MegaLoc calls through [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](
 ## Functions
 
 1. [`completion()`](/sdk/reference/api#completion), [`batchCompletion()`](/sdk/ai-capabilities/batch-processing), [`audioGen()`](/sdk/ai-capabilities/music-generation), [`diffusion()`](/sdk/reference/api#diffusion), [`upscale()`](/sdk/reference/api#upscale), and [`ocr()`](/sdk/reference/api#ocr) — return a run object that exposes a synchronous `requestId` field.
-2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`estimateDisparity()`](/sdk/reference/api#estimatedisparity), [`vla()`](/sdk/reference/api#vla), [`invokePlugin()`](/sdk/reference/api#invokeplugin), and the [`rag*()`](/sdk/ai-capabilities/rag) workspace operations (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
+2. [`loadModel()`](/sdk/reference/api#loadmodel), [`downloadAsset()`](/sdk/reference/api#downloadasset), [`embed()`](/sdk/reference/api#embed), [`decide()`](/sdk/reference/api#decide), [`rerank()`](/sdk/reference/api#rerank), [`transcribe()`](/sdk/reference/api#transcribe), [`classify()`](/sdk/reference/api#classify), [`estimateDisparity()`](/sdk/reference/api#estimatedisparity), [`vla()`](/sdk/reference/api#vla), and [`invokePlugin()`](/sdk/reference/api#invokeplugin) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
 3. [`cancel()`](/sdk/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
@@ -48,7 +48,7 @@ Pending `startRpcServer()` and `discoverRpcServers()` calls also return `Promise
 Two shapes show up across the SDK surface:
 
 - **`completion()`, `audioGen()`, `diffusion()`, `upscale()` and `ocr()`** — return run objects with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
-- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `estimateDisparity()`, `vla()`, `invokePlugin()`, `ragIngest()`, `ragSaveEmbeddings()`, and `ragReindex()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
+- `loadModel()`, `downloadAsset()`, `embed()`, `embedBatch()`, `decide()`, `rerank()`, `transcribe()`, `classify()`, `estimateDisparity()`, `vla()`, and `invokePlugin()` return `Promise<T> & { requestId: string }`. The promise exposes `requestId` before it settles, so a stop button can target the call immediately. Awaiting the promise returns the operation's result.
 
 ```ts
 // Pattern 1 — completion: requestId is on the returned run
@@ -88,7 +88,7 @@ Outcome on the consumer side:
 - The `final` promise rejects with [`InferenceCancelledError`](/sdk/reference/api#errors) (code `52419`).
 - For `audioGen()`, the progress stream closes, the terminal frame carries `stopReason: "cancelled"`, and both `audio` and `stats` reject with `InferenceCancelledError`.
 
-Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `startRpcServer`, `discoverRpcServers`, `embed`, `decide`, `rerank`, `transcribe`, `rag*`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
+Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `startRpcServer`, `discoverRpcServers`, `embed`, `decide`, `rerank`, `transcribe`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
 
 Only the cancelled call stops — other in-flight `completion()`, `batchCompletion()` and LLM `translate()` calls on the same `modelId` keep running. Use this form when you want a per-request stop button that doesn't disturb the rest of your workload.
 
@@ -151,9 +151,9 @@ AudioGen is different: targeted or broad cancellation is **hard**. The plugin ca
 
 ## Soft-cancel caveat for `loadModel`
 
-The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal today — a cancel that lands during the load phase still rejects the client's promise with `InferenceCancelledError`, but the addon finishes loading the model into memory in the background.
+The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal. A cancel that lands during the load phase takes effect when the addon has finished loading the model: the runtime then unloads the model instead of registering it, and the client's promise rejects with `InferenceCancelledError`. The call stays pending until then.
 
-The result is an **orphan model**: registered as loaded server-side, but the client believes the call failed. If you re-trigger `loadModel()` shortly after a cancel, prefer calling `unloadModel({ modelId })` first (using the model id you can derive deterministically from `modelSrc`) to avoid leaking RAM. A per-load cancel surface on the addon would close this gap; tracked as a follow-up.
+A `loadModel()` that fails on its [`loadMs` deadline](/sdk/runtime/deadlines#what-happens-on-expiry) rejects at the deadline, without waiting for the load, and the runtime unloads the model the same way once its load finishes. In both cases a `loadModel()` of the same configuration issued in the meantime waits for that unload and then loads the model again.
 
 ## `cancelFinetune` timing change
 
@@ -193,6 +193,8 @@ const run = completion({ modelId, history, stream: true, rpcOptions: { timeout: 
 ```
 
 A timeout also cancels the request on the worker, so the inference job stops.
+
+`timeout` is enforced by the client that sets it. To bound a request on the runtime itself, for every client and for the requests queued behind it, see [Deadlines](/sdk/runtime/deadlines).
 
 <Callout type="info">
 **Python:** `completion()` takes no per-call `timeout`, so this applies to the JS/TS SDK only.

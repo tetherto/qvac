@@ -9,6 +9,8 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
+  type DeadlineBoundary,
   TranslationFailedError,
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
@@ -19,7 +21,8 @@ import {
   ModelLeasedError,
   ModelReconfiguredError,
   OwnerOnlyError,
-  RAGWorkspaceBusyError
+  CapabilityNotGrantedError,
+  SessionGrantInvalidError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -113,6 +116,8 @@ function readOptionalStringField(
 
 type ErrorReconstructor = (response: ErrorResponse) => Error
 
+const DEADLINE_BOUNDARIES: ReadonlySet<string> = new Set(['queue', 'load', 'run', 'idle'])
+
 /**
  * Map of server-thrown `QvacErrorBase` subclasses that need to survive
  * the RPC boundary as their original class — `err instanceof
@@ -205,6 +210,17 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       response.cause
     )
   },
+  DEADLINE_EXCEEDED: (response) => {
+    const boundary = readStringField(response.typedFields, 'boundary', 'run')
+    return new DeadlineExceededError(
+      readStringField(response.typedFields, 'requestId', ''),
+      DEADLINE_BOUNDARIES.has(boundary) ? (boundary as DeadlineBoundary) : 'run',
+      readOptionalNumberField(response.typedFields, 'timeoutMs') ?? 0,
+      readOptionalStringField(response.typedFields, 'capability'),
+      readOptionalStringField(response.typedFields, 'modelId'),
+      response.cause
+    )
+  },
   CONTEXT_OVERFLOW: (response) => {
     return new ContextOverflowError(
       {
@@ -256,9 +272,18 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readStringField(response.typedFields, 'modelId', ''),
       response.cause
     ),
-  RAG_WORKSPACE_BUSY: (response) =>
-    new RAGWorkspaceBusyError(
-      readStringField(response.typedFields, 'workspace', ''),
+  CAPABILITY_NOT_GRANTED: (response) =>
+    new CapabilityNotGrantedError(
+      readStringField(response.typedFields, 'operation', ''),
+      readStringField(response.typedFields, 'sessionId', ''),
+      readOptionalStringField(response.typedFields, 'required') ?? null,
+      response.cause
+    ),
+  SESSION_GRANT_INVALID: (response) =>
+    new SessionGrantInvalidError(
+      readStringField(response.typedFields, 'sessionId', ''),
+      readStringField(response.typedFields, 'permission', ''),
+      readStringField(response.typedFields, 'details', ''),
       response.cause
     )
 }

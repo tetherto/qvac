@@ -76,6 +76,8 @@ runs:
         HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
         HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         TRIGGER_ID: ${{ github.event.workflow_run.id }}
+        DISPATCH_PR: ${{ github.event.inputs.pr }}
+        DISPATCH_SHA: ${{ github.event.inputs.sha }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         BRANCHES: ${{ inputs.branches }}
         PATHS: ${{ inputs.paths }}

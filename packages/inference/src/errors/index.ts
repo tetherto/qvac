@@ -487,6 +487,56 @@ export class RequestRejectedByPolicyError extends QvacErrorBase {
   }
 }
 
+/** The limit a request ran past: see `DeadlineExceededError`. */
+export type DeadlineBoundary = 'queue' | 'load' | 'run' | 'idle'
+
+/**
+ * Thrown when a request runs past a deadline the runtime enforces. The caller
+ * receives it when the deadline passes; the request's native work is told to
+ * stop and keeps its admission slot until it has stopped.
+ *
+ * `boundary` names the limit: `queue` (waiting for an admission slot), `load`
+ * (loading a model), `run` (from admission to the end) or `idle` (time since
+ * the last progress). `capability` is the capability contract the limit was
+ * configured under; it is absent for `loadModel` and for a plugin handler
+ * outside every contract.
+ */
+export class DeadlineExceededError extends QvacErrorBase {
+  readonly requestId: string
+  readonly boundary: DeadlineBoundary
+  readonly timeoutMs: number
+  readonly capability: string | undefined
+  readonly modelId: string | undefined
+
+  constructor(
+    requestId: string,
+    boundary: DeadlineBoundary,
+    timeoutMs: number,
+    capability?: string,
+    modelId?: string,
+    cause?: unknown
+  ) {
+    super(
+      createErrorOptions(ERROR_CODES.DEADLINE_EXCEEDED, [requestId, boundary, timeoutMs], cause)
+    )
+    this.requestId = requestId
+    this.boundary = boundary
+    this.timeoutMs = timeoutMs
+    this.capability = capability
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      requestId: this.requestId,
+      boundary: this.boundary,
+      timeoutMs: this.timeoutMs,
+      ...(this.capability !== undefined && { capability: this.capability }),
+      ...(this.modelId !== undefined && { modelId: this.modelId })
+    }
+  }
+}
+
 /**
  * Thrown when a long-running inference request was cancelled before
  * completion. The `events` stream on `CompletionRun` ends normally with
@@ -626,112 +676,6 @@ export class AudioEncodeFailedError extends QvacErrorBase {
   }
   toErrorResponseFields(): Record<string, unknown> {
     return { format: this.format, ...(this.details !== undefined && { details: this.details }) }
-  }
-}
-
-// ============== RAG operations ==============
-
-export class RAGSaveFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_SAVE_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGSearchFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_SEARCH_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGDeleteFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_DELETE_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGChunkFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_CHUNK_FAILED, details ? [details] : undefined, cause))
-  }
-}
-
-export class RAGCloseWorkspaceFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGListWorkspacesFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_LIST_WORKSPACES_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class RAGUnknownOperationError extends QvacErrorBase {
-  constructor(operation: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_UNKNOWN_OPERATION, [operation], cause))
-  }
-}
-
-export class RAGHyperDBFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_HYPERDB_FAILED, [details], cause))
-  }
-}
-
-export class RAGWorkspaceModelMismatchError extends QvacErrorBase {
-  constructor(workspace: string, existingModelId: string, newModelId: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH,
-        [workspace, existingModelId, newModelId],
-        cause
-      )
-    )
-  }
-}
-
-export class RAGWorkspaceNotFoundError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_NOT_FOUND, [workspace], cause))
-  }
-}
-
-export class RAGWorkspaceInUseError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_IN_USE, [workspace], cause))
-  }
-}
-
-/** A RAG operation on a workspace that another session's operation is using. */
-export class RAGWorkspaceBusyError extends QvacErrorBase {
-  readonly workspace: string
-
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_BUSY, [workspace], cause))
-    this.workspace = workspace
-  }
-
-  toErrorResponseFields(): Record<string, unknown> {
-    return { workspace: this.workspace }
-  }
-}
-
-export class RAGWorkspaceNotOpenError extends QvacErrorBase {
-  constructor(workspace: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_NOT_OPEN, [workspace], cause))
   }
 }
 
@@ -1172,6 +1116,58 @@ export class ModelReconfiguredError extends QvacErrorBase {
 
   toErrorResponseFields(): Record<string, unknown> {
     return { modelId: this.modelId }
+  }
+}
+
+/**
+ * A session with a grant called an operation the grant does not cover.
+ * `required` is the permission the call needs, or `null` for a plugin handler
+ * that no capability contract of its plugin lists, which no grant can cover.
+ */
+export class CapabilityNotGrantedError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+  readonly required: string | null
+
+  constructor(operation: string, sessionId: string, required: string | null, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.CAPABILITY_NOT_GRANTED,
+        [
+          operation,
+          sessionId,
+          required === null
+            ? 'no capability contract lists it, so no grant covers it'
+            : `it needs the permission "${required}"`
+        ],
+        cause
+      )
+    )
+    this.operation = operation
+    this.sessionId = sessionId
+    this.required = required
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId, required: this.required }
+  }
+}
+
+/** An `openSession` whose grant names a permission the runtime does not have. */
+export class SessionGrantInvalidError extends QvacErrorBase {
+  readonly sessionId: string
+  readonly permission: string
+  readonly details: string
+
+  constructor(sessionId: string, permission: string, details: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.SESSION_GRANT_INVALID, [sessionId, details], cause))
+    this.sessionId = sessionId
+    this.permission = permission
+    this.details = details
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId, permission: this.permission, details: this.details }
   }
 }
 

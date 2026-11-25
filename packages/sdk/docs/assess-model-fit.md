@@ -147,8 +147,9 @@ placement.
 The fitter runs for `llamacpp-completion`, `llamacpp-embedding`,
 `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`,
 `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml`, `sdcpp-generation`,
-`ggml-ocr`, `nmtcpp-translation`, `ggml-classification` and
-`ggml-image-embedding`, on every platform the engine's addon is built for.
+`ggml-ocr`, `nmtcpp-translation`, `ggml-classification`,
+`ggml-image-embedding` and `ggml-stereo-depth`, on every platform the engine's
+addon is built for.
 
 What each engine's rows cover:
 
@@ -178,9 +179,15 @@ What each engine's rows cover:
   classification load is one host row. A MegaLoc load is the selected device,
   then the host. Both read the model file itself, so they answer for files on
   disk only.
+- **stereo depth**: the measured weights and the compute one 1280x720 pair
+  takes, on the selected device and then the host. That is the largest size
+  BridgeDepth runs the model at, since a larger pair is downsampled first. A
+  larger pair still needs bigger host buffers, which the rows leave out. It
+  reads the model file itself, so it answers for files on disk only.
 
 Everything else is `unknown`: `onnx-tts`, `ggml-vla`, a translation,
-classification or image-embedding model not yet downloaded, MOSS-Speech, a TTS load with a LavaSR
+classification, image-embedding or stereo-depth model not yet downloaded,
+MOSS-Speech, a TTS load with a LavaSR
 enhancer or denoiser, a diffusion world load without a `sceneSrc`, a load naming
 an ESRGAN checkpoint not yet downloaded (the catalog's `.pth` checkpoints have no
 registry description), a split model, a multimodal completion load naming a

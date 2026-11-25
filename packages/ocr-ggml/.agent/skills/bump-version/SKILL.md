@@ -191,9 +191,9 @@ Look up the git tag prefix in `packages/<pkg>/project.json`: `metadata.publish.t
 Addons get a **git tag only, no GitHub Release** — the release workflow calls `create-release-tag.yml`
 since #2602. Do not promise a Releases-page entry; only the SDK publishes one.
 
-Then tell the user the next step is `/release <pkg>`, which cuts `release-<pkg>-<version>`, dispatches
-its release workflow (`publish-npm.yml`), and pauses at
-the human-only `npm` approval gate.
+Then tell the user that merging this PR into `main` starts the release: `addon-auto-release.yml`
+cuts `release-<pkg>-<version>` and starts `publish-npm.yml`, which pauses at the human-only `npm`
+approval gate. `/release <pkg>` follows that run to npm.
 
 ## Step 7 — Verify before committing
 

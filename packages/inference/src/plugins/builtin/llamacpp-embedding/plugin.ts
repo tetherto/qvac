@@ -1,5 +1,6 @@
 import EmbedLlamacpp, { assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -109,6 +110,7 @@ export const embeddingsPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.embedding],
   handlers: {
     embedBatch: defineHandler({
       requestSchema: embedBatchRequestSchema,

@@ -70,7 +70,6 @@ extra.
 | `multimodal.py`                    | `llamacpp-multimodal.ts`                               | ordered text and image `content` parts on a `completion` history; `projectionModelSrc` loaded alongside the LLM           |
 | `cancel.py`                        | `cancel-by-request-id.ts`                              | `cancel` by `request_id`, `InferenceCancelledError`                                                                       |
 | `embeddings.py`                    | `embed-p2p.ts`                                         | `embed` (`EmbedRequest`)                                                                                                  |
-| `rag_managed.py`                   | `rag/rag-hyperdb/ingest.ts`                            | `rag` (`RagRequest`) — `ingest`, `search`, `closeWorkspace` against the built-in vector store                             |
 | `rag_turbovec.py`                  | `rag/rag-turbovec.ts`                                  | `vector_index` (`VectorIndexRequest`) — TurboVec index over `embed` vectors, with snapshot `write`/`load`                 |
 | `rag_turbovec_ivf.py`              | `rag/rag-turbovec-ivf.ts`                              | `vector_index` `setIvf` on an F32 index: IVF lists, per-call `nProbe` on `search`, rebuilt after `add`, off with `None`   |
 | `rag_mongodb.py`                   | `rag/rag-mongodb.ts`                                   | `embed` into MongoDB Atlas Vector Search: `$vectorSearch` with a pre-filter (needs `pymongo`)                             |
@@ -136,6 +135,7 @@ extra.
 | `rerank.py`                        | `rerank.ts`                                            | `rerank` (`RerankRequest`): one score per document, sorted; optional GGUF path or URL argument                          |
 | `suspend_resume.py`                | `suspend-resume.ts`                                    | `suspend` / `resume` / `state`; a `completion` while suspended fails with `LIFECYCLE_OPERATION_BLOCKED`                |
 | `sessions.py`                      | `sessions.ts`                                          | `Client.open_session`: two sessions share one model by lease; a session's `cancel` reaches only its own requests         |
+| `runtime_capabilities.py`          | `runtime-capabilities.ts`                              | `get_runtime_capabilities`: the capability contracts and majors the runtime provides; loads no model                    |
 | `vla.py`                           | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |
 | `vla_pi05.py`                     | `vla-pi05.ts`                                          | π₀.₅: three camera frames, discrete state (empty `state`), required `noise`; per-stage timings                           |
 | `vla_groot.py`                    | `vla-groot.ts`                                         | GR00T patch inputs, padded continuous state, hand-laid prompt; optional `vla_set_embodiment` via `QVAC_GROOT_*` env vars |

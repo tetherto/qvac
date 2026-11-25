@@ -3,7 +3,6 @@ import {
   loadModelOptionsToRequestSchema,
   downloadAssetOptionsToRequestSchema,
   bciTranscribeStreamRequestSchema,
-  ragRequestSchema,
   startRpcServerRequestSchema,
   discoverRpcServersRequestSchema
 } from '@qvac/inference/surface'
@@ -27,7 +26,7 @@ test('RPC control requests preserve caller IDs and allow legacy requests without
 // `requestId` once, the request envelope carries it on the wire, and
 // the server uses that same value as the registry-entry key. These
 // tests pin the **envelope half** — that the request schemas accept
-// and preserve `requestId` for `loadModel`, `downloadAsset`, and `rag`.
+// and preserve `requestId` for `loadModel` and `downloadAsset`.
 //
 // The handler-side half (server keys the registry on the client's
 // `requestId`) is exercised by the per-handler tests in
@@ -89,57 +88,5 @@ test('bciTranscribeStreamRequestSchema: forwards requestId onto the wire envelop
     (parsed as { requestId?: string }).requestId,
     'client-uuid-bci-stream',
     'BCI stream envelope must carry the client-generated requestId'
-  )
-})
-
-test('ragRequestSchema: forwards requestId for ingest', (t) => {
-  const parsed = ragRequestSchema.parse({
-    type: 'rag',
-    operation: 'ingest',
-    workspace: 'ws-a',
-    modelId: 'model-a',
-    documents: 'hello',
-    requestId: 'client-uuid-rag'
-  })
-  t.is(
-    (parsed as { requestId?: string }).requestId,
-    'client-uuid-rag',
-    'rag ingest envelope must carry the client-generated requestId'
-  )
-})
-
-test('ragRequestSchema: requestId is optional for ingest', (t) => {
-  const parsed = ragRequestSchema.parse({
-    type: 'rag',
-    operation: 'ingest',
-    workspace: 'ws-a',
-    modelId: 'model-a',
-    documents: 'hello'
-  })
-  t.is((parsed as { requestId?: string }).requestId, undefined)
-})
-
-test('ragRequestSchema: forwards requestId for reindex (storage-only op)', (t) => {
-  const parsed = ragRequestSchema.parse({
-    type: 'rag',
-    operation: 'reindex',
-    workspace: 'ws-a',
-    requestId: 'client-uuid-reindex'
-  })
-  t.is((parsed as { requestId?: string }).requestId, 'client-uuid-reindex')
-})
-
-test('ragRequestSchema: forwards requestId for saveEmbeddings', (t) => {
-  const parsed = ragRequestSchema.parse({
-    type: 'rag',
-    operation: 'saveEmbeddings',
-    workspace: 'ws-a',
-    documents: [],
-    requestId: 'client-uuid-save'
-  })
-  t.is(
-    (parsed as { requestId?: string }).requestId,
-    'client-uuid-save',
-    'saveEmbeddings envelope must carry the client-generated requestId'
   )
 })

@@ -22,6 +22,13 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
  */
 const DEFAULT_VIDEO_FRAMES = 33
 
+/**
+ * The largest workload the fitter sizes. A load accepts larger declared output
+ * limits, and the fitter rejects a workload above these.
+ */
+const FIT_MAX_DIMENSION = 65536
+const FIT_MAX_VIDEO_FRAMES = 4096
+
 /** The diffusion fit request for a load: the files and config each mode loads. */
 export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   if (load.isShardedModel) {
@@ -68,15 +75,36 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   const vaeTiling = config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }
 
   if (config.mode === 'video') {
+    // A context that declares all three output limits is sized at its largest clip.
+    const boundedVideo = config.performance_max_width !== undefined &&
+      config.performance_max_height !== undefined &&
+      config.performance_max_frames !== undefined && {
+        width: config.performance_max_width,
+        height: config.performance_max_height,
+        videoFrames: config.performance_max_frames
+      }
+    if (
+      boundedVideo &&
+      (boundedVideo.width > FIT_MAX_DIMENSION ||
+        boundedVideo.height > FIT_MAX_DIMENSION ||
+        boundedVideo.videoFrames > FIT_MAX_VIDEO_FRAMES)
+    ) {
+      return { unknown: 'the declared output limits exceed the largest workload the fitter sizes' }
+    }
     const request: DiffusionFitRequest = {
       files: videoFilesFor(load.modelPath, artifacts),
       config: videoConfigFor(config),
-      workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES }
+      workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES, ...boundedVideo }
     }
     return { request }
   }
 
   assertUpscalerResolved(config, artifacts)
+  // The addon's fitter answers `unknown` for these too: Core ML places and sizes
+  // the sidecars itself, outside the ggml planner the fitter runs.
+  if (artifacts?.['coremlUnetModelPath'] || artifacts?.['coremlTaeDecoderModelPath']) {
+    return { unknown: 'the fitter cannot size Core ML sidecars, which Core ML places itself' }
+  }
   const request: DiffusionFitRequest = {
     files: imageFilesFor(load.modelPath, artifacts),
     config: imageConfigFor(config),

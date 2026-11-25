@@ -50,7 +50,7 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 The QVAC surface supports:
 * [Batch chat completion](#post-qvacv1chatbatch) — via `/qvac/v1/chat/batch`, several prompts decoded together on one LLM.
 * [System resources](#get-qvacv1system) — via `/qvac/v1/system`: the host's CPU, memory and GPUs.
-* [Runtime](#runtime-qvacv1runtime) — via `/qvac/v1/runtime/*`: lifecycle state and loaded models; suspend and resume behind `--enable-admin`.
+* [Runtime](#runtime-qvacv1runtime) — via `/qvac/v1/runtime/*`: lifecycle state, loaded models and capability contracts; suspend and resume behind `--enable-admin`.
 * [Model fit](#post-qvacv1modelsfit) — via `/qvac/v1/models/fit`: whether models fit together, before loading them.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 * [OCR](#post-qvacv1ocr) — via `/qvac/v1/ocr`, text recognition in an image.
@@ -235,7 +235,7 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
 | `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
 | `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
-| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume); needs a key off loopback |
+| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume, plugin invoke); needs a key off loopback |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -477,7 +477,8 @@ Admin routes also refuse a request whose `Origin` header is outside `--cors-orig
 Clients that send no `Origin`, such as `curl` or an SDK, are unaffected.
 
 While the runtime is `suspending`, `suspended` or `resuming`, every route except
-`GET /qvac/v1/runtime/state`, `suspend` and `resume` answers `503 runtime_suspended`.
+`GET /qvac/v1/runtime/state`, `GET /qvac/v1/runtime/capabilities`, `suspend` and `resume` answers
+`503 runtime_suspended`.
 `/openapi.json`, `/docs` and `/qvac/identity` stay available.
 
 #### `GET /qvac/v1/runtime/state`
@@ -515,9 +516,35 @@ on-disk path is not returned.
 }
 ```
 
+#### `GET /qvac/v1/runtime/capabilities`
+
+The capability contracts the runtime's registered plugins declare, with the major version of each,
+from the SDK's `getRuntimeCapabilities()`. It reads plugin registration only, so it loads no model
+and answers while the runtime is suspended. An entry means a registered plugin declares the
+contract; a call still uses the plugin of the model it names, so an operation in
+`partialOperations` can fail for a given model.
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/runtime/capabilities
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "transcription",
+      "version": 1,
+      "operations": ["transcribe"],
+      "partialOperations": ["transcribeStream"]
+    }
+  ]
+}
+```
+
 #### `POST /qvac/v1/runtime/suspend` and `POST /qvac/v1/runtime/resume`
 
-Admin-only. Suspend pauses P2P resources and gates every route except state, suspend and resume
+Admin-only. Suspend pauses P2P resources and gates every route except state, capabilities, suspend and resume
 until resume. A request whose SDK call is already running finishes; one still waiting, on a model
 load say, gets `503 runtime_suspended`. Both are idempotent and return the state they leave the
 runtime in.
@@ -1330,6 +1357,84 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
 }
 ```
 
+### Plugins: `POST /qvac/v1/plugins/:name/invoke`
+
+Call a handler of a custom plugin, backed by the SDK's `invokePlugin()`, or
+`invokePluginStream()` with `stream: true`. It runs whatever the plugin does, so it is
+**admin-only**: it answers `403 admin_disabled` unless the server was started with
+`--enable-admin`, and refuses browser origins outside the CORS allowlist like the
+[runtime routes](#runtime-qvacv1runtime).
+
+The plugin must be registered in the worker that serve runs. List it under `plugins` in
+`qvac.config.*` and run `qvac bundle sdk`, which writes `qvac/worker.entry.mjs`; serve uses
+that entry when started from the project directory, or the file `QVAC_WORKER_PATH` names.
+Then give the plugin an alias whose `type` is its model type:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "echo": { "src": "./models/echo.bin", "type": "echo-plugin" }
+    }
+  }
+}
+```
+
+`:name` is that model type. Built-in plugins answer `400 builtin_plugin`: use their own
+endpoints.
+
+| Field     | Type      | Required | Meaning                                                      |
+| --------- | --------- | -------- | ------------------------------------------------------------ |
+| `model`   | `string`  | Yes      | A `serve.models` alias whose `type` is `:name`               |
+| `handler` | `string`  | Yes      | The plugin handler to call                                   |
+| `params`  | any JSON  | No       | Passed to the handler as-is; the plugin validates it (`{}`)  |
+| `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
+  -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
+```
+
+```json
+{ "object": "plugin.invocation", "model": "echo", "handler": "echo", "result": { "text": "hi" } }
+```
+
+With `stream: true`, a streaming handler answers with Server-Sent Events: a
+`plugin.invocation.chunk` per result, one `plugin.invocation.done`, then `data: [DONE]`.
+
+```text
+data: {"object":"plugin.invocation.chunk","model":"echo","handler":"count","index":0,"result":{"n":1}}
+
+data: {"object":"plugin.invocation.done","model":"echo","handler":"count"}
+
+data: [DONE]
+```
+
+Plugin calls cannot be cancelled: a client disconnect stops the stream, but the handler runs
+to the end.
+
+#### Errors
+
+| HTTP | `error.code`              | When                                                           |
+| ---- | ------------------------- | -------------------------------------------------------------- |
+| 400  | `missing_model`           | `model` is missing                                             |
+| 400  | `missing_handler`         | `handler` is missing                                           |
+| 400  | `builtin_plugin`          | `:name` is a built-in model type                               |
+| 400  | `invalid_model_type`      | The alias's `type` is not `:name`                              |
+| 400  | `invalid_plugin_params`   | The plugin rejected `params`                                   |
+| 400  | `handler_type_mismatch`   | `stream` does not match whether the handler streams            |
+| 400  | `invalid_request`         | The body carries an unknown field                              |
+| 403  | `admin_disabled`          | The server was started without `--enable-admin`                |
+| 403  | `origin_not_allowed`      | A browser request from an origin outside the CORS allowlist    |
+| 404  | `model_not_found`         | Unknown alias                                                  |
+| 404  | `handler_not_found`       | The plugin has no such handler                                 |
+| 502  | `plugin_response_invalid` | The handler's result failed the plugin's own response schema   |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled                  |
+| 503  | `runtime_suspended`       | The runtime is suspended                                       |
+
+A failure mid-stream arrives as an SSE `error` frame with the same codes.
+
 ## OpenAI-compatible API
 
 Served by the `--openai` extension. All endpoints follow the [OpenAI API](https://ecosystem.openai.com/docs/api-reference) request and response format. Base path: `/v1`.
@@ -1675,7 +1780,7 @@ Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`
 
 The QVAC plugins for OpenCode and OpenClaw have the host send its session id as `prompt_cache_key`, so each session gets its own cache. The pi coding agent does the same for a custom provider only when `PI_CACHE_RETENTION=long` is set.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. It is **not** a per-request count of reused prompt tokens. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
+`usage.prompt_tokens` counts the whole prompt, and `usage.prompt_tokens_details.cached_tokens` the part of it the cache already held. On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
 
 #### Unsupported parameters
 
@@ -1763,7 +1868,7 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 
 OpenAI's `prompt_cache_key` works as well, so clients that already send one per conversation (Codex does) get a cache without extra configuration. Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once, since a repeated header is rejected. A supplied key must be a string containing at least one non-whitespace character and no more than 512 UTF-8 bytes, measured before hashing. Invalid keys return `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use; the same exact key selects the same named SDK session in blocking and streaming requests, including tool turns. Use a separate key per conversation, resend it with the growing history (or `previous_response_id`), and serialize turns within a session. A key selects a cache, not stored history. With no key, Responses remains uncached; `store` and `previous_response_id` do not opt in or inherit a key.
 
-On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy, **not** a per-request count of reused prompt tokens, so it is not mapped to OpenAI's `input_tokens_details.cached_tokens`. Streaming includes the same diagnostic in the final response event. Existing `input_tokens` / `total_tokens` accounting is unchanged. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
+On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy. The reused part of the input is reported separately as `usage.input_tokens_details.cached_tokens`. Streaming includes both in the final response event. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
 
 <Callout type="warn">
 **Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
@@ -2445,11 +2550,11 @@ Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first evi
 
 ### Vector stores
 
-OpenAI-compatible vector-store endpoints backed by the SDK's RAG primitives. Each vector store maps 1:1 to a RAG workspace.
+OpenAI-compatible vector-store endpoints backed by [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag). Stores keep their data under `serve/vector-stores` next to the SDK `cacheDirectory` (`~/.qvac/serve/vector-stores` by default), so they survive a restart; metadata such as `name` and `expires_after` stays in memory. A store is open in one server at a time: while another server on the same data directory holds it, search, attach and delete return `409 vector_store_in_use`. Stores created with CLI 0.20.x or earlier are not carried over; see [Migrate from the SDK RAG API](/resources/rag-migration).
 
 #### `GET /v1/vector_stores`
 
-List all stores (merged with on-disk RAG workspaces).
+List all stores, including stores that only exist on disk.
 
 #### `POST /v1/vector_stores`
 
@@ -2465,15 +2570,15 @@ Update `name`, `expires_after`, or `metadata`.
 
 #### `DELETE /v1/vector_stores/:id`
 
-Delete the store and the underlying RAG workspace.
+Delete the store and its ingested files.
 
 #### `POST /v1/vector_stores/:id/search`
 
-Embed `query` and run top-K similarity search.
+Embed `query` and run top-K similarity search (`max_num_results`, default 5).
 
 #### `POST /v1/vector_stores/:id/files`
 
-Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
+Attach a previously-uploaded `/v1/files` entry (UTF-8 text content). Attaching the same `file_id` again replaces its chunks.
 
 **End-to-end ingest + search:**
 
@@ -2504,16 +2609,16 @@ Search and ingest both pick an embedding model from `serve.models`:
 3. If multiple embedding aliases are configured and none is flagged as default, the request fails with `400 ambiguous_embedding_model`.
 4. If no embedding alias is configured, the request fails with `400 no_embedding_model_configured`.
 
-Once a vector store has been ingested with a particular embedding model, subsequent ingest or search calls must resolve to the **same** alias — otherwise the request fails with `400 embedding_model_mismatch`. To switch embeddings, create a new vector store.
+Once a vector store has been ingested with a particular embedding model, subsequent ingest or search calls must resolve to the **same** weights with the same `pooling`, `attention` and `embdNormalize` settings — otherwise the request fails with `400 embedding_model_mismatch`. Other load options, such as `device`, `gpuLayers` or `batchSize`, can change freely. To switch embeddings, create a new vector store.
 
 #### File ingest constraints
 
 - Files attached via `POST /v1/vector_stores/:id/files` must be **UTF-8 text** (e.g. `.txt`, `.md`, `.json`). Binary uploads (PDF / PNG / DOCX) are rejected with `400 unsupported_file_type` — no built-in document conversion is performed.
-- Once attached, the file is removed from the in-memory file store. The chunks are persisted by the underlying RAG workspace; only the original `file_id` and `filename` are kept as attribution metadata so search hits can carry them.
+- Once attached, the file is removed from the in-memory file store. Its chunks are stored on disk under its `file_id`, with its `filename`, so search hits can carry both.
 
 #### Search results
 
-Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
+Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each hit carries the `file_id` and `filename` of the file it came from.
 
 ### Videos
 

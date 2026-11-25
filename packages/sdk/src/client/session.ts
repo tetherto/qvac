@@ -21,6 +21,17 @@ import { InvalidResponseError, SessionInvalidatedError } from '@/utils/errors-cl
 export interface OpenSessionOptions {
   /** Label for worker logs and diagnostics. */
   name?: string
+  /**
+   * Permissions the session may use, one per operation:
+   * `<capability ID>/<operation>`, such as `transcription/transcribe`, or
+   * `runtime/<operation>` for an operation the runtime serves itself, such as
+   * `runtime/loadModel`; `RUNTIME_PERMISSION_OPERATIONS` lists them.
+   * `capabilityPermissions()` lists every operation of a contract. Omitted:
+   * the session is unrestricted. An
+   * empty list allows only operations that need no permission. The worker
+   * refuses an operation outside the grant with `CapabilityNotGrantedError`.
+   */
+  grant?: readonly string[]
 }
 
 type Api = typeof api
@@ -44,7 +55,13 @@ type Api = typeof api
 export interface QvacSession {
   readonly sessionId: string
   readonly name: string | undefined
-  /** Resolves once the worker has registered the session. Calls queue behind it on their own. */
+  /** The permissions the session was opened with; `undefined` when it is unrestricted. */
+  readonly grant: readonly string[] | undefined
+  /**
+   * Resolves once the worker has registered the session. Calls queue behind it
+   * on their own. Rejects with `SessionGrantInvalidError` when the worker
+   * lacks a permission the grant names.
+   */
   readonly opened: Promise<void>
   /**
    * Whether this session loaded `modelId` and has not unloaded it. Stays true
@@ -76,15 +93,6 @@ export interface QvacSession {
   textToSpeechStream: Api['textToSpeechStream']
   finetune: Api['finetune']
   cancel: Api['cancel']
-  ragChunk: Api['ragChunk']
-  ragIngest: Api['ragIngest']
-  ragSaveEmbeddings: Api['ragSaveEmbeddings']
-  ragSearch: Api['ragSearch']
-  ragDeleteEmbeddings: Api['ragDeleteEmbeddings']
-  ragReindex: Api['ragReindex']
-  ragListWorkspaces: Api['ragListWorkspaces']
-  ragCloseWorkspace: Api['ragCloseWorkspace']
-  ragDeleteWorkspace: Api['ragDeleteWorkspace']
   createVectorIndex: Api['createVectorIndex']
   loadVectorIndex: Api['loadVectorIndex']
   ocr: Api['ocr']
@@ -107,6 +115,7 @@ export interface QvacSession {
   getModelInfo: Api['getModelInfo']
   getLoadedModelInfo: Api['getLoadedModelInfo']
   getSystemResources: Api['getSystemResources']
+  getRuntimeCapabilities: Api['getRuntimeCapabilities']
   assessModelFit: Api['assessModelFit']
   heartbeat: Api['heartbeat']
   loggingStream: Api['loggingStream']
@@ -123,10 +132,13 @@ export interface QvacSession {
  * `openSession` round trip runs in the background; calls made on the handle
  * wait for it, so the handle is usable immediately.
  *
- * @param options - `name` labels the session in worker logs.
+ * @param options - `name` labels the session in worker logs; `grant` limits
+ *   the session to the listed permissions.
  * @returns The session handle.
  * @throws {SessionIdConflictError} Through `session.opened` and every call,
  *   when the worker already has a session with the minted id.
+ * @throws {SessionGrantInvalidError} Through `session.opened` and every call,
+ *   when the grant names a permission the worker does not have.
  *
  * @example
  * ```typescript
@@ -142,11 +154,17 @@ export interface QvacSession {
 export function openSession(options: OpenSessionOptions = {}): QvacSession {
   const sessionId = generateClientRequestId()
   const name = options.name
-  const opened = sendOpenSession({ type: 'openSession', sessionId, ...(name && { name }) })
+  const grant = options.grant ? [...options.grant] : undefined
+  const opened = sendOpenSession({
+    type: 'openSession',
+    sessionId,
+    ...(name && { name }),
+    ...(grant && { grant })
+  })
   // Later calls surface the failure themselves; an unobserved rejection here
   // must not crash the host.
   opened.catch(() => {})
-  return createSessionHandle(createSessionRecord(sessionId, opened), name)
+  return createSessionHandle(createSessionRecord(sessionId, opened), name, grant)
 }
 
 async function sendOpenSession(request: OpenSessionRequest): Promise<void> {
@@ -182,7 +200,11 @@ export async function closeSessionRecord(
   }
 }
 
-function createSessionHandle(record: SessionRecord, name: string | undefined): QvacSession {
+function createSessionHandle(
+  record: SessionRecord,
+  name: string | undefined,
+  grant: readonly string[] | undefined
+): QvacSession {
   const { sessionId, opened } = record
   // Session-stamped options for every wire call made through the handle. A
   // caller's own options are kept; `sessionId` is set by the handle, and the
@@ -208,6 +230,7 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
   return {
     sessionId,
     name,
+    grant: grant ? Object.freeze([...grant]) : undefined,
     opened,
     isModelHeld: (modelId) => isModelHeldBySession(record, modelId),
     close: (options) => closeSessionRecord(record, options),
@@ -254,15 +277,6 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
         withSession(options)
       )) as Api['finetune'],
     cancel: (params, options) => api.cancel(params, withSession(options)),
-    ragChunk: (params, options) => api.ragChunk(params, withSession(options)),
-    ragIngest: (params, options) => api.ragIngest(params, withSession(options)),
-    ragSaveEmbeddings: (params, options) => api.ragSaveEmbeddings(params, withSession(options)),
-    ragSearch: (params, options) => api.ragSearch(params, withSession(options)),
-    ragDeleteEmbeddings: (params, options) => api.ragDeleteEmbeddings(params, withSession(options)),
-    ragReindex: (params, options) => api.ragReindex(params, withSession(options)),
-    ragListWorkspaces: (options) => api.ragListWorkspaces(withSession(options)),
-    ragCloseWorkspace: (params, options) => api.ragCloseWorkspace(params, withSession(options)),
-    ragDeleteWorkspace: (params, options) => api.ragDeleteWorkspace(params, withSession(options)),
     createVectorIndex: vectorIndexes.createVectorIndex,
     loadVectorIndex: vectorIndexes.loadVectorIndex,
     ocr: (params, options) => api.ocr(params, withSession(options)),
@@ -290,6 +304,7 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
     getModelInfo: (params, options) => api.getModelInfo(params, withSession(options)),
     getLoadedModelInfo: (params, options) => api.getLoadedModelInfo(params, withSession(options)),
     getSystemResources: (input, options) => api.getSystemResources(input, withSession(options)),
+    getRuntimeCapabilities: (options) => api.getRuntimeCapabilities(withSession(options)),
     assessModelFit: (input, options) => api.assessModelFit(input, withSession(options)),
     heartbeat: (options) => api.heartbeat(withSession(options)),
     loggingStream: (params, options) => api.loggingStream(params, withSession(options)),

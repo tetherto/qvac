@@ -1,9 +1,5 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/utils/tools/shared'
+import { acceptToolCall, type ParserResult } from '@/utils/tools/shared'
 
 // Transliterates Gemma 4's JS-literal argument body to valid JSON so it can
 // be parsed with JSON.parse. The body uses:
@@ -62,18 +58,9 @@ export function parseGemma4NativeFormat(text: string, tools: Tool[]): ParserResu
       continue
     }
 
-    const validation = validateToolArguments(name, args, tools)
-    if (!validation.isValid && validation.error) {
-      errors.push({ ...validation.error, raw: match[0] })
-      continue
-    }
-
-    toolCalls.push({
-      id: generateStableToolCallId(name, args),
-      name,
-      arguments: args,
-      raw: match[0]
-    })
+    const accepted = acceptToolCall({ name, arguments: args }, tools, match[0])
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   return { matched: true, toolCalls, errors }

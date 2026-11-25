@@ -257,12 +257,17 @@ export async function startFinetune(
 
   const handle = await model.finetune(request.options)
 
-  if (onProgress) {
-    handle.on('stats', onProgress)
-    ctx.scope.defer(() => {
-      handle.removeListener('stats', onProgress)
-    })
+  // Training reports progress only through `stats`, and the caller receives
+  // those only when it asked for progress. The idle deadline counts them
+  // either way.
+  const onStats = (stats: FinetuneProgress) => {
+    ctx.touch()
+    onProgress?.(stats)
   }
+  handle.on('stats', onStats)
+  ctx.scope.defer(() => {
+    handle.removeListener('stats', onStats)
+  })
 
   const result = await handle.await()
 

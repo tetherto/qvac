@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, unlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -21,6 +21,7 @@ import {
   toSdkChatArgs,
   type OpenAIMessage
 } from '@/serve/extensions/openai/schemas/chat'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import {
   parseExpiresAfter,
   parseMetadata,
@@ -362,7 +363,7 @@ describe('openaiMessagesToHistory', () => {
       assert.deepEqual(await readFile(tmpPaths[0]!), Buffer.from(PNG_BASE64, 'base64'))
       assert.deepEqual(await readFile(tmpPaths[1]!), Buffer.from(JPEG_BASE64, 'base64'))
     } finally {
-      await Promise.all(tmpPaths.map((path) => unlink(path)))
+      await Promise.all(tmpPaths.map(removePrivateTempFile))
     }
   })
 
@@ -863,13 +864,13 @@ describe('vectorStoreToOpenAI', () => {
     assert.deepEqual(out.metadata, { topic: 'rag' })
   })
 
-  it('reports status="in_progress" when no underlying RAG workspace exists', () => {
+  it('reports status="in_progress" when the store holds no files yet', () => {
     const out = vectorStoreToOpenAI(fixtureMeta())
     assert.equal(out.status, 'in_progress')
   })
 
-  it('reports status="completed" once a workspace exists', () => {
-    const out = vectorStoreToOpenAI(fixtureMeta(), { exists: true, open: true })
+  it('reports status="completed" once the store holds files', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta(), { exists: true })
     assert.equal(out.status, 'completed')
   })
 
@@ -907,46 +908,23 @@ describe('searchResultsToOpenAI', () => {
     assert.equal(page.next_page, null)
   })
 
-  it('maps RAG results to OpenAI search items preserving score', () => {
+  it('maps hits to OpenAI search items with their file and score', () => {
     const page = searchResultsToOpenAI(
       [
-        { id: 'doc-1', content: 'first chunk text', score: 0.92 },
-        { id: 'doc-2', content: 'second chunk text', score: 0.81 }
+        { fileId: 'file-abc', fileName: 'notes.txt', content: 'first chunk text', score: 0.92 },
+        { fileId: 'file-def', fileName: 'plan.md', content: 'second chunk text', score: 0.81 }
       ],
       'embedding query'
     )
     assert.equal(page.data.length, 2)
     const first = page.data[0]
     assert.ok(first)
-    assert.equal(first.file_id, 'doc-1')
-    assert.equal(first.filename, 'doc-1')
+    assert.equal(first.file_id, 'file-abc')
+    assert.equal(first.filename, 'notes.txt')
     assert.equal(first.score, 0.92)
     assert.deepEqual(first.attributes, {})
     assert.deepEqual(first.content, [{ type: 'text', text: 'first chunk text' }])
-  })
-
-  it('uses the attribution lookup for file_id and filename when available', () => {
-    const page = searchResultsToOpenAI(
-      [
-        { id: 'chunk-1', content: 'first chunk', score: 0.9 },
-        { id: 'chunk-2', content: 'second chunk', score: 0.8 }
-      ],
-      'query',
-      (chunkId) => {
-        if (chunkId === 'chunk-1') return { fileId: 'file-abc', fileName: 'notes.txt' }
-        return null
-      }
-    )
-    const first = page.data[0]
-    const second = page.data[1]
-    assert.ok(first)
-    assert.ok(second)
-    // Attributed hit reports the original upload's identity.
-    assert.equal(first.file_id, 'file-abc')
-    assert.equal(first.filename, 'notes.txt')
-    // Unattributed hit falls back to the chunk id (today's behavior).
-    assert.equal(second.file_id, 'chunk-2')
-    assert.equal(second.filename, 'chunk-2')
+    assert.equal(page.data[1]?.file_id, 'file-def')
   })
 })
 

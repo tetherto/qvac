@@ -1,4 +1,5 @@
-import { BridgeDepth } from '@qvac/classification-ggml'
+import { BridgeDepth, assessFit as classificationAssessFit } from '@qvac/classification-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -10,12 +11,15 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { estimateDisparity } from './ops/estimate-disparity'
+import { stereoDepthFitRequest } from './fit'
 
 export const stereoDepthPlugin = definePlugin({
   modelType: ModelType.ggmlStereoDepth,
   displayName: 'Stereo depth (BridgeDepth)',
   addonPackage: ADDON_CLASSIFICATION,
   loadConfigSchema: stereoDepthConfigSchema,
+  fitRequest: stereoDepthFitRequest,
+  assessFit: classificationAssessFit,
   createModel(params) {
     const config = stereoDepthConfigSchema.parse(params.modelConfig ?? {})
     const logger = createStreamLogger(params.modelId, ModelType.ggmlStereoDepth)
@@ -29,6 +33,7 @@ export const stereoDepthPlugin = definePlugin({
     })
     return { model }
   },
+  provides: [CAPABILITY_CONTRACTS.stereoDepthEstimation],
   handlers: {
     estimateDisparity: defineHandler({
       requestSchema: estimateDisparityRequestSchema,

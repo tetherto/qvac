@@ -32,6 +32,9 @@ When editing workflows or composite actions:
 - Declare the least permissions needed. Prefer OIDC to long-lived credentials.
 - Treat fork-controlled code and metadata as untrusted, and never expose secrets to
   untrusted pull-request execution.
+- Never trigger a workflow on `pull_request_target` or ask for a policy that re-allows
+  it. Start privileged pull-request work from `workflow_run` on a `pull_request`
+  workflow that holds no secrets; `ci-trust-policy.test.mjs` fails on the trigger.
 - Quote shell inputs and pass untrusted values through environment variables rather
   than interpolating them into scripts.
 - Make a job that publishes, tags or releases succeed when re-run after it

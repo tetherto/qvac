@@ -1,8 +1,6 @@
 import { type CanonicalModelType } from '@/schemas/model-types'
 
-export const RAG_NAMESPACE = 'rag:hyperdb' as const
-
-export type AddonNamespace = CanonicalModelType | typeof RAG_NAMESPACE
+export type AddonNamespace = CanonicalModelType
 
 // Stream id for the library's own logs.
 export const LOG_ID = '__engine__'

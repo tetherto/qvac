@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { trackedRequestSchema } from '@/schemas/request-base'
-
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+import { base64String } from '@/schemas/base64'
 
 const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 
-const base64StringSchema = z.string().min(1).regex(BASE64_PATTERN)
+const base64StringSchema = base64String().min(1)
+
+const positiveInt32Schema = z.number().int().positive().max(2147483647)
 
 const samplingMethodSchema = z.enum([
   'euler',
@@ -259,6 +260,39 @@ export const sdcppConfigSchema = z.object({
         "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
     ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
+  performance_profile: z
+    .enum(['auto', 'off'])
+    .optional()
+    .describe(
+      'Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native ' +
+        'options win. off retains baseline settings. Temporal tiling is unchanged.'
+    ),
+  performance_max_width: positiveInt32Schema
+    .optional()
+    .describe(
+      'Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.'
+    ),
+  performance_max_height: positiveInt32Schema
+    .optional()
+    .describe(
+      'Maximum video output height; requests above this declared bound are rejected by the addon.'
+    ),
+  performance_max_frames: positiveInt32Schema
+    .optional()
+    .describe(
+      'Maximum video output frame count; requests above this declared bound are rejected by the addon.'
+    ),
+  vae_conv_direct: z
+    .boolean()
+    .optional()
+    .describe('Explicit VAE convolution selection, overriding automatic performance profiles.'),
+  tensor_type_rules: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Explicit native per-tensor precision rules, overriding automatic matrix precision selection.'
+    ),
   diffusion_fa: z
     .boolean()
     .optional()
@@ -356,6 +390,35 @@ export const sdcppConfigSchema = z.object({
         'presence selects the LTX-2 video layout (Gemma text encoder via ' +
         '`llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead ' +
         'of the Wan layout.'
+    ),
+  taesdModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Tiny autoencoder weights (TAESD `taesd.safetensors`; TAESDXL for SDXL) — image ' +
+        'diffusion only. Replaces the full VAE for every encode and decode, so the ' +
+        "model's own VAE and `vaeModelSrc` go unused. Required by " +
+        '`coremlTaeDecoderModelSrc` unless the model has a built-in tiny autoencoder (SDXS).'
+    ),
+  coremlUnetModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Apple Core ML UNet sidecar: a compiled `.mlmodelc` directory, as a local path or a ' +
+        '`registry://` bundle. Runs the SD 1.x/2.x UNet (SDXS included) on Core ML, ' +
+        "which places it on the Neural Engine, GPU or CPU; the GGUF's UNet weights are " +
+        'skipped and text encoding and sampling stay on ggml. macOS and iOS only, image ' +
+        'diffusion only. The export fixes the image size, batch and 77-token prompt ' +
+        'length; requests with a LoRA are rejected. Set `prediction` when the export does ' +
+        "not record its prediction type: `'eps'` for the SD 2.1-base sidecar on SD 2.1. " +
+        'The load-time fit check reports `unknown` for Core ML loads.'
+    ),
+  coremlTaeDecoderModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Apple Core ML tiny-autoencoder decoder sidecar: a compiled `.mlmodelc` directory, ' +
+        'as a local path or a `registry://` bundle. Decodes latents on Core ML. Needs a ' +
+        "tiny autoencoder: SDXS's built-in one or `taesdModelSrc`. Tiled decoding and " +
+        'image encoding use the ggml tiny autoencoder. macOS and iOS only, image ' +
+        'diffusion only.'
     ),
   taehvModelSrc: modelSrcInputSchema
     .optional()
@@ -567,6 +630,31 @@ export type SdcppConfig = Omit<
   'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
 >
 
+const PERFORMANCE_LIMIT_KEYS = [
+  'performance_max_width',
+  'performance_max_height',
+  'performance_max_frames'
+] as const
+
+// The addon rejects a context that declares only some output limits, so the
+// schema does too, naming the first missing one.
+export function refineSdcppPerformanceLimits(
+  config: Pick<SdcppConfig, (typeof PERFORMANCE_LIMIT_KEYS)[number]>,
+  ctx: z.RefinementCtx
+) {
+  const missing = PERFORMANCE_LIMIT_KEYS.filter((key) => config[key] === undefined)
+  if (missing.length === 0 || missing.length === PERFORMANCE_LIMIT_KEYS.length) return
+  ctx.addIssue({
+    code: 'custom',
+    path: [missing[0]!],
+    message:
+      'performance_max_width, performance_max_height and performance_max_frames ' +
+      'must be supplied together.'
+  })
+}
+
+export const sdcppLoadConfigSchema = sdcppConfigSchema.superRefine(refineSdcppPerformanceLimits)
+
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
     .number()
@@ -767,7 +855,7 @@ export const diffusionRequestSchema = z
       .describe('Enable VAE tiling for large images on constrained VRAM, overriding model config.'),
     vae_tile_size: z
       .union([
-        z.number().int().positive().max(2147483647).meta({ title: 'DiffusionVaeTileSize' }),
+        positiveInt32Schema.meta({ title: 'DiffusionVaeTileSize' }),
         z
           .string()
           .regex(/^[0-9]+x[0-9]+$/, { message: 'vae_tile_size must be a WxH string' })
@@ -1468,11 +1556,7 @@ export const upscaleRequestSchema = z.object({
       'Identifier of the loaded upscaler model. The model must have been loaded ' +
         "with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`."
     ),
-  image: z
-    .string()
-    .min(1)
-    .regex(BASE64_PATTERN)
-    .describe('Base64-encoded PNG/JPEG bytes of the source image.'),
+  image: base64String().min(1).describe('Base64-encoded PNG/JPEG bytes of the source image.'),
   repeats: z
     .number()
     .int()
@@ -1685,21 +1769,8 @@ export const MAX_SCENE_PIXELS = 1920 * 1088
  * decoder allocates. Those differ by orders of magnitude for a compressed
  * format, so this is not the decompression-bomb guard; the declared-dimension
  * check in `ops/world.ts` is. This one keeps a multi-megabyte base64 string off
- * the worker in the first place.
- *
- * 3 MB is generous for a frame that ends up at most 1920x1088 — and it is also
- * the largest value this can be *enforced* at today. `BASE64_PATTERN` is a
- * starred quad group that both engines give up on a little above this ceiling,
- * but differently, and the difference matters: measured at 4.8M characters, JSC
- * (Bun) returns `false`, while **V8 — which is what Bare runs — THROWS
- * `RangeError: Maximum call stack size exceeded`**. Since Zod runs every string
- * check regardless of order, a larger image reaches the pattern even after
- * `.max()` fails, so `safeParse` throws instead of reporting `too_big`.
- * 3 MB decodes to 4194304 characters, inside the range that still matches on
- * both. The client guards the raw byte length before encoding for the same
- * reason (see `createWorldSceneResult`). The pattern is shared with the
- * diffusion, upscale and VLA image fields, so fixing it belongs in its own
- * change.
+ * the worker in the first place. 3 MB is generous for a frame that ends up at
+ * most 1920x1088.
  */
 export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
 
@@ -1734,10 +1805,6 @@ export function refineWorldSceneBudget(
     })
   }
   // The encoded-size ceiling is a `.max()` on the field rather than a check here.
-  // Note Zod runs every check on a string regardless of order, so an oversized
-  // image collects the `too_big` issue AND whatever BASE64_PATTERN reports — the
-  // ordering only decides which reads first, it does not short-circuit. See
-  // MAX_SCENE_IMAGE_BYTES for why the pattern cannot be relied on at that size.
 }
 
 const worldSceneRequestShape = {
@@ -1758,13 +1825,9 @@ const worldSceneRequestShape = {
       'Scene prompt, encoded verbatim by umT5-XXL. The reference pipeline prefixes ' +
         'prompts with "| unknown | ".'
     ),
-  image: z
-    .string()
+  image: base64String()
     .min(1)
-    // Declared before the pattern so an oversized frame reports its size instead
-    // of failing as malformed base64.
     .max(MAX_SCENE_IMAGE_BASE64_CHARS)
-    .regex(BASE64_PATTERN)
     .describe(
       'Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded and 8192x8192 ' +
         'pixels. It is cover-scaled and center-cropped to width x height, so a ' +

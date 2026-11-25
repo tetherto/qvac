@@ -269,7 +269,6 @@ def test_session_errors_reconstruct_with_typed_fields():
         ModelLeasedError,
         ModelReconfiguredError,
         OwnerOnlyError,
-        RagWorkspaceBusyError,
         SessionIdConflictError,
         SessionNotOpenError,
     )
@@ -306,8 +305,56 @@ def test_session_errors_reconstruct_with_typed_fields():
     assert isinstance(reconfigured, ModelReconfiguredError)
     assert reconfigured.model_id == "m-2"
 
-    busy = reconstruct_error(
-        _envelope(name="RAG_WORKSPACE_BUSY", typedFields={"workspace": "default"})
+
+def test_session_grant_errors_round_trip_their_typed_fields():
+    from tetherto.qvac_sdk.errors import (
+        CapabilityNotGrantedError,
+        SessionGrantInvalidError,
     )
-    assert isinstance(busy, RagWorkspaceBusyError)
-    assert busy.workspace == "default"
+
+    refused = reconstruct_error(
+        _envelope(
+            name="CAPABILITY_NOT_GRANTED",
+            typedFields={
+                "operation": "transcribeStream",
+                "sessionId": "s-1",
+                "required": "transcription/transcribeStream",
+            },
+        )
+    )
+    assert isinstance(refused, CapabilityNotGrantedError)
+    assert (refused.operation, refused.session_id, refused.required) == (
+        "transcribeStream",
+        "s-1",
+        "transcription/transcribeStream",
+    )
+
+    uncovered = reconstruct_error(
+        _envelope(
+            name="CAPABILITY_NOT_GRANTED",
+            typedFields={
+                "operation": "debugDump",
+                "sessionId": "s-1",
+                "required": None,
+            },
+        )
+    )
+    assert isinstance(uncovered, CapabilityNotGrantedError)
+    assert uncovered.required is None
+
+    invalid = reconstruct_error(
+        _envelope(
+            name="SESSION_GRANT_INVALID",
+            typedFields={
+                "sessionId": "s-2",
+                "permission": "embedding/embed",
+                "details": "no registered plugin declares it",
+            },
+        )
+    )
+    assert isinstance(invalid, SessionGrantInvalidError)
+    assert (invalid.session_id, invalid.permission, invalid.details) == (
+        "s-2",
+        "embedding/embed",
+        "no registered plugin declares it",
+    )

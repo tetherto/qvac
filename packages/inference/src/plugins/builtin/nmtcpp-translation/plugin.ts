@@ -1,4 +1,5 @@
 import TranslationNmtcpp, { type TranslationNmtcppFiles } from '@qvac/translation-nmtcpp'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -17,12 +18,21 @@ import {
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { translate } from '@/plugins/ops/translate'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
-import { nmtConfigFor, nmtFilesFor } from '@/plugins/builtin/nmtcpp-translation/load-files'
+import {
+  nmtConfigFor,
+  nmtFilesFor,
+  nmtParamsFor
+} from '@/plugins/builtin/nmtcpp-translation/load-files'
 import { nmtFitRequest } from '@/plugins/builtin/nmtcpp-translation/fit'
 import {
   resolveBergamotVocab,
   type PivotModelConfig
 } from '@/plugins/builtin/nmtcpp-translation/resolve-vocab'
+import {
+  assertTranslatePsyNanoLanguages,
+  assertTranslatePsyNanoPivot,
+  resolveTranslatePsyNanoPack
+} from '@/plugins/builtin/nmtcpp-translation/translatepsy-nano'
 
 function createNmtModel(modelId: string, files: TranslationNmtcppFiles, nmtConfig: NmtConfig) {
   const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation)
@@ -30,7 +40,7 @@ function createNmtModel(modelId: string, files: TranslationNmtcppFiles, nmtConfi
 
   const model = new TranslationNmtcpp({
     files,
-    params: { srcLang: nmtConfig.from, dstLang: nmtConfig.to },
+    params: nmtParamsFor(nmtConfig),
     config: nmtConfigFor(nmtConfig, files.pivotModel),
     logger,
     opts: { stats: true }
@@ -61,7 +71,26 @@ export const nmtPlugin = definePlugin({
       return { config: nmtConfig }
     }
 
-    const bergamotConfig = { ...nmtConfig, ...(pivotModel && { pivotModel }) }
+    // TranslatePsy Nano packs are told apart by their source path, which only
+    // this hook sees: the resolved path of a registry download is a cache set
+    // directory. A detected en-xx pack resolves to `targetTag: true`, which
+    // createModel and the translate op read.
+    const nanoPack = resolveTranslatePsyNanoPack({
+      targetTag: nmtConfig.targetTag,
+      modelSrc: ctx.modelSrc
+    })
+    if (nanoPack) {
+      assertTranslatePsyNanoLanguages(nanoPack, nmtConfig.from, nmtConfig.to, !!pivotModel)
+    }
+    if (pivotModel) {
+      assertTranslatePsyNanoPivot(pivotModel.modelSrc, nmtConfig.to)
+    }
+
+    const bergamotConfig = {
+      ...nmtConfig,
+      ...(nanoPack?.direction === 'en-xx' && { targetTag: true }),
+      ...(pivotModel && { pivotModel })
+    }
 
     return resolveBergamotVocab(bergamotConfig, ctx, srcVocabSrc, dstVocabSrc, pivotModel)
   },
@@ -75,6 +104,7 @@ export const nmtPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.translation],
   handlers: {
     translate: defineHandler({
       requestSchema: translateRequestSchema,
