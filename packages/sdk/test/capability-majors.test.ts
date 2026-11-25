@@ -200,7 +200,7 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     'response',
     object({ m: { type: 'object', additionalProperties: { type: 'number' } } }),
     object({ m: { type: 'object', additionalProperties: {} } }),
-    /"m.<extra>" is now limited to number/
+    /"m.<extra>" is no longer limited to number/
   ],
   [
     'response: loose object where the old one was not strict',
@@ -249,7 +249,28 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     'response',
     object({ m: { enum: ['x'] } }),
     object({ m: { enum: ['x', 'y'] } }),
-    /"m" no longer accepts "y"/
+    /"m" can now be "y"/
+  ],
+  [
+    'response: const widened to its type',
+    'response',
+    object({ done: { const: true } }),
+    object({ done: { type: 'boolean' } }),
+    /"done" is no longer limited to fixed values/
+  ],
+  [
+    'response: type widened',
+    'response',
+    object({ n: { type: 'number' } }),
+    object({ n: { type: ['number', 'string'] } }),
+    /"n" can now be string/
+  ],
+  [
+    'response: upper bound raised',
+    'response',
+    object({ n: { type: 'number', maximum: 1 } }),
+    object({ n: { type: 'number', maximum: 2 } }),
+    /upper bound of "n" increased/
   ],
   [
     'response: enum narrowed',
@@ -312,7 +333,13 @@ function snapshot(options: {
   return {
     capabilities: {
       contracts: [
-        { id: 'transcription', version: options.version ?? 1, operations, optionalOperations }
+        {
+          id: 'transcription',
+          version: options.version ?? 1,
+          operations,
+          optionalOperations,
+          runtimeOperations: []
+        }
       ]
     },
     manifest: {
@@ -377,6 +404,19 @@ test('operation changes under the same major are reported', function (t) {
   ])
 })
 
+test('an operation without recorded schemas is reported', function (t) {
+  const unrecorded = snapshot({})
+  unrecorded.manifest.methods = unrecorded.manifest.methods.filter(
+    (method) => method.name !== 'transcribe'
+  )
+  t.alike(findMajorProblems(snapshot({}), unrecorded), [
+    'transcription@1: transcribe has no recorded schemas in the working tree'
+  ])
+  t.alike(findMajorProblems(unrecorded, snapshot({})), [
+    'transcription@1: transcribe has no recorded schemas in the published baseline'
+  ])
+})
+
 test('a published contract that disappears without a higher major is reported', function (t) {
   const gone: ContractSnapshot = { ...snapshot({}), capabilities: { contracts: [] } }
   t.alike(findMajorProblems(snapshot({}), gone), [
@@ -436,7 +476,7 @@ test('the capability baseline compares completionOrchestrate under completion', 
   ])
 
   const removed = baseline()
-  for (const contract of removed.capabilities.contracts) delete contract.runtimeOperations
+  for (const contract of removed.capabilities.contracts) contract.runtimeOperations = []
   t.alike(findMajorProblems(baseline(), removed), [
     'completion@1: runtime operation completionOrchestrate was removed'
   ])

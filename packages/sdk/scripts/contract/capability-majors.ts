@@ -24,7 +24,7 @@ export interface CapabilityContractEntry {
   operations: string[]
   optionalOperations: string[]
   /** Operations the runtime implements on top of the contract; no plugin declares them. */
-  runtimeOperations?: string[]
+  runtimeOperations: string[]
 }
 
 /** The shape of `capability-baseline.json`, and of the working tree's contracts. */
@@ -87,26 +87,30 @@ export function findMajorProblems(
       )
     }
 
-    const runtimeBefore = before.runtimeOperations ?? []
-    const runtimeAfter = after.runtimeOperations ?? []
-    for (const operation of runtimeBefore) {
-      if (!runtimeAfter.includes(operation)) {
+    for (const operation of before.runtimeOperations) {
+      if (!after.runtimeOperations.includes(operation)) {
         problems.push(`${key}: runtime operation ${operation} was removed`)
       }
     }
 
-    const kept = [...before.operations, ...before.optionalOperations, ...runtimeBefore].filter(
+    const kept = [
+      ...before.operations,
+      ...before.optionalOperations,
+      ...before.runtimeOperations
+    ].filter(
       (operation) =>
         after.operations.includes(operation) ||
         after.optionalOperations.includes(operation) ||
-        runtimeAfter.includes(operation)
+        after.runtimeOperations.includes(operation)
     )
     for (const operation of kept) {
       const old = publishedMethods.get(operation)
       const now = currentMethods.get(operation)
-      // buildCapabilityBaseline records every operation, so a missing entry is
-      // a baseline written before the operation's schemas were recorded.
-      if (!old || !now) continue
+      if (!old || !now) {
+        const side = old ? 'the working tree' : 'the published baseline'
+        problems.push(`${key}: ${operation} has no recorded schemas in ${side}`)
+        continue
+      }
       if (old.callShape !== now.callShape) {
         problems.push(`${key}: ${operation} changed from ${old.callShape} to ${now.callShape}`)
         continue

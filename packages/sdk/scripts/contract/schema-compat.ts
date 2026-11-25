@@ -177,6 +177,10 @@ export function findIncompatibility(
 ): string | undefined {
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   const validators = new Map<string, (value: unknown) => boolean>()
+  // A response is compared new-against-old, so a problem the request wording
+  // calls narrowing is a widening of the response.
+  const say = (request: string, response: string) =>
+    options.direction === 'request' ? request : response
 
   function accepts(schema: unknown, value: unknown): boolean {
     const key = canonical(schema, { defs: supDefs })
@@ -210,8 +214,15 @@ export function findIncompatibility(
     }
 
     if (isAnything(b) || a === false) return undefined
-    if (b === false) return `${show(path)} is no longer accepted`
-    if (a === true || !isNode(a)) return `${show(path)} accepted any value and no longer does`
+    if (b === false) {
+      return say(`${show(path)} is no longer accepted`, `${show(path)} can now be present`)
+    }
+    if (a === true || !isNode(a)) {
+      return say(
+        `${show(path)} accepted any value and no longer does`,
+        `${show(path)} can now be any value`
+      )
+    }
     if (!isNode(b)) return `${show(path)} cannot be compared`
 
     if (canonical(a, { defs: subDefs }) === canonical(b, { defs: supDefs })) return undefined
@@ -253,25 +264,41 @@ export function findIncompatibility(
       }
       return reasons.length === 1
         ? reasons[0]
-        : `no alternative of ${show(path)} accepts what it accepted before`
+        : say(
+            `no alternative of ${show(path)} accepts what it accepted before`,
+            `${show(path)} can now be a value no old alternative accepts`
+          )
     }
 
     const values = fixedValues(a)
     if (values) {
       const rejected = values.find((value) => !accepts(b, value))
-      return rejected === undefined
-        ? undefined
-        : `${show(path)} no longer accepts ${JSON.stringify(rejected)}`
+      if (rejected === undefined) return undefined
+      const shown = JSON.stringify(rejected)
+      return say(`${show(path)} no longer accepts ${shown}`, `${show(path)} can now be ${shown}`)
     }
-    if (fixedValues(b)) return `${show(path)} is now limited to fixed values`
+    if (fixedValues(b)) {
+      return say(
+        `${show(path)} is now limited to fixed values`,
+        `${show(path)} is no longer limited to fixed values`
+      )
+    }
 
     const subTypes = types(a)
     const supTypes = types(b)
     if (supTypes) {
-      if (!subTypes) return `${show(path)} is now limited to ${[...supTypes].join(' or ')}`
+      const listed = [...supTypes].join(' or ')
+      if (!subTypes) {
+        return say(
+          `${show(path)} is now limited to ${listed}`,
+          `${show(path)} is no longer limited to ${listed}`
+        )
+      }
       for (const type of subTypes) {
         const allowed = supTypes.has(type) || (type === 'integer' && supTypes.has('number'))
-        if (!allowed) return `${show(path)} no longer accepts ${type}`
+        if (!allowed) {
+          return say(`${show(path)} no longer accepts ${type}`, `${show(path)} can now be ${type}`)
+        }
       }
     }
 
@@ -287,19 +314,28 @@ export function findIncompatibility(
       const supMin = b[min]
       const subMin = a[min]
       if (typeof supMin === 'number' && !(typeof subMin === 'number' && subMin >= supMin)) {
-        return `the minimum ${label} of ${show(path)} increased`
+        return say(
+          `the minimum ${label} of ${show(path)} increased`,
+          `the minimum ${label} of ${show(path)} decreased`
+        )
       }
       const supMax = b[max]
       const subMax = a[max]
       if (typeof supMax === 'number' && !(typeof subMax === 'number' && subMax <= supMax)) {
-        return `the maximum ${label} of ${show(path)} decreased`
+        return say(
+          `the maximum ${label} of ${show(path)} decreased`,
+          `the maximum ${label} of ${show(path)} increased`
+        )
       }
     }
 
     if (typeof b['multipleOf'] === 'number') {
       const subStep = a['multipleOf']
       if (typeof subStep !== 'number' || !Number.isInteger(subStep / b['multipleOf'])) {
-        return `${show(path)} must now be a multiple of ${b['multipleOf']}`
+        return say(
+          `${show(path)} must now be a multiple of ${b['multipleOf']}`,
+          `${show(path)} is no longer always a multiple of ${b['multipleOf']}`
+        )
       }
     }
     for (const key of ['pattern', 'format', 'contentEncoding'] as const) {
@@ -384,7 +420,12 @@ export function findIncompatibility(
       }
     }
     if (isNode(subExtra) && !isAnything(subExtra)) {
-      if (supExtra === false) return `${show(path)} no longer accepts map entries`
+      if (supExtra === false) {
+        return say(
+          `${show(path)} no longer accepts map entries`,
+          `${show(path)} can now carry map entries`
+        )
+      }
       for (const [key, supProp] of Object.entries(supProps)) {
         if (key in subProps) continue
         const problem = check(subExtra, supProp, at(path, key), seen)
@@ -409,7 +450,11 @@ export function findIncompatibility(
           (subMin !== undefined && subMin > supExclusive)
         : (subMin !== undefined && subMin >= (supMin as number)) ||
           (subExclusive !== undefined && subExclusive >= (supMin as number))
-    return ok ? undefined : `the lower bound of ${show(path)} increased`
+    if (ok) return undefined
+    return say(
+      `the lower bound of ${show(path)} increased`,
+      `the lower bound of ${show(path)} decreased`
+    )
   }
 
   function upperBoundProblem(a: Node, b: Node, path: string): string | undefined {
@@ -425,7 +470,11 @@ export function findIncompatibility(
           (subMax !== undefined && subMax < supExclusive)
         : (subMax !== undefined && subMax <= (supMax as number)) ||
           (subExclusive !== undefined && subExclusive <= (supMax as number))
-    return ok ? undefined : `the upper bound of ${show(path)} decreased`
+    if (ok) return undefined
+    return say(
+      `the upper bound of ${show(path)} decreased`,
+      `the upper bound of ${show(path)} increased`
+    )
   }
 
   return check(sub, sup, '', new Set())
