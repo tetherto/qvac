@@ -91,10 +91,10 @@ test('completion: the checkpoint and prompt-cache keys stay out of the fit reque
   t.is(config['ctx_size'], '4096')
 })
 
-test('completion: the image limit stays out of the fit request', (t) => {
+test('completion: the image limit travels to the fitter', (t) => {
   const config = llmRequest(completion({ 'image-max-megapixels': 20 }))?.config ?? {}
 
-  t.absent('image-max-megapixels' in config)
+  t.is(config['image-max-megapixels'], '20')
   t.is(config['ctx_size'], '4096')
 })
 
