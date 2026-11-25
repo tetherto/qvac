@@ -28,7 +28,7 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
 - `"active"` — all SDK operations are accepted normally
 - `"suspending"` — `suspend()` is in progress; non-lifecycle operations are already blocked
-- `"suspended"` — runtime is paused; only `suspend()`, `resume()`, `state()` are accepted
+- `"suspended"` — runtime is paused; only `suspend()`, `resume()`, `state()` and `getRuntimeCapabilities()` are accepted
 - `"resuming"` — `resume()` is in progress; non-lifecycle operations are still blocked
 
 A partial `resume()` failure leaves the runtime in `"suspended"` (not `"active"`), so callers can retry `resume()` without leaking the failed state.
@@ -36,7 +36,7 @@ A partial `resume()` failure leaves the runtime in `"suspended"` (not `"active"`
 ## Behavior while suspended
 
 <Callout type="info">
-While runtime state is not `"active"`, only `suspend()`, `resume()`, and `state()` are accepted. Any other request fails fast with `LIFECYCLE_OPERATION_BLOCKED` instead of hanging.
+While runtime state is not `"active"`, only `suspend()`, `resume()`, `state()` and `getRuntimeCapabilities()` are accepted. Any other request fails fast with `LIFECYCLE_OPERATION_BLOCKED` instead of hanging.
 </Callout>
 
 In-flight operations started **before** `suspend()` follow the matrix below:

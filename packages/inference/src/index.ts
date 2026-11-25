@@ -34,6 +34,7 @@ export {
   stopRpcServer,
   discoverRpcServers,
   getSystemResources,
+  getRuntimeCapabilities,
   assessModelFit,
   loggingStream,
   subscribeServerLogs,

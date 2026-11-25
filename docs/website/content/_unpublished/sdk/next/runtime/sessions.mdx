@@ -20,7 +20,7 @@ Calls made without a session run as the **owner**. Existing single-caller code n
 
 ## Functions
 
-1. `openSession({ name? })` — returns a session handle at once. The open round trip runs in the background; calls on the handle wait for it.
+1. `openSession({ name?, grant? })` — returns a session handle at once. The open round trip runs in the background; calls on the handle wait for it.
 2. `session.close()` — ends the session. It does not stop the runtime.
 3. `close()` — the owner's shutdown. It stops the runtime and ends every session.
 
@@ -49,6 +49,30 @@ A loaded model records which sessions hold it.
 ## Owner-only operations
 
 [`suspend()`](/sdk/reference/api#suspend), [`resume()`](/sdk/reference/api#resume), [`deleteCache()`](/sdk/reference/api#deletecache), [`startRpcServer()`](/sdk/reference/api#startrpcserver) and [`stopRpcServer()`](/sdk/reference/api#stoprpcserver) change the runtime for every session, so only the owner may call them. A session handle has no method for them, and the worker refuses them from a session with `OwnerOnlyError`. A session cannot open another session.
+
+## Capability grants
+
+`openSession({ grant })` limits a session to the operations it lists, for example when a harness hands a session to a skill runner. A grant is a list of permissions, one per operation:
+
+- `<capability ID>/<operation>` for an operation of a [capability contract](/sdk/runtime/capabilities), such as `transcription/transcribe`;
+- `runtime/<operation>` for `loadModel`, `downloadAsset`, `vectorIndex`, `loggingStream`, `discoverRpcServers`, `getModelInfo`, `assessModelFit`, `modelRegistryList`, `modelRegistrySearch` and `modelRegistryGetModel`, which the runtime serves itself. They load models, fetch files, write storage, stream runtime-wide logs or can reach the network.
+
+```ts
+import { openSession, capabilityPermissions, CAPABILITY_CONTRACTS } from '@qvac/sdk'
+
+const skills = openSession({
+  name: 'skill-runner',
+  grant: ['runtime/loadModel', ...capabilityPermissions(CAPABILITY_CONTRACTS.transcription)]
+})
+```
+
+- Without `grant`, the session is unrestricted. With `grant: []`, it may call only the operations that need no permission: `cancel`, `unloadModel`, `heartbeat`, `state`, `getRuntimeCapabilities`, `getLoadedModelInfo` and `getSystemResources`.
+- A call outside the grant fails with `CapabilityNotGrantedError`, whose `required` names the missing permission. A plugin handler that no capability contract of its plugin lists is refused for every session with a grant, with `required: null`.
+- A permission names no major version, so it stays the same across versions; check versions with [`getRuntimeCapabilities()`](/sdk/runtime/capabilities). Each operation is its own permission, so an operation a newer runtime adds to a contract is not covered until it is granted. `capabilityPermissions()` lists a contract's operations from the SDK's own copy of the table, so its result does not grow with the runtime.
+- The open fails with `SessionGrantInvalidError` when a permission is malformed, listed twice, or names an operation no registered plugin declares.
+- The grant is fixed for the life of the session. `session.grant` holds it.
+
+A grant restricts only code that reaches the runtime through the session handle and nothing else. Code that can import `@qvac/sdk` or hold its own connection to the worker calls as the owner, which no grant restricts. Give a grant-limited session to code across a process boundary, such as a skill runner the harness reaches only through a proxy. A grant does not authenticate callers.
 
 ## Runtime loss
 
@@ -111,3 +135,5 @@ The following script opens two sessions that share one model by lease, shows tha
 - `ModelLeasedError` — a reload of a model's configuration while another session holds a lease on it.
 - `ModelReconfiguredError` — a load, from a session that holds no lease, of a configuration whose model was since reloaded with another configuration.
 - `OwnerOnlyError` — a session called an owner-only operation.
+- `CapabilityNotGrantedError` — a session opened with a grant called an operation the grant does not cover.
+- `SessionGrantInvalidError` — the grant passed to `openSession()` names a permission the worker does not have.

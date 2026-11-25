@@ -796,14 +796,15 @@ function registerSecondTurnThrowingModel(
   modelId: string,
   calls: RecordedCall[],
   cachePaths: string[],
-  thrown: Error,
+  thrown: Error | ((cacheKey: string | undefined) => Error),
   throwOnRun = 2
-): void {
+): ReturnType<typeof heldConversations> {
   let runCount = 0
   const conversations = heldConversations()
   registerModel(modelId, {
     model: {
       saveCache: conversations.saveCache,
+      discardCache: conversations.discardCache,
       run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
@@ -812,7 +813,9 @@ function registerSecondTurnThrowingModel(
         if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         if (!opts?.prefill) {
           runCount += 1
-          if (runCount === throwOnRun) throw thrown
+          if (runCount === throwOnRun) {
+            throw typeof thrown === 'function' ? thrown(opts?.cacheKey) : thrown
+          }
         }
         conversations.hold(opts?.cacheKey)
         return {
@@ -828,6 +831,7 @@ function registerSecondTurnThrowingModel(
     config: {},
     modelType: ModelType.llamacppCompletion
   })
+  return conversations
 }
 
 // Turn one commits, turn two fails or stops early, turn three retries the same
@@ -1058,6 +1062,69 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
   t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
   assertRetryReusesCache(t, turnCalls, cachePaths)
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A file the addon cannot load fails every request that loads it, so the
+// failed turn removes it and the retry starts cold on the same key.
+test('completion: kv-cache drops a cache file the addon cannot load', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) => new Error(`TextLlmContext::loadCache: failed to load cache '${cacheKey}'`)
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'unloadable-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && /failed to load cache/.test(refusal.message), 'turn two fails')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache drops a cache file over the slot limit as a context overflow', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-over-limit-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) =>
+      new Error(
+        `TextLlmContext::loadCache: cache '${cacheKey}' exceeds the context limit of 8192 tokens`
+      )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'over-limit-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  t.alike(conversations.discarded, [cachePaths[1]], 'rollback discards the held conversation')
+  t.is((refusal as { ctxSize?: number }).ctxSize, 8192, 'the limit is the slot limit')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
 
   unregisterModel(modelId)
   clearRegistry()
