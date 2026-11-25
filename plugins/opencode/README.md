@@ -184,11 +184,11 @@ nothing is torn down when OpenCode exits.
 
 - OpenCode 2.x. The plugin uses the V2 plugin API (`@opencode/plugin`) and does
   not load in OpenCode 1.x.
-- [`@qvac/ai-sdk-provider@^0.12.1`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
+- [`@qvac/ai-sdk-provider@^0.13.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
   for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
   so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
   [Provider compatibility](#provider-compatibility).
-- [`@qvac/cli@^0.20.0`](https://www.npmjs.com/package/@qvac/cli) available so the
+- [`@qvac/cli@^0.21.0`](https://www.npmjs.com/package/@qvac/cli) available so the
   host can run `qvac serve` (SDK 0.24 runtime). `--api-key-file`, which keeps the
   managed serve's bearer key out of the process command line, has been accepted
   since CLI 0.11.0.
