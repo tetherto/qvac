@@ -12,7 +12,12 @@ const BIT_WIDTH = Symbol('IdMapIndex.bitWidth')
 const LENGTH = Symbol('IdMapIndex.length')
 const CALIBRATED = Symbol('IdMapIndex.calibrated')
 const STAGED = Symbol('IdMapIndex.staged')
+const THREADS = Symbol('IdMapIndex.threads')
+const STORAGE = Symbol('IdMapIndex.storage')
+const LEGACY = Symbol('IdMapIndex.legacy')
 const INT32_MAX = 0x7fffffff
+// Fabric's limit for ggml_vec_index_set_threads.
+const MAX_THREADS = 256
 // Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
 // keeps prepareFilter amortized O(1) instead of rescanning on every call.
 const MIN_FILTERS_PRUNE_AT = 64
@@ -22,11 +27,13 @@ const BIT_WIDTH_BY_STORAGE = {
   q8: 8,
   q4: 4,
   'turbovec-q4': 4,
+  'turbovec-q3': 3,
   'turbovec-q2': 2
 } as const
 
 const STORAGE_BY_BIT_WIDTH = {
   2: 'turbovec-q2',
+  3: 'turbovec-q3',
   4: 'q4',
   8: 'q8',
   32: 'f32'
@@ -55,6 +62,10 @@ interface IdMapIndexBinding {
   idx_bit_width(handle: NativeHandle): IdMapIndexBitWidth
   idx_calibrated(handle: NativeHandle): boolean
   idx_staged(handle: NativeHandle): boolean
+  idx_threads(handle: NativeHandle): number
+  idx_set_threads(handle: NativeHandle, nThreads: number): void
+  idx_storage(handle: NativeHandle): IdMapIndexStorage
+  idx_legacy(handle: NativeHandle): boolean
   idx_abort_token_create(): AbortToken
   idx_abort_token_abort(token: AbortToken): void
   idx_load_async(path: string, token: Token): Promise<NativeHandle>
@@ -64,6 +75,7 @@ interface IdMapIndexBinding {
     deltaPath: string,
     token: Token
   ): Promise<NativeHandle>
+  idx_from_bytes_async(bytes: Uint8Array, token: Token): Promise<NativeHandle>
   idx_add_async(
     handle: NativeHandle,
     vectors: Float32Array,
@@ -132,7 +144,10 @@ interface IdMapIndexBinding {
   ): Promise<IdMapIndexSearchResult>
   idx_compact_async(handle: NativeHandle, token: Token): Promise<void>
   idx_prepare_async(handle: NativeHandle, token: Token): Promise<void>
-  idx_write_async(handle: NativeHandle, path: string, token: Token): Promise<void>
+  idx_write_async(handle: NativeHandle, path: string, fast: boolean, token: Token): Promise<void>
+  idx_sync_async(handle: NativeHandle, path: string, token: Token): Promise<void>
+  idx_ids_async(handle: NativeHandle, token: Token): Promise<BigUint64Array>
+  idx_to_bytes_async(handle: NativeHandle, token: Token): Promise<Uint8Array>
   idx_compact_delta_async(
     handle: NativeHandle,
     snapshotPath: string,
@@ -149,7 +164,7 @@ function loadBinding() {
   return binding
 }
 
-export type IdMapIndexBitWidth = 2 | 4 | 8 | 32
+export type IdMapIndexBitWidth = 2 | 3 | 4 | 8 | 32
 export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE
 
 export interface IdMapIndexOptions {
@@ -158,10 +173,15 @@ export interface IdMapIndexOptions {
    * divisible by 8 and no greater than 16,384.
    */
   dim: number
-  /** 2 = TurboVec q2, 4 = q4, 8 = q8, and 32 = full f32 storage. Defaults to 8. */
+  /**
+   * 2 = TurboVec q2, 3 = TurboVec q3, 4 = q4, 8 = q8, and 32 = full f32
+   * storage. Defaults to 8.
+   */
   bitWidth?: IdMapIndexBitWidth
   /** Use `turbovec-q4` to distinguish TurboVec q4 from generic q4 storage. */
   storage?: IdMapIndexStorage
+  /** Worker threads for the index's calls; see `setThreads()`. Defaults to 1. */
+  threads?: number
 }
 
 /**
@@ -186,6 +206,16 @@ export interface IdMapIndexCallOptions {
   signal?: IdMapIndexAbortSignal
 }
 
+export interface IdMapIndexWriteOptions extends IdMapIndexCallOptions {
+  /**
+   * `durable` (the default) fsyncs the snapshot and its directory before
+   * resolving. `fast` skips both fsyncs: the file is still replaced
+   * atomically and survives a process crash, but a power loss soon after
+   * may lose it, and a delta log cannot start from it.
+   */
+  durability?: 'durable' | 'fast'
+}
+
 export interface IdMapIndexSearchResult {
   /**
    * Row-major similarity scores. f32/q4/q8 use dot products against stored or
@@ -208,6 +238,23 @@ function isPositiveInt32(value: number) {
 
 function isNonNegativeInt32(value: number) {
   return Number.isInteger(value) && value >= 0 && value <= INT32_MAX
+}
+
+function requireThreads(value: number, name: string) {
+  if (!Number.isInteger(value) || value < 1 || value > MAX_THREADS) {
+    throw new TypeError(`${name} must be an integer from 1 to ${MAX_THREADS}`)
+  }
+}
+
+function readWriteFast(options: IdMapIndexWriteOptions | undefined) {
+  const durability = options?.durability
+  if (durability === undefined || durability === 'durable') {
+    return false
+  }
+  if (durability === 'fast') {
+    return true
+  }
+  throw new TypeError("write: options.durability must be 'durable' or 'fast'")
 }
 
 function requireNonEmptyPath(value: string, name: string) {
@@ -370,7 +417,7 @@ function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage 
       !Object.prototype.hasOwnProperty.call(BIT_WIDTH_BY_STORAGE, storage)
     ) {
       throw new TypeError(
-        "IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', or 'turbovec-q2'"
+        "IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q3', or 'turbovec-q2'"
       )
     }
     // A null bitWidth counts as the default 8, as it did in embed-llamacpp.
@@ -385,7 +432,7 @@ function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage 
     typeof width !== 'number' ||
     !Object.prototype.hasOwnProperty.call(STORAGE_BY_BIT_WIDTH, width)
   ) {
-    throw new TypeError('IdMapIndex: bitWidth must be 2, 4, 8, or 32')
+    throw new TypeError('IdMapIndex: bitWidth must be 2, 3, 4, 8, or 32')
   }
   return STORAGE_BY_BIT_WIDTH[width]
 }
@@ -537,10 +584,13 @@ export default class IdMapIndex {
   [BIT_WIDTH]: IdMapIndexBitWidth = 8;
   [LENGTH] = 0;
   [CALIBRATED] = false;
-  [STAGED] = false
+  [STAGED] = false;
+  [THREADS] = 1;
+  [STORAGE]: IdMapIndexStorage = 'q8';
+  [LEGACY] = false
 
   constructor(options: IdMapIndexOptions) {
-    const { dim } = options ?? ({} as IdMapIndexOptions)
+    const { dim, threads } = options ?? ({} as IdMapIndexOptions)
     if (!isPositiveInt32(dim)) {
       throw new TypeError('IdMapIndex: dim must be a positive int32')
     }
@@ -550,7 +600,15 @@ export default class IdMapIndex {
         'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384'
       )
     }
-    this[HANDLE] = loadBinding().idx_create({ dim, storage })
+    if (threads !== undefined) {
+      requireThreads(threads, 'IdMapIndex: threads')
+    }
+    const native = loadBinding()
+    const handle = native.idx_create({ dim, storage })
+    this[HANDLE] = handle
+    if (threads !== undefined) {
+      native.idx_set_threads(handle, threads)
+    }
     this.readState()
   }
 
@@ -637,6 +695,34 @@ export default class IdMapIndex {
     const signal = readSignal('IdMapIndex.loadWithDelta', options)
     return IdMapIndex.startLoad(this, signal, (token) =>
       loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath, token)
+    )
+  }
+
+  /**
+   * Load a TurboVec snapshot from the bytes `toBytes()` returns, or from the
+   * contents of a TurboVec v8 snapshot file. Other snapshots, including v3,
+   * are rejected. The bytes are copied when the call is made. Loads with
+   * staged search off and 1 thread, as `load()` does. Resolves to a subclass
+   * instance when called on a subclass, as `load()` does.
+   */
+  static fromBytes<T extends IdMapIndex>(
+    this: IdMapIndexClass<T>,
+    bytes: Uint8Array,
+    options?: IdMapIndexCallOptions
+  ): Promise<T>
+  /** Detached call, e.g. `const { fromBytes } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static fromBytes(bytes: Uint8Array, options?: IdMapIndexCallOptions): Promise<IdMapIndex>
+  static async fromBytes(
+    this: unknown,
+    bytes: Uint8Array,
+    options?: IdMapIndexCallOptions
+  ): Promise<IdMapIndex> {
+    if (!(bytes instanceof Uint8Array)) {
+      throw new TypeError('IdMapIndex.fromBytes: bytes must be a Uint8Array')
+    }
+    const signal = readSignal('IdMapIndex.fromBytes', options)
+    return IdMapIndex.startLoad(this, signal, (token) =>
+      loadBinding().idx_from_bytes_async(bytes, token)
     )
   }
 
@@ -945,14 +1031,89 @@ export default class IdMapIndex {
    * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
    * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
    * must use `compactDelta()`. A NotDurable error means replacement succeeded
-   * but parent-directory durability was not confirmed.
+   * but parent-directory durability was not confirmed. See
+   * {@link IdMapIndexWriteOptions} for `durability`.
    */
-  async write(path: string, options?: IdMapIndexCallOptions) {
+  async write(path: string, options?: IdMapIndexWriteOptions) {
     requireNonEmptyPath(path, 'write: path')
     const signal = readSignal('write', options)
+    const fast = readWriteFast(options)
     return enqueue(
       this,
-      (token) => loadBinding().idx_write_async(ensureHandle(this), path, token),
+      (token) => loadBinding().idx_write_async(ensureHandle(this), path, fast, token),
+      signal
+    )
+  }
+
+  /**
+   * Save a TurboVec index to `path`, writing only what changed since its last
+   * sync there. The first sync to a path, and the first after a calibration
+   * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
+   * at any point leaves the previous sync loadable. An index loaded from a
+   * synced file keeps syncing to it incrementally. One index may sync to a
+   * path at a time: when another writer has changed the file, this rejects
+   * with `IOError` and the file must be loaded again to continue. Rejects
+   * with `InvalidArgument` for non-TurboVec storage and for an index loaded
+   * from a v3 snapshot.
+   */
+  async sync(path: string, options?: IdMapIndexCallOptions) {
+    requireNonEmptyPath(path, 'sync: path')
+    const signal = readSignal('sync', options)
+    return enqueue(
+      this,
+      (token) => loadBinding().idx_sync_async(ensureHandle(this), path, token),
+      signal
+    )
+  }
+
+  /**
+   * The bytes `write()` would put in a TurboVec snapshot file, for storing
+   * an index somewhere other than a file. Load them with
+   * `IdMapIndex.fromBytes()`. Rejects with `InvalidArgument` for non-TurboVec
+   * storage and for an index loaded from a v3 snapshot.
+   */
+  async toBytes(options?: IdMapIndexCallOptions) {
+    const signal = readSignal('toBytes', options)
+    return enqueue(
+      this,
+      (token) => loadBinding().idx_to_bytes_async(ensureHandle(this), token),
+      signal
+    )
+  }
+
+  /**
+   * All live IDs. The order is stable until the index changes, and on
+   * TurboVec storage until `buildIvf()`.
+   */
+  async ids(options?: IdMapIndexCallOptions) {
+    const signal = readSignal('ids', options)
+    return enqueue(
+      this,
+      (token) => loadBinding().idx_ids_async(ensureHandle(this), token),
+      signal
+    )
+  }
+
+  /**
+   * Set how many threads the calls queued after this one may use, from 1
+   * (the default) to 256, the addon's worker thread included. Searches,
+   * adds and TurboVec calibration split their work across them; results do
+   * not depend on the count. The extra threads come from one pool shared by
+   * every index in the process. Not saved in snapshots: a loaded index
+   * starts at 1.
+   */
+  async setThreads(threads: number, options?: IdMapIndexCallOptions) {
+    requireThreads(threads, 'setThreads: threads')
+    const signal = readSignal('setThreads', options)
+    // Only stores the count, so it runs on the JS thread at this call's turn.
+    return enqueue(
+      this,
+      () => {
+        const handle = ensureHandle(this)
+        const native = loadBinding()
+        native.idx_set_threads(handle, threads)
+        this[THREADS] = native.idx_threads(handle)
+      },
       signal
     )
   }
@@ -983,9 +1144,9 @@ export default class IdMapIndex {
    * first and scores only a shortlist: several times faster per query, but
    * it can miss some of the best matches, especially at small k. It applies
    * only at a dimension divisible by 32, on hosts that support it, and never
-   * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
-   * every search scans in full. Rejects for non-TurboVec storage. Not saved
-   * in snapshots.
+   * to an index loaded from a v3 snapshot or to `turbovec-q3` storage;
+   * elsewhere the setting is kept but every search scans in full. Rejects
+   * for non-TurboVec storage. Not saved in snapshots.
    */
   async setStagedSearch(enabled: boolean, options?: IdMapIndexCallOptions) {
     if (typeof enabled !== 'boolean') {
@@ -1018,6 +1179,28 @@ export default class IdMapIndex {
   get bitWidth() {
     ensureHandle(this)
     return this[BIT_WIDTH]
+  }
+
+  /** Storage mode; unlike `bitWidth`, tells TurboVec q4 from generic q4. */
+  get storage() {
+    ensureHandle(this)
+    return this[STORAGE]
+  }
+
+  /** Threads the index's calls may use, as of the last `setThreads()` that finished. */
+  get threads() {
+    ensureHandle(this)
+    return this[THREADS]
+  }
+
+  /**
+   * Whether this is a TurboVec index loaded from a v3 snapshot of an earlier
+   * release. It keeps that encoding and writes v3, and supports neither
+   * `sync()` nor `toBytes()`.
+   */
+  get legacy() {
+    ensureHandle(this)
+    return this[LEGACY]
   }
 
   /**
@@ -1092,6 +1275,9 @@ export default class IdMapIndex {
     this[LENGTH] = native.idx_len(handle)
     this[CALIBRATED] = native.idx_calibrated(handle)
     this[STAGED] = native.idx_staged(handle)
+    this[THREADS] = native.idx_threads(handle)
+    this[STORAGE] = native.idx_storage(handle)
+    this[LEGACY] = native.idx_legacy(handle)
   }
 
   // After a mutation: prepared filters no longer match the index, and the

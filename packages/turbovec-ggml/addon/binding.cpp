@@ -509,6 +509,21 @@ js_value_t* toJs(js_env_t* env, const SearchResult& result) {
   return object;
 }
 
+struct IdList {
+  std::vector<uint64_t> ids;
+};
+
+js_value_t* toJs(js_env_t* env, const IdList& list) {
+  std::span<const uint64_t> ids(list.ids);
+  return js::TypedArray<uint64_t>::create(env, ids);
+}
+
+// Copied once into a new Uint8Array; the fabric buffer is freed with the job.
+js_value_t* toJs(js_env_t* env, const turbovec_ggml::SnapshotBytes& bytes) {
+  std::span<const uint8_t> data(bytes.data, bytes.size);
+  return js::TypedArray<uint8_t>::create(env, data);
+}
+
 js_value_t* toJs(js_env_t* env, const std::shared_ptr<VectorIndex>& index) {
   auto state = std::make_shared<IndexState>();
   state->idx = index;
@@ -527,11 +542,12 @@ js_value_t* toJs(js_env_t* env, const std::shared_ptr<FilterHandle>& handle) {
 //
 // Every call that can take more than a moment runs as a JsAsyncTask on one of
 // two process-wide lanes of worker threads, and returns a promise. Long work
-// (adds, IVF builds, loads, writes, compaction, filter creation, logged
-// removes) runs on the bulk lane and the rest (searches, plain removes) on the
-// search lane, so a long build never holds up a search. Each fabric call runs
-// on the one thread that makes it: the addon leaves fabric's per-index thread
-// count at 1.
+// (adds, IVF builds, loads, writes, syncs, serialization, compaction, filter
+// creation, logged removes) runs on the bulk lane and the rest (searches, id
+// listing, plain removes) on the search lane, so a long build never holds up
+// a search. A fabric call runs on the lane thread that makes it, plus helpers
+// from fabric's own process-wide pool when the index's thread count
+// (setThreads) is above 1.
 
 enum class Lane : uint8_t { Bulk, Search };
 
@@ -748,7 +764,7 @@ js_value_t* idxFilterDispose(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
-// Generic int32 getter for len/dim/bitWidth.
+// Generic int32 getter for len/dim/bitWidth/threads.
 template <int (VectorIndex::*Fn)() const noexcept>
 js_value_t* idxIntGetter(js_env_t* env, js_callback_info_t* info) try {
   const Args argv = readArgs(env, info, 1, "handle");
@@ -766,6 +782,38 @@ TURBOVEC_CATCH
 js_value_t* idxStaged(js_env_t* env, js_callback_info_t* info) try {
   const Args argv = readArgs(env, info, 1, "handle");
   return js::Boolean::create(env, liveIndex(env, argv[0])->idx->staged());
+}
+TURBOVEC_CATCH
+
+// idxSetThreads(handle, nThreads) -> undefined. Only stores the count fabric
+// splits later calls across, so it runs on the JS thread at its turn.
+js_value_t* idxSetThreads(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 2, "(handle, nThreads:number)");
+  const std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
+  const int32_t nThreads = readPositiveInt32(env, argv[1], "n_threads");
+  if (nThreads > VectorIndex::MAX_THREADS) {
+    fail("InvalidArgument", "n_threads must be at most 256");
+  }
+  checkStatus(state->idx->setThreads(nThreads));
+  return js::Undefined::create(env);
+}
+TURBOVEC_CATCH
+
+// idxStorage(handle) -> storage name.
+js_value_t* idxStorage(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "handle");
+  const char* name =
+      turbovec_ggml::storageName(liveIndex(env, argv[0])->idx->storage());
+  if (name == nullptr) {
+    fail("InternalError", "index has an unknown storage");
+  }
+  return js::String::create(env, name);
+}
+TURBOVEC_CATCH
+
+js_value_t* idxLegacy(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "handle");
+  return js::Boolean::create(env, liveIndex(env, argv[0])->idx->legacy());
 }
 TURBOVEC_CATCH
 
@@ -828,6 +876,21 @@ js_value_t* idxLoadWithDeltaAsync(js_env_t* env, js_callback_info_t* info) try {
       [snapshot = readString(env, argv[0], "snapshotPath"),
        delta = readString(env, argv[1], "deltaPath")](int* status) {
         return VectorIndex::loadWithDelta(snapshot, delta, status);
+      });
+}
+TURBOVEC_CATCH
+
+// idxFromBytesAsync(bytes, token?) -> Promise<handle>. Loads start at once,
+// but on a worker, so the bytes are always copied first.
+js_value_t* idxFromBytesAsync(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "bytes:Uint8Array");
+  const std::span<const uint8_t> view =
+      viewTypedArray<uint8_t>(env, argv[0], "bytes", "Uint8Array");
+  return startLoad(
+      env,
+      readToken(env, argv, 1),
+      [bytes = takeInput(env, argv[0], view, false)](int* status) {
+        return VectorIndex::fromBytes(bytes.data, bytes.size, status);
       });
 }
 TURBOVEC_CATCH
@@ -1113,8 +1176,29 @@ js_value_t* idxPrepareAsync(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
-// idxWriteAsync(handle, path, token?) -> Promise<undefined>
+// idxWriteAsync(handle, path, fast?, token?) -> Promise<undefined>
 js_value_t* idxWriteAsync(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 2, "(handle, path)");
+  std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
+  bool fast = false;
+  if (!isMissing(env, argv, 2)) {
+    if (!js::is<js::Boolean>(env, argv[2])) {
+      fail("InvalidArgument", "fast must be a boolean");
+    }
+    fast = js::Boolean(env, argv[2]).as<bool>(env);
+  }
+  return startBulk(
+      env,
+      std::move(state),
+      readToken(env, argv, 3),
+      [path = readString(env, argv[1], "path"), fast](VectorIndex& idx) {
+        return idx.write(path, fast);
+      });
+}
+TURBOVEC_CATCH
+
+// idxSyncAsync(handle, path, token?) -> Promise<undefined>
+js_value_t* idxSyncAsync(js_env_t* env, js_callback_info_t* info) try {
   const Args argv = readArgs(env, info, 2, "(handle, path)");
   std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
   return startBulk(
@@ -1122,7 +1206,47 @@ js_value_t* idxWriteAsync(js_env_t* env, js_callback_info_t* info) try {
       std::move(state),
       readToken(env, argv, 2),
       [path = readString(env, argv[1], "path")](VectorIndex& idx) {
-        return idx.write(path);
+        return idx.sync(path);
+      });
+}
+TURBOVEC_CATCH
+
+// idxIdsAsync(handle, token?) -> Promise<BigUint64Array>. A read, so it runs
+// on the search lane.
+js_value_t* idxIdsAsync(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "handle");
+  std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
+  std::shared_ptr<VectorIndex> idx = state->idx;
+  return startJob(
+      env,
+      Lane::Search,
+      std::move(state),
+      nullptr,
+      readToken(env, argv, 1),
+      [idx = std::move(idx)]() {
+        IdList list;
+        checkStatus(idx->ids(list.ids));
+        return list;
+      });
+}
+TURBOVEC_CATCH
+
+// idxToBytesAsync(handle, token?) -> Promise<Uint8Array>. Serializes the
+// whole index, so it runs on the bulk lane.
+js_value_t* idxToBytesAsync(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "handle");
+  std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
+  std::shared_ptr<VectorIndex> idx = state->idx;
+  return startJob(
+      env,
+      Lane::Bulk,
+      std::move(state),
+      nullptr,
+      readToken(env, argv, 1),
+      [idx = std::move(idx)]() {
+        turbovec_ggml::SnapshotBytes bytes;
+        checkStatus(idx->toBytes(bytes));
+        return bytes;
       });
 }
 TURBOVEC_CATCH
@@ -1170,11 +1294,16 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_bit_width", (idxIntGetter<&VectorIndex::bitWidth>));
   V("idx_calibrated", idxCalibrated);
   V("idx_staged", idxStaged);
+  V("idx_threads", (idxIntGetter<&VectorIndex::threads>));
+  V("idx_set_threads", idxSetThreads);
+  V("idx_storage", idxStorage);
+  V("idx_legacy", idxLegacy);
   V("idx_abort_token_create", idxAbortTokenCreate);
   V("idx_abort_token_abort", idxAbortTokenAbort);
   V("idx_load_async", idxLoadAsync);
   V("idx_load_mmap_async", idxLoadMmapAsync);
   V("idx_load_with_delta_async", idxLoadWithDeltaAsync);
+  V("idx_from_bytes_async", idxFromBytesAsync);
   V("idx_add_async", idxAddAsync);
   V("idx_add_logged_async", idxAddLoggedAsync);
   V("idx_remove_async", idxRemoveAsync);
@@ -1189,6 +1318,9 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_compact_async", idxCompactAsync);
   V("idx_prepare_async", idxPrepareAsync);
   V("idx_write_async", idxWriteAsync);
+  V("idx_sync_async", idxSyncAsync);
+  V("idx_ids_async", idxIdsAsync);
+  V("idx_to_bytes_async", idxToBytesAsync);
   V("idx_compact_delta_async", idxCompactDeltaAsync);
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

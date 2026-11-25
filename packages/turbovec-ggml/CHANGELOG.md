@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Exposed the TurboVec features of `@qvac/fabric` 0.33 that the addon did not
+  reach yet:
+  - `threads` constructor option, `setThreads(n)` and a `threads` getter:
+    searches, adds and TurboVec calibration on an index can split their work
+    across up to 256 threads from fabric's shared pool. Results do not depend
+    on the count. The default stays 1.
+  - `sync(path)` saves a TurboVec index incrementally, writing only what
+    changed since its last sync to that path.
+  - `toBytes()` and the static `IdMapIndex.fromBytes()` keep a TurboVec
+    snapshot in memory instead of a file. The bytes are those `write()` puts
+    in the file.
+  - `ids()` resolves to every live ID as a `BigUint64Array`.
+  - `turbovec-q3` storage (`bitWidth: 3`), TurboVec's 3-bit mode.
+  - `write(path, { durability: 'fast' })` skips the fsyncs.
+  - `storage` getter, which tells TurboVec q4 from generic q4, and a `legacy`
+    getter for a TurboVec index loaded from a v3 snapshot.
+
 ## [0.8.0] - 2026-11-23
 
 ### Changed

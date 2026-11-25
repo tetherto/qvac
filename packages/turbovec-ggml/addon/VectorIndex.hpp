@@ -9,17 +9,42 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ggml-vector-index.h>
 
 namespace turbovec_ggml {
 
-enum class VectorStorage : std::uint8_t { F32, Q8, Q4, TurboVecQ4, TurboVecQ2 };
+enum class VectorStorage : std::uint8_t {
+  F32,
+  Q8,
+  Q4,
+  TurboVecQ4,
+  TurboVecQ3,
+  TurboVecQ2
+};
 
 // Parses the JS storage name (`f32`, `q8`, `q4`, `turbovec-q4`,
-// `turbovec-q2`). Returns nullopt for anything else.
+// `turbovec-q3`, `turbovec-q2`). Returns nullopt for anything else.
 std::optional<VectorStorage>
 parseVectorStorage(std::string_view storage) noexcept;
+
+// The JS storage name of a fabric `ggml_vec_index_storage` value, or nullptr
+// for GGML_VEC_INDEX_STORAGE_NONE and unknown values.
+const char* storageName(int storage) noexcept;
+
+// A snapshot buffer fabric allocated; freed with ggml_vec_index_bytes_free.
+struct SnapshotBytes {
+  SnapshotBytes() noexcept = default;
+  ~SnapshotBytes();
+  SnapshotBytes(const SnapshotBytes&) = delete;
+  SnapshotBytes& operator=(const SnapshotBytes&) = delete;
+  SnapshotBytes(SnapshotBytes&& other) noexcept;
+  SnapshotBytes& operator=(SnapshotBytes&& other) noexcept;
+
+  uint8_t* data = nullptr;
+  size_t size = 0;
+};
 
 class VectorIndexFilter {
 public:
@@ -132,8 +157,29 @@ public:
       const float* queries, int nQ, int k, int nProbe, float* outScores,
       uint64_t* outIds) const noexcept;
 
-  // Persists to disk. Returns 0 on success.
-  int write(const std::string& path) noexcept;
+  // Persists to disk. Returns 0 on success. A fast write skips both fsyncs:
+  // the file is still replaced atomically, but a power loss soon after may
+  // lose it, and it cannot start a delta log.
+  int write(const std::string& path, bool fast = false) noexcept;
+
+  // Incremental save of a TurboVec 1.x index: writes only what changed since
+  // the last sync to `path`. E_INVALID_ARG for other indexes, E_IO when
+  // another writer has advanced or replaced the file.
+  int sync(const std::string& path) noexcept;
+
+  // The live ids, in fabric's stable order. Returns 0 on success.
+  int ids(std::vector<uint64_t>& out) const;
+
+  // The bytes `write` puts in a TurboVec 1.x snapshot file. E_INVALID_ARG
+  // for other indexes.
+  int toBytes(SnapshotBytes& out) const noexcept;
+
+  // Worker threads search, add and calibration may use, the calling thread
+  // included. Results do not depend on it. E_INVALID_ARG outside
+  // 1..MAX_THREADS.
+  static constexpr int MAX_THREADS = 256;
+  int setThreads(int nThreads) noexcept;
+  [[nodiscard]] int threads() const noexcept;
 
   int compactDelta(
       const std::string& snapshotPath, const std::string& deltaPath) noexcept;
@@ -149,10 +195,19 @@ public:
   // Reads from disk with mmap-backed vector storage. Mutations fail.
   static VectorIndex loadMmap(const std::string& path, int* status) noexcept;
 
+  // Loads a TurboVec v8 snapshot from memory, with staged search off as
+  // load() does.
+  static VectorIndex
+  fromBytes(const uint8_t* bytes, size_t size, int* status) noexcept;
+
   // Stats.
   [[nodiscard]] int len() const noexcept;
   [[nodiscard]] int dim() const noexcept;
   [[nodiscard]] int bitWidth() const noexcept;
+  // A `ggml_vec_index_storage` value.
+  [[nodiscard]] int storage() const noexcept;
+  // True for a TurboVec index loaded from a v3 (turbovec 0.9) snapshot.
+  [[nodiscard]] bool legacy() const noexcept;
 
   // True if this instance owns a native handle (i.e. wasn't moved-from /
   // wasn't a failed load).

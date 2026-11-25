@@ -15,7 +15,12 @@ const BIT_WIDTH = Symbol('IdMapIndex.bitWidth');
 const LENGTH = Symbol('IdMapIndex.length');
 const CALIBRATED = Symbol('IdMapIndex.calibrated');
 const STAGED = Symbol('IdMapIndex.staged');
+const THREADS = Symbol('IdMapIndex.threads');
+const STORAGE = Symbol('IdMapIndex.storage');
+const LEGACY = Symbol('IdMapIndex.legacy');
 const INT32_MAX = 0x7fffffff;
+// Fabric's limit for ggml_vec_index_set_threads.
+const MAX_THREADS = 256;
 // Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
 // keeps prepareFilter amortized O(1) instead of rescanning on every call.
 const MIN_FILTERS_PRUNE_AT = 64;
@@ -24,10 +29,12 @@ const BIT_WIDTH_BY_STORAGE = {
     q8: 8,
     q4: 4,
     'turbovec-q4': 4,
+    'turbovec-q3': 3,
     'turbovec-q2': 2
 };
 const STORAGE_BY_BIT_WIDTH = {
     2: 'turbovec-q2',
+    3: 'turbovec-q3',
     4: 'q4',
     8: 'q8',
     32: 'f32'
@@ -43,6 +50,21 @@ function isPositiveInt32(value) {
 }
 function isNonNegativeInt32(value) {
     return Number.isInteger(value) && value >= 0 && value <= INT32_MAX;
+}
+function requireThreads(value, name) {
+    if (!Number.isInteger(value) || value < 1 || value > MAX_THREADS) {
+        throw new TypeError(`${name} must be an integer from 1 to ${MAX_THREADS}`);
+    }
+}
+function readWriteFast(options) {
+    const durability = options?.durability;
+    if (durability === undefined || durability === 'durable') {
+        return false;
+    }
+    if (durability === 'fast') {
+        return true;
+    }
+    throw new TypeError("write: options.durability must be 'durable' or 'fast'");
 }
 function requireNonEmptyPath(value, name) {
     if (typeof value !== 'string' || value.length === 0) {
@@ -176,7 +198,7 @@ function normalizeStorageOptions(options) {
     if (storage !== undefined) {
         if (typeof storage !== 'string' ||
             !Object.prototype.hasOwnProperty.call(BIT_WIDTH_BY_STORAGE, storage)) {
-            throw new TypeError("IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', or 'turbovec-q2'");
+            throw new TypeError("IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q3', or 'turbovec-q2'");
         }
         // A null bitWidth counts as the default 8, as it did in embed-llamacpp.
         if (bitWidth !== undefined && (bitWidth ?? 8) !== BIT_WIDTH_BY_STORAGE[storage]) {
@@ -187,7 +209,7 @@ function normalizeStorageOptions(options) {
     const width = bitWidth ?? 8;
     if (typeof width !== 'number' ||
         !Object.prototype.hasOwnProperty.call(STORAGE_BY_BIT_WIDTH, width)) {
-        throw new TypeError('IdMapIndex: bitWidth must be 2, 4, 8, or 32');
+        throw new TypeError('IdMapIndex: bitWidth must be 2, 3, 4, 8, or 32');
     }
     return STORAGE_BY_BIT_WIDTH[width];
 }
@@ -316,8 +338,11 @@ class IdMapIndex {
     [LENGTH] = 0;
     [CALIBRATED] = false;
     [STAGED] = false;
+    [THREADS] = 1;
+    [STORAGE] = 'q8';
+    [LEGACY] = false;
     constructor(options) {
-        const { dim } = options ?? {};
+        const { dim, threads } = options ?? {};
         if (!isPositiveInt32(dim)) {
             throw new TypeError('IdMapIndex: dim must be a positive int32');
         }
@@ -325,7 +350,15 @@ class IdMapIndex {
         if (storage.startsWith('turbovec-') && (dim > 16_384 || dim % 8 !== 0)) {
             throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384');
         }
-        this[HANDLE] = loadBinding().idx_create({ dim, storage });
+        if (threads !== undefined) {
+            requireThreads(threads, 'IdMapIndex: threads');
+        }
+        const native = loadBinding();
+        const handle = native.idx_create({ dim, storage });
+        this[HANDLE] = handle;
+        if (threads !== undefined) {
+            native.idx_set_threads(handle, threads);
+        }
         this.readState();
     }
     static async load(path, options) {
@@ -343,6 +376,13 @@ class IdMapIndex {
         requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath');
         const signal = readSignal('IdMapIndex.loadWithDelta', options);
         return IdMapIndex.startLoad(this, signal, (token) => loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath, token));
+    }
+    static async fromBytes(bytes, options) {
+        if (!(bytes instanceof Uint8Array)) {
+            throw new TypeError('IdMapIndex.fromBytes: bytes must be a Uint8Array');
+        }
+        const signal = readSignal('IdMapIndex.fromBytes', options);
+        return IdMapIndex.startLoad(this, signal, (token) => loadBinding().idx_from_bytes_async(bytes, token));
     }
     static startLoad(ctor, signal, start) {
         if (signal?.aborted) {
@@ -540,12 +580,67 @@ class IdMapIndex {
      * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
      * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
      * must use `compactDelta()`. A NotDurable error means replacement succeeded
-     * but parent-directory durability was not confirmed.
+     * but parent-directory durability was not confirmed. See
+     * {@link IdMapIndexWriteOptions} for `durability`.
      */
     async write(path, options) {
         requireNonEmptyPath(path, 'write: path');
         const signal = readSignal('write', options);
-        return enqueue(this, (token) => loadBinding().idx_write_async(ensureHandle(this), path, token), signal);
+        const fast = readWriteFast(options);
+        return enqueue(this, (token) => loadBinding().idx_write_async(ensureHandle(this), path, fast, token), signal);
+    }
+    /**
+     * Save a TurboVec index to `path`, writing only what changed since its last
+     * sync there. The first sync to a path, and the first after a calibration
+     * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
+     * at any point leaves the previous sync loadable. An index loaded from a
+     * synced file keeps syncing to it incrementally. One index may sync to a
+     * path at a time: when another writer has changed the file, this rejects
+     * with `IOError` and the file must be loaded again to continue. Rejects
+     * with `InvalidArgument` for non-TurboVec storage and for an index loaded
+     * from a v3 snapshot.
+     */
+    async sync(path, options) {
+        requireNonEmptyPath(path, 'sync: path');
+        const signal = readSignal('sync', options);
+        return enqueue(this, (token) => loadBinding().idx_sync_async(ensureHandle(this), path, token), signal);
+    }
+    /**
+     * The bytes `write()` would put in a TurboVec snapshot file, for storing
+     * an index somewhere other than a file. Load them with
+     * `IdMapIndex.fromBytes()`. Rejects with `InvalidArgument` for non-TurboVec
+     * storage and for an index loaded from a v3 snapshot.
+     */
+    async toBytes(options) {
+        const signal = readSignal('toBytes', options);
+        return enqueue(this, (token) => loadBinding().idx_to_bytes_async(ensureHandle(this), token), signal);
+    }
+    /**
+     * All live IDs. The order is stable until the index changes, and on
+     * TurboVec storage until `buildIvf()`.
+     */
+    async ids(options) {
+        const signal = readSignal('ids', options);
+        return enqueue(this, (token) => loadBinding().idx_ids_async(ensureHandle(this), token), signal);
+    }
+    /**
+     * Set how many threads the calls queued after this one may use, from 1
+     * (the default) to 256, the addon's worker thread included. Searches,
+     * adds and TurboVec calibration split their work across them; results do
+     * not depend on the count. The extra threads come from one pool shared by
+     * every index in the process. Not saved in snapshots: a loaded index
+     * starts at 1.
+     */
+    async setThreads(threads, options) {
+        requireThreads(threads, 'setThreads: threads');
+        const signal = readSignal('setThreads', options);
+        // Only stores the count, so it runs on the JS thread at this call's turn.
+        return enqueue(this, () => {
+            const handle = ensureHandle(this);
+            const native = loadBinding();
+            native.idx_set_threads(handle, threads);
+            this[THREADS] = native.idx_threads(handle);
+        }, signal);
     }
     /**
      * Write a fresh snapshot and reset its matching v4 delta log. A
@@ -565,9 +660,9 @@ class IdMapIndex {
      * first and scores only a shortlist: several times faster per query, but
      * it can miss some of the best matches, especially at small k. It applies
      * only at a dimension divisible by 32, on hosts that support it, and never
-     * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
-     * every search scans in full. Rejects for non-TurboVec storage. Not saved
-     * in snapshots.
+     * to an index loaded from a v3 snapshot or to `turbovec-q3` storage;
+     * elsewhere the setting is kept but every search scans in full. Rejects
+     * for non-TurboVec storage. Not saved in snapshots.
      */
     async setStagedSearch(enabled, options) {
         if (typeof enabled !== 'boolean') {
@@ -593,6 +688,25 @@ class IdMapIndex {
     get bitWidth() {
         ensureHandle(this);
         return this[BIT_WIDTH];
+    }
+    /** Storage mode; unlike `bitWidth`, tells TurboVec q4 from generic q4. */
+    get storage() {
+        ensureHandle(this);
+        return this[STORAGE];
+    }
+    /** Threads the index's calls may use, as of the last `setThreads()` that finished. */
+    get threads() {
+        ensureHandle(this);
+        return this[THREADS];
+    }
+    /**
+     * Whether this is a TurboVec index loaded from a v3 snapshot of an earlier
+     * release. It keeps that encoding and writes v3, and supports neither
+     * `sync()` nor `toBytes()`.
+     */
+    get legacy() {
+        ensureHandle(this);
+        return this[LEGACY];
     }
     /**
      * Whether a TurboVec index holds a TQ+ calibration, as of the last call
@@ -662,6 +776,9 @@ class IdMapIndex {
         this[LENGTH] = native.idx_len(handle);
         this[CALIBRATED] = native.idx_calibrated(handle);
         this[STAGED] = native.idx_staged(handle);
+        this[THREADS] = native.idx_threads(handle);
+        this[STORAGE] = native.idx_storage(handle);
+        this[LEGACY] = native.idx_legacy(handle);
     }
     // After a mutation: prepared filters no longer match the index, and the
     // cached state may have changed.

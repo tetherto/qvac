@@ -12,15 +12,19 @@ declare const BIT_WIDTH: unique symbol;
 declare const LENGTH: unique symbol;
 declare const CALIBRATED: unique symbol;
 declare const STAGED: unique symbol;
+declare const THREADS: unique symbol;
+declare const STORAGE: unique symbol;
+declare const LEGACY: unique symbol;
 declare const BIT_WIDTH_BY_STORAGE: {
     readonly f32: 32;
     readonly q8: 8;
     readonly q4: 4;
     readonly 'turbovec-q4': 4;
+    readonly 'turbovec-q3': 3;
     readonly 'turbovec-q2': 2;
 };
 type NativeHandle = object;
-export type IdMapIndexBitWidth = 2 | 4 | 8 | 32;
+export type IdMapIndexBitWidth = 2 | 3 | 4 | 8 | 32;
 export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE;
 export interface IdMapIndexOptions {
     /**
@@ -28,10 +32,15 @@ export interface IdMapIndexOptions {
      * divisible by 8 and no greater than 16,384.
      */
     dim: number;
-    /** 2 = TurboVec q2, 4 = q4, 8 = q8, and 32 = full f32 storage. Defaults to 8. */
+    /**
+     * 2 = TurboVec q2, 3 = TurboVec q3, 4 = q4, 8 = q8, and 32 = full f32
+     * storage. Defaults to 8.
+     */
     bitWidth?: IdMapIndexBitWidth;
     /** Use `turbovec-q4` to distinguish TurboVec q4 from generic q4 storage. */
     storage?: IdMapIndexStorage;
+    /** Worker threads for the index's calls; see `setThreads()`. Defaults to 1. */
+    threads?: number;
 }
 /**
  * The parts of an `AbortSignal` the index uses. Signals from the DOM, Node
@@ -54,6 +63,15 @@ export interface IdMapIndexCallOptions {
      * work. The promise rejects with `signal.reason`.
      */
     signal?: IdMapIndexAbortSignal;
+}
+export interface IdMapIndexWriteOptions extends IdMapIndexCallOptions {
+    /**
+     * `durable` (the default) fsyncs the snapshot and its directory before
+     * resolving. `fast` skips both fsyncs: the file is still replaced
+     * atomically and survives a process crash, but a power loss soon after
+     * may lose it, and a delta log cannot start from it.
+     */
+    durability?: 'durable' | 'fast';
 }
 export interface IdMapIndexSearchResult {
     /**
@@ -126,6 +144,9 @@ export default class IdMapIndex {
     [LENGTH]: number;
     [CALIBRATED]: boolean;
     [STAGED]: boolean;
+    [THREADS]: number;
+    [STORAGE]: IdMapIndexStorage;
+    [LEGACY]: boolean;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
@@ -160,6 +181,16 @@ export default class IdMapIndex {
     static loadWithDelta<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions): Promise<T>;
     /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Resolves to an IdMapIndex. */
     static loadWithDelta(snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>;
+    /**
+     * Load a TurboVec snapshot from the bytes `toBytes()` returns, or from the
+     * contents of a TurboVec v8 snapshot file. Other snapshots, including v3,
+     * are rejected. The bytes are copied when the call is made. Loads with
+     * staged search off and 1 thread, as `load()` does. Resolves to a subclass
+     * instance when called on a subclass, as `load()` does.
+     */
+    static fromBytes<T extends IdMapIndex>(this: IdMapIndexClass<T>, bytes: Uint8Array, options?: IdMapIndexCallOptions): Promise<T>;
+    /** Detached call, e.g. `const { fromBytes } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static fromBytes(bytes: Uint8Array, options?: IdMapIndexCallOptions): Promise<IdMapIndex>;
     private static startLoad;
     private static fromHandle;
     /**
@@ -230,9 +261,43 @@ export default class IdMapIndex {
      * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
      * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
      * must use `compactDelta()`. A NotDurable error means replacement succeeded
-     * but parent-directory durability was not confirmed.
+     * but parent-directory durability was not confirmed. See
+     * {@link IdMapIndexWriteOptions} for `durability`.
      */
-    write(path: string, options?: IdMapIndexCallOptions): Promise<void>;
+    write(path: string, options?: IdMapIndexWriteOptions): Promise<void>;
+    /**
+     * Save a TurboVec index to `path`, writing only what changed since its last
+     * sync there. The first sync to a path, and the first after a calibration
+     * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
+     * at any point leaves the previous sync loadable. An index loaded from a
+     * synced file keeps syncing to it incrementally. One index may sync to a
+     * path at a time: when another writer has changed the file, this rejects
+     * with `IOError` and the file must be loaded again to continue. Rejects
+     * with `InvalidArgument` for non-TurboVec storage and for an index loaded
+     * from a v3 snapshot.
+     */
+    sync(path: string, options?: IdMapIndexCallOptions): Promise<void>;
+    /**
+     * The bytes `write()` would put in a TurboVec snapshot file, for storing
+     * an index somewhere other than a file. Load them with
+     * `IdMapIndex.fromBytes()`. Rejects with `InvalidArgument` for non-TurboVec
+     * storage and for an index loaded from a v3 snapshot.
+     */
+    toBytes(options?: IdMapIndexCallOptions): Promise<Uint8Array<ArrayBufferLike>>;
+    /**
+     * All live IDs. The order is stable until the index changes, and on
+     * TurboVec storage until `buildIvf()`.
+     */
+    ids(options?: IdMapIndexCallOptions): Promise<BigUint64Array<ArrayBufferLike>>;
+    /**
+     * Set how many threads the calls queued after this one may use, from 1
+     * (the default) to 256, the addon's worker thread included. Searches,
+     * adds and TurboVec calibration split their work across them; results do
+     * not depend on the count. The extra threads come from one pool shared by
+     * every index in the process. Not saved in snapshots: a loaded index
+     * starts at 1.
+     */
+    setThreads(threads: number, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Write a fresh snapshot and reset its matching v4 delta log. A
      * PartialCompact error means replacement occurred but durability or log
@@ -246,9 +311,9 @@ export default class IdMapIndex {
      * first and scores only a shortlist: several times faster per query, but
      * it can miss some of the best matches, especially at small k. It applies
      * only at a dimension divisible by 32, on hosts that support it, and never
-     * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
-     * every search scans in full. Rejects for non-TurboVec storage. Not saved
-     * in snapshots.
+     * to an index loaded from a v3 snapshot or to `turbovec-q3` storage;
+     * elsewhere the setting is kept but every search scans in full. Rejects
+     * for non-TurboVec storage. Not saved in snapshots.
      */
     setStagedSearch(enabled: boolean, options?: IdMapIndexCallOptions): Promise<void>;
     /** Number of live entries after the last call that finished. */
@@ -257,6 +322,16 @@ export default class IdMapIndex {
     get dim(): number;
     /** Effective storage bit width. */
     get bitWidth(): IdMapIndexBitWidth;
+    /** Storage mode; unlike `bitWidth`, tells TurboVec q4 from generic q4. */
+    get storage(): "turbovec-q2" | "turbovec-q3" | "q4" | "q8" | "f32" | "turbovec-q4";
+    /** Threads the index's calls may use, as of the last `setThreads()` that finished. */
+    get threads(): number;
+    /**
+     * Whether this is a TurboVec index loaded from a v3 snapshot of an earlier
+     * release. It keeps that encoding and writes v3, and supports neither
+     * `sync()` nor `toBytes()`.
+     */
+    get legacy(): boolean;
     /**
      * Whether a TurboVec index holds a TQ+ calibration, as of the last call
      * that finished. A fresh TurboVec index calibrates from its first
