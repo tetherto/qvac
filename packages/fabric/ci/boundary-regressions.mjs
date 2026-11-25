@@ -1,6 +1,6 @@
 // Build and exercise the draft overlay port, including /MTd on Windows.
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, join, delimiter, dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +17,14 @@ const toolchain = createRequire(join(root, '.github/bare-toolchain/package.json'
 const cmake = toolchain('cmake-runtime')('cmake')
 const ctest = toolchain('cmake-runtime')('ctest')
 const ninja = toolchain('ninja-runtime')()
+// The npm launchers normally make unpacked runtime binaries executable.
+for (const executable of [cmake, ctest, ninja]) {
+  try {
+    accessSync(executable, constants.X_OK)
+  } catch {
+    chmodSync(executable, 0o755)
+  }
+}
 const llvm = toolchain('llvm-runtime')
 const toolchainFile = join(
   dirname(toolchain.resolve('cmake-toolchains/package')),
@@ -74,7 +82,7 @@ if (phase === 'build') {
     `-DCMAKE_C_COMPILER=${llvm(windows ? 'clang-cl' : 'clang')}`,
     `-DCMAKE_CXX_COMPILER=${llvm(windows ? 'clang-cl' : 'clang++')}`,
     `-DCMAKE_PREFIX_PATH=${installed}`,
-    `-DQVAC_TEST_BACKEND=${join(installed, 'debug', windows ? 'bin/qvac-ggml-cpu-x64.dll' : 'lib/libqvac-ggml-cpu-x64.so')}`,
+    `-DQVAC_TEST_BACKEND=${join(installed, 'debug/lib', windows ? 'qvac-ggml-cpu-x64.dll' : 'libqvac-ggml-cpu-x64.so')}`,
     ...(windows
       ? []
       : [`-DQVAC_TEST_RUNTIME_PROVIDER=${join(installed, 'debug/lib/libqvac-ggml-base-1.so')}`])
