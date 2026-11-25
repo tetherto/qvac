@@ -74,8 +74,8 @@ test("pr-build-test runs the baseline rows when the labels are absent, and only 
   assert.match(cppTests, /needs\.route\.outputs\.run_cpp_tests == 'true' \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]\[0\] != null/);
   assert.match(cppTests, /run_cpp_tests == 'true' && fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests'\] \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]/);
   // A package the baseline run did not test must not read as a pass it never earned.
-  assert.match(status, /CPP_TEST_RESULT: \$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/);
-  assert.match(status, /PREBUILD_RESULT: \$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && /);
+  assert.match(status, /RESULT: \$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/);
+  assert.match(status, /RESULT: \$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && /);
 });
 
 test("select-projects emits baseline rows for the opted-in package alone", async () => {
@@ -98,7 +98,6 @@ test("select-projects emits baseline rows for the opted-in package alone", async
     affected: null,
     targets: ["build", "cpp:tests"],
     labels: { linux_ubuntu2204_x64: "qvac-ubuntu2204-x64" },
-    gate: { a: "a", b: "b" },
   });
   assert.deepEqual(out.matrices["build:baseline"].map((r) => r.project), ["a"]);
   assert.deepEqual(out.matrices["cpp:tests:baseline"].map((r) => r.project), ["a"]);

@@ -65,6 +65,14 @@ export function generateExportName({
 
   exportName = exportName.replace(/^_+|_+$/g, '').replace(/_+/g, '_')
 
+  // Models QVAC trained carry the shared `qvac` tag. Prefix their names so they
+  // stay apart from the upstream builds they were tuned from.
+  if (tags.includes('qvac')) {
+    exportName = exportName.startsWith('MMPROJ_')
+      ? `MMPROJ_QVAC_${exportName.slice('MMPROJ_'.length)}`
+      : `QVAC_${exportName}`
+  }
+
   // Add suffix for metadata files (tensors.txt are shard metadata, not actual models)
   if (lowerFilename.endsWith('.tensors.txt')) {
     exportName = `${exportName}_TENSORS`
@@ -480,6 +488,14 @@ function isIndicConformer(filename: string, lowerPath: string) {
 
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
+  const coremlComponent = lowerPath.match(
+    /(?:^|\/)(transcribepsy-250m-eu-(?:decoder|encoder-shared))\.mlmodelc\/(.+)$/
+  )
+  if (coremlComponent) {
+    const [, bundle, component] = coremlComponent
+    return `PARAKEET_${cleanPart(bundle!)}_${cleanPart(component!)}`
+  }
+
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
   if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {

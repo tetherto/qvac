@@ -41,6 +41,21 @@ test('batch transcription resolves undefined when terminal stats are absent', as
   t.is(await call.stats, undefined)
 })
 
+test('batch transcription preserves Core ML fallback stats without metadata', async (t) => {
+  const stats = { encoderOnCoreml: 1, encoderUsedCoreml: 0 }
+  const call = createTranscribeCall(
+    { modelId: 'parakeet', audioChunk: 'audio.wav' },
+    undefined,
+    responseStream([
+      { type: 'transcribe', text: 'complete transcript' },
+      { type: 'transcribe', done: true, stats }
+    ])
+  )
+
+  t.is(await call, 'complete transcript')
+  t.alike(await call.stats, stats)
+})
+
 test('batch transcription rejects stats when the response stream fails', async (t) => {
   const failure = new Error('transport failed')
   const failedStream = async function* () {
