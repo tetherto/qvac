@@ -133,7 +133,7 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
   async rejectAutoUndetected(_params: unknown, expectation: unknown): Promise<TestResult> {
     try {
       const modelId = await loadModel({
-        modelSrc: DSPARK_TARGET,
+        modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
         modelType: 'llamacpp-completion',
         modelConfig: {
           ctx_size: 2048,

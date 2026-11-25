@@ -226,7 +226,7 @@ export const speculativeDecodingAutoUndetectedRejected: TestDefinition = {
   expectation: { validation: 'throws-error', errorContains: 'detected no speculative type' },
   steps: [
     // A plain model has no DFlash, DSpark or MTP header for `auto` to read.
-    { modelSource: { dep: 'llm-dspark', as: 'src' } },
+    { modelSource: { dep: 'llm-no-mtp', as: 'src' } },
     { modelSource: { dep: 'llm-no-mtp', as: 'draft' } },
     {
       callError: {
@@ -250,7 +250,7 @@ export const speculativeDecodingAutoUndetectedRejected: TestDefinition = {
   metadata: {
     category: 'speculative-decoding',
     dependency: 'none',
-    dependencies: ['llm-dspark', 'llm-no-mtp'],
+    dependencies: ['llm-no-mtp'],
     estimatedDurationMs: 120000
   }
 }
