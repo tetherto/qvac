@@ -1,9 +1,9 @@
-import { unlink } from 'node:fs/promises'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { transcribe, textToSpeech, textToSpeechStream } from '@qvac/sdk'
 import type { TextToSpeechStreamResponse, TranscribeSegment } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
 import { writeTempAudio } from '@/serve/lib/temp-audio'
@@ -235,7 +235,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         text = result.text
         segments = result.segments
       } finally {
-        await unlink(tmpPath).catch(() => undefined)
+        await removePrivateTempFile(tmpPath)
       }
       app.qvac.logger.info(`  transcribe done chars=${text.length}`)
 
@@ -313,7 +313,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         text = result.text
         segments = result.segments
       } finally {
-        await unlink(tmpPath).catch(() => undefined)
+        await removePrivateTempFile(tmpPath)
       }
       app.qvac.logger.info(`  translate done chars=${text.length}`)
 
