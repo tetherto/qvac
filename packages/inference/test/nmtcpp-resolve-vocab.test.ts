@@ -1,8 +1,10 @@
 import test from 'brittle'
 import {
   buildBergamotVocabSources,
+  deriveBergamotLocalVocabSources,
   deriveBergamotRegistryVocabSources,
   deriveBergamotVocabSources,
+  deriveBergamotVocabSourcesFor,
   resolveBergamotVocab,
   type PivotModelConfig
 } from '@/plugins/builtin/nmtcpp-translation/resolve-vocab'
@@ -207,4 +209,72 @@ test('resolveBergamotVocab: pivot throws when pivot vocab cannot be derived', as
     ModelLoadFailedError,
     'unsupported pivot source raises ModelLoadFailedError'
   )
+})
+
+// ---------------------------------------------------------------------------
+// Multilingual (pair-less) packs and local model files
+// ---------------------------------------------------------------------------
+
+const NANO_REGISTRY =
+  'registry://hf/qvac/TranslatePsy-AfriNano/resolve/7a793aac03e34b31f53388c22eda26ae108c58e5/en-xx/Tiny/intgemm/model.intgemm.alphas.bin'
+
+test('buildBergamotVocabSources: a pair-less pack shares vocab.spm', (t) => {
+  t.alike(buildBergamotVocabSources('registry://hf/foo/', ''), {
+    srcVocabSrc: 'registry://hf/foo/vocab.spm',
+    dstVocabSrc: 'registry://hf/foo/vocab.spm'
+  })
+})
+
+test('derive: pair-less packs over registry://, pear:// and local paths', (t) => {
+  t.is(
+    deriveBergamotRegistryVocabSources(NANO_REGISTRY)?.srcVocabSrc,
+    NANO_REGISTRY.replace('model.intgemm.alphas.bin', 'vocab.spm')
+  )
+  t.is(
+    deriveBergamotVocabSources('pear://abc123/en-xx/Base/intgemm/model.intgemm.alphas.bin')
+      ?.dstVocabSrc,
+    'pear://abc123/en-xx/Base/intgemm/vocab.spm'
+  )
+  t.is(
+    deriveBergamotLocalVocabSources('/models/en-xx/Base/intgemm/model.intgemm.alphas.bin')
+      ?.srcVocabSrc,
+    '/models/en-xx/Base/intgemm/vocab.spm'
+  )
+  t.is(
+    deriveBergamotLocalVocabSources('C:\\packs\\xx-en\\model.intgemm.alphas.bin')?.srcVocabSrc,
+    'C:\\packs\\xx-en\\vocab.spm'
+  )
+  t.is(
+    deriveBergamotLocalVocabSources('./packs/model.enja.intgemm.alphas.bin')?.dstVocabSrc,
+    './packs/trgvocab.enja.spm',
+    'pair-named local models get the same vocab names as registry ones'
+  )
+})
+
+test('derive: unsupported sources and other files stay underivable', (t) => {
+  t.is(deriveBergamotVocabSourcesFor('https://example.com/model.intgemm.alphas.bin'), null)
+  t.is(deriveBergamotVocabSourcesFor('model.intgemm.alphas.bin'), null, 'bare cache filename')
+  t.is(deriveBergamotVocabSourcesFor('/models/model.gguf'), null)
+  t.is(deriveBergamotVocabSourcesFor('/models/model.EN.intgemm.alphas.bin'), null)
+})
+
+test('resolveBergamotVocab: registry:// pair-less pack skips vocab resolution (companion set)', async (t) => {
+  const { ctx, calls } = makeCtx({ modelSrc: NANO_REGISTRY })
+
+  const result = await resolveBergamotVocab(bergamotConfig, ctx, undefined, undefined, undefined)
+
+  t.is(calls.length, 0)
+  t.absent(result.artifacts)
+})
+
+test('resolveBergamotVocab: local model file resolves the vocab beside it', async (t) => {
+  const { ctx, calls } = makeCtx({ modelSrc: '/models/fren/model.fren.intgemm.alphas.bin' })
+
+  const result = await resolveBergamotVocab(bergamotConfig, ctx, undefined, undefined, undefined)
+
+  t.alike(
+    calls.map((c) => c.src),
+    ['/models/fren/vocab.fren.spm', '/models/fren/vocab.fren.spm']
+  )
+  t.ok(result.artifacts)
 })

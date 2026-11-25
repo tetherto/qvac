@@ -26,6 +26,10 @@ import {
   buildTranslatePsyMessages,
   TRANSLATEPSY_GENERATION_PARAMS
 } from '@/plugins/ops/translatepsy-utils'
+import {
+  translatePsyNanoTargetTag,
+  withTargetTag
+} from '@/plugins/builtin/nmtcpp-translation/translatepsy-nano'
 
 const AFRICAN_LANGUAGE_ALIASES = new Map([
   ['af', 'afr_Latn'],
@@ -150,6 +154,13 @@ export async function* translate(
 
   const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
   const translatePsy = isLlm && isTranslatePsyModel(entry.local)
+  // A TranslatePsy Nano en-xx pack selects its output language from a `##<TO>`
+  // tag on each input (resolved to `targetTag: true` at load).
+  const nmtTargetTag =
+    canonicalModelType === ModelType.nmtcppTranslation
+      ? translatePsyNanoTargetTag(entry.local.config)
+      : undefined
+  const nmtInput = (input: string) => (nmtTargetTag ? withTargetTag(input, nmtTargetTag) : input)
 
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)
@@ -204,7 +215,7 @@ export async function* translate(
     const modelStart = nowMs()
     let translations: string[]
     try {
-      translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
+      translations = await (model as unknown as TranslationNmtcpp).runBatch(text.map(nmtInput))
     } finally {
       // The batch advanced the addon's counters and reported no stats, so the
       // next single request has no baseline to difference against.
@@ -233,7 +244,7 @@ export async function* translate(
   // Prepare input based on model type
   const input =
     canonicalModelType === ModelType.nmtcppTranslation
-      ? singleText
+      ? nmtInput(singleText!)
       : translatePsy
         ? buildTranslatePsyMessages(fromLanguage, toLanguage, singleText!)
         : [
