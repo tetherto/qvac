@@ -1,5 +1,47 @@
 {
   "models": {
+    "cosyvoice3-llm-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf",
+      "dest": "models/cosyvoice3/cosyvoice3-llm-q8_0.gguf",
+      "targets": [
+        "test:integration"
+      ]
+    },
+    "cosyvoice3-flow-f32.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf",
+      "dest": "models/cosyvoice3/cosyvoice3-flow-f32.gguf",
+      "targets": [
+        "test:integration"
+      ]
+    },
+    "cosyvoice3-hift-f32.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf",
+      "dest": "models/cosyvoice3/cosyvoice3-hift-f32.gguf",
+      "targets": [
+        "test:integration"
+      ]
+    },
+    "voice.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf",
+      "dest": "models/cosyvoice3/voice.gguf",
+      "targets": [
+        "test:integration"
+      ]
+    },
+    "cosyvoice3-vocab.json": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json",
+      "dest": "models/cosyvoice3/vocab.json",
+      "targets": [
+        "test:integration"
+      ]
+    },
+    "cosyvoice3-merges.txt": {
+      "s3Path": "qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt",
+      "dest": "models/cosyvoice3/merges.txt",
+      "targets": [
+        "test:integration"
+      ]
+    },
     "chatterbox-t3-turbo.gguf": {
       "s3Path": "qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
       "dest": "models/chatterbox-t3-turbo.gguf",
