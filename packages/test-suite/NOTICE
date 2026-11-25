@@ -48,7 +48,7 @@ JavaScript Dependencies
 
 --- mit (MIT License) ---
 
-  @babel/runtime@7.29.13
+  @babel/runtime@7.29.15
     https://github.com/babel/babel
   @esbuild/darwin-arm64@0.27.7
     https://github.com/evanw/esbuild
@@ -152,7 +152,7 @@ JavaScript Dependencies
     https://github.com/feross/safe-buffer
   smart-buffer@4.2.0
     https://github.com/JoshGlazebrook/smart-buffer
-  socks@2.8.10
+  socks@2.8.11
     https://github.com/JoshGlazebrook/socks
   stream-shift@1.0.3
     https://github.com/mafintosh/stream-shift
@@ -190,7 +190,7 @@ JavaScript Dependencies
     https://github.com/chrisguttandin/worker-timers-worker
   ws@3.3.3
     https://github.com/websockets/ws
-  ws@8.22.2
+  ws@8.23.0
     https://github.com/websockets/ws
   xtend@4.0.2
     https://github.com/Raynos/xtend
