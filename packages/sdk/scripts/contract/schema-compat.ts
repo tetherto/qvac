@@ -408,33 +408,26 @@ export function findIncompatibility(
     // entries part of the contract, and so does an explicit
     // `additionalProperties: {}` (`z.looseObject`, or `z.record` of unknown
     // values), which promises entries of any value.
-    if ('additionalProperties' in a && isAnything(subExtra)) {
-      if (isNode(supExtra) && !isAnything(supExtra)) {
-        const problem = check(subExtra, supExtra, at(path, '<extra>'), seen)
-        if (problem) return problem
-      } else if (
-        supExtra === false &&
-        (options.direction === 'request' || b['x-strict'] === true)
-      ) {
-        return `${show(path)} no longer accepts fields it does not declare`
-      }
-    }
-    if (isNode(subExtra) && !isAnything(subExtra)) {
-      if (supExtra === false) {
+    if (!('additionalProperties' in a) || subExtra === false) return undefined
+    if (supExtra === false) {
+      if (!isAnything(subExtra)) {
         return say(
           `${show(path)} no longer accepts map entries`,
           `${show(path)} can now carry map entries`
         )
       }
-      for (const [key, supProp] of Object.entries(supProps)) {
-        if (key in subProps) continue
-        const problem = check(subExtra, supProp, at(path, key), seen)
-        if (problem) return problem
+      if (options.direction === 'request' || b['x-strict'] === true) {
+        return `${show(path)} no longer accepts fields it does not declare`
       }
-      const problem = check(subExtra, supExtra, at(path, '<extra>'), seen)
+      return undefined
+    }
+    // A field the other side now declares was one of these entries before.
+    for (const [key, supProp] of Object.entries(supProps)) {
+      if (key in subProps) continue
+      const problem = check(subExtra, supProp, at(path, key), seen)
       if (problem) return problem
     }
-    return undefined
+    return check(subExtra, supExtra, at(path, '<extra>'), seen)
   }
 
   function lowerBoundProblem(a: Node, b: Node, path: string): string | undefined {

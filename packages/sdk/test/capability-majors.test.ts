@@ -196,6 +196,13 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     /the value no longer accepts fields it does not declare/
   ],
   [
+    'request: loose object declares a field it took as any value',
+    'request',
+    { type: 'object', properties: { a: text }, additionalProperties: {} },
+    { type: 'object', properties: { a: text, items: text }, additionalProperties: {} },
+    /"items" is now limited to string/
+  ],
+  [
     'response: map entries widened to any value',
     'response',
     object({ m: { type: 'object', additionalProperties: { type: 'number' } } }),
