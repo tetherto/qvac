@@ -24,9 +24,9 @@ import {
 import { acquireDownloadLock, partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   buildBlobBinding,
-  validateCachedFile,
   downloadSingleFileFromRegistry
 } from '@/handlers/load-model/registry-download-utils'
+import { validateCachedFile } from '@/handlers/load-model/cached-file'
 import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry-companion-set'
 import {
   findCoremlCompanionSet,
@@ -136,6 +136,8 @@ export function selectDeclaredShards<T extends { path: string }>(
  * Download sharded model files from registry.
  * When localShardMetadata is provided, uses pre-computed metadata + blob direct download
  * instead of querying the registry for shard info.
+ * When cachedShards is provided, it holds the shards the caller already validated;
+ * every other shard is downloaded without checking the cache again.
  */
 async function downloadShardedFilesFromRegistry(
   registryPath: string,
@@ -145,7 +147,8 @@ async function downloadShardedFilesFromRegistry(
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
   hooks?: DownloadHooks,
-  shouldClearCache?: () => boolean
+  shouldClearCache?: () => boolean,
+  cachedShards?: ReadonlySet<string>
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -210,15 +213,11 @@ async function downloadShardedFilesFromRegistry(
     const shard = shards[i]!
     const shardPath = getShardPath(cacheKey, shard.filename)
 
-    const cachedPath = await validateCachedFile(
-      shardPath,
-      shard.filename,
-      shard.size,
-      shard.checksum,
-      hooks
-    )
+    const cached = cachedShards
+      ? cachedShards.has(shard.filename)
+      : await validateCachedFile(shardPath, shard.filename, shard.size, shard.checksum, hooks)
 
-    if (cachedPath) {
+    if (cached) {
       logger.debug(`✅ Shard ${i + 1}/${shards.length} already cached`)
       overallDownloaded += shard.size
 
@@ -364,9 +363,11 @@ export async function downloadModelFromRegistry(
         const localShardMeta = modelMetadata?.shardMetadata
 
         // FS pre-check for known models: if all shards cached, return immediately
+        let cachedShards: Set<string> | undefined
         if (localShardMeta?.length) {
-          let allCached = true
+          cachedShards = new Set()
           for (const shard of localShardMeta) {
+            if (ctx.signal.aborted) throw new DownloadCancelledError()
             const shardPath = getShardPath(cacheKey, shard.filename)
             const cached = await validateCachedFile(
               shardPath,
@@ -375,13 +376,10 @@ export async function downloadModelFromRegistry(
               shard.sha256Checksum,
               hooks
             )
-            if (!cached) {
-              allCached = false
-              break
-            }
+            if (cached) cachedShards.add(shard.filename)
           }
 
-          if (allCached) {
+          if (cachedShards.size === localShardMeta.length) {
             const firstShardFilename = localShardMeta[0]!.filename
             logger.info(`✅ All ${localShardMeta.length} shards cached`)
             hooks?.markCacheHit?.()
@@ -419,7 +417,8 @@ export async function downloadModelFromRegistry(
             ctx.signal,
             localShardMeta,
             hooks,
-            ctx.shouldClearCache
+            ctx.shouldClearCache,
+            cachedShards
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {

@@ -62,7 +62,7 @@ For every `.github/workflows/*.yml` and `.github/actions/**/action.yml` in the p
 | A1 | Every `uses: <vendor>/<action>@<ref>` is pinned to a 40-char SHA (regex `@[0-9a-f]{40}\b`) with a trailing `# v<ver>` comment. Tag pins (`@v3`, `@main`, branch refs) fail. First-party `./.github/actions/<name>` references are exempt. | `.github/AGENTS.md` | High |
 | A2 | Permissions are declared explicitly — either a top-level `permissions:` block, OR every job has its own `permissions:` block. Relying on repo-default permissions fails. | `.github/AGENTS.md` | High |
 | A3 | No occurrence of `permissions: write-all` anywhere in the workflow. | `.github/AGENTS.md` | High |
-| A4 | If the workflow uses `pull_request_target`, none of its jobs check out PR HEAD via `actions/checkout@... ref: ${{ github.event.pull_request.head.sha }}` or `${{ github.head_ref }}`. | `.github/AGENTS.md` | High |
+| A4 | No workflow triggers on `pull_request_target`. Privileged pull-request work starts from `workflow_run`, and a job that checks out the PR head holds no secrets. | `.github/AGENTS.md` | High |
 | A5 | No direct interpolation of `${{ github.event.pull_request.title }}`, `body`, `head_ref`, `commits[*].message`, or any `github.event.*` user-controlled field inside `run:` blocks. They MUST be piped via `env:`. | `.github/AGENTS.md` | High |
 | A6 | If the workflow has `id-token: write`, OIDC is consumed by an auth action (`google-github-actions/auth`, `aws-actions/configure-aws-credentials`, `azure/login`) — not used for token forging that reaches a long-lived credential. | `.github/AGENTS.md` | Medium |
 | A7 | No `${{ secrets.X }}` interpolated directly inside a `run:` block. Pass via `env:` or action `with:` instead. | `.github/AGENTS.md` | High |

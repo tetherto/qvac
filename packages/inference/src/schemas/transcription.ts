@@ -389,14 +389,21 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>
  * Per-call overrides for parakeet's duplex streaming session.
  *
  * Each field maps to its `streaming*`-prefixed counterpart in
- * `parakeetConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
+ * `modelConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
  * prefix is intentionally dropped here because every field on this
  * object is already namespaced under the `parakeetStreamingConfig`
  * field of `transcribeStream({ ... })`. Any field omitted falls back
  * to the load-time value.
  */
 export const parakeetStreamingRunConfigSchema = z.object({
-  chunkMs: z.number().int().positive().optional(),
+  chunkMs: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Streaming decode window in ms. Omit to inherit streamingChunkMs from modelConfig, or the native model default when neither is set. Offline TDT push streams default to 30000 and reject windows below 30000; this is independent of the size of audio writes. Cache-aware models use their own cadence.'
+    ),
   historyMs: z.number().int().positive().optional(),
   leftContextMs: z.number().int().nonnegative().optional(),
   rightLookaheadMs: z.number().int().nonnegative().optional(),
