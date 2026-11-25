@@ -77,8 +77,10 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
  *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
- *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
- *   - The configHash includes model config + system prompt to ensure cache isolation
+ *   - Structure: `{kvCacheKey}/{modelFolder}/{configHash}.bin`
+ *   - `modelFolder` hashes the model and its load config, ignoring settings that do not change the cache contents:
+ *     `cache_share_across_keys` and `verbosity` count as their defaults when sent, `openclCacheDir` and `cache_ram_mib` are left out
+ *   - `configHash` hashes the system prompt
  *   - `true`: Auto-generate cache key based on conversation history
  *   - `"custom-key"`: Use provided string as cache key for manual session management
  *   - `false` or `undefined`: No caching
