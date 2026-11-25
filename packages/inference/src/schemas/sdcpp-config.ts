@@ -391,6 +391,35 @@ export const sdcppConfigSchema = z.object({
         '`llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead ' +
         'of the Wan layout.'
     ),
+  taesdModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Tiny autoencoder weights (TAESD `taesd.safetensors`; TAESDXL for SDXL) — image ' +
+        'diffusion only. Replaces the full VAE for every encode and decode, so the ' +
+        "model's own VAE and `vaeModelSrc` go unused. Required by " +
+        '`coremlTaeDecoderModelSrc` unless the model has a built-in tiny autoencoder (SDXS).'
+    ),
+  coremlUnetModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Apple Core ML UNet sidecar: a compiled `.mlmodelc` directory, as a local path or a ' +
+        '`registry://` bundle. Runs the SD 1.x/2.x UNet (SDXS included) on Core ML, ' +
+        "which places it on the Neural Engine, GPU or CPU; the GGUF's UNet weights are " +
+        'skipped and text encoding and sampling stay on ggml. macOS and iOS only, image ' +
+        'diffusion only. The export fixes the image size, batch and 77-token prompt ' +
+        'length; requests with a LoRA are rejected. Set `prediction` when the export does ' +
+        "not record its prediction type: `'eps'` for the SD 2.1-base sidecar on SD 2.1. " +
+        'The load-time fit check reports `unknown` for Core ML loads.'
+    ),
+  coremlTaeDecoderModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Apple Core ML tiny-autoencoder decoder sidecar: a compiled `.mlmodelc` directory, ' +
+        'as a local path or a `registry://` bundle. Decodes latents on Core ML. Needs a ' +
+        "tiny autoencoder: SDXS's built-in one or `taesdModelSrc`. Tiled decoding and " +
+        'image encoding use the ggml tiny autoencoder. macOS and iOS only, image ' +
+        'diffusion only.'
+    ),
   taehvModelSrc: modelSrcInputSchema
     .optional()
     .describe(
