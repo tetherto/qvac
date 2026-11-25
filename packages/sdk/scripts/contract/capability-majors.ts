@@ -1,3 +1,4 @@
+import semver from 'semver'
 import { findIncompatibility, type Definitions } from './schema-compat'
 
 /**
@@ -34,6 +35,16 @@ export interface ContractSnapshot {
   capabilities: { contracts: CapabilityContractEntry[] }
   manifest: { methods: ManifestMethod[] }
   schema: { $defs: Definitions }
+}
+
+/**
+ * The published version to compare a package against: the highest stable
+ * release at or below its own version. A patch on an older release line is
+ * compared with that line, not with a newer minor that added things the patch
+ * does not have.
+ */
+export function baselineVersion(published: string[], own: string): string | undefined {
+  return semver.maxSatisfying(published, `<=${own}`) ?? undefined
 }
 
 function defName(ref: string): string {

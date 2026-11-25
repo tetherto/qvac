@@ -1,6 +1,10 @@
 import test from 'brittle'
 import { findIncompatibility, type Direction } from '../scripts/contract/schema-compat'
-import { findMajorProblems, type ContractSnapshot } from '../scripts/contract/capability-majors'
+import {
+  baselineVersion,
+  findMajorProblems,
+  type ContractSnapshot
+} from '../scripts/contract/capability-majors'
 import { buildCapabilityBaseline } from '../scripts/contract/build-capability-baseline'
 
 type Schema = Record<string, unknown>
@@ -379,6 +383,13 @@ function snapshot(options: {
     }
   }
 }
+
+test('the baseline is the highest stable release at or below the package version', function (t) {
+  const published = ['0.11.0', '0.11.1', '0.12.0', '0.13.0-rc.1']
+  t.is(baselineVersion(published, '0.11.2'), '0.11.1', 'a patch on an older line')
+  t.is(baselineVersion(published, '0.13.0'), '0.12.0', 'the next release')
+  t.is(baselineVersion(published, '0.10.0'), undefined, 'nothing published at or below')
+})
 
 test('an unchanged contract has no problems', function (t) {
   t.alike(findMajorProblems(snapshot({}), snapshot({})), [])

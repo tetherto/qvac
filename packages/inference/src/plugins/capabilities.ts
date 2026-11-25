@@ -145,7 +145,8 @@ export function findProvidesProblem(
 
     const problem = isQvacId(contract.id)
       ? findQvacCallShapeProblem(plugin, contract)
-      : (findThirdPartyDuplexHandler(plugin, contract) ??
+      : (findThirdPartyTypedOperation(contract) ??
+        findThirdPartyDuplexHandler(plugin, contract) ??
         findThirdPartyConflict(plugin, contract, others))
     if (problem) return problem
 
@@ -176,6 +177,25 @@ function findQvacCallShapeProblem(
         `but the runtime calls ${operation} as a ${expected}`
       )
     }
+  }
+  return undefined
+}
+
+// An operation the runtime calls through its own typed request belongs to the
+// QVAC contract that lists it. Listing it under a third-party contract would
+// put one handler under two contracts, and code that maps a typed request to
+// its contract by operation name could not tell which one applies.
+function findThirdPartyTypedOperation(contract: CapabilityContract): string | undefined {
+  for (const operation of [...contract.operations, ...contract.optionalOperations]) {
+    if (QVAC_OPERATION_CALL_SHAPES[operation] === undefined) continue
+    const owner = Object.values(CAPABILITY_CONTRACTS).find(
+      (qvac) => qvac.operations.includes(operation) || qvac.optionalOperations.includes(operation)
+    )
+    return (
+      `capability "${contractKey(contract)}" lists "${operation}", which the runtime calls ` +
+      `through its own typed request` +
+      (owner ? `; declare capability "${owner.id}" instead` : '')
+    )
   }
   return undefined
 }

@@ -32,7 +32,7 @@ export const runtimeCapability = z.object({
     .describe(
       'Capability contract ID, such as `transcription`. A dotted ID names a contract a third-party plugin defines.'
     ),
-  version: z.number().int().describe('Major version of the contract.'),
+  version: z.number().int().min(1).describe('Major version of the contract.'),
   operations: z
     .array(z.string())
     .describe('Operations every registered plugin that declares the contract implements.'),

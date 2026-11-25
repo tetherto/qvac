@@ -251,7 +251,7 @@ test('a handler that belongs to another contract does not count for an optional 
   }
 })
 
-test('registerPlugin rejects a duplex handler in a third-party contract', function (t) {
+test('registerPlugin rejects a duplex handler or a typed QVAC operation in a third-party contract', function (t) {
   clearPlugins()
   try {
     t.ok(
@@ -282,6 +282,16 @@ test('registerPlugin rejects a duplex handler in a third-party contract', functi
     t.absent(
       rejectionReason(plugin('undeclared', { listen: handler('duplex') }, [])),
       'a duplex handler outside every contract is left alone'
+    )
+    t.ok(
+      /capability "acme.speech@1" lists "transcribe", which the runtime calls through its own typed request; declare capability "transcription" instead/.test(
+        rejectionReason(
+          plugin('speech', { transcribe: handler('reply') }, [
+            { id: 'acme.speech', version: 1, operations: ['transcribe'] }
+          ])
+        ) ?? ''
+      ),
+      'a typed QVAC operation under a dotted contract'
     )
   } finally {
     clearPlugins()
