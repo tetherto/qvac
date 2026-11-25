@@ -1,4 +1,5 @@
 import TTSGgml from '@qvac/tts-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -929,6 +930,7 @@ export const ttsPlugin = definePlugin({
     return createChatterboxModel(params.modelId, config, params, artifacts)
   },
 
+  provides: [CAPABILITY_CONTRACTS.textToSpeech],
   handlers: {
     textToSpeech: defineHandler({
       requestSchema: ttsRequestSchema,

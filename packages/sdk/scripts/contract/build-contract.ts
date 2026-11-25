@@ -495,15 +495,37 @@ function titleNestedSchemas(root: JsonSchema, rootTitle: string, seenTitles: Set
   }
 }
 
+export interface WireJsonSchemaOptions {
+  /**
+   * Mark each strict Zod object (`.strict()`, which rejects unknown keys when
+   * parsing) with `x-strict: true`. In the output shape every object has
+   * `additionalProperties: false`, so the marker is the only way to tell a
+   * strict object from one that drops unknown keys.
+   */
+  markStrict?: boolean
+}
+
+function isStrictObject(schema: unknown): boolean {
+  const def = (schema as { _zod?: { def?: { type?: string; catchall?: unknown } } })._zod?.def
+  const catchall = (def?.catchall as { _zod?: { def?: { type?: string } } } | undefined)?._zod?.def
+  return def?.type === 'object' && catchall?.type === 'never'
+}
+
 export function toWireJsonSchema(
   schema: z.ZodType,
   io: 'input' | 'output',
-  defName: string
+  defName: string,
+  options: WireJsonSchemaOptions = {}
 ): JsonSchema {
   const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
-    unrepresentable: 'any'
+    unrepresentable: 'any',
+    ...(options.markStrict && {
+      override(context: { zodSchema: unknown; jsonSchema: JsonSchema }) {
+        if (isStrictObject(context.zodSchema)) context.jsonSchema['x-strict'] = true
+      }
+    })
   }) as JsonSchema
   delete json['$schema']
   const expanded = expandPrimitiveTypeArrays(json) as JsonSchema
@@ -588,7 +610,7 @@ const ownerOnlyMethods: ReadonlySet<string> = new Set([
   'closeSession'
 ])
 
-export function buildContract() {
+export function buildContract(options: WireJsonSchemaOptions = {}) {
   const methodNames = (Object.keys(methodShapes) as MethodName[]).sort()
   const requestByType = collectByWireType(requestSchema.options, 'request')
   const responseByType = collectByWireType(responseSchema.options, 'response')
@@ -670,7 +692,7 @@ export function buildContract() {
   ])
 
   for (const [defName, schema, io, title] of defEntries) {
-    const wireSchema = toWireJsonSchema(schema, io, defName)
+    const wireSchema = toWireJsonSchema(schema, io, defName, options)
     titleNestedSchemas(wireSchema, title, seenTitles)
     const varNames = constantVarNames.get(defName)
     defs[defName] = {
@@ -722,7 +744,7 @@ async function formatJson(value: unknown, fileName: string) {
 }
 
 export async function renderContractFiles() {
-  const { schemaDocument, manifest } = buildContract()
+  const { schemaDocument, manifest } = buildContract({ markStrict: true })
   const modelsRegistry = buildModelsRegistry()
   const modelTypeMaps = buildModelTypeMaps()
   const errorCodes = buildErrorCodes()

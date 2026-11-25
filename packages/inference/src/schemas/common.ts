@@ -11,6 +11,10 @@ import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
 import {
+  getRuntimeCapabilitiesRequestSchema,
+  getRuntimeCapabilitiesResponseSchema
+} from '@/schemas/capabilities'
+import {
   openSessionRequestSchema,
   openSessionResponseSchema,
   closeSessionRequestSchema,
@@ -171,6 +175,7 @@ export const requestSchema = z.union([
   getModelInfoRequestSchema,
   getLoadedModelInfoRequestSchema,
   getSystemResourcesRequestSchema,
+  getRuntimeCapabilitiesRequestSchema,
   assessModelFitRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
@@ -228,6 +233,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   getModelInfoResponseSchema,
   getLoadedModelInfoResponseSchema,
   getSystemResourcesResponseSchema,
+  getRuntimeCapabilitiesResponseSchema,
   assessModelFitResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,

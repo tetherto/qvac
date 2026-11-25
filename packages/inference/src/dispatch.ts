@@ -298,6 +298,7 @@ export async function send<T extends Request>(
     request.type === 'startRpcServer' ||
       request.type === 'stopRpcServer' ||
       request.type === 'discoverRpcServers' ||
+      request.type === 'getRuntimeCapabilities' ||
       (request.type === 'cancel' && request.operation === 'request')
   )
   assertLifecycleAllowed(request)
