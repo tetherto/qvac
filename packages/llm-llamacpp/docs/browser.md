@@ -93,7 +93,9 @@ removed from OPFS is missing for the next run, as on native.
 Without `checkpointSaveDir`, checkpoints go to `checkpoints` in the OPFS root,
 the browser equivalent of the native `./checkpoints`. Every page of the origin
 shares that directory, so a run can resume or remove another run's pause
-checkpoint. Give each independent run its own `checkpointSaveDir`.
+checkpoint. Give each independent run its own `checkpointSaveDir`. When pages
+share a checkpoint directory, a pause checkpoint already in a worker can still
+be resumed there after another page removed it.
 
 Non-ephemeral `cacheKey` runs and `saveCache()` also require OPFS because their
 contract promises durable files. Inference without a cache key, an ephemeral
