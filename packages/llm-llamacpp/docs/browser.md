@@ -83,15 +83,21 @@ await model.unload()
 ## Finetuning files
 
 Browser finetuning dataset, chat-template, output, and checkpoint paths may be
-safe relative or absolute OPFS paths. SDK-mounted input paths are also
-accepted. Path segments must not be `.` or `..`; for example, use
+safe relative or absolute OPFS paths. Paths of files mounted into the worker
+are also accepted. Path segments must not be `.` or `..`; for example, use
 `checkpoints/run-1` or `/checkpoints/run-1`, not `./checkpoints/run-1`.
 NUL characters are rejected. Outputs and completed checkpoints are persisted
-in OPFS, so finetuning requires OPFS support.
+in OPFS, so finetuning requires OPFS support. A dataset or chat template
+removed from OPFS is missing for the next run, as on native.
+
+Without `checkpointSaveDir`, checkpoints go to `checkpoints` in the OPFS root,
+the browser equivalent of the native `./checkpoints`. Every page of the origin
+shares that directory, so a run can resume or remove another run's pause
+checkpoint. Give each independent run its own `checkpointSaveDir`.
 
 Non-ephemeral `cacheKey` runs and `saveCache()` also require OPFS because their
 contract promises durable files. Inference without a cache key, an ephemeral
-cache, and a read-only `baseCacheKey` can still run from SDK-mounted files when
+cache, and a read-only `baseCacheKey` can still run from mounted files when
 OPFS is unavailable. Exact cache and checkpoint file commits use the browser's
 cross-context Web Locks API when available. Writable cache,
 output, and checkpoint paths must not be shared by simultaneous model workers;

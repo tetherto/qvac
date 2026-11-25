@@ -485,7 +485,16 @@ async function persistJobFiles(handle, job) {
   // A request can make a previously active conversation write its cache while
   // the current conversation remains resident. Persist every known writable
   // key so that switch/eviction output reaches OPFS at this terminal boundary.
-  for (const path of handle.cachePaths) await persistTree(module, path)
+  // Only this request's own keys fail it: another key's failed write is
+  // retried at the next terminal and at unload, which reports it.
+  const ownKeys = new Set(job.cachePaths.map((path) => pathParts(path).join('/')))
+  for (const path of handle.cachePaths) {
+    try {
+      await persistTree(module, path)
+    } catch (error) {
+      if (ownKeys.has(pathParts(path).join('/'))) throw error
+    }
+  }
   for (const path of job.finetunePaths) {
     const persisted = await persistTree(module, path)
     if (persisted || !hasOpfs() || !completed) handle.pendingFinetunePaths.delete(path)
@@ -799,7 +808,8 @@ function finetune(handle, params) {
   }
   const normalized = { ...params }
   if (normalized.checkpointSaveDir === undefined || normalized.checkpointSaveDir === '') {
-    normalized.checkpointSaveDir = '/qvac-finetune/checkpoints'
+    // The native and SDK default, ./checkpoints, in the OPFS root.
+    normalized.checkpointSaveDir = 'checkpoints'
   }
   for (const key of [
     'trainDatasetDir',
@@ -848,7 +858,11 @@ function finetune(handle, params) {
           const module = usableEngine(handle).module
           await retryCheckpointCleanups(handle, module)
           await persistPendingFinetuneState(handle, module)
-          for (const path of inputs) await hydrateFile(module, path)
+          // An input no longer in OPFS must not fall back to an earlier run's
+          // copy, so the engine sees it missing, as native does.
+          for (const path of inputs) {
+            if (!(await hydrateFile(module, path))) removeMemoryFile(module, path)
+          }
           await hydrateCheckpointTree(module, normalized.checkpointSaveDir)
           for (const path of outputs) ensureParentDirectory(module, path)
           await call(

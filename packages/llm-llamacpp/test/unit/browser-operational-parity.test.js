@@ -3319,3 +3319,192 @@ test('a failed cooperative step leaves a queued finetune to finish once 20x', as
     else delete globalThis.navigator
   }
 })
+
+function installOpfsRoot() {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => Promise.resolve(root) } }
+  })
+  return {
+    root,
+    restore() {
+      if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+      else delete globalThis.navigator
+    }
+  }
+}
+
+test('a failed write for another cache key fails only its own requests 20x', async (t) => {
+  const opfs = installOpfsRoot()
+  binding._setEngineFactoryForTest(persistenceOrderingEngine)
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const cacheKey = `/isolated-cache-${iteration}/key.bin`
+      const events = []
+      const handle = binding.createInstance(
+        {},
+        { path: '', projectionPath: '', config: {} },
+        (_owner, event, _data, error) => events.push({ event, error })
+      )
+      await binding.activate(handle)
+      const module = handle.engine.module
+      async function run(input, key) {
+        const prompt = { type: 'text', input, generationParams: {} }
+        if (key) prompt.cacheKey = key
+        const start = events.length
+        await binding.runJob(handle, [prompt], false)
+        await eventually(() => binding.activeJobs(handle) === 0)
+        return events.slice(start).filter(({ event }) => event === 'Error')
+      }
+
+      t.alike(await run('keyed', cacheKey), [], `keyed run persists ${iteration + 1}`)
+      const directory = await opfsDirectory(opfs.root, `/isolated-cache-${iteration}`, false)
+      const file = directory.children.get('key.bin')
+      file.failWrite = fsError('QuotaExceededError')
+      const failed = await run('keyed again', cacheKey)
+      t.is(failed.length, 1, `own key failure reported ${iteration + 1}`)
+      t.is(failed[0]?.error?.name, 'QuotaExceededError', `own key error ${iteration + 1}`)
+      const pending = Uint8Array.of(module.runCalls)
+      for (let unkeyed = 0; unkeyed < 2; unkeyed++) {
+        t.alike(await run('unkeyed', null), [], `unkeyed run ${unkeyed} ${iteration + 1}`)
+      }
+
+      await t.exception.all(
+        () => binding.destroyInstance(handle),
+        /QuotaExceededError/,
+        `unload reports the pending key ${iteration + 1}`
+      )
+      file.failWrite = null
+      await binding.destroyInstance(handle)
+      t.alike(file.bytes, pending, `pending key persisted ${iteration + 1}`)
+    }
+  } finally {
+    opfs.restore()
+  }
+})
+
+function finetuneInputEngine(options) {
+  const module = persistenceOrderingEngine(options)
+  const ccall = module.ccall
+  module.finetuneInputs = []
+  module.ccall = function (name, returnType, types, args) {
+    if (name === 'qvac_web_finetune') {
+      const params = JSON.parse(args[2])
+      module.finetuneInputs.push({
+        checkpointSaveDir: params.checkpointSaveDir,
+        dataset: module.FS.bytes(params.trainDatasetDir) ?? null
+      })
+    }
+    return ccall.call(this, name, returnType, types, args)
+  }
+  return module
+}
+
+test('a finetune input removed from OPFS is missing for the next run 20x', async (t) => {
+  const opfs = installOpfsRoot()
+  binding._setEngineFactoryForTest(finetuneInputEngine)
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const dataset = `/removed-input-${iteration}/train.txt`
+      await opfsWrite(opfs.root, dataset, Uint8Array.of(1, 2))
+      const handle = binding.createInstance(
+        {},
+        { path: '', projectionPath: '', config: {} },
+        () => {}
+      )
+      await binding.activate(handle)
+      const module = handle.engine.module
+      const before = module.finetuneInputs.length
+      for (const run of ['first', 'second']) {
+        if (run === 'second') {
+          const directory = await opfsDirectory(opfs.root, `/removed-input-${iteration}`, false)
+          await directory.removeEntry('train.txt')
+        }
+        const id = await binding.finetune(handle, {
+          trainDatasetDir: dataset,
+          outputParametersDir: `/removed-input-out-${iteration}-${run}`,
+          checkpointSaveDir: `/removed-input-checkpoints-${iteration}`
+        })
+        t.ok(Number.isInteger(id), `${run} admitted ${iteration + 1}`)
+        await eventually(() => module.finetuneInputs.length === before + (run === 'first' ? 1 : 2))
+        await eventually(() => binding.activeJobs(handle) === 0)
+      }
+      t.alike(
+        module.finetuneInputs.slice(before).map(({ dataset }) => dataset),
+        [Uint8Array.of(1, 2), null],
+        `second run sees the dataset missing ${iteration + 1}`
+      )
+      await binding.destroyInstance(handle)
+    }
+  } finally {
+    opfs.restore()
+  }
+})
+
+test('browser finetune defaults checkpoints to the native ./checkpoints in OPFS', async (t) => {
+  const opfs = installOpfsRoot()
+  binding._setEngineFactoryForTest(finetuneInputEngine)
+  try {
+    const handle = binding.createInstance(
+      {},
+      { path: '', projectionPath: '', config: {} },
+      () => {}
+    )
+    await binding.activate(handle)
+    const module = handle.engine.module
+    const before = module.finetuneInputs.length
+    await binding.finetune(handle, {
+      trainDatasetDir: '/default-checkpoints/train.txt',
+      outputParametersDir: '/default-checkpoints/out'
+    })
+    await eventually(() => module.finetuneInputs.length === before + 1)
+    await eventually(() => binding.activeJobs(handle) === 0)
+    t.is(module.finetuneInputs[before].checkpointSaveDir, '/checkpoints')
+    await binding.destroyInstance(handle)
+  } finally {
+    opfs.restore()
+  }
+})
+
+test('browser assessFit hands the engine the mounted asset paths 20x', async (t) => {
+  const previous = globalThis[MOUNTED_FILES_KEY]
+  const header = Uint8Array.from([71, 71, 85, 70, 3, 0, 0, 0])
+  globalThis[MOUNTED_FILES_KEY] = new Map([
+    ['/fit/model.gguf', fileBytes('model.gguf', header)],
+    ['/fit/a,b.gguf', fileBytes('a,b.gguf', header)],
+    ['/fit/draft.gguf', fileBytes('draft.gguf', header)]
+  ])
+  const calls = []
+  binding._setEngineFactoryForTest(() => {
+    const engine = fitValidationEngine()
+    const ccall = engine.ccall
+    engine.ccall = function (name, returnType, types, args) {
+      if (name === 'qvac_web_validate_fit') calls.push(args)
+      return ccall.call(this, name, returnType, types, args)
+    }
+    return engine
+  })
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const result = await binding.assessFit({
+        modelPath: '/fit/model.gguf',
+        config: { lora: '/fit/a,b.gguf', spec_draft_model: '/fit/draft.gguf', ctx_size: '256' }
+      })
+      t.alike(result, { status: 'unknown', devices: [], stats: {} })
+      const [modelPath, configJson] = calls.pop()
+      const config = JSON.parse(configJson)
+      t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
+      t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
+      t.ok(
+        /^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model),
+        config.spec_draft_model
+      )
+      t.is(config.ctx_size, '256')
+    }
+  } finally {
+    if (previous === undefined) delete globalThis[MOUNTED_FILES_KEY]
+    else globalThis[MOUNTED_FILES_KEY] = previous
+  }
+})

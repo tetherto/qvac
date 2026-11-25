@@ -774,13 +774,17 @@ test('invalid browser load config does not load an engine', async (t) => {
 })
 
 test('browser engine creation receives the mounted load asset paths', async (t) => {
+  const previous = globalThis[MOUNTED_FILES_KEY]
   globalThis[MOUNTED_FILES_KEY] = new Map([
     ['/m/model.gguf', { name: 'model.gguf' }],
     ['/m/mmproj.gguf', { name: 'mmproj.gguf' }],
     ['/m/a,b.gguf', { name: 'a,b.gguf' }],
     ['/m/draft.gguf', { name: 'draft.gguf' }]
   ])
-  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  t.teardown(() => {
+    if (previous === undefined) delete globalThis[MOUNTED_FILES_KEY]
+    else globalThis[MOUNTED_FILES_KEY] = previous
+  })
   const created = []
   const isolated = isolatedBinding(() => ({
     FS: {
@@ -809,15 +813,21 @@ test('browser engine creation receives the mounted load asset paths', async (t) 
       },
       () => {}
     )
-    await isolated.activate(handle)
-    const [modelPath, projectionPath, configJson] = created.pop()
-    const config = JSON.parse(configJson)
-    t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
-    t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
-    t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
-    t.ok(/^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model), config.spec_draft_model)
-    t.is(config.parallel, '2')
-    await isolated.destroyInstance(handle)
+    try {
+      await isolated.activate(handle)
+      const [modelPath, projectionPath, configJson] = created.pop()
+      const config = JSON.parse(configJson)
+      t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
+      t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
+      t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
+      t.ok(
+        /^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model),
+        config.spec_draft_model
+      )
+      t.is(config.parallel, '2')
+    } finally {
+      await isolated.destroyInstance(handle)
+    }
   }
 })
 
