@@ -1,0 +1,205 @@
+---
+title: API reference
+icon: FileCode
+description: Every function exported by @qvac/rag.
+schemaType: TechArticle
+tocMaxDepth: 3
+---
+
+## `createRag(options)`
+
+Create a RAG instance.
+
+| Option | Type | Description |
+|---|---|---|
+| `corestore` | `Corestore` | The Corestore that backs this instance. One store per folder per process. |
+| `embeddings` | `EmbeddingsPort` | Optional. Provides `embedDocuments` and `embedQuery` for text-based ingest and search. Without it, supply precomputed vectors. |
+| `index` | `{ dir: string }` | Optional. Directory for a TurboVec index. On Bare, enables approximate nearest-neighbour search; on Node, ignored (every search scans all chunks). |
+| `chunking` | `ChunkingOptions` | Optional. Controls automatic text chunking on `ingest()`. |
+
+Returns a `Rag` handle. Call `await rag.ready()` before any other method.
+
+---
+
+## `rag.createNamespace(options)`
+
+Create a namespace tied to one embedding space.
+
+| Option | Type | Description |
+|---|---|---|
+| `name` | `string` | Namespace identifier. |
+| `space` | `EmbeddingSpace` | The embedding space: model, revision, dimensions, metric, and preprocessing. |
+
+Returns `{ spaceId }`. A namespace only accepts vectors from its space.
+
+---
+
+## `rag.ingest(options[, control])`
+
+Ingest documents into a namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documents` | `IngestDocument[]` | Documents to ingest. Each has an `id` and either `text` (chunked and embedded via the port) or `chunks` (precomputed `{ content, embedding, spaceId }`). |
+
+The optional second argument accepts `onProgress` and `signal` (abort).
+
+---
+
+## `rag.search(options)`
+
+Search for the most relevant chunks.
+
+| Option | Type | Description |
+|---|---|---|
+| `scope` | `{ namespace, documentIds? }` | Where to search. `documentIds` restricts the search to specific documents. |
+| `query` | `string` | Text query (requires a port with `embedQuery`). |
+| `vector` | `number[] \| Float32Array` | Pre-embedded query vector (use instead of `query`). |
+| `spaceId` | `string` | Required with `vector`. |
+| `k` | `number` | Maximum results. |
+
+Returns an array of hits, each with `content`, `score`, `documentId`, `chunkIndex`, and `spaceId`.
+
+---
+
+## `rag.deleteDocuments(options)`
+
+Remove documents from a namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentIds` | `string[]` | Documents to delete. |
+
+---
+
+## `rag.readDocument(options)`
+
+Read a single document's chunks.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentId` | `string` | The document to read. |
+
+---
+
+## `rag.listDocuments(options)`
+
+List all document ids in a namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+
+---
+
+## `rag.exportNamespace(options)`
+
+Export a namespace for transfer to another store.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Namespace to export. |
+
+---
+
+## `rag.importNamespace(options)`
+
+Import a previously exported namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Name for the imported namespace. |
+| `data` | `Buffer` | The exported data. |
+
+---
+
+## `rag.listNamespaces()`
+
+List all namespaces in this instance. Returns an array of namespace names.
+
+---
+
+## `rag.dropNamespace(options)`
+
+Delete a namespace and all its documents.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Namespace to drop. |
+
+---
+
+## `rag.scoped(options)`
+
+Create a scoped handle that restricts every operation to a subset of documents.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentIds` | `string[]` | Documents in scope. |
+
+The returned handle exposes `search`, `readDocument`, `listDocuments`, and `deleteDocuments`, each pre-scoped.
+
+---
+
+## `rag.close()`
+
+Close the RAG instance. Close the Corestore separately after.
+
+---
+
+## `EmbeddingsPort`
+
+The embeddings port you pass to `createRag()`.
+
+```typescript
+interface EmbeddingsPort {
+  space: EmbeddingSpace
+  embedDocuments(texts: string[]): Promise<Float32Array>
+  embedQuery(text: string): Promise<Float32Array>
+}
+```
+
+`space` identifies the vectors. A namespace only accepts vectors from its space. Change `space` when the vectors change (model, revision, pooling).
+
+---
+
+## `EmbeddingSpace`
+
+Describes one set of compatible vectors.
+
+```typescript
+interface EmbeddingSpace {
+  model: string
+  revision: string
+  dimensions: number
+  metric: 'cosine' | 'dot' | 'euclidean'
+  normalized: boolean
+  documentEncoding: string
+  queryEncoding: string
+  preprocessing: string
+}
+```
+
+---
+
+## Performance
+
+On Node, `@qvac/rag` scans all chunks on every search. At 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the TurboVec index on Bare. Past that threshold, run on Bare.
+
+| Chunks | Dimensions | Node (scan) | Bare + TurboVec |
+|---|---|---|---|
+| 10,000 | 768 | ~130 ms | ~2 ms |
+| 100,000 | 768 | ~1.3 s | ~21 ms |
+| 1,000,000 | 768 | ~13 s | ~210 ms |
+
+## Error handling
+
+Import errors from `@qvac/rag/errors`:
+
+```typescript
+import { RagError, NamespaceNotFoundError } from '@qvac/rag/errors'
+```
