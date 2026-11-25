@@ -97,6 +97,27 @@ function rejects(
   ]
 }
 
+const other = (driver: Driver): Driver => (driver === 'bare' ? 'node' : 'bare')
+
+const QUERY = { query: 'lava eruption', k: 4 }
+
+/** Searches `half` in `store` and checks it returns `against` in order, scores within `tolerance`. */
+function sameHits(
+  driver: Driver,
+  store: string,
+  against: string,
+  tolerance: number,
+  as: string
+): Step[] {
+  return [
+    op(driver, 'searchDelta', { store, scope: { namespace: 'half' }, ...QUERY, against }, as),
+    project(`$${as}`, 'result.sameOrder', `${as}Order`),
+    named(`$${as}Order`, 'isTrue'),
+    project(`$${as}`, 'result.maxScoreDelta', `${as}Delta`),
+    named(`$${as}Delta`, 'numbersInRange', { min: 0, max: tolerance })
+  ]
+}
+
 interface Case {
   id: string
   /** What the case shows, for the report. */
@@ -108,6 +129,8 @@ interface Case {
   expectation?: TestDefinition['expectation']
   smoke?: Driver[]
   durationMs?: number
+  /** Uses both runtimes: it starts on the driver and ends on the other one. */
+  crossRuntime?: boolean
 }
 
 // Cases whose checks are all named assertions still need an expectation; nothing applies it.
@@ -767,6 +790,57 @@ const CASES: Case[] = [
     ]
   },
 
+  // --- float16 vectors ---------------------------------------------------------------------
+  {
+    id: 'float16-roundtrip',
+    about:
+      'an f16 namespace ranks like f32, and its export imports on the other runtime as f16 with the same hits',
+    crossRuntime: true,
+    expectation: { validation: 'contains-all', contains: ['volcanoes'] },
+    durationMs: 60000,
+    steps: (d) => [
+      { useModel: { deps: ['embeddings'], as: 'embed' } },
+      { useModel: { deps: ['rag-e2e'], as: 'rag' } },
+      op(d, 'open', { store: 'main', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'main', name: 'half', vectorEncoding: 'f16' }),
+      op(d, 'createNamespace', { store: 'main', name: 'full' }),
+      op(d, 'ingest', { store: 'main', namespace: 'half', documents: '$params.corpus' }),
+      op(d, 'ingest', { store: 'main', namespace: 'full', documents: '$params.corpus' }),
+      op(d, 'search', { store: 'main', scope: { namespace: 'full' }, ...QUERY }, 'full'),
+      project('$full', 'result.hits', 'fullHits'),
+      ...sameHits(d, 'main', '$fullHits', 1e-3, 'vsFull'),
+      op(d, 'search', { store: 'main', scope: { namespace: 'half' }, ...QUERY }, 'half'),
+      project('$half', 'result.hits', 'halfHits'),
+      project('$half', 'result.hits[0].documentId', 'top'),
+      { assert: { on: '$top', use: 'expectation' } },
+      op(d, 'exportHex', { store: 'main', namespace: 'half' }, 'exported'),
+      project('$exported', 'result.hex', 'hex'),
+      op(other(d), 'open', { store: 'copy', embedModelId: '$embed', fresh: true }),
+      op(other(d), 'importHex', { store: 'copy', namespace: 'half', hex: '$hex' }),
+      op(other(d), 'listNamespaces', { store: 'copy' }, 'listed'),
+      project('$listed', 'result.namespaces[0]', 'copied'),
+      named('$copied', 'fieldsMatch', {
+        fields: ['name', 'vectorEncoding', 'documentCount'],
+        expected: { name: 'half', vectorEncoding: 'f16', documentCount: 4 }
+      }),
+      ...sameHits(other(d), 'copy', '$halfHits', 1e-4, 'vsSource')
+    ]
+  },
+  {
+    id: 'float16-encoding-mismatch',
+    about: 'an f16 export does not import into an existing f32 namespace',
+    steps: (d) => [
+      { useModel: { deps: ['embeddings'], as: 'embed' } },
+      ...(d === 'bare' ? [{ useModel: { deps: ['rag-e2e'], as: 'rag' } } as Step] : []),
+      op(d, 'open', { store: 'main', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'main', name: 'half', vectorEncoding: 'f16' }),
+      op(d, 'ingest', { store: 'main', namespace: 'half', documents: '$params.corpus' }),
+      op(d, 'open', { store: 'copy', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'copy', name: 'half' }),
+      ...rejects(d, 'transfer', { from: 'main', to: 'copy', namespace: 'half' }, 'NAMESPACE_EXISTS')
+    ]
+  },
+
   // --- lifecycle --------------------------------------------------------------------------
   {
     id: 'reopen-persists',
@@ -828,10 +902,12 @@ function define(c: Case, driver: Driver): TestDefinition {
     expectation: c.expectation ?? UNUSED,
     ...(c.smoke?.includes(driver) && { suites: ['smoke'] }),
     steps: c.steps(driver),
-    finally: [op(driver, 'reset', {})],
+    finally: c.crossRuntime
+      ? [op(driver, 'reset', {}), op(other(driver), 'reset', {})]
+      : [op(driver, 'reset', {})],
     metadata: {
       category: 'qvac-rag',
-      dependency: driver === 'bare' ? 'embeddings+rag-e2e' : 'embeddings',
+      dependency: driver === 'bare' || c.crossRuntime ? 'embeddings+rag-e2e' : 'embeddings',
       estimatedDurationMs: c.durationMs ?? 30000
     }
   }
