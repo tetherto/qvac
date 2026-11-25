@@ -315,13 +315,13 @@
       },
       "configurations": {
         "linux-x64-gpu2204": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set GGML_CUDA_DISABLE_MMQ_COL_OUTER=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set __GL_SHADER_DISK_CACHE=0 --set GGML_VK_PIPELINE_STATS=_",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
         },
         "linux-x64-gpu": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set GGML_CUDA_DISABLE_MMQ_COL_OUTER=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set __GL_SHADER_DISK_CACHE=0 --set GGML_VK_PIPELINE_STATS=_",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           },
@@ -337,7 +337,7 @@
           ]
         },
         "linux-x64-vulkan": {
-          "args": "--set CUDA_VISIBLE_DEVICES=-1 --set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set CUDA_VISIBLE_DEVICES=-1 --set QVAC_RUN_SPECULATIVE_DSPARK=1 --set __GL_SHADER_DISK_CACHE=0 --set GGML_VK_PIPELINE_STATS=_ --set GGML_VK_DISABLE_STREAM_K=1",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           }
