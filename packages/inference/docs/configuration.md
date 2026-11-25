@@ -73,6 +73,16 @@ Offline TDT push streams, including Parakeet TDT v3, default to 30,000 ms and
 require at least 30,000 ms. Explicit SDK overrides must be positive. Full
 TranscribePsy EU uses its own default.
 
+Standard TDT batch and push-stream transcription falls back to ggml when a
+Core ML sidecar cannot safely handle the encoder input. A loaded sidecar does
+not guarantee that every request uses Core ML; check `encoderUsedCoreml` in the
+terminal statistics for actual use.
+
+A streaming decode window is independent of the size of PCM writes: callers can
+send small writes while the engine accumulates its supported window. Unsupported
+explicit TDT windows fail through the normal request error path instead of
+producing a truncated transcript.
+
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages
 itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
