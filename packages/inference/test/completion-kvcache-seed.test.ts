@@ -100,12 +100,8 @@ function registerRecordingModel(
         held.delete(cacheKey)
         return Promise.resolve()
       },
-      async run(_prompt: unknown, opts?: { cacheKey?: string; baseCacheKey?: string }) {
+      run(_prompt: unknown, opts?: { cacheKey?: string; baseCacheKey?: string }) {
         calls.push({ cacheKey: opts?.cacheKey, baseCacheKey: opts?.baseCacheKey })
-        const source = opts?.baseCacheKey
-        if (source !== undefined && (await readBytes(source)) !== `saved-by:${source}`) {
-          throw new Error(`TextLlmContext::loadCache: failed to load cache '${source}'`)
-        }
         if (opts?.cacheKey !== undefined) held.add(opts.cacheKey)
         return {
           iterate: async function* () {
@@ -213,7 +209,7 @@ test('completion: a seeded chat points the addon at the source file and writes o
   clearRegistry()
 })
 
-test('completion: a failed seedFrom load preserves the seed file', async (t) => {
+test('completion: an unloadable seed leaves the request and the seed file intact', async (t) => {
   await setIsolatedHome()
   clearRegistry()
   const modelId = `seed-unloadable-${Date.now()}`
@@ -226,12 +222,11 @@ test('completion: a failed seedFrom load preserves the seed file', async (t) => 
   const source = calls[0]!.cacheKey!
   const fs = await import('bare-fs')
   fs.writeFileSync(source, 'unreadable cache')
-  await t.exception(
-    complete(history, { kvCache: 'chat-1', seedFrom: 'base' }),
-    /failed to load cache/
-  )
-  t.is(calls[1]!.baseCacheKey, source)
-  t.is(await readBytes(source), 'unreadable cache')
+  // The addon offers a seed only as a donor and starts cold when it fails to
+  // load, so the request succeeds.
+  await complete(history, { kvCache: 'chat-1', seedFrom: 'base' })
+  t.is(calls[1]!.baseCacheKey, source, 'the addon is pointed at the seed')
+  t.is(await readBytes(source), 'unreadable cache', 'the seed file is left byte-identical')
 
   unregisterModel(modelId)
   clearRegistry()

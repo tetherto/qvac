@@ -200,7 +200,7 @@ test('reconstructError: an oversized cache file keeps the worker recovery messag
   t.is(envelope.typedFields?.['cacheFileOverflow'], true)
   const error = reconstructError(envelope)
   t.ok(error instanceof ContextOverflowError && error.cacheFileOverflow && error.ctxSize === 8192)
-  t.ok(error.message.includes('Retry the request.'))
+  t.ok(error.message.includes('raise ctx_size.'))
   t.is(error.message, envelope.message)
   t.is(error.stack?.split('\n')[0], `CONTEXT_OVERFLOW: ${envelope.message}`)
 })

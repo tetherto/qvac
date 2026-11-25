@@ -426,7 +426,7 @@ const errorDefinitions: ErrorCodesMap = {
       if (source === 'cacheFile') {
         const size = cachedTokens ? ` holds ${cachedTokens} tokens and` : ''
         const limit = ctxSize ? `the ${ctxSize}-token slot limit` : 'the slot limit'
-        return `The saved KV cache${size} exceeds ${limit}${model}. Retry the request. If the oversized file is a seed, omit or rebuild that seed first.`
+        return `The saved KV cache${size} exceeds ${limit}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
       }
       if (requiredTokens && cachedTokens) {
         return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctx_size.`
