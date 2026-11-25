@@ -86,9 +86,8 @@ Browser finetuning dataset, chat-template, output, and checkpoint paths may be
 safe relative or absolute OPFS paths. SDK-mounted input paths are also
 accepted. Path segments must not be `.` or `..`; for example, use
 `checkpoints/run-1` or `/checkpoints/run-1`, not `./checkpoints/run-1`.
-NUL characters are rejected. SDK-mounted dataset and template files are
-accepted. Outputs and completed checkpoints are persisted in OPFS, so
-finetuning requires OPFS support.
+NUL characters are rejected. Outputs and completed checkpoints are persisted
+in OPFS, so finetuning requires OPFS support.
 
 Non-ephemeral `cacheKey` runs and `saveCache()` also require OPFS because their
 contract promises durable files. Inference without a cache key, an ephemeral

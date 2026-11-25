@@ -1,6 +1,6 @@
 'use strict'
 
-const { browserLoadConfig } = require('./load-config.js')
+const { checkLoadFiles } = require('./load-config.js')
 
 function optionalFinite(request, key) {
   const value = request[key]
@@ -27,7 +27,7 @@ function validateFitRequest(request) {
   }
   optionalFinite(request, 'minCtxSize')
   optionalFinite(request, 'marginBytes')
-  browserLoadConfig(request.config)
+  checkLoadFiles({ path: request.modelPath, projectionPath: '', config: request.config })
 }
 
 module.exports = { validateFitRequest }

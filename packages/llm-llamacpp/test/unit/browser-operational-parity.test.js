@@ -1274,6 +1274,32 @@ test('browser assessFit validates through the engine and reports unknown', async
   }
 })
 
+test('browser assessFit checks every asset path before starting an engine 20x', async (t) => {
+  let factoryCalls = 0
+  binding._setEngineFactoryForTest(() => {
+    factoryCalls++
+    throw new Error('no WebGPU adapter')
+  })
+  const cases = [
+    [{ modelPath: 'relative.gguf' }, /absolute OPFS path, got: relative\.gguf/],
+    [{ modelPath: '/models/m-00002-of-00002.gguf' }, /must be loaded from its first shard/],
+    [
+      { modelPath: '/models/model.gguf', config: { lora: 'adapter.gguf' } },
+      /absolute OPFS path, got: adapter\.gguf/
+    ],
+    [
+      { modelPath: '/models/model.gguf', config: { 'spec-draft-model': 'draft.gguf' } },
+      /absolute OPFS path, got: draft\.gguf/
+    ]
+  ]
+  for (let iteration = 0; iteration < 20; iteration++) {
+    for (const [request, message] of cases) {
+      await t.exception.all(() => binding.assessFit(request), message)
+    }
+    t.is(factoryCalls, 0, `no engine started ${iteration + 1}`)
+  }
+})
+
 test('browser assessFit retires an engine whose temporary mount cannot be cleaned 20x', async (t) => {
   const previous = globalThis[MOUNTED_FILES_KEY]
   const mounted = new Map()
@@ -3188,6 +3214,106 @@ test('completed browser finetune removes stale pause checkpoints but keeps perio
       )
       await binding.destroyInstance(handle)
     }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})
+
+test('a failed cooperative step leaves a queued finetune to finish once 20x', async (t) => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const root = new DirectoryHandle()
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { getDirectory: () => new Promise((r) => setTimeout(() => r(root), 3)) } }
+  })
+  let overlaps = 0
+  let handleRef = null
+  binding._setEngineFactoryForTest((options) => {
+    const ops = new Map()
+    const module = {
+      FS: memoryFs(),
+      finetuneCalls: 0,
+      ccall(name, _returnType, _types, args) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_cache_request') {
+          ops.set(args[1], { path: args[2], complete: false })
+          return 0
+        }
+        if (name === 'qvac_web_step') {
+          let completed = false
+          for (const op of ops.values()) {
+            if (op.complete) continue
+            op.complete = true
+            module.FS.set(op.path, Uint8Array.of(1))
+            completed = true
+          }
+          return new Promise((resolve) =>
+            setTimeout(() => {
+              if (!completed) {
+                if (handleRef && handleRef.finetuneJobId !== null) overlaps++
+                resolve(-1)
+              } else resolve(0)
+            }, 15)
+          )
+        }
+        if (name === 'qvac_web_cache_poll') {
+          const op = ops.get(args[1])
+          if (!op?.complete) return 1
+          ops.delete(args[1])
+          return 0
+        }
+        if (name === 'qvac_web_active_slots') return 0
+        if (name === 'qvac_web_finetune') {
+          const params = JSON.parse(args[2])
+          module.finetuneCalls++
+          module.FS.set(`${params.outputParametersDir}/adapter.gguf`, Uint8Array.of(9))
+          options.qvacEmit(
+            args[0],
+            args[1],
+            'JobEnded',
+            JSON.stringify({ op: 'finetune', status: 'COMPLETED' })
+          )
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        }
+        if (name === 'qvac_web_result') return JSON.stringify({ error: 'step failed' })
+        return 0
+      }
+    }
+    return module
+  })
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const events = []
+      const handle = binding.createInstance(
+        {},
+        { path: '', config: { parallel: 2 } },
+        (_owner, type, _data, error) => events.push([type, error?.message])
+      )
+      handleRef = handle
+      await binding.activate(handle)
+      const base = `/ft-${iteration}`
+      await opfsWrite(root, `${base}/train.jsonl`, Uint8Array.of(1))
+      const save = binding.saveCache(handle, `${base}/saved.bin`)
+      const finetune = binding.finetune(handle, {
+        trainDatasetDir: `${base}/train.jsonl`,
+        outputParametersDir: `${base}/output`,
+        checkpointSaveDir: `${base}/checkpoints`
+      })
+      await save
+      t.ok(await finetune, 'admitted')
+      await eventually(() => binding.activeJobs(handle) === 0)
+      await new Promise((r) => setTimeout(r, 50))
+      t.alike(
+        events.map((e) => e[0]),
+        ['JobEnded', 'JobEnded'],
+        `finetune terminals ${iteration} ${JSON.stringify(events)}`
+      )
+      t.is(handle.engine.module.finetuneCalls, iteration + 1, 'finetune ran once')
+      await binding.destroyInstance(handle)
+    }
+    t.ok(overlaps > 0, 'a step failed while the finetune was live')
   } finally {
     if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
     else delete globalThis.navigator
