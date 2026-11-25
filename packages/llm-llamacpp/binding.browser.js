@@ -171,12 +171,21 @@ async function call(handle, name, types, args, prepare) {
   }
 }
 
+// Only for exports that never suspend. Under Asyncify a suspended sync ccall
+// returns a Promise while the engine is still running, so treat that as fatal
+// rather than let the next call in.
 function callSync(handle, name, types, args, prepare) {
   const engine = usableEngine(handle)
   const { module } = engine
   try {
     if (prepare) prepare(module)
-    return check(module, module.ccall(name, 'number', types, args))
+    const status = module.ccall(name, 'number', types, args)
+    if (typeof status?.then === 'function') {
+      const error = new Error(`${name} suspended in a synchronous engine call`)
+      poison(engine, error)
+      throw error
+    }
+    return check(module, status)
   } catch (error) {
     if (isFatalWasmError(error)) poison(engine, error)
     throw error
@@ -428,7 +437,7 @@ function runLegacyJob(handle, id, job, prepared) {
   execution.then(() => finishJob(handle, id))
 }
 
-function runJob(handle, data, rejectWhenBusy = true) {
+function runJob(handle, data, rejectWhenBusy = false) {
   if (handle.destroying) return Promise.reject(new Error('Model is not loaded'))
   const isBatch = data.length > 0 && Array.isArray(data[0].messages)
   if (isBatch && !handle.cooperative) {
@@ -471,7 +480,7 @@ function runJob(handle, data, rejectWhenBusy = true) {
   return serializeHandle(handle, () =>
     enqueue(async () => {
       try {
-        await callSync(
+        await call(
           handle,
           'qvac_web_submit',
           ['number', 'number', 'number', 'string'],
@@ -530,10 +539,12 @@ function cacheOperation(handle, cacheKey, discard) {
   }
   return serializeHandle(handle, async () => {
     const operationId = handle.nextCacheOperationId++
-    await enqueue(() => {
+    // A cooperative save runs in this call and reads state back from the GPU,
+    // which can suspend.
+    await enqueue(async () => {
       const module = usableEngine(handle).module
       if (!discard) ensureParentDirectory(module, cacheKey)
-      callSync(
+      await call(
         handle,
         'qvac_web_cache_request',
         ['number', 'number', 'string', 'number'],
@@ -566,7 +577,7 @@ function destroyInstance(handle) {
   }
   return cancel(handle).then(() =>
     serializeHandle(handle, () =>
-      enqueue(() => {
+      enqueue(async () => {
         // Read the resources only after earlier queued work has settled. In
         // particular, unload may be requested while activate() is still creating
         // the native instance and mounting its files.
@@ -574,7 +585,9 @@ function destroyInstance(handle) {
         const native = handle.native
         if (native && !handle.failure) {
           try {
-            callSync(handle, 'qvac_web_destroy', ['number'], [native])
+            // Destroying flushes resident caches, reading state back from the
+            // GPU, which can suspend.
+            await call(handle, 'qvac_web_destroy', ['number'], [native])
           } catch (error) {
             if (!handle.failure) throw error
           }

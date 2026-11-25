@@ -90,7 +90,9 @@ Supported:
 - Reasoning models
 - Tool calling
 - Generation parameters
-- Per-job cancel during generation; a queued job can also be cancelled before it starts
+- Per-job cancel during generation; a queued job can also be cancelled before it starts.
+  As on native, `cancel()` resolves once the cancelled work has stopped, so a
+  following `run()` is not refused as busy
 - Runtime stats
 - `saveCache`/`discardCache` (cache files live in memory)
 - `calcTokens` while the engine is idle

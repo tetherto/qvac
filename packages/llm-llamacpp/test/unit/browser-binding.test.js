@@ -221,14 +221,17 @@ test('browser binding validates inputs before admission', async (t) => {
 
 test('browser admission reserves worker capacity before validation', async (t) => {
   let runs = 0
+  let nextHandle = 1
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    async ccall(name, _returnType, _types, args) {
-      if (name === 'qvac_web_create') return 1
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return nextHandle++
       if (name === 'qvac_web_run') {
         runs++
-        await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return delay().then(() => {
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -253,12 +256,14 @@ test('rejectWhenBusy false queues legacy browser requests', async (t) => {
   let runs = 0
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    async ccall(name, _returnType, _types, args) {
+    ccall(name, _returnType, _types, args) {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_run') {
         runs++
-        await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return delay().then(() => {
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -381,11 +386,14 @@ test('browser binding exposes cancellation while a job has emitted no output', a
   const terminals = []
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    ccall: async (name, _returnType, _types, args) => {
+    ccall: (name, _returnType, _types, args) => {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_run') {
-        while (!options.qvacCancelled(args[0], args[1])) await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return (async () => {
+          while (!options.qvacCancelled(args[0], args[1])) await delay()
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })()
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -680,13 +688,16 @@ test('browser unload cancels a legacy job waiting for admission', async (t) => {
   const runs = []
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    async ccall(name, _returnType, _types, args) {
+    ccall(name, _returnType, _types, args) {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_run') {
         const input = JSON.parse(args[2])[0].input
         runs.push(input)
-        while (!options.qvacCancelled(args[0], args[1])) await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return (async () => {
+          while (!options.qvacCancelled(args[0], args[1])) await delay()
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })()
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -1047,5 +1058,126 @@ test('browser calcTokens fails fast while the engine queue is busy', async (t) =
   await isolated.cancelJob(handle, admission.id)
   await delay()
   t.is(isolated.activeJobs(handle), 0)
+  await isolated.destroyInstance(handle)
+})
+
+// Under Asyncify a sync ccall that suspends returns a Promise; these engines
+// suspend on every call to the named export.
+function suspendingEngine(suspending, log) {
+  return () => ({
+    FS: { mkdirTree() {}, unmount: () => log.push('unmount'), rmdir() {} },
+    ccall(name) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_result') return '{}'
+      if (name === suspending) {
+        log.push(`${name} started`)
+        return delay().then(() => {
+          log.push(`${name} finished`)
+          return 0
+        })
+      }
+      if (name === 'qvac_web_cache_poll') log.push('poll')
+      return 0
+    }
+  })
+}
+
+test('browser unload waits for a destroy that suspends 20x', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const log = []
+    const isolated = isolatedBinding(suspendingEngine('qvac_web_destroy', log))
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    handle.mounts.push({ mountpoint: `/qvac-files/suspend-${iteration}`, mounted: true })
+    await isolated.destroyInstance(handle)
+    t.alike(
+      log,
+      ['qvac_web_destroy started', 'qvac_web_destroy finished', 'unmount'],
+      `iteration ${iteration + 1}`
+    )
+  }
+})
+
+test('cooperative saveCache waits for a cache request that suspends 20x', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const log = []
+    const isolated = isolatedBinding(suspendingEngine('qvac_web_cache_request', log))
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    await isolated.saveCache(handle, `/cache/suspend-${iteration}.bin`)
+    t.alike(
+      log,
+      ['qvac_web_cache_request started', 'qvac_web_cache_request finished', 'poll'],
+      `iteration ${iteration + 1}`
+    )
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('a synchronous engine call that suspends retires the engine', async (t) => {
+  const isolated = isolatedBinding(suspendingEngine('qvac_web_active_slots', []))
+  const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+  await isolated.activate(handle)
+  await t.exception(
+    isolated.runJob(handle, [{ type: 'text', input: '[]' }]),
+    /qvac_web_active_slots suspended in a synchronous engine call/
+  )
+  await t.exception(
+    isolated.runJob(handle, [{ type: 'text', input: '[]' }]),
+    /must be loaded again/
+  )
+  await isolated.destroyInstance(handle)
+})
+
+test('browser run data rejects media paths and keeps byte markers', async (t) => {
+  const pathCases = [
+    [{ role: 'user', type: 'media', content: '/images/cat.png' }],
+    [{ role: 'user', content: [{ type: 'media', content: '/images/cat.png' }] }]
+  ]
+  for (const messages of pathCases) {
+    const item = { type: 'text', input: JSON.stringify(messages) }
+    await t.exception.all(() => prepareRunData([item]), /Media paths are not supported/)
+    await t.exception.all(
+      () => prepareRunData([{ messages: [item] }]),
+      /Media paths are not supported/
+    )
+  }
+  const markers = [
+    { role: 'user', type: 'media', content: '' },
+    { role: 'user', content: [{ type: 'media' }, { type: 'text', text: 'what is this?' }] },
+    { role: 'user', content: 'a "media" mention in text' }
+  ]
+  const prepared = prepareRunData([
+    { type: 'media', content: Uint8Array.of(1) },
+    { type: 'media', content: Uint8Array.of(2) },
+    { type: 'text', input: JSON.stringify(markers) }
+  ])
+  t.is(prepared.media[0].length, 2)
+})
+
+test('browser binding runJob queues by default like native 20x', async (t) => {
+  const isolated = isolatedBinding(
+    fakeEngine(async (emit, [native, id]) => {
+      await delay()
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const handle = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(handle)
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    const second = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    t.ok(first.accepted && second.accepted, `both admitted ${iteration + 1}`)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+  }
+  await t.exception(
+    (async () => {
+      await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+      await isolated.runJob(handle, [{ type: 'text', input: '[]' }], true)
+    })(),
+    /already set or being processed/
+  )
+  while (isolated.activeJobs(handle) !== 0) await delay()
   await isolated.destroyInstance(handle)
 })

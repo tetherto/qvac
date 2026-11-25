@@ -742,7 +742,8 @@ const LlmLlamacpp = class LlmLlamacpp {
     /**
      * Cancel finetuning and remove the pause checkpoint so the next
      * `finetune()` call starts fresh instead of resuming. Also cancels
-     * any inference job in flight.
+     * any inference job in flight. Resolves once the cancelled work has
+     * stopped, so a following `run()` is not refused as busy.
      */
     async cancel() {
         if (this.addon?.cancel) {
