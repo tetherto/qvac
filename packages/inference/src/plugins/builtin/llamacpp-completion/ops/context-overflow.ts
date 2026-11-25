@@ -10,6 +10,9 @@
  * codeString survives only the synchronous throw path — asynchronous run
  * errors are transported as `exception.what()` alone, with no code.
  *
+ * A cache file longer than the slot limit is refused when a request loads
+ * it, under `ContextLengthExeeded`; that is the same condition.
+ *
  * These helpers let the plugin handler convert that addon error into a
  * typed `ContextOverflowError` and let unit tests assert the detection
  * + extraction logic without a real model load.
@@ -28,18 +31,25 @@ const CONTEXT_OVERFLOW_FORMS = [
   /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/
+  /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  // A cache file over the slot limit, refused as the request loads it.
+  /^(?:TextLlmContext::|MtmdLlmContext::)?loadCache: cache (?:file )?'[^\r\n]*' exceeds the context limit of \d+ tokens$/,
+  /^acceptLoadedState: cache file '[^\r\n]*' contains \d+ tokens, which exceeds the context limit of \d+ tokens$/
 ]
 
 // Both detectors classify raw addon errors only — an already-typed QvacError
 // (numeric `code`) is deliberately rejected by the present-code gate.
 export function isAddonContextOverflowError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
-  // A present status code is authoritative: exact ContextOverflow accepts,
-  // anything else (a non-string included) rejects with no message fallback.
+  // A present status code is authoritative: exact ContextOverflow or
+  // ContextLengthExeeded accepts, anything else (a non-string included)
+  // rejects with no message fallback.
   const code = (err as { code?: unknown }).code
   if (code !== undefined) {
-    return typeof code === 'string' && /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)
+    return (
+      typeof code === 'string' &&
+      /^\[\s*[\w.-]+\s*::\s*(?:ContextOverflow|ContextLengthExeeded)\s*\]$/.test(code)
+    )
   }
   // The production path: the async transport strips status metadata from
   // every run error, so the message alone identifies the overflow guards.
@@ -128,6 +138,18 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     // reservation plus the prompt is the space the request needs.
     pattern: /n_predict (\d+) \+ prompt (\d+) KV cells exceeds per-sequence cap (\d+)/,
     map: ([predict, cells, cap]) => ({ requiredTokens: predict! + cells!, ctxSize: cap! })
+  },
+  {
+    // "cache file '<path>' contains N tokens, which exceeds the context limit
+    // of M tokens" — the file is all of it, so it is also the total.
+    pattern: /contains (\d+) tokens, which exceeds the context limit of (\d+) tokens/,
+    map: ([cached, ctx]) => ({ cachedTokens: cached!, requiredTokens: cached!, ctxSize: ctx! })
+  },
+  {
+    // "cache '<path>' exceeds the context limit of M tokens" — the file's
+    // length is not reported.
+    pattern: /exceeds the context limit of (\d+) tokens/,
+    map: ([ctx]) => ({ ctxSize: ctx! })
   }
 ]
 

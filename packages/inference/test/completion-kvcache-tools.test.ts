@@ -796,7 +796,7 @@ function registerSecondTurnThrowingModel(
   modelId: string,
   calls: RecordedCall[],
   cachePaths: string[],
-  thrown: Error,
+  thrown: Error | ((cacheKey: string | undefined) => Error),
   throwOnRun = 2
 ): void {
   let runCount = 0
@@ -812,7 +812,9 @@ function registerSecondTurnThrowingModel(
         if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         if (!opts?.prefill) {
           runCount += 1
-          if (runCount === throwOnRun) throw thrown
+          if (runCount === throwOnRun) {
+            throw typeof thrown === 'function' ? thrown(opts?.cacheKey) : thrown
+          }
         }
         conversations.hold(opts?.cacheKey)
         return {
@@ -1057,6 +1059,96 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
   )
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
   t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
+  assertRetryReusesCache(t, turnCalls, cachePaths)
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A file the addon cannot load fails every request that loads it, so the
+// failed turn removes it and the retry starts cold on the same key.
+test('completion: kv-cache drops a cache file the addon cannot load', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) => new Error(`TextLlmContext::loadCache: failed to load cache '${cacheKey}'`)
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'unloadable-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && /failed to load cache/.test(refusal.message), 'turn two fails')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache drops a cache file over the slot limit as a context overflow', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-over-limit-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) =>
+      new Error(
+        `TextLlmContext::loadCache: cache '${cacheKey}' exceeds the context limit of 8192 tokens`
+      )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'over-limit-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  t.is((refusal as { ctxSize?: number }).ctxSize, 8192, 'the limit is the slot limit')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A load failure that names another file, such as a seed source, is not this
+// key's file failing.
+test('completion: kv-cache keeps its file when another cache file fails to load', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-other-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error("TextLlmContext::loadCache: failed to load cache '/elsewhere/source.bin'")
+  )
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'other-unloadable-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
   assertRetryReusesCache(t, turnCalls, cachePaths)
 
   unregisterModel(modelId)
