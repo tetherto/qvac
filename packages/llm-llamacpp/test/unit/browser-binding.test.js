@@ -603,6 +603,70 @@ test('cooperative listener failure cancels only its job and releases it', async 
   }
 })
 
+test('a failed cooperative step does not end a job still waiting to submit', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const live = new Map()
+    let failNextStep = false
+    let stepFailing = null
+    const isolated = isolatedBinding((options) => ({
+      FS: { mkdirTree() {} },
+      ccall(name, _returnType, _types, args, ccallOptions) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_result') return JSON.stringify({ error: 'step failed' })
+        if (name === 'qvac_web_submit') live.set(args[1], 0)
+        if (name === 'qvac_web_active_slots') return live.size
+        if (name !== 'qvac_web_step') return 0
+        if (failNextStep) {
+          failNextStep = false
+          stepFailing()
+          return new Promise((resolve) =>
+            setTimeout(() => {
+              for (const id of [...live.keys()]) {
+                live.delete(id)
+                options.qvacEmit(args[0], id, 'Error', JSON.stringify({ error: 'step failed' }))
+              }
+              resolve(-1)
+            }, 20)
+          )
+        }
+        for (const [id, steps] of [...live]) {
+          if (steps < 3) {
+            live.set(id, steps + 1)
+          } else {
+            live.delete(id)
+            options.qvacEmit(args[0], id, 'JobEnded', '{}')
+          }
+        }
+        return ccallOptions?.async ? Promise.resolve(0) : 0
+      }
+    }))
+    const terminals = new Map()
+    const admitted = new Set()
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, (...event) => {
+      const [, type, , , id] = event
+      if (type !== 'JobEnded' && type !== 'Error') return
+      t.ok(admitted.has(id), `terminal after admission, iteration ${iteration + 1}`)
+      terminals.set(id, [...(terminals.get(id) ?? []), type])
+    })
+    await isolated.activate(handle)
+    failNextStep = true
+    const failing = new Promise((resolve) => {
+      stepFailing = resolve
+    })
+    const first = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    admitted.add(first.id)
+    await failing
+    const second = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    admitted.add(second.id)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+
+    t.alike(terminals.get(first.id), ['Error'], `failed job ends, iteration ${iteration + 1}`)
+    t.alike(terminals.get(second.id), ['JobEnded'], `queued job runs, iteration ${iteration + 1}`)
+    t.is(live.size, 0, `no native job left, iteration ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
 test('cooperative cache operation does not wait for an unrelated live job', async (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     const isolated = isolatedBinding(cooperativeEngine)

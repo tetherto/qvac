@@ -432,6 +432,7 @@ function createJob(
   const job = {
     cancelled: false,
     ended: false,
+    submitted: false,
     terminals: [],
     callbackError: null,
     cachePaths,
@@ -607,8 +608,10 @@ async function runPump() {
         } catch (error) {
           handle.activeSlots = 0
           const failed = []
-          for (const id of [...handle.jobs.keys()]) {
-            failed.push([id, await prepareFinishedJob(handle, id, error)])
+          // A job still queued behind this step has not reached the engine and
+          // its caller has no listener yet; it is submitted after the step.
+          for (const [id, job] of [...handle.jobs]) {
+            if (job.submitted) failed.push([id, await prepareFinishedJob(handle, id, error)])
           }
           return failed
         }
@@ -712,6 +715,7 @@ function runJob(handle, data, rejectWhenBusy = true) {
             stageMedia(module, handle, id, prepared.media)
           }
         )
+        job.submitted = true
         if (job.cancelled) {
           callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
         }
