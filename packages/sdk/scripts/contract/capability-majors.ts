@@ -16,6 +16,8 @@ interface ManifestMethod {
   requestSchema: string
   responseSchema: string
   progress?: { responseSchema: string } | undefined
+  /** The frames a client sends up a duplex call after the request. */
+  inputSchema?: string | undefined
 }
 
 export interface CapabilityContractEntry {
@@ -115,14 +117,25 @@ export function findMajorProblems(
         problems.push(`${key}: ${operation} changed from ${old.callShape} to ${now.callShape}`)
         continue
       }
-      const request = findIncompatibility(
-        schemaAt(published, old.requestSchema),
-        published.schema.$defs,
-        schemaAt(current, now.requestSchema),
-        current.schema.$defs,
-        { direction: 'request' }
-      )
-      if (request) problems.push(`${key}: ${operation} request: ${request}`)
+      const requests: Array<[string, string | undefined, string | undefined]> = [
+        ['request', old.requestSchema, now.requestSchema],
+        ['input', old.inputSchema, now.inputSchema]
+      ]
+      for (const [label, oldRef, nowRef] of requests) {
+        if (oldRef === undefined && nowRef === undefined) continue
+        if (oldRef === undefined || nowRef === undefined) {
+          problems.push(`${key}: ${operation} ${label} was ${oldRef ? 'removed' : 'added'}`)
+          continue
+        }
+        const request = findIncompatibility(
+          schemaAt(published, oldRef),
+          published.schema.$defs,
+          schemaAt(current, nowRef),
+          current.schema.$defs,
+          { direction: 'request' }
+        )
+        if (request) problems.push(`${key}: ${operation} ${label}: ${request}`)
+      }
       const responses: Array<[string, string | undefined, string | undefined]> = [
         ['response', old.responseSchema, now.responseSchema],
         ['progress response', old.progress?.responseSchema, now.progress?.responseSchema]

@@ -217,6 +217,13 @@ const cases: Array<[string, Direction, unknown, unknown, RegExp | undefined]> = 
     undefined
   ],
   [
+    'response: a declared field becomes an untyped entry of a loose object',
+    'response',
+    object({ a: text, text }),
+    { type: 'object', properties: { a: text }, additionalProperties: {} },
+    /"text" is no longer limited to string/
+  ],
+  [
     'response: new field when the old schema allowed extras',
     'response',
     { type: 'object', properties: { a: text }, required: ['a'] },
@@ -480,6 +487,13 @@ test('the capability baseline compares completionOrchestrate under completion', 
   ]
   t.alike(findMajorProblems(baseline(), changed), [
     'completion@1: completionOrchestrate request: field "turnLimit" became required'
+  ])
+
+  const input = baseline()
+  const toolResult = defOf(input, 'completionOrchestrate.input')
+  toolResult['required'] = [...(toolResult['required'] as string[]), 'error']
+  t.alike(findMajorProblems(baseline(), input), [
+    'completion@1: completionOrchestrate input: field "error" became required'
   ])
 
   const removed = baseline()

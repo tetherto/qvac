@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import {
   CAPABILITY_CONTRACTS,
+  toolCallbackResultSchema,
   vlaHparamsRequestSchema,
   vlaHparamsResponseSchema,
   vlaRunRequestSchema,
@@ -41,6 +42,16 @@ const PLUGIN_HANDLER_OPERATIONS: Record<
  */
 const RUNTIME_OPERATIONS: Record<string, string[]> = {
   completion: ['completionOrchestrate']
+}
+
+/**
+ * The frames a client sends up a duplex call after the request, for the
+ * operations whose frames have a schema. The other duplex operations take raw
+ * audio or text chunks. The wire contract does not describe these frames, so
+ * the baseline records them here.
+ */
+const DUPLEX_INPUT_SCHEMAS: Record<string, z.ZodType> = {
+  completionOrchestrate: toolCallbackResultSchema
 }
 
 /**
@@ -116,6 +127,13 @@ export function buildCapabilityBaseline(): ContractSnapshot {
       requestSchema: `schema.json#/$defs/${requestDef}`,
       responseSchema: `schema.json#/$defs/${responseDef}`
     })
+  }
+  for (const [operation, schema] of Object.entries(DUPLEX_INPUT_SCHEMAS)) {
+    const method = methods.find((candidate) => candidate.name === operation)
+    if (!method) throw new Error(`duplex input schema for "${operation}", which no contract lists`)
+    const inputDef = `${operation}.input`
+    $defs[inputDef] = toWireJsonSchema(schema, 'input', inputDef, { markStrict: true })
+    method.inputSchema = `schema.json#/$defs/${inputDef}`
   }
   methods.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 

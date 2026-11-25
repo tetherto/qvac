@@ -409,6 +409,12 @@ export function findIncompatibility(
     // `additionalProperties: {}` (`z.looseObject`, or `z.record` of unknown
     // values), which promises entries of any value.
     if (!('additionalProperties' in a) || subExtra === false) return undefined
+    // A field the other side now declares was one of these entries before.
+    for (const [key, supProp] of Object.entries(supProps)) {
+      if (key in subProps) continue
+      const problem = check(subExtra, supProp, at(path, key), seen)
+      if (problem) return problem
+    }
     if (supExtra === false) {
       if (!isAnything(subExtra)) {
         return say(
@@ -420,12 +426,6 @@ export function findIncompatibility(
         return `${show(path)} no longer accepts fields it does not declare`
       }
       return undefined
-    }
-    // A field the other side now declares was one of these entries before.
-    for (const [key, supProp] of Object.entries(supProps)) {
-      if (key in subProps) continue
-      const problem = check(subExtra, supProp, at(path, key), seen)
-      if (problem) return problem
     }
     return check(subExtra, supExtra, at(path, '<extra>'), seen)
   }
