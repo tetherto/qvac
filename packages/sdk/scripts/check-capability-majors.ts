@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { createGunzip } from 'node:zlib'
 import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import tar from 'tar-stream'
 import { buildCapabilityBaseline } from './contract/build-capability-baseline'
 import { findMajorProblems, type ContractSnapshot } from './contract/capability-majors'
@@ -39,14 +40,7 @@ async function readFromTarball(url: string, path: string): Promise<string | unde
     })
     stream.resume()
   })
-  const done = new Promise<void>((resolve, reject) => {
-    extract.on('finish', resolve)
-    extract.on('error', reject)
-  })
-  Readable.fromWeb(response.body as never)
-    .pipe(createGunzip())
-    .pipe(extract)
-  await done
+  await pipeline(Readable.fromWeb(response.body as never), createGunzip(), extract)
   return found
 }
 
