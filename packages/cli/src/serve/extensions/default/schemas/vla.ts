@@ -8,9 +8,13 @@ const MAX_EMBODIMENT_TAG_LENGTH = 256
 // Tokens are copied into an Int32Array, which would wrap anything wider.
 const INT32_MAX = 2 ** 31 - 1
 
-const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+// No repeated group: a backtracking `(?:...{4})*` overflows the stack on camera-sized frames.
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 
-const base64 = z.string().min(1).regex(BASE64_RE, 'Expected base64.')
+const base64 = z
+  .string()
+  .min(1)
+  .refine((value) => value.length % 4 === 0 && BASE64_RE.test(value), 'Expected base64.')
 
 const pixelsImage = z.strictObject({
   pixels: base64.describe(

@@ -66,6 +66,11 @@ describe('qvac vla: validation', () => {
     assertStatusAndError(await post({ ...BODY, model: undefined }), 400, 'missing_model')
     assertStatusAndError(await post({ ...BODY, images: [] }), 400, 'invalid_images')
     assertStatusAndError(await post({ ...BODY, images: [{ tensor: '!!' }] }), 400, 'invalid_images')
+    assertStatusAndError(
+      await post({ ...BODY, images: [{ tensor: 'abcde' }] }),
+      400,
+      'invalid_images'
+    )
     assertStatusAndError(await post({ ...BODY, tokens: undefined }), 400, 'invalid_tokens')
     assertStatusAndError(await post({ ...BODY, tokens: [5, -1] }), 400, 'invalid_tokens')
     assertStatusAndError(await post({ ...BODY, attentionMask: [2] }), 400, 'invalid_attention_mask')
@@ -160,6 +165,24 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
     assert.deepEqual([...call.tokens], [7, 8, 9, 0, 0])
     assert.deepEqual([...call.mask], [1, 1, 1, 0, 0])
     assert.equal(call.state.length, 6)
+  })
+
+  it('accepts full-size 1080p frames', async () => {
+    stubHparams()
+    const calls: VlaClientRunParams[] = []
+    stubRun(calls)
+    const frame = {
+      pixels: Buffer.alloc(1920 * 1080 * 3, 64).toString('base64'),
+      width: 1920,
+      height: 1080
+    }
+    const res = await server().inject({
+      method: 'POST',
+      url: ACTIONS,
+      payload: { ...BODY, images: [frame, frame] }
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.equal(calls[0]!.images[0]!.length, 3 * SIZE * SIZE)
   })
 
   it('rejects a camera count the model does not take, without running it', async () => {
