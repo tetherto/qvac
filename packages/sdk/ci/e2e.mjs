@@ -172,7 +172,7 @@ export function prepare(env, afterSdkBuild = () => {}) {
     console.log('DIAG node_modules/@qvac:', ls(join(E2E, 'node_modules', '@qvac')))
     console.log('DIAG node_modules/@qvac/sdk-e2e:', ls(join(E2E, 'node_modules', '@qvac', 'sdk-e2e')))
     console.log('DIAG node_modules (top 80):', [].concat(ls(join(E2E, 'node_modules'))).slice(0, 80))
-    const cache = run('npm', ['config', 'get', 'cache'], { cwd: E2E, env, capture: true }).trim()
+    const cache = process.platform === 'win32' ? join(env.LOCALAPPDATA, 'npm-cache') : join(homedir(), '.npm')
     const logs = join(cache, '_logs')
     const last = readdirSync(logs).filter((f) => f.endsWith('-debug-0.log')).sort().pop()
     const text = readFileSync(join(logs, last), 'utf8').split(/\r?\n/)
