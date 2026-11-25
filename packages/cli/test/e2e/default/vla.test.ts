@@ -336,4 +336,68 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
     state().vlaSetEmbodimentOverride = () => Promise.reject(addonError('job in flight', 30007))
     assertStatusAndError(await switchTo(), 429, 'request_rejected_by_policy')
   })
+
+  it('maps a single-embodiment GGUF refusing the switch to 400', async () => {
+    stubHparams(GROOT)
+    state().vlaSetEmbodimentOverride = () =>
+      Promise.reject(addonError('model has a single embodiment', 30001))
+    const res = await server().inject({
+      method: 'POST',
+      url: `${MODELS}/smolvla/embodiment`,
+      payload: { embodiment: 'libero_sim' }
+    })
+    assertStatusAndError(res, 400, 'invalid_embodiment')
+  })
+
+  it('refuses a second action request on a busy model, without running it', async () => {
+    stubHparams()
+    let finish!: () => void
+    let runs = 0
+    stubRun([], () => {
+      runs++
+      return new Promise((resolve) => {
+        finish = () =>
+          resolve({ actions: Float32Array.from([1, 2, 3, 4, 5, 6]), actionDim: 3, chunkSize: 2 })
+      })
+    })
+    const first = server().inject({ method: 'POST', url: ACTIONS, payload: BODY })
+    while (finish === undefined) await new Promise((r) => setImmediate(r))
+
+    assertStatusAndError(
+      await server().inject({ method: 'POST', url: ACTIONS, payload: BODY }),
+      429,
+      'request_rejected_by_policy'
+    )
+    assert.equal(runs, 1)
+    finish()
+    assert.equal((await first).statusCode, 200)
+  })
+
+  it('rejects a π₀.₅ mask with a hole and maps an inference failure to 400', async () => {
+    stubHparams({ ...HPARAMS, stateInputMode: 'discrete' })
+    const calls: VlaClientRunParams[] = []
+    stubRun(calls)
+    const noise = new Array(8).fill(0)
+    assertStatusAndError(
+      await server().inject({
+        method: 'POST',
+        url: ACTIONS,
+        payload: { ...BODY, tokens: [7, 8, 9, 10], attentionMask: [1, 0, 1, 1], noise }
+      }),
+      400,
+      'invalid_attention_mask'
+    )
+    assert.equal(calls.length, 0)
+
+    stubRun([], () => Promise.reject(addonError('token id out of range', 30010)))
+    assertStatusAndError(
+      await server().inject({
+        method: 'POST',
+        url: ACTIONS,
+        payload: { ...BODY, tokens: [7, 8, 999999], noise }
+      }),
+      400,
+      'invalid_vla_request'
+    )
+  })
 })

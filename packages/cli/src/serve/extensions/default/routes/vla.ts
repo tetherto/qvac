@@ -32,9 +32,12 @@ const ACTIONS = '/qvac/v1/vla/actions'
 const MODELS = '/qvac/v1/vla/models'
 
 // `@qvac/vla-ggml` error codes, which reach the client on the SDK error.
+const ADDON_FAILED_TO_LOAD_WEIGHTS = 30001
 const ADDON_INVALID_CONFIG = 30004
 const ADDON_INVALID_INPUT = 30006
 const ADDON_JOB_ALREADY_RUNNING = 30007
+// The native forward pass reports a malformed prompt (an out-of-vocabulary ID) this way.
+const ADDON_INFERENCE_FAILED = 30010
 
 const MODEL_ERRORS = {
   503: {
@@ -68,7 +71,8 @@ tokenize. \`tokens\`, \`attentionMask\` and \`state\` are zero-padded to the mod
 \`tokenizerMaxLength\` of 0 (GR00T) means the prompt is sent unpadded. Read those sizes from
 \`GET ${MODELS}/{model}\`.
 
-A client disconnect cancels the run.
+A model runs one action request at a time: a request that arrives while another runs on
+the same model gets 429. A client disconnect cancels the run.
 `.trim()
 
 const modelDescription = `
@@ -109,7 +113,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_state: "`state` is longer than the model's `maxStateDim`",
               invalid_tokens:
                 "`tokens` is missing, has a negative ID, or is longer than the model's `tokenizerMaxLength`",
-              invalid_attention_mask: '`attentionMask` does not have one entry per token',
+              invalid_attention_mask:
+                '`attentionMask` does not have one entry per token, or has a 0 before a 1 on a discrete-state model (π₀.₅)',
               invalid_noise:
                 '`noise` is missing for a model that needs it, or is not `chunkSize * maxActionDim` values',
               invalid_vla_request: 'The model refused the inputs',
@@ -118,7 +123,10 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             },
             ...MODEL_LOOKUP,
             413: { request_too_large: 'The body is over the size cap' },
-            429: { request_rejected_by_policy: 'An embodiment switch is running on this model' },
+            429: {
+              request_rejected_by_policy:
+                'Another action request or an embodiment switch is running on this model'
+            },
             ...MODEL_ERRORS
           })
         },
@@ -150,7 +158,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
         const run = (state.vlaOverride ?? vla)({ modelId: sdkModelId, ...params })
         bindClientDisconnectCancel(reply.raw, run.requestId, app.qvac.logger, state.cancelOverride)
-        result = await run.catch((err: unknown) => rethrow(err, 'invalid_vla_request'))
+        result = await run.catch((err: unknown) =>
+          rethrow(err, 'invalid_vla_request', ADDON_INFERENCE_FAILED)
+        )
       } finally {
         release()
       }
@@ -245,8 +255,15 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           throw new HttpError(400, 'invalid_embodiment', 'The model is not GR00T.')
         }
         app.qvac.logger.info(`  vla_embodiment model=${alias} to=${JSON.stringify(embodiment)}`)
-        const result = await callSdk('invalid_embodiment', () =>
-          (state.vlaSetEmbodimentOverride ?? vlaSetEmbodiment)({ modelId: sdkModelId, embodiment })
+        // A single-embodiment GGUF refuses the switch with the load-failure code.
+        const result = await callSdk(
+          'invalid_embodiment',
+          () =>
+            (state.vlaSetEmbodimentOverride ?? vlaSetEmbodiment)({
+              modelId: sdkModelId,
+              embodiment
+            }),
+          ADDON_FAILED_TO_LOAD_WEIGHTS
         )
         return { object: 'vla.model' as const, model: alias, hparams: result.hparams }
       } finally {
@@ -259,18 +276,17 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 const BUSY_SWITCH = 'An embodiment switch is running on this model.'
 const BUSY_ACTION = 'An action request is running on this model.'
 
+// The addon takes one job per model and rejects the rest, so refuse them here with a
+// clear message instead.
 function createModelGuard() {
-  const actions = new Map<string, number>()
+  const actions = new Set<string>()
   const switching = new Set<string>()
 
   function enterAction(modelId: string): () => void {
     if (switching.has(modelId)) throw new HttpError(429, 'request_rejected_by_policy', BUSY_SWITCH)
-    actions.set(modelId, (actions.get(modelId) ?? 0) + 1)
-    return () => {
-      const left = (actions.get(modelId) ?? 1) - 1
-      if (left === 0) actions.delete(modelId)
-      else actions.set(modelId, left)
-    }
+    if (actions.has(modelId)) throw new HttpError(429, 'request_rejected_by_policy', BUSY_ACTION)
+    actions.add(modelId)
+    return () => actions.delete(modelId)
   }
 
   function enterSwitch(modelId: string): () => void {
@@ -328,6 +344,13 @@ export function buildRunParams(body: VlaActionsBody, hparams: VlaHparams): RunPa
       'attentionMask',
       `expected ${tokenCount} entries, one per token, got ${body.attentionMask.length}.`
     )
+  }
+  // π₀.₅ reads the mask as a prompt length, so a 0 before a 1 breaks the native run.
+  if (discrete && body.attentionMask !== undefined) {
+    const firstZero = body.attentionMask.indexOf(0)
+    if (firstZero !== -1 && body.attentionMask.indexOf(1, firstZero) !== -1) {
+      throw invalid('attentionMask', 'the model takes 1s for the prompt, then 0s only.')
+    }
   }
   const tokens = new Int32Array(padTo)
   tokens.set(body.tokens)
@@ -416,22 +439,24 @@ function invalid(field: string, detail: string): HttpError {
   return new HttpError(400, code, `${field}: ${detail}`)
 }
 
-async function callSdk<T>(code: string, call: () => Promise<T>): Promise<T> {
+async function callSdk<T>(code: string, call: () => Promise<T>, inputCode?: number): Promise<T> {
   try {
     return await call()
   } catch (err) {
-    return rethrow(err, code)
+    return rethrow(err, code, inputCode)
   }
 }
 
-function rethrow(err: unknown, code: string): never {
+// `inputCode` is an addon code that means a bad request on this route only.
+function rethrow(err: unknown, code: string, inputCode?: number): never {
   const errCode = (err as { code?: unknown } | null)?.code
   const message = err instanceof Error ? err.message : String(err)
   if (
     err instanceof RequestValidationFailedError ||
     errCode === SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED ||
     errCode === ADDON_INVALID_CONFIG ||
-    errCode === ADDON_INVALID_INPUT
+    errCode === ADDON_INVALID_INPUT ||
+    (inputCode !== undefined && errCode === inputCode)
   ) {
     throw new HttpError(400, code, message)
   }

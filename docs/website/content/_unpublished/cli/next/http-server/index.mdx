@@ -1352,7 +1352,7 @@ model if it is not loaded yet.
 {
   "object": "vla.model",
   "model": "smolvla",
-  "backend_name": "Metal",
+  "backend_name": "MTL0",
   "hparams": {
     "chunkSize": 50,
     "actionDim": 7,
@@ -1376,7 +1376,7 @@ Predict one action chunk. JSON only.
 | `model`         | `string`   | Yes      | A `serve.models` alias with endpoint category `vla`                           |
 | `images`        | `object[]` | Yes      | One frame per camera, `hparams.numCameras` in all (π₀.₅: 1 to that)           |
 | `tokens`        | `int[]`    | Yes      | Tokenized instruction, IDs from 0; zero-padded to `hparams.tokenizerMaxLength`, unpadded when that is 0 (GR00T) |
-| `attentionMask` | `(0\|1)[]` | No       | One entry per token; default 1 for every token sent                           |
+| `attentionMask` | `(0\|1)[]` | No       | One entry per token, default 1 each; π₀.₅ takes 1s then 0s                           |
 | `state`         | `number[]` | No       | Robot state, zero-padded to `hparams.maxStateDim`; ignored by π₀.₅            |
 | `noise`         | `number[]` | No       | `chunkSize * maxActionDim` values; required for GR00T and π₀.₅, sampled for SmolVLA |
 
@@ -1400,8 +1400,9 @@ Each `images` entry is one of:
 }
 ```
 
-`actions` holds `chunk_size` rows of `action_dim` values, in execution order. A client
-disconnect cancels the run.
+`actions` holds `chunk_size` rows of `action_dim` values, in execution order. A model runs
+one action request at a time; another one sent meanwhile gets 429. A client disconnect
+cancels the run.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/vla/actions \
@@ -1425,7 +1426,7 @@ request runs on the model.
 | 400  | `missing_model`              | `model` is missing                                                                        |
 | 400  | `invalid_images`             | Missing, wrong camera count, or a frame of the wrong size or form for the model           |
 | 400  | `invalid_tokens`             | `tokens` is missing, has a negative ID, or is longer than `tokenizerMaxLength` |
-| 400  | `invalid_attention_mask`     | `attentionMask` does not have one entry per token                                         |
+| 400  | `invalid_attention_mask`     | No entry per token, or a 0 before a 1 for π₀.₅                                            |
 | 400  | `invalid_state`              | `state` is longer than `maxStateDim`                                                      |
 | 400  | `invalid_noise`              | `noise` is missing for GR00T or π₀.₅, or is not `chunkSize * maxActionDim` values         |
 | 400  | `invalid_vla_request`        | The model refused the inputs                                                              |
@@ -1433,7 +1434,7 @@ request runs on the model.
 | 400  | `invalid_request`            | The body carries an unknown field                                                         |
 | 400  | `invalid_model_type`         | Alias is not a `vla` model                                                                |
 | 404  | `model_not_found`            | Unknown alias                                                                             |
-| 429  | `request_rejected_by_policy` | An action request and an embodiment switch overlapped on the model                        |
+| 429  | `request_rejected_by_policy` | Another action request or an embodiment switch is running on the model |
 | 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                             |
 
 #### Configuring a VLA model

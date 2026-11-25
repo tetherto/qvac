@@ -136,7 +136,7 @@ export const vlaModel = z.object({
     .string()
     .nullable()
     .optional()
-    .describe('The ggml backend the model runs on, such as `Metal`. Not sent after a switch.'),
+    .describe('The ggml backend the model runs on, such as `MTL0`. Not sent after a switch.'),
   hparams: hparams.describe("The SDK's `VlaHparams`, verbatim.")
 })
 
