@@ -117,7 +117,7 @@ test('binary request fields accept payloads past the previous pattern limit', (t
 test('schemas do not use the per-quad base64 pattern or Zod .base64()', (t) => {
   // Compiled sources sit at test/dist/src beside this file's test/dist/test.
   const root = URL.fileURLToPath(new URL('../src/', import.meta.url))
-  // The helper's own comment names the pattern it replaces.
+  // The helper's own comment names Zod's `.base64()`.
   const helper = path.join(root, 'schemas', 'base64.js')
   const offenders: string[] = []
   const visit = (dir: string) => {

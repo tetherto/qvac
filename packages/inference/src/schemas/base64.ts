@@ -11,13 +11,8 @@ for (const range of ['AZ', 'az', '09', '++', '//']) {
 /**
  * Whether `value` is padded standard base64, checked in one pass.
  *
- * Zod's `.base64()` and patterns such as `^(?:[A-Za-z0-9+/]{4})*...$` repeat a
- * group once per four characters, which engines give up on a few million
- * characters in, each in its own way: V8 throws `RangeError: Maximum call
- * stack size exceeded`, and JavaScriptCore returns false. Images and tensors
- * reach that size as base64 (one 512x512 VLA camera is 4,194,304 characters),
- * and these schemas run on the client (Hermes, V8 or JavaScriptCore) as well
- * as in the worker, so binary fields are checked here instead.
+ * Use this instead of Zod's `.base64()`, whose regex fails on strings of a few
+ * million characters, a size our images and tensors reach.
  */
 export function isBase64(value: string): boolean {
   const length = value.length
