@@ -272,6 +272,49 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsReportsObservedFigures) {
       << "the aggregate must equal the sum of the jobs' own counts";
 }
 
+TEST_F(ConcurrentProcessByIdTest, ConcurrentJobsReportTheirOwnCacheTokens) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  auto runJob = [&model](const LlamaModel::Prompt& prompt, JobId id) {
+    std::any out = model->process(std::any(prompt), id);
+    return std::any_cast<std::string>(out);
+  };
+  auto promptA = makePrompt("What is the capital of France? One word.");
+  auto promptB = makePrompt(
+      "List the planets of the solar system in order from the sun, one per "
+      "line, with one sentence about each.");
+  auto futureA = std::async(std::launch::async, runJob, promptA, JobId{1});
+  auto futureB = std::async(std::launch::async, runJob, promptB, JobId{2});
+  ASSERT_EQ(
+      futureA.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  ASSERT_EQ(
+      futureB.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_FALSE(futureA.get().empty());
+  EXPECT_FALSE(futureB.get().empty());
+
+  double perJobCacheTokens = 0.0;
+  for (const JobId id : {JobId{1}, JobId{2}}) {
+    const auto stats = model->consumeJobStats(id);
+    ASSERT_FALSE(stats.empty()) << "job " << id << " left no observed stats";
+    const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
+    const double promptTokens =
+        test_common::getStatValue(stats, "promptTokens");
+    const double generatedTokens =
+        test_common::getStatValue(stats, "generatedTokens");
+    EXPECT_GE(cacheTokens, promptTokens) << "job " << id;
+    EXPECT_LE(cacheTokens, promptTokens + generatedTokens)
+        << "job " << id << " counted a peer's slot in its CacheTokens";
+    perJobCacheTokens += cacheTokens;
+  }
+
+  EXPECT_DOUBLE_EQ(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"),
+      perJobCacheTokens)
+      << "the whole-model figure must be the jobs' own slots summed";
+}
+
 /// Consuming a finished tagged job's stats is a pure hand-over of the
 /// terminal snapshot built when that run finished: it must not read - and
 /// above all must not reset - the live llama_context perf counters. A peer

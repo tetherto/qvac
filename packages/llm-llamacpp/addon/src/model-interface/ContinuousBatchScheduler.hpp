@@ -85,6 +85,7 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  int64_t cacheTokens = 0;
   /// Renders where this request's own chat template dropped the tool
   /// definitions. Read off the slot driver at drain rather than off the
   /// scheduler-wide accumulator: that

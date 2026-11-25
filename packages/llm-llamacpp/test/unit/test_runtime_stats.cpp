@@ -295,6 +295,14 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   EXPECT_EQ(agg.promptTokens, 35);
 }
 
+TEST(ObservedRequestStats, GroupAggregateSumsEachRequestsCacheTokens) {
+  const std::vector<ObservedRequestStats> group{
+      {.generatedTokens = 11, .promptTokens = 10, .cacheTokens = 900},
+      {.generatedTokens = 31, .promptTokens = 20, .cacheTokens = 300}};
+
+  EXPECT_EQ(aggregateObservedStats(group).cacheTokens, 1200);
+}
+
 // The per-slot tool counter sums like the token counts rather than averaging:
 // a group's caller asked one question, and "two of my renders dropped their
 // tools" is the honest answer to it. Summing is also what leaves a one-item

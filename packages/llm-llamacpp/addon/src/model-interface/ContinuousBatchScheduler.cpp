@@ -2517,6 +2517,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    agg.cacheTokens += stats.cacheTokens;
     // Summed like the token counts rather than averaged: a multi-item group's
     // caller asked one question, and "two of my renders dropped their tools"
     // is the honest answer to it.
@@ -2554,6 +2555,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
+  int64_t kvCells = 0;
   int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
@@ -2565,6 +2567,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // `CacheTokens` matches the live driver cursor either way. Work performed
     // is still reported via `promptTokens` / `generatedTokens`.
     nPast = static_cast<int64_t>(slot.driver->getNPast());
+    kvCells = static_cast<int64_t>(slot.driver->getKvCellsUsed());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
@@ -2584,6 +2587,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // which only this function holds. The same two values also go into the
     // scheduler-wide accumulator above — that copy stays, for the whole-model
     // `runtimeStats()` read.
+    observed.cacheTokens = kvCells;
     observed.toolDefinitionsDropped = toolsDropped;
     if (slot.driver) {
       const auto speculativeStats = slot.driver->speculativeStats();
