@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- On a load with `parallel >= 2`, a job's `CacheTokens` reports the KV cells of
+  its own slot (summed over its own requests for a batch). It reported every
+  slot that finished since the scheduler was last idle, so a request that
+  overlapped another one counted both, and it read positions where media on
+  M-RoPE models takes more cells than positions
+  ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+
 ## [0.73.0] - 2026-11-23
 
 ### Breaking
