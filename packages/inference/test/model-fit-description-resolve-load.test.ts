@@ -23,7 +23,7 @@ import { useTestCacheDir } from './fixtures/test-cache'
 function scratchFile(name: string): string {
   const dir = path.join(os.tmpdir(), `fit-load-${Math.random().toString(36).slice(2)}`)
   fs.mkdirSync(dir, { recursive: true })
-  const file = path.join(dir, name)
+  const file = path.join(fs.realpathSync(dir), name)
   fs.writeFileSync(file, 'weights')
   return file
 }
@@ -429,7 +429,11 @@ test('resolve load: a partly downloaded model in the cache is not read', async (
   t.is(resolved.reason, 'files-only-engine')
 })
 
-for (const modelType of [ModelType.ggmlClassification, ModelType.ggmlImageEmbedding]) {
+for (const modelType of [
+  ModelType.ggmlClassification,
+  ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth
+]) {
   test(`resolve load: a ${modelType} source not on disk fetches no stub`, async (t) => {
     clearPlugins()
     t.teardown(clearPlugins)
