@@ -6,9 +6,9 @@
 //
 // Model paths are absolute paths in the origin private file system (OPFS),
 // e.g. `/models/qwen.gguf` is `models/qwen.gguf` under
-// `navigator.storage.getDirectory()`, or the paths of files the page mounted
-// in place. Each file is mounted read-only into the engine without being
-// copied into WebAssembly memory.
+// `navigator.storage.getDirectory()`, or the paths of files registered in this
+// Worker for in-place mounting. Each file is mounted read-only into the engine
+// without being copied into WebAssembly memory.
 
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 const MEDIA_STAGE_CHUNK_BYTES = 1024 * 1024
@@ -304,6 +304,7 @@ function createJob(handle, id, legacy = false, reserved = false) {
   const job = {
     cancelled: false,
     ended: false,
+    submitted: false,
     terminals: [],
     callbackError: null,
     legacy,
@@ -387,7 +388,11 @@ async function runPump() {
         cleanupEnded(handle)
       } catch (error) {
         handle.activeSlots = 0
-        for (const id of [...handle.jobs.keys()]) finishJob(handle, id, error)
+        // A job still queued behind this step has not reached the engine and
+        // its caller has no listener yet; it is submitted after the step.
+        for (const [id, job] of [...handle.jobs]) {
+          if (job.submitted) finishJob(handle, id, error)
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
@@ -476,6 +481,7 @@ function runJob(handle, data, rejectWhenBusy = true) {
             stageMedia(module, handle, id, prepared.media)
           }
         )
+        job.submitted = true
         if (job.cancelled) {
           callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
         }
