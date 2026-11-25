@@ -24,7 +24,7 @@ env['HOME'] = path.join(os.tmpdir(), `qvac-model-fit-assess-${os.pid()}`)
 const GIB = 1024 ** 3
 
 function modelFile(name: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-model-fit-assess-'))
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-model-fit-assess-')))
   const file = path.join(dir, name)
   fs.writeFileSync(file, '')
   return file

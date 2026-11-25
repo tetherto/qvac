@@ -23,7 +23,7 @@ import { useTestCacheDir } from './fixtures/test-cache'
 function scratchFile(name: string): string {
   const dir = path.join(os.tmpdir(), `fit-load-${Math.random().toString(36).slice(2)}`)
   fs.mkdirSync(dir, { recursive: true })
-  const file = path.join(dir, name)
+  const file = path.join(fs.realpathSync(dir), name)
   fs.writeFileSync(file, 'weights')
   return file
 }

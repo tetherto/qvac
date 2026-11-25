@@ -1,6 +1,6 @@
 import type { ClassificationFitRequest } from '@qvac/classification-ggml'
-import path from 'bare-path'
 
+import { fitModelPath } from '@/model-fit/model-path'
 import type { StereoDepthConfig } from '@/schemas/index'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
@@ -19,7 +19,7 @@ import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 export function stereoDepthFitRequest(load: FitLoad): FitRequestPlan {
   const config = (load.modelConfig ?? {}) as StereoDepthConfig
   const request: ClassificationFitRequest = {
-    modelPath: load.modelPath && path.resolve(load.modelPath),
+    modelPath: load.modelPath && fitModelPath(load.modelPath),
     ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.threads !== undefined && { threads: config.threads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
