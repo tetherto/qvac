@@ -18,8 +18,10 @@ const {
   SKIP_PARLER_GPU_ONLY,
   PARLER_GPU_ONLY_USE_GPU,
   SKIP_PARLER_DETERMINISM,
-  PARLER_DETERMINISM_USE_GPU
+  PARLER_DETERMINISM_USE_GPU,
+  PARLER_DETERMINISM_PINNED_BACKEND
 } = require('../utils/gpuOnly')
+const { assertDesktopGpuBackend } = require('../utils/desktopGpuBackend')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -328,6 +330,15 @@ async function assertParlerDeterminism(t, engineParams) {
   try {
     const text = 'Deterministic synthesis check.'
     const a = await runParlerTTS(model, { text })
+    if (PARLER_DETERMINISM_PINNED_BACKEND) {
+      assertDesktopGpuBackend(
+        t,
+        `parler determinism/${platform}`,
+        a.data.stats?.backendDevice,
+        a.data.stats?.backendId,
+        PARLER_DETERMINISM_PINNED_BACKEND
+      )
+    }
     // The engine reseeds from EngineOptions::seed on every synthesize
     // call, so a same-instance repeat must be bit-identical.
     const b = await runParlerTTS(model, { text })
