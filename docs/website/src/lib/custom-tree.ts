@@ -403,7 +403,7 @@ function collectionRoots(collection: Collection, pageTree: Root): Node[] {
 
   const current = getCurrentLine(software);
   const folder = collection.path.slice(1);
-  return software.versions.map((line): Node => ({
+  const roots = software.versions.map((line): Node => ({
     ...root,
     index: {
       type: 'page',
@@ -412,6 +412,27 @@ function collectionRoots(collection: Collection, pageTree: Root): Node[] {
     },
     children: lineChildren(pageTree, `${folder}/${line.folder}`),
   }));
+
+  // A local `preview` symlink (see docs-workflow.md § "Previewing the
+  // development line") places unpublished content inside the page tree without
+  // adding it to the version manifest. Give it its own root so the sidebar
+  // scopes correctly instead of falling back to the all-roots listing.
+  try {
+    const previewChildren = lineChildren(pageTree, `${folder}/preview`);
+    roots.push({
+      ...root,
+      index: {
+        type: 'page',
+        name: 'Overview',
+        url: `${collection.path}/preview`,
+      },
+      children: previewChildren,
+    });
+  } catch {
+    // No preview folder in the page tree — the symlink is not present.
+  }
+
+  return roots;
 }
 
 /**
