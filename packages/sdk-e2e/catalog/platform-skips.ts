@@ -323,6 +323,23 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: /^parakeet-transcribepsy-eu-coreml-/,
+    skip: {
+      reason:
+        'Full TranscribePsy EU runs its encoder on Core ML only where its shared-weight bundle can be staged and loaded: macOS and iOS',
+      platforms: [
+        'desktop-linux',
+        'desktop-windows',
+        'desktop-python',
+        'desktop-kotlin',
+        'electron-linux',
+        'electron-windows',
+        'snap',
+        'mobile-android'
+      ]
+    }
+  },
+  {
     match: ['parakeet-unified-coreml-ios'],
     skip: {
       reason:

@@ -22,6 +22,27 @@ export const COREML_COMPONENTS = [
   'weights/weight.bin'
 ] as const
 
+// `metadata.json` describes a compiled bundle, but Core ML loads one without
+// it, and some published bundles (full TranscribePsy EU) leave it out.
+const OPTIONAL_COREML_COMPONENTS: ReadonlySet<string> = new Set(['metadata.json'])
+
+/**
+ * The components of one bundle to stage, each with what `find` returned for
+ * it, or `undefined` when a component Core ML needs is missing: a partial
+ * `.mlmodelc` is not usable. An optional component is staged when present.
+ */
+export function coremlBundleComponents<T>(
+  find: (component: string) => T | undefined
+): { component: string; entry: T }[] | undefined {
+  const staged: { component: string; entry: T }[] = []
+  for (const component of COREML_COMPONENTS) {
+    const entry = find(component)
+    if (entry !== undefined) staged.push({ component, entry })
+    else if (!OPTIONAL_COREML_COMPONENTS.has(component)) return undefined
+  }
+  return staged
+}
+
 /**
  * The name of the compiled Core ML bundle a source or registry path names (a
  * `.mlmodelc` directory, with or without a trailing slash), or `undefined`
@@ -142,10 +163,13 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
     // adapter route and the language gate), or on one shared-weight bundle on
     // macOS 15 and iOS 18 or later; the decoder bundle batches long offline
     // inputs; streaming and unwindowed runs need the FP32 `-flexible` programs.
-    // The bundles are staged from the GGUF's own registry directory once they
-    // are published there. The optional macOS-only `-fp32-<frames>` programs
-    // carry their capacity in their names and are not staged.
+    // The registry publishes the shared encoder and the decoder, without
+    // `metadata.json`, in a later directory than the GGUF; the other bundles
+    // are staged too once they are published there. The optional macOS-only
+    // `-fp32-<frames>` programs carry their capacity in their names and are
+    // not staged.
     source: 's3',
+    root: 'qvac_models_compiled/ggml/transcribe-psy/2026-11-25/',
     pathPattern: /\/ggml\/transcribepsy\//,
     stemPattern: /^(transcribepsy-250m-eu)\.gguf$/,
     bundlesByStem: {
@@ -278,9 +302,9 @@ export function getCatalogCoremlSidecars(
   spec: CoremlSidecarSpec,
   darwinMajor?: number
 ): { key: string; targetName: string; entry: RegistryItem }[] {
-  const entriesOf = (bundle: BundleSpec) => {
+  const componentsOf = (bundle: BundleSpec) => {
     const registryPrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
-    return COREML_COMPONENTS.map((component) =>
+    return coremlBundleComponents((component) =>
       models.find(
         (entry) =>
           entry.registrySource === spec.source && entry.registryPath === registryPrefix + component
@@ -290,18 +314,17 @@ export function getCatalogCoremlSidecars(
   const sidecars: { key: string; targetName: string; entry: RegistryItem }[] = []
   const staged = selectCoremlBundles(
     spec.bundles,
-    (bundle) => entriesOf(bundle).every((entry) => entry !== undefined),
+    (bundle) => componentsOf(bundle) !== undefined,
     darwinMajor
   )
   for (const bundle of staged) {
-    const entries = entriesOf(bundle)
-    entries.forEach((entry, index) =>
+    for (const { component, entry } of componentsOf(bundle)!) {
       sidecars.push({
-        key: `${bundle.sourceName}/${COREML_COMPONENTS[index]}`,
-        targetName: `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/${COREML_COMPONENTS[index]}`,
-        entry: entry!
+        key: `${bundle.sourceName}/${component}`,
+        targetName: `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/${component}`,
+        entry
       })
-    )
+    }
   }
   return sidecars
 }

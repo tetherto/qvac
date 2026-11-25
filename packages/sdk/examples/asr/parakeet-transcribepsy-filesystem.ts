@@ -15,9 +15,10 @@
  *
  * `--eu` loads the full 25-language TranscribePsy-250M-EU instead
  * (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`): one GGUF with its CAFE language
- * adapters and gate embedded, ggml on every platform. On macOS and iOS the SDK
- * also stages the model's own Core ML bundles when the registry publishes
- * them, with no flag to pass, and the script reports which stages ran there.
+ * adapters and gate embedded, ggml on every platform. On macOS 15 and iOS 18
+ * or later the SDK also stages its shared-weight Core ML encoder and its
+ * decoder from the registry, with no flag to pass, and the script reports which
+ * stages ran there.
  * `--language` picks its route: `en` for the English trunk, `other` for the
  * non-English adapters, or `auto` (the default) to let the gate decide from
  * the first seconds of the recording.

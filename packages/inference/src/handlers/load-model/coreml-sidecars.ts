@@ -3,6 +3,7 @@ import type { RegistryItem } from '@/models/registry/models'
 import { generateShortHash } from '@/utils/formatting'
 import {
   COREML_COMPONENTS,
+  coremlBundleComponents,
   getCatalogCoremlSidecars,
   getCoremlSetKeySource,
   getCoremlSidecarSpec,
@@ -147,8 +148,15 @@ function isValidCachedSet(
 
   for (const bundle of spec.bundles) {
     const prefix = `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/`
-    const count = actual.filter((file) => file.targetName.startsWith(prefix)).length
-    if (count !== 0 && count !== COREML_COMPONENTS.length) return false
+    const components = new Set(
+      actual
+        .filter((file) => file.targetName.startsWith(prefix))
+        .map((file) => file.targetName.slice(prefix.length))
+    )
+    const complete = coremlBundleComponents((component) =>
+      components.has(component) ? component : undefined
+    )
+    if (components.size !== 0 && complete === undefined) return false
   }
   return true
 }
@@ -287,22 +295,20 @@ export async function findCoremlCompanionSet(
 
   // A partially ingested .mlmodelc is not a usable bundle. Other complete
   // bundles (notably Sortformer's batch/AOSC pair) may still be staged.
-  const entriesOf = (bundle: BundleSpec) =>
-    COREML_COMPONENTS.map((component) =>
-      byPath.get(`${spec.root}${bundle.sourceName}.mlmodelc/${component}`)
-    )
+  const componentsOf = (bundle: BundleSpec) =>
+    coremlBundleComponents((component) => {
+      const entry = byPath.get(`${spec.root}${bundle.sourceName}.mlmodelc/${component}`)
+      return entry?.blobBinding?.sha256 ? entry : undefined
+    })
   const staged = selectCoremlBundles(
     spec.bundles,
-    (bundle) => entriesOf(bundle).every((entry) => !!entry?.blobBinding?.sha256),
+    (bundle) => componentsOf(bundle) !== undefined,
     darwinMajor
   )
 
   const sidecarFiles: CompanionSet['files'][number][] = []
   for (const bundle of staged) {
-    const entries = entriesOf(bundle)
-    for (let i = 0; i < COREML_COMPONENTS.length; i++) {
-      const component = COREML_COMPONENTS[i]!
-      const entry = entries[i]!
+    for (const { component, entry } of componentsOf(bundle)!) {
       const binding = entry.blobBinding
       sidecarFiles.push({
         key: `${bundle.sourceName}/${component}`,

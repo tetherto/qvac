@@ -446,16 +446,14 @@ test('Core ML sidecars: the encoder-less GGUF is refused off Apple with the ggml
 })
 
 // ---------------------------------------------------------------------------
-// Full TranscribePsy EU: optional bundles beside the S3 GGUF
+// Full TranscribePsy EU: optional bundles in a later S3 directory
 // ---------------------------------------------------------------------------
 
 const TRANSCRIBEPSY_EU = models.find(
   (model) => model.name === 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'
 )!
-const TRANSCRIBEPSY_EU_DIR = TRANSCRIBEPSY_EU.registryPath.slice(
-  0,
-  TRANSCRIBEPSY_EU.registryPath.lastIndexOf('/') + 1
-)
+// The registry publishes the bundles in a later directory than the GGUF.
+const TRANSCRIBEPSY_EU_DIR = 'qvac_models_compiled/ggml/transcribe-psy/2026-11-25/'
 const EU = 'transcribepsy-250m-eu'
 const EU_FIXED = [`${EU}-encoder`, `${EU}-encoder-other`, `${EU}-encoder-gate`]
 const EU_FLEXIBLE = [
@@ -468,6 +466,11 @@ function euBundles(names: string[]): QVACModelEntry[] {
   return names.flatMap((name) => bundle(name, TRANSCRIBEPSY_EU_DIR))
 }
 
+// The registry's actual full EU bundles: no `metadata.json`.
+function publishedEuBundles(names: string[]): QVACModelEntry[] {
+  return euBundles(names).filter((entry) => !entry.path.endsWith('/metadata.json'))
+}
+
 function stagedBundles(set: Awaited<ReturnType<typeof findCoremlCompanionSet>>): string[] {
   const names = new Set(
     (set?.files ?? []).slice(1).map((file) => file.targetName.split('.mlmodelc/')[0]!)
@@ -475,11 +478,11 @@ function stagedBundles(set: Awaited<ReturnType<typeof findCoremlCompanionSet>>):
   return [...names].sort()
 }
 
-test('Core ML sidecars: the full TranscribePsy EU GGUF looks for its bundles beside it on Apple', (t) => {
+test('Core ML sidecars: the full TranscribePsy EU GGUF looks for its bundles on Apple', (t) => {
   t.ok(TRANSCRIBEPSY_EU, 'the catalog lists the full EU GGUF')
   for (const platform of ['darwin', 'ios']) {
     const spec = getCoremlSidecarSpec(TRANSCRIBEPSY_EU.registryPath, 's3', platform)
-    t.is(spec?.root, TRANSCRIBEPSY_EU_DIR, `${platform}: the GGUF's own directory`)
+    t.is(spec?.root, TRANSCRIBEPSY_EU_DIR, `${platform}: the bundles' registry directory`)
     t.is(spec?.modelStem, EU)
     t.alike(
       spec?.bundles.map((bundle) => bundle.targetSuffix),
@@ -612,4 +615,60 @@ test('selectCoremlBundles: an unknown OS is taken to load the shared-weight bund
   t.alike(pick(undefined), [`${EU}-decoder`, `${EU}-encoder-shared`], 'unknown')
   t.alike(pick(24), [`${EU}-decoder`, `${EU}-encoder-shared`], 'Darwin 24')
   t.alike(pick(23), [`${EU}-decoder`, ...EU_FIXED].sort(), 'Darwin 23')
+})
+
+test('Core ML sidecars: the published full EU bundles stage without metadata.json', async (t) => {
+  // What the registry publishes: the shared encoder and the decoder, four files each.
+  const registry = client(publishedEuBundles([`${EU}-encoder-shared`, `${EU}-decoder`]))
+
+  const set = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 24)
+  t.alike(stagedBundles(set), [`${EU}-decoder`, `${EU}-encoder-shared`])
+  t.is(set?.files.length, 1 + 2 * 4, 'the GGUF and four files per bundle')
+  t.absent(
+    set?.files.some((file) => file.targetName.endsWith('/metadata.json')),
+    'no metadata.json is asked for'
+  )
+  t.is(
+    set?.files.find((file) => file.targetName === `${EU}-encoder-shared.mlmodelc/coremldata.bin`)
+      ?.registryPath,
+    `${TRANSCRIBEPSY_EU_DIR}${EU}-encoder-shared.mlmodelc/coremldata.bin`
+  )
+
+  // macOS 14 and iOS 17 cannot load the shared encoder, so only the decoder is staged.
+  const older = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'ios', 23)
+  t.alike(stagedBundles(older), [`${EU}-decoder`])
+})
+
+test('Core ML sidecars: a bundle missing a required component is still left out', async (t) => {
+  const withoutWeights = publishedEuBundles([`${EU}-encoder-shared`, `${EU}-decoder`]).filter(
+    (entry) => entry.path !== `${TRANSCRIBEPSY_EU_DIR}${EU}-decoder.mlmodelc/weights/weight.bin`
+  )
+  const set = await findCoremlCompanionSet(client(withoutWeights), TRANSCRIBEPSY_EU, 'darwin', 24)
+  t.alike(stagedBundles(set), [`${EU}-encoder-shared`])
+})
+
+test('Core ML sidecars: a cached full EU set without metadata.json is reused', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-coreml-cache-'))
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const set = await findCoremlCompanionSet(
+    client(publishedEuBundles([`${EU}-encoder-shared`, `${EU}-decoder`])),
+    TRANSCRIBEPSY_EU,
+    'darwin',
+    24
+  )
+  await writeCachedCoremlCompanionSet(set!, cacheDir)
+  const cached = await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir)
+  t.alike(
+    cached?.files.map((file) => file.targetName),
+    set!.files.map((file) => file.targetName),
+    'the four-file bundles round-trip'
+  )
+
+  // A cached bundle that lost a required file is not a usable set.
+  const broken = {
+    ...set!,
+    files: set!.files.filter((file) => file.targetName !== `${EU}-decoder.mlmodelc/model.mil`)
+  }
+  await writeCachedCoremlCompanionSet(broken, cacheDir)
+  t.absent(await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir))
 })
