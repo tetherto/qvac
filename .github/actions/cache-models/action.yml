@@ -118,7 +118,7 @@ runs:
     #      set, so editing test logic no longer churns the key or forces a re-save)
     #   3. legacy default: every .js under test/integration/
     # Resolved here (not in the workflow) so the manifest key takes effect from a
-    # PR-head checkout without editing the pull_request_target workflow YAML.
+    # PR-head checkout without editing the default branch's workflow YAML.
     - name: Resolve cache-key hash glob
       id: keyglob
       shell: bash

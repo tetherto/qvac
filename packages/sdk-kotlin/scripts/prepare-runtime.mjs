@@ -152,7 +152,8 @@ function ensureWorkspaceSdk(sdkDir) {
     path.join(sdkDir, 'dist', 'src', 'commands', 'bundle', 'targets.js')
   ]
   if (!built.every((file) => fsSync.existsSync(file))) {
-    execFileSync('python3', [path.join(sdkDir, '..', 'sdk-python', 'scripts', 'build_worker.py')], {
+    const python = process.platform === 'win32' ? 'python' : 'python3'
+    execFileSync(python, [path.join(sdkDir, '..', 'sdk-python', 'scripts', 'build_worker.py')], {
       stdio: 'inherit'
     })
   }
@@ -257,7 +258,7 @@ async function installPrebuilds(modulesRoot, specs) {
     execFileSync(
       'npm',
       ['install', '--ignore-scripts', '--no-package-lock', '--legacy-peer-deps', ...specs],
-      { cwd: staging, stdio: 'inherit' }
+      { cwd: staging, stdio: 'inherit', shell: process.platform === 'win32' }
     )
     for (const spec of specs) {
       const name = spec.slice(0, spec.lastIndexOf('@'))
