@@ -27,25 +27,10 @@ const MIN_KOTLIN_VERSION = '2.4.20'
 /**
  * Expo plugin: adds the Bare Kit module that `withMobileBundle` writes to the
  * app, as a Gradle module on Android and a local Swift package on iOS, and
- * raises the app's Kotlin to the version Bare Kit needs. Fails when
- * expo-bare-kit is also configured, since both write Bare Kit and the native
- * addons into the app.
+ * raises the app's Kotlin to the version Bare Kit needs.
  */
 function withBareKit(config: ExpoConfig): ExpoConfig {
-  if (hasPlugin(config, 'expo-bare-kit')) {
-    throw new Error(
-      `QVAC: ${PLUGIN} cannot be used with expo-bare-kit, since both add Bare Kit and its native ` +
-        'addons to the app. Remove expo-bare-kit from the plugins.'
-    )
-  }
-
   return withPlugins(config, [withAndroidModule, withJitPack, withKotlinVersion, withIosPackage])
-}
-
-function hasPlugin(config: ExpoConfig, name: string): boolean {
-  return (config.plugins ?? []).some((plugin) =>
-    Array.isArray(plugin) ? plugin[0] === name : plugin === name
-  )
 }
 
 export function includeModule(settings: string): string {

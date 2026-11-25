@@ -1,6 +1,6 @@
 import test from 'brittle'
 import configPlugins from '@expo/config-plugins'
-import withBareKit, {
+import {
   addFolderResource,
   addJitPack,
   addModuleDependency,
@@ -102,11 +102,4 @@ test('addFolderResource: copies the assets folder into the app once', (t) => {
     ['bare-stow in Resources']
   )
   t.is(project.hash.project.objects.PBXGroup['MAIN']!.children.length, 1)
-})
-
-test('withBareKit: refuses an app that also uses expo-bare-kit', (t) => {
-  t.exception(
-    () => withBareKit({ name: 'app', slug: 'app', plugins: [['expo-bare-kit', {}]] }),
-    /cannot be used with expo-bare-kit/
-  )
 })
