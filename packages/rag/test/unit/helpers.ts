@@ -5,12 +5,7 @@ import HyperDB from 'hyperdb'
 import dbSpec from '../../src/db/hyperspec/hyperdb/index.js'
 import { createRag } from '../../src/index.js'
 import { QvacErrorRAG } from '../../src/errors.js'
-import {
-  loadNativeIndex,
-  setNativeIndexLoader,
-  type NativeIndex,
-  type NativeIndexModule
-} from '../../src/vector-index/native.js'
+import { loadNativeIndex } from '../../src/vector-index/native.js'
 import type {
   Corestore as Store,
   HyperDBReader,
@@ -20,7 +15,9 @@ import type {
   EmbeddedDocumentInput,
   EmbeddingSpace,
   EmbeddingsPort,
+  IndexHandle,
   IndexOptions,
+  IndexProvider,
   Rag
 } from '../../src/types.js'
 
@@ -88,7 +85,7 @@ export async function openRag(
   index?: IndexOptions
 ): Promise<Fixture> {
   const store = new Corestore(await tmp(t))
-  const rag = createRag({ corestore: store, index })
+  const rag = createRag({ corestore: store, index: { provider: testProvider, ...index } })
   await rag.ready()
   let spaceId = ''
   for (const name of namespaces) {
@@ -163,10 +160,30 @@ export async function rejectsWithCode(
   }
 }
 
-// Forces the scan path for one test, as if the addon were not installed.
+// The provider `openRag` and other test openers pass, for one test.
+let testProvider: IndexProvider | undefined
+
+export function useProvider(t: Test, provider: IndexProvider | undefined): void {
+  testProvider = provider
+  t.teardown(() => {
+    testProvider = undefined
+  })
+}
+
+export function currentProvider(): IndexProvider | undefined {
+  return testProvider
+}
+
+// Every index build fails, so search scans.
+export const SCAN_ONLY: IndexProvider = {
+  create() {
+    throw new Error('scan only')
+  }
+}
+
+// Forces the scan path for one test.
 export function useScan(t: Test): void {
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, SCAN_ONLY)
 }
 
 export interface NativeCalls {
@@ -175,38 +192,39 @@ export interface NativeCalls {
   compacts: number
 }
 
-// The installed TurboVec module, with the default loader restored.
-export async function realNativeIndex(): Promise<NativeIndexModule> {
-  setNativeIndexLoader(null)
+export interface RealProvider extends IndexProvider {
+  create(dim: number, storage: Parameters<IndexProvider['create']>[1]): IndexHandle
+  load(path: string): Promise<IndexHandle>
+}
+
+// The installed TurboVec module.
+export async function realNativeIndex(): Promise<RealProvider> {
   const { module } = await loadNativeIndex()
   if (!module) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
-  return module
+  return module as RealProvider
 }
 
 // Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
 export async function countNativeCalls(t: Test): Promise<NativeCalls> {
   const real = await realNativeIndex()
   const calls: NativeCalls = { creates: 0, loads: 0, compacts: 0 }
-  function counted(native: NativeIndex): NativeIndex {
-    const compact = native.compact.bind(native)
+  function counted(native: IndexHandle): IndexHandle {
+    const compact = (native.compact as () => Promise<void>).bind(native)
     native.compact = () => {
       calls.compacts++
       return compact()
     }
     return native
   }
-  setNativeIndexLoader(() =>
-    Promise.resolve({
-      create(dim, storage) {
-        calls.creates++
-        return counted(real.create(dim, storage))
-      },
-      async load(path) {
-        calls.loads++
-        return counted(await real.load(path))
-      }
-    })
-  )
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, {
+    create(dim, storage) {
+      calls.creates++
+      return counted(real.create(dim, storage))
+    },
+    async load(path) {
+      calls.loads++
+      return counted(await real.load(path))
+    }
+  })
   return calls
 }

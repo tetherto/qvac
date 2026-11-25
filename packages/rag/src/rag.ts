@@ -207,9 +207,10 @@ async function openDatabase(core: Hypercore): Promise<OpenDatabase> {
 
 // The file system loads without a snapshot directory too: dropping a namespace
 // deletes the snapshots other RAGs on the core wrote.
-async function loadIndexRuntime(): Promise<IndexRuntime> {
-  const native = await loadNativeIndex()
+async function loadIndexRuntime(config: IndexConfig): Promise<IndexRuntime> {
+  const native = config.provider ? { module: config.provider } : await loadNativeIndex()
   if (!native.module) return { native, files: null }
+  if (config.fs) return { native, files: config.fs }
   try {
     return { native, files: await loadSnapshotFileSystem() }
   } catch (error) {
@@ -273,7 +274,7 @@ export function createRag(options: CreateRagOptions): Rag {
   async function open(): Promise<void> {
     // Before anything else, so a host that seals module loading once ready()
     // resolves keeps the index.
-    runtime ??= await loadIndexRuntime()
+    runtime ??= await loadIndexRuntime(indexConfig)
     await corestore.ready()
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
     db = acquired.db

@@ -4,14 +4,23 @@ import Corestore from 'corestore'
 import fs from 'bare-fs'
 
 import { ERR_CODES, createRag } from '../../src/index.js'
+import { forgetLoadedModules, importers, type NativeIndex } from '../../src/vector-index/native.js'
 import {
-  setNativeIndexLoader,
-  type NativeIndex,
-  type NativeIndexModule
-} from '../../src/vector-index/native.js'
-import { setSnapshotFileSystemLoader, type FileSystem } from '../../src/vector-index/snapshots.js'
-import { SPACE, doc, realNativeIndex, rejectsWithCode, type Test } from './helpers.js'
-import type { IndexFallbackEvent, IndexOptions, Rag } from '../../src/types.js'
+  SCAN_ONLY,
+  SPACE,
+  doc,
+  realNativeIndex,
+  rejectsWithCode,
+  type RealProvider,
+  type Test
+} from './helpers.js'
+import type {
+  IndexFallbackEvent,
+  IndexOptions,
+  IndexProvider,
+  Rag,
+  SnapshotFileSystem
+} from '../../src/types.js'
 
 interface Opened {
   rag: Rag
@@ -42,15 +51,18 @@ async function open(t: Test, index: IndexOptions = {}): Promise<Opened> {
   return { rag, spaceId, dir, events }
 }
 
-function useLoader(t: Test, loader: () => Promise<NativeIndexModule | null>): void {
-  setNativeIndexLoader(loader)
-  t.teardown(() => setNativeIndexLoader(null))
+// Replaces the default imports for one test, as a host's module loader would.
+function useImporters(t: Test, replaced: Partial<typeof importers>): void {
+  const original = { ...importers }
+  Object.assign(importers, replaced)
+  forgetLoadedModules()
+  t.teardown(() => {
+    Object.assign(importers, original)
+    forgetLoadedModules()
+  })
 }
 
-function useFileSystem(t: Test, loader: () => Promise<FileSystem>): void {
-  setSnapshotFileSystemLoader(loader)
-  t.teardown(() => setSnapshotFileSystemLoader(null))
-}
+const bareFs = (): SnapshotFileSystem => fs.promises as unknown as SnapshotFileSystem
 
 async function searchIds(rag: Rag, spaceId: string): Promise<string[]> {
   const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 2 })
@@ -65,7 +77,7 @@ function snapshotCount(dir: string): number {
   return count
 }
 
-function failing(real: NativeIndexModule, method: 'addWithIds' | 'search'): NativeIndexModule {
+function failing(real: RealProvider, method: 'addWithIds' | 'search'): IndexProvider {
   const wrap = (native: NativeIndex): NativeIndex =>
     new Proxy(native, {
       get(target, key) {
@@ -81,22 +93,17 @@ function failing(real: NativeIndexModule, method: 'addWithIds' | 'search'): Nati
 }
 
 test('a host that seals module loading after ready() keeps the index and its snapshots', async (t) => {
-  const real = await realNativeIndex()
   let sealed = false
-  const loads = { native: 0, fs: 0 }
-  function refuseOnceSealed(): void {
-    if (sealed) throw new Error('module loading is sealed')
+  const loads = { turbovec: 0, bareFs: 0 }
+  const original = { ...importers }
+  function sealable(name: keyof typeof importers) {
+    return () => {
+      loads[name]++
+      if (sealed) return Promise.reject(new Error('module loading is sealed'))
+      return original[name]()
+    }
   }
-  useLoader(t, () => {
-    loads.native++
-    refuseOnceSealed()
-    return Promise.resolve(real)
-  })
-  useFileSystem(t, async () => {
-    loads.fs++
-    refuseOnceSealed()
-    return (await import('bare-fs')).promises as unknown as FileSystem
-  })
+  useImporters(t, { turbovec: sealable('turbovec'), bareFs: sealable('bareFs') })
 
   const { rag, spaceId, dir } = await open(t, { snapshotEvery: 1 })
   sealed = true
@@ -110,11 +117,15 @@ test('a host that seals module loading after ready() keeps the index and its sna
     snapshot: 'ok'
   })
   t.is(snapshotCount(dir), 1, 'a snapshot was written after the seal')
-  t.alike(loads, { native: 1, fs: 1 }, 'both loaded once, during ready()')
+  t.alike(loads, { turbovec: 1, bareFs: 1 }, 'both imported once, during ready()')
 })
 
 test('without the addon, status and the callback report addon-missing once', async (t) => {
-  useLoader(t, () => Promise.resolve(null))
+  const missing = Object.assign(new Error('not installed'), {
+    code: 'MODULE_NOT_FOUND',
+    specifier: '@qvac/turbovec-ggml'
+  })
+  useImporters(t, { turbovec: () => Promise.reject(missing) })
   const { rag, spaceId, events } = await open(t)
   t.alike(await rag.indexStatus({ namespace: 'ns' }), { mode: 'scan', reason: 'addon-missing' })
   t.alike(await searchIds(rag, spaceId), ['a', 'b'], 'the scan answers')
@@ -124,7 +135,7 @@ test('without the addon, status and the callback report addon-missing once', asy
 
 test('an addon that fails to load reports addon-load-failed with its error', async (t) => {
   const cause = new Error('no prebuild')
-  useLoader(t, () => Promise.reject(cause))
+  useImporters(t, { turbovec: () => Promise.reject(cause) })
   const { rag, spaceId, events } = await open(t)
   t.alike(await searchIds(rag, spaceId), ['a', 'b'])
   const status = await rag.indexStatus({ namespace: 'ns' })
@@ -139,9 +150,9 @@ for (const [method, reason] of [
   ['search', 'search-failed']
 ] as const) {
   test(`a failing native ${method} reports ${reason}`, async (t) => {
-    const module = failing(await realNativeIndex(), method)
-    useLoader(t, () => Promise.resolve(module))
-    const { rag, spaceId, events } = await open(t)
+    const { rag, spaceId, events } = await open(t, {
+      provider: failing(await realNativeIndex(), method)
+    })
     t.alike(await searchIds(rag, spaceId), ['a', 'b'], 'the scan answers')
     const status = await rag.indexStatus({ namespace: 'ns' })
     t.is(status.mode === 'scan' && status.reason, reason)
@@ -160,9 +171,8 @@ for (const [method, reason] of [
 }
 
 test('a file system that fails to load keeps the index in memory', async (t) => {
-  await realNativeIndex()
   const cause = new Error('fs sealed')
-  useFileSystem(t, () => Promise.reject(cause))
+  useImporters(t, { bareFs: () => Promise.reject(cause) })
   const { rag, spaceId, dir, events } = await open(t, { snapshotEvery: 1 })
   t.alike(await searchIds(rag, spaceId), ['a', 'b'])
   t.alike(await rag.indexStatus({ namespace: 'ns' }), {
@@ -174,22 +184,18 @@ test('a file system that fails to load keeps the index in memory', async (t) => 
   t.alike(events, [], 'not a fallback')
 })
 
-test('a snapshot write failure keeps the index and is reported', async (t) => {
-  await realNativeIndex()
-  const real = (await import('bare-fs')).promises as unknown as FileSystem
+test('a snapshot write failure through a supplied fs keeps the index and is reported', async (t) => {
+  const real = bareFs()
   let failWrites = true
-  useFileSystem(t, () =>
-    Promise.resolve({
-      ...real,
-      mkdir: real.mkdir.bind(real),
-      readFile: real.readFile.bind(real),
-      rename: real.rename.bind(real),
-      unlink: real.unlink.bind(real),
-      writeFile: (path: string, data: string) =>
-        failWrites ? Promise.reject(new Error('disk full')) : real.writeFile(path, data)
-    })
-  )
-  const { rag, spaceId, events } = await open(t, { snapshotEvery: 1 })
+  const files: SnapshotFileSystem = {
+    mkdir: (path, options) => real.mkdir(path, options),
+    readFile: (path, encoding) => real.readFile(path, encoding),
+    rename: (from, to) => real.rename(from, to),
+    unlink: (path) => real.unlink(path),
+    writeFile: (path, data) =>
+      failWrites ? Promise.reject(new Error('disk full')) : real.writeFile(path, data)
+  }
+  const { rag, spaceId, events } = await open(t, { snapshotEvery: 1, fs: files })
   t.alike(await searchIds(rag, spaceId), ['a', 'b'])
   const status = await rag.indexStatus({ namespace: 'ns' })
   t.is(status.mode, 'index', 'still searched by the index')
@@ -211,15 +217,29 @@ test('a snapshot write failure keeps the index and is reported', async (t) => {
 })
 
 test('indexStatus validates its namespace and a throwing callback never fails a search', async (t) => {
-  useLoader(t, () => Promise.resolve(null))
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close(), { order: 1 })
   t.exception(
     () => createRag({ corestore: store, onIndexFallback: 'nope' as never }),
     /onIndexFallback must be a function/
   )
+  await rejectsWithCode(
+    t,
+    () => createRag({ corestore: store, index: { provider: {} as never } }),
+    ERR_CODES.INVALID_INPUT,
+    'provider without create',
+    /create/
+  )
+  await rejectsWithCode(
+    t,
+    () => createRag({ corestore: store, index: { fs: { mkdir() {} } as never } }),
+    ERR_CODES.INVALID_INPUT,
+    'fs without every method',
+    /unlink/
+  )
   const rag = createRag({
     corestore: store,
+    index: { provider: SCAN_ONLY },
     onIndexFallback: () => {
       throw new Error('callback fault')
     }
