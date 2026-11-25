@@ -1,4 +1,6 @@
 name: Publish to npm
+# Marks dry runs in the run list, so addon-auto-release.yml does not count one as a release.
+run-name: ${{ inputs.dry_run && format('Publish to npm (dry run) on {0}', github.ref_name) || format('Publish to npm on {0}', github.ref_name) }}
 
 # Release publishing for packages on the CI contract: a push to release-<dir>-x.y.z builds and publishes that package alone.
 on:

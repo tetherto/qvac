@@ -752,10 +752,9 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
 
 const SEED_SYSTEM = 'You are the seed test assistant. Follow the user instructions. Be brief.'
 const SEED_HISTORY = [{ role: 'system', content: SEED_SYSTEM }]
-const SEED_QUESTION = [
-  ...SEED_HISTORY,
-  { role: 'user', content: 'Reply with only the word APPLE.' }
-]
+// Llama 3.2's template puts today's date in the prompt; a weaker wording fails on some days.
+const SEED_ANSWER_APPLE = 'Say APPLE. Reply with only the word APPLE and nothing else.'
+const SEED_QUESTION = [...SEED_HISTORY, { role: 'user', content: SEED_ANSWER_APPLE }]
 const SEED_GENERATION = { temp: 0, top_k: 1, seed: 42, predict: 32 }
 
 const seedCompletion = (
@@ -845,7 +844,10 @@ export const kvCacheSeedIgnoredOnceCached: TestDefinition = {
       [
         ...SEED_QUESTION,
         { role: 'assistant', content: '$firstText' },
-        { role: 'user', content: 'Reply with only the word APPLE again.' }
+        {
+          role: 'user',
+          content: 'Say APPLE again. Reply with only the word APPLE and nothing else.'
+        }
       ],
       { kvCache: '$params.chatKey', seedFrom: 'seed-source-that-does-not-exist' }
     ),

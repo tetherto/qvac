@@ -1,7 +1,5 @@
-import { randomBytes } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { extname, join } from 'node:path'
+import { extname } from 'node:path'
+import { writePrivateTempFile } from '@/serve/lib/temp-file'
 
 const MIME_TO_EXT: Record<string, string> = {
   'audio/mpeg': '.mp3',
@@ -17,14 +15,12 @@ const MIME_TO_EXT: Record<string, string> = {
 
 // The SDK's audio decoder reads files and picks the decoder by extension, so
 // an upload is written out under the name or type the client declared. The
-// caller deletes the file, typically in a finally block.
-export async function writeTempAudio(
+// caller removes it with removePrivateTempFile, typically in a finally block.
+export function writeTempAudio(
   audio: Buffer,
   fileMeta: { filename: string; mimetype: string } | undefined
 ): Promise<string> {
   const originalName = fileMeta?.filename ?? ''
   const ext = extname(originalName) || MIME_TO_EXT[fileMeta?.mimetype ?? ''] || '.bin'
-  const tmpPath = join(tmpdir(), `qvac-audio-${randomBytes(8).toString('hex')}${ext}`)
-  await writeFile(tmpPath, audio)
-  return tmpPath
+  return writePrivateTempFile(`audio${ext}`, audio)
 }

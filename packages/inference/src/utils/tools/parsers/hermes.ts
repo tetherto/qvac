@@ -1,8 +1,8 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
-  generateStableToolCallId,
+  acceptToolCall,
   isValidToolCall,
-  validateToolArguments,
+  withObjectArguments,
   type ParserResult
 } from '@/utils/tools/shared'
 
@@ -53,7 +53,7 @@ export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
 
     let callItem: unknown
     try {
-      callItem = parseHermesJson(trimmedJson)
+      callItem = withObjectArguments(parseHermesJson(trimmedJson))
     } catch (error) {
       errors.push({
         code: 'PARSE_ERROR',
@@ -72,24 +72,9 @@ export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
       continue
     }
 
-    const call = callItem
-
-    const validation = validateToolArguments(call.name, call.arguments, tools)
-
-    if (!validation.isValid && validation.error) {
-      errors.push({
-        ...validation.error,
-        raw: trimmedJson
-      })
-      continue
-    }
-
-    toolCalls.push({
-      id: call.id || generateStableToolCallId(call.name, call.arguments),
-      name: call.name,
-      arguments: call.arguments,
-      raw: trimmedJson
-    })
+    const accepted = acceptToolCall(callItem, tools, trimmedJson)
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   return { matched: true, toolCalls, errors }
@@ -109,7 +94,7 @@ function recoverIncompleteHermesFrame(text: string, tools: Tool[]): ParserResult
 
   let parsed: unknown
   try {
-    parsed = parseHermesJson(candidate)
+    parsed = withObjectArguments(parseHermesJson(candidate))
   } catch {
     return { matched: false, toolCalls: [], errors: [] }
   }
@@ -118,25 +103,8 @@ function recoverIncompleteHermesFrame(text: string, tools: Tool[]): ParserResult
     return { matched: false, toolCalls: [], errors: [] }
   }
 
-  const validation = validateToolArguments(parsed.name, parsed.arguments, tools)
-  if (!validation.isValid && validation.error) {
-    return {
-      matched: true,
-      toolCalls: [],
-      errors: [{ ...validation.error, raw: candidate }]
-    }
-  }
-
-  return {
-    matched: true,
-    toolCalls: [
-      {
-        id: parsed.id || generateStableToolCallId(parsed.name, parsed.arguments),
-        name: parsed.name,
-        arguments: parsed.arguments,
-        raw: candidate
-      }
-    ],
-    errors: []
-  }
+  const accepted = acceptToolCall(parsed, tools, candidate)
+  return accepted.error
+    ? { matched: true, toolCalls: [], errors: [accepted.error] }
+    : { matched: true, toolCalls: [accepted.call], errors: [] }
 }
