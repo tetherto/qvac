@@ -179,7 +179,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/asr-ggml": "0.8.1",
+    "@qvac/asr-ggml": "0.14.0",
     "@qvac/registry-client": "^0.6.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
