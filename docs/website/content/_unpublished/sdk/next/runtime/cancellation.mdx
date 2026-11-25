@@ -151,9 +151,9 @@ AudioGen is different: targeted or broad cancellation is **hard**. The plugin ca
 
 ## Soft-cancel caveat for `loadModel`
 
-The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal. A cancel that lands during the load phase rejects the client's promise with `InferenceCancelledError` at once, and the addon finishes loading the model in the background.
+The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal. A cancel that lands during the load phase takes effect when the addon has finished loading the model: the runtime then unloads the model instead of registering it, and the client's promise rejects with `InferenceCancelledError`. The call stays pending until then.
 
-The runtime unloads that model as soon as its load finishes, so it is never registered and holds no memory afterwards. A `loadModel()` of the same configuration issued in the meantime waits for that unload and then loads the model again.
+A `loadModel()` that fails on its [`loadMs` deadline](/sdk/runtime/deadlines#what-happens-on-expiry) rejects at the deadline, without waiting for the load, and the runtime unloads the model the same way once its load finishes. In both cases a `loadModel()` of the same configuration issued in the meantime waits for that unload and then loads the model again.
 
 ## `cancelFinetune` timing change
 

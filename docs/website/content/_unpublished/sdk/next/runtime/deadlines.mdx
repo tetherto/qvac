@@ -34,7 +34,16 @@ The four runtime deadlines measure:
 
 A completion that runs tools on the caller's side stops its `runMs` and `idleMs` while it waits for a tool result, and starts both afresh for the next model turn.
 
-`transcribeStream()` and `textToSpeechStream()` take their input from the caller during the call. Their `idleMs` stops while the runtime waits for the caller's next input and starts afresh when input arrives, so a caller that pauses does not fail the call. `runMs` keeps counting through those waits. Streaming transcription reads its input ahead of its work, so it is waiting for input for as long as the caller is behind: bound the length of a `transcribeStream()` session with `runMs`.
+`transcribeStream()` and `textToSpeechStream()` take their input from the caller during the call. Their `idleMs` stops while the runtime waits for the caller's next input and starts afresh when input arrives, so a caller that pauses does not fail the call. `runMs` keeps counting through those waits.
+
+<Callout type="warn">
+`idleMs` does not detect a stall in two of these sessions while the caller's input is open, because both take the next input before they have finished the input before it:
+
+- a Whisper `transcribeStream()` session, which takes each audio chunk as soon as it arrives;
+- a `textToSpeechStream()` session with `accumulateSentences`, the default for streamed text, which reads the next text while a sentence is being synthesized.
+
+Such a session is waiting for input, and its idle deadline is stopped, for nearly the whole time until the caller ends its input. Bound it with `runMs`.
+</Callout>
 
 Deadlines are measured in wall-clock time. A deadline that passes while the runtime is [suspended](/sdk/runtime/lifecycle) expires when the runtime resumes.
 
@@ -137,7 +146,7 @@ val request = CompletionStreamRequest(
 | Capability | Progress the runtime sees | Stretches with no progress |
 | --- | --- | --- |
 | `completion` | Each token | Prompt processing before the first token; restoring a KV cache |
-| `text-to-speech`, `transcription` | Each audio chunk or segment | One long sentence or segment |
+| `text-to-speech`, `transcription` | Each audio chunk or segment | One long sentence or segment. `idleMs` does not bound a Whisper `transcribeStream()` session or a `textToSpeechStream()` session: see [Boundaries](#boundaries) |
 | `image-generation` | Each denoising step | Text encoding and the first step; decoding and upscaling after the last step |
 | `video-generation` | Each denoising step | Text encoding and the first step; decoding after the last step |
 | `image-upscaling` | None | The whole run |

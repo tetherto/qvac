@@ -19,7 +19,11 @@ import {
 } from '@/runtime/model-registry'
 import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import { withModelWorkLock } from '@/runtime/model-work-lock'
-import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
+import {
+  startLogBuffering,
+  stopLogBufferingWithTimeout,
+  unregisterAllLoggingStreams
+} from '@/runtime/logging-stream-registry'
 import { detectShardedModel, checkAllShardsExist } from '@/utils/index'
 import {
   PluginNotFoundError,
@@ -37,7 +41,7 @@ import { getConfig } from '@/runtime/state'
 import { resolveToolDialect } from '@/utils/tools/dialect'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getEngineLogger } from '@/logging/index'
+import { getEngineLogger, unregisterAddonLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 
@@ -192,11 +196,17 @@ async function loadModelLocked(
         : undefined
 
     // The native load takes no abort signal, so a cancel or a deadline that
-    // landed during it is honored here. The caller's call has already failed
-    // without a model id, so a model registered now could never be unloaded
-    // by the caller.
+    // landed during it is honored here. The caller receives no model id, so a
+    // model registered now could never be unloaded by the caller. The plugin
+    // registered the model's addon logger in `createModel()`, and no later
+    // unload will remove it.
     if (request !== undefined && abortedDuringLoad(request.signal)) {
-      await result.model.unload?.()
+      try {
+        await result.model.unload?.()
+      } finally {
+        unregisterAddonLogger(modelId)
+        unregisterAllLoggingStreams(modelId)
+      }
       throw new InferenceCancelledError(request.requestId)
     }
 

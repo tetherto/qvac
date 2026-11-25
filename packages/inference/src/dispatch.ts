@@ -338,6 +338,12 @@ async function* streamWithinDeadline<T>(
 /**
  * The caller's input, with the idle deadline stopped for as long as the handler
  * waits for the next chunk. A caller that pauses between chunks is not a stall.
+ *
+ * A handler that asks for its next chunk before it has finished the one
+ * before, as whisper streaming and sentence-accumulating text-to-speech do, is
+ * waiting for nearly the whole time its input is open. The idle deadline
+ * detects no stall in such a handler until the input ends; its run deadline
+ * does.
  */
 async function* inputWithinDeadline(
   input: AsyncIterable<Buffer>,

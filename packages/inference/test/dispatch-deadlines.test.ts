@@ -20,6 +20,12 @@ import { startFinetune } from '@/plugins/builtin/llamacpp-completion/ops/finetun
 import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import { DeadlineClock } from '@/runtime/deadlines'
 import { DeadlineExceededError } from '@/errors'
+import {
+  clearAllAddonLoggers,
+  createAddonLoggerCallback,
+  registerAddonLogger,
+  type Logger
+} from '@/logging'
 import { CAPABILITY_CONTRACTS, ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
 import type { QvacPlugin } from '@/schemas/plugin'
@@ -262,23 +268,31 @@ test('loadModel fails with boundary "load" when the native load outlasts loadMs'
   })
   let loadStarted = false
   let unloads = 0
+  const addonNamespace = 'slow-load-addon'
+  const addonLogs: string[] = []
+  const addonLog = createAddonLoggerCallback(addonNamespace)
   clearPlugins()
   registerPlugin({
     modelType: ModelType.llamacppCompletion,
     displayName: 'Slow load',
     addonPackage: '@qvac/llm-llamacpp',
     loadConfigSchema: z.looseObject({}),
-    createModel: () => ({
-      model: {
-        load: () => {
-          loadStarted = true
-          return loading
-        },
-        unload: async () => {
-          unloads++
+    createModel: ({ modelId }: { modelId: string }) => {
+      registerAddonLogger(modelId, addonNamespace, {
+        info: (message: string) => addonLogs.push(message)
+      } as unknown as Logger)
+      return {
+        model: {
+          load: () => {
+            loadStarted = true
+            return loading
+          },
+          unload: async () => {
+            unloads++
+          }
         }
       }
-    }),
+    },
     handlers: {}
   } as unknown as QvacPlugin)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-load-deadline-'))
@@ -297,13 +311,17 @@ test('loadModel fails with boundary "load" when the native load outlasts loadMs'
     t.is(error.boundary, 'load', 'runMs on a load is not read')
     t.is(error.capability, undefined)
     t.ok(loadStarted, 'the deadline passed while the native load was running')
+    addonLog(2, 'during the load')
     finishLoad()
     await sleep(50)
     t.is(unloads, 1, 'the model the abandoned load produced is unloaded')
     t.alike(getAllModelIds(), [], 'no model is registered under an id the caller never received')
+    addonLog(2, 'after the unload')
+    t.alike(addonLogs, ['during the load'], 'the unloaded model receives no further addon logs')
   } finally {
     await close()
     clearPlugins()
+    clearAllAddonLoggers()
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
