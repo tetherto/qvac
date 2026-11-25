@@ -11,14 +11,21 @@ export const RUNTIME_PERMISSION_NAMESPACE = 'runtime'
 /**
  * Runtime operations a session with a grant may call only with the matching
  * `runtime/<operation>` permission. They load models, fetch files, write
- * storage, stream runtime-wide logs or probe the network.
+ * storage, stream runtime-wide logs or reach the network. `getModelInfo`
+ * reaches the model registry only for a CoreML companion set; it is gated too,
+ * so every request that can reach the network needs a permission.
  */
 export const RUNTIME_PERMISSION_OPERATIONS = [
   'loadModel',
   'downloadAsset',
   'vectorIndex',
   'loggingStream',
-  'discoverRpcServers'
+  'discoverRpcServers',
+  'getModelInfo',
+  'assessModelFit',
+  'modelRegistryList',
+  'modelRegistrySearch',
+  'modelRegistryGetModel'
 ] as const
 
 export type RuntimePermissionOperation = (typeof RUNTIME_PERMISSION_OPERATIONS)[number]
@@ -72,7 +79,8 @@ export const sessionGrantSchema = z
   .describe(
     'Permissions the session may use, one per operation: "<capability ID>/<operation>", such as ' +
       '"transcription/transcribe", or "runtime/<operation>" for loadModel, downloadAsset, vectorIndex, ' +
-      'loggingStream and discoverRpcServers. Omitted: the session is unrestricted. An empty list allows ' +
+      'loggingStream, discoverRpcServers, getModelInfo, assessModelFit, modelRegistryList, ' +
+      'modelRegistrySearch and modelRegistryGetModel. Omitted: the session is unrestricted. An empty list allows ' +
       'only operations that need no permission. The open fails for a permission the runtime does not have.'
   )
 

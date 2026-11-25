@@ -253,7 +253,10 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       response.cause
     ),
   MODEL_RECONFIGURED: (response) =>
-    new ModelReconfiguredError(readStringField(response.typedFields, 'modelId', ''), response.cause),
+    new ModelReconfiguredError(
+      readStringField(response.typedFields, 'modelId', ''),
+      response.cause
+    ),
   CAPABILITY_NOT_GRANTED: (response) =>
     new CapabilityNotGrantedError(
       readStringField(response.typedFields, 'operation', ''),

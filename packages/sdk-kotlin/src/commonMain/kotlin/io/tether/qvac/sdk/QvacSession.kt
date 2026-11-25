@@ -211,8 +211,8 @@ class QvacOwnerOnlyException(val operation: String, val sessionId: String) :
  *
  * [grant] limits the session to the listed permissions, one per operation:
  * `<capability ID>/<operation>`, such as `transcription/transcribe`, or
- * `runtime/<operation>` for `loadModel`, `downloadAsset`, `vectorIndex`,
- * `loggingStream` and `discoverRpcServers`. `null` leaves the session
+ * `runtime/<operation>` for an operation the runtime serves itself, such as
+ * `runtime/loadModel` (the sessions docs page lists them). `null` leaves the session
  * unrestricted; an empty list allows only operations that need no
  * permission. The worker fails the open with `SESSION_GRANT_INVALID` for a
  * permission it does not have, and a call outside the grant with

@@ -220,6 +220,19 @@ test('runtime operations need their runtime permission', async function (t) {
       }
       t.absent(refusal(() => assertSessionGrant(asSession('loader', { type: 'loadModel' }))))
       t.ok(refusal(() => assertSessionGrant(asSession('loader', { type: 'downloadAsset' }))))
+      for (const type of [
+        'getModelInfo',
+        'assessModelFit',
+        'modelRegistryList',
+        'modelRegistrySearch',
+        'modelRegistryGetModel'
+      ]) {
+        t.is(
+          refusal(() => assertSessionGrant(asSession('none', { type })))?.required,
+          `runtime/${type}`,
+          `${type} can reach the model registry, so an empty grant does not cover it`
+        )
+      }
     }
   )
 })
@@ -477,7 +490,7 @@ test('openSession validates the grant and opens no session on failure', async fu
         [['transcription/transcribe', 'transcription/transcribe'], 'duplicate'],
         [['embedding/embed'], 'no plugin declares embedding'],
         [['transcription/translate'], 'not an operation of transcription'],
-        [['runtime/rag'], 'rag has no permission'],
+        [['runtime/rag'], 'rag is not a runtime operation'],
         [['runtime/heartbeat'], 'heartbeat needs no permission'],
         [['acme.tool/other'], 'not an operation of acme.tool']
       ] as const) {

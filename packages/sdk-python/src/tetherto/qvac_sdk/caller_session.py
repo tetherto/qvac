@@ -205,8 +205,8 @@ async def open_session(
 
     `grant` limits the session to the listed permissions, one per operation:
     "<capability ID>/<operation>", such as "transcription/transcribe", or
-    "runtime/<operation>" for loadModel, downloadAsset, vectorIndex,
-    loggingStream and discoverRpcServers. None leaves the session
+    "runtime/<operation>" for an operation the runtime serves itself, such as
+    "runtime/loadModel" (the sessions docs page lists them). None leaves the session
     unrestricted; an empty list allows only operations that need no
     permission. The worker raises `SessionGrantInvalidError` for a permission
     it does not have, and `CapabilityNotGrantedError` for a call outside the

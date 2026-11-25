@@ -24,9 +24,10 @@ export interface OpenSessionOptions {
   /**
    * Permissions the session may use, one per operation:
    * `<capability ID>/<operation>`, such as `transcription/transcribe`, or
-   * `runtime/<operation>` for `loadModel`, `downloadAsset`, `vectorIndex`,
-   * `loggingStream` and `discoverRpcServers`. `capabilityPermissions()` lists
-   * every operation of a contract. Omitted: the session is unrestricted. An
+   * `runtime/<operation>` for an operation the runtime serves itself, such as
+   * `runtime/loadModel`; `RUNTIME_PERMISSION_OPERATIONS` lists them.
+   * `capabilityPermissions()` lists every operation of a contract. Omitted:
+   * the session is unrestricted. An
    * empty list allows only operations that need no permission. The worker
    * refuses an operation outside the grant with `CapabilityNotGrantedError`.
    */
