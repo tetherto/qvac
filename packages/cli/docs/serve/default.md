@@ -1160,22 +1160,25 @@ forms.
 | `hop_timesteps`    | `integer`    | No       | Stream only: window advance, below the window (default 500)                |
 
 The recording is a little-endian `[timesteps u32, channels u32]` header followed by
-`timesteps * channels` float32 samples. A file whose length does not match its header is
-rejected before the model loads.
+`timesteps * channels` float32 samples, one timestep per 20 ms. A file with no samples or
+whose length does not match its header is rejected before the model loads. Without `stream`,
+the recording must fit one decode (at most 3000 timesteps); send a longer one with
+`stream: true`.
 
 `json` answers `{ "text": "not too controversial" }`. `verbose_json` adds `duration` and
 `segments` (`id`, `start`, `end`, `text`, in seconds); `srt` and `vtt` are subtitle files.
+`duration` is the recording's length from its header, and no segment ends after it.
 
 With `stream: true` the response is server-sent events, one `transcript.text.delta` event per
-window that found new text, then `transcript.text.done` with the joined text, then `[DONE]`.
+window that found new text, then `transcript.text.done` with the deltas joined by spaces, then `[DONE]`.
 A stream takes `response_format` `json` or `text` only. A failure after the first event ends
 the stream with an `error` event and no `[DONE]`. A client disconnect cancels the
 transcription.
 
 ```text
-data: {"type":"transcript.text.delta","delta":" not too"}
+data: {"type":"transcript.text.delta","delta":"not too"}
 
-data: {"type":"transcript.text.delta","delta":" controversial"}
+data: {"type":"transcript.text.delta","delta":"controversial"}
 
 data: {"type":"transcript.text.done","text":"not too controversial"}
 
@@ -1196,8 +1199,8 @@ curl -sSN http://localhost:11435/qvac/v1/bci/transcriptions \
 | 400  | `invalid_json`               | Body is not valid JSON                                                                                                                        |
 | 400  | `missing_model`              | `model` is missing                                                                                                                            |
 | 400  | `missing_file`               | `file` is missing                                                                                                                             |
-| 400  | `invalid_neural_data`        | Short or zero-channel header, a length the header does not match, or model refusal                                                            |
-| 400  | `neural_data_too_large`      | `file` is over the model's input buffer                                                                                                       |
+| 400  | `invalid_neural_data`        | Short header, zero channels or samples, a length the header does not match, or model refusal                                                  |
+| 400  | `neural_data_too_large`      | `file` is over the model's input buffer, or a recording over 3000 timesteps without `stream`                                                  |
 | 400  | `invalid_response_format`    | Unknown format, or a timed format with `stream`                                                                                               |
 | 400  | `invalid_window`             | `window_timesteps` or `hop_timesteps` without `stream`, a window over 2900, or a hop not below the window (an omitted side takes its default) |
 | 400  | `invalid_request`            | The body carries an unknown field                                                                                                             |

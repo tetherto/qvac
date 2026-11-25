@@ -47,10 +47,19 @@ export function isTimedTranscriptionFormat(format: string): format is TimedTrans
   return format === 'srt' || format === 'vtt' || format === 'verbose_json'
 }
 
+export interface TimedTranscriptionOptions {
+  /** The input's real length. Sets `duration` and clamps segment times to it. */
+  durationMs?: number
+}
+
 export function formatTimedTranscription(
   format: TimedTranscriptionFormat,
-  segments: TranscribeSegment[]
+  timedSegments: TranscribeSegment[],
+  opts: TimedTranscriptionOptions = {}
 ): TimedTranscriptionResponse {
+  const { durationMs } = opts
+  const segments =
+    durationMs === undefined ? timedSegments : clampSegments(timedSegments, durationMs)
   switch (format) {
     case 'srt':
       return { contentType: 'text/plain; charset=utf-8', body: formatCues(segments, ',') }
@@ -70,14 +79,15 @@ export function formatTimedTranscription(
             .trim(),
           ...(language !== undefined ? { language } : {}),
           duration:
-            segments.reduce(
-              (maximumEndMs, segment) =>
-                (segment.speakerSegments ?? []).reduce(
-                  (maximum, turn) => Math.max(maximum, roundMilliseconds(turn.endMs)),
-                  Math.max(maximumEndMs, roundMilliseconds(segment.endMs))
-                ),
-              0
-            ) / 1000,
+            (durationMs ??
+              segments.reduce(
+                (maximumEndMs, segment) =>
+                  (segment.speakerSegments ?? []).reduce(
+                    (maximum, turn) => Math.max(maximum, roundMilliseconds(turn.endMs)),
+                    Math.max(maximumEndMs, roundMilliseconds(segment.endMs))
+                  ),
+                0
+              )) / 1000,
           segments: segments.map((segment) => ({
             id: segment.id,
             start: roundMilliseconds(segment.startMs) / 1000,
@@ -118,6 +128,33 @@ export function formatTimedTranscription(
       return exhaustive
     }
   }
+}
+
+function clampSegments(segments: TranscribeSegment[], durationMs: number): TranscribeSegment[] {
+  const clamp = (milliseconds: number) => Math.min(milliseconds, durationMs)
+  return segments.map((segment) => ({
+    ...segment,
+    startMs: clamp(segment.startMs),
+    endMs: clamp(segment.endMs),
+    ...(segment.tokens !== undefined
+      ? {
+          tokens: segment.tokens.map((token) => ({
+            ...token,
+            startMs: clamp(token.startMs),
+            endMs: clamp(token.endMs)
+          }))
+        }
+      : {}),
+    ...(segment.speakerSegments !== undefined
+      ? {
+          speakerSegments: segment.speakerSegments.map((turn) => ({
+            ...turn,
+            startMs: clamp(turn.startMs),
+            endMs: clamp(turn.endMs)
+          }))
+        }
+      : {})
+  }))
 }
 
 /** Whisper decodes each window in its own language; report one only when they agree. */

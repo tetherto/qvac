@@ -19,7 +19,9 @@ import { bindClientDisconnectCancel } from '@/serve/core/cancel-bridge'
 import { defaultState } from '@/serve/extensions/default/state'
 import {
   bciTranscriptionsBody,
+  BCI_MAX_BATCH_TIMESTEPS,
   neuralDataProblem,
+  neuralDurationMs,
   type BciTranscriptionsBody
 } from '@/serve/extensions/default/schemas/bci'
 
@@ -47,19 +49,21 @@ Transcribe a neural-signal recording with a BCI model, backed by the SDK's
 \`/v1/audio/transcriptions\`.
 
 Send JSON or \`multipart/form-data\`. \`file\` is the recording: a little-endian
-\`[timesteps u32, channels u32]\` header, then \`timesteps * channels\` float32 samples. It is
-a multipart file part, a base64 data URL, or the \`id\` of a file uploaded with
-\`POST /v1/files\`.
+\`[timesteps u32, channels u32]\` header, then \`timesteps * channels\` float32 samples, one
+timestep per 20 ms. It is a multipart file part, a base64 data URL, or the \`id\` of a file
+uploaded with \`POST /v1/files\`. Without \`stream\`, the recording must fit one decode
+(at most ${BCI_MAX_BATCH_TIMESTEPS} timesteps); send a longer one with \`stream: true\`.
 
 \`response_format\` is \`json\` (default, \`{ "text" }\`), \`text\`, \`verbose_json\`, \`srt\`
-or \`vtt\`.
+or \`vtt\`. The timed formats report the recording's real length as \`duration\`, and no
+segment ends after it.
 
 With \`stream: true\` the recording is decoded in sliding windows of \`window_timesteps\`
 (default 1500, at most 2900), advancing by \`hop_timesteps\` (default 500, below the
-window), and the response is server-sent events: one
-\`transcript.text.delta\` event per window that found new text, then
-\`transcript.text.done\` with the joined text, then \`[DONE]\`. A failure after the first event
-ends the stream with an \`error\` event and no \`[DONE]\`.
+window), and the response is server-sent events: one \`transcript.text.delta\` event per
+window that found new text, then \`transcript.text.done\` with the deltas joined by spaces,
+then \`[DONE]\`. A failure after the first event ends the stream with an \`error\` event and
+no \`[DONE]\`.
 
 A client disconnect cancels the transcription.
 `.trim()
@@ -83,8 +87,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_data_url: '`file` is a data URL that is not base64',
               file_not_found: '`file` is neither a data URL nor an uploaded file id',
               invalid_neural_data:
-                '`file` is not a neural recording: a short or zero-channel header, a length the header does not match, or the model refused it',
-              neural_data_too_large: "`file` is over the model's input buffer",
+                '`file` is not a neural recording: a short header, zero channels or timesteps, a length the header does not match, or the model refused it',
+              neural_data_too_large:
+                "`file` is over the model's input buffer, or a batch recording is over 3000 timesteps",
               invalid_response_format:
                 '`response_format` is not one of `json`, `text`, `verbose_json`, `srt`, `vtt`, or a stream asked for a timed format',
               invalid_window:
@@ -117,7 +122,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         async function (req) {
           const { bytes } = resolveBinaryInput(req, 'file', req.body.file)
           const problem = neuralDataProblem(bytes, req.body.stream === true)
-          if (problem !== null) throw new HttpError(400, 'invalid_neural_data', problem)
+          if (problem !== null) throw new HttpError(400, problem.code, problem.message)
           req.bciNeuralData = bytes
         },
         requireModel('bci')
@@ -157,7 +162,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         return { text: result }
       }
 
-      const response = formatTimedTranscription(format as 'verbose_json' | 'srt' | 'vtt', result)
+      const response = formatTimedTranscription(format as 'verbose_json' | 'srt' | 'vtt', result, {
+        durationMs: neuralDurationMs(bytes)
+      })
       app.qvac.logger.info(`  bci_transcribe done segments=${result.length}`)
       return reply.type(response.contentType).send(response.body)
     }
@@ -183,10 +190,15 @@ async function streamTranscription(
       ...(hopTimesteps !== undefined ? { hopTimesteps } : {})
     })
   ).catch(rethrow)
+  // A disconnect only cancels, and the run's stream is drained. Destroying the
+  // session on top of the cancel crashed the worker.
   bindClientDisconnectCancel(reply.raw, session.requestId, qvac.logger, state.cancelOverride)
-  reply.raw.on('close', () => {
-    if (!reply.raw.writableEnded) session.destroy()
+  const raw = reply.raw
+  let closed = false
+  raw.once('close', () => {
+    closed = !raw.writableEnded
   })
+  const clientGone = () => closed || raw.destroyed
 
   for (let offset = 0; offset < bytes.length; offset += STREAM_CHUNK_BYTES) {
     session.write(new Uint8Array(bytes.subarray(offset, offset + STREAM_CHUNK_BYTES)))
@@ -198,18 +210,24 @@ async function streamTranscription(
   // there come back as a JSON error.
   const first = await deltas.next().catch(rethrow)
 
+  if (clientGone()) {
+    await drain(deltas)
+    return
+  }
   initSSE(reply)
-  const raw = reply.raw
-  let text = ''
+  const texts: string[] = []
 
   // Fastify drops errors thrown after hijack, so a failure here has to end
   // the stream itself or the client would hang.
   try {
     for (let next = first; next.done !== true; next = await deltas.next()) {
-      text += next.value
+      // The cancelled run still ends its stream; drain it without writing.
+      if (clientGone()) continue
+      texts.push(next.value.trim())
       sendSSE(raw, { type: 'transcript.text.delta', delta: next.value })
     }
   } catch (err) {
+    if (clientGone()) return
     const message = err instanceof Error ? err.message : String(err)
     qvac.logger.error(`  bci_transcribe stream failed: ${message}`)
     sendSSE(raw, {
@@ -218,9 +236,20 @@ async function streamTranscription(
     endSSE(raw, { sentinel: false })
     return
   }
-  sendSSE(raw, { type: 'transcript.text.done', text: text.trim() })
+  if (clientGone()) return
+  // The addon trims each delta, so joining them as-is glues the windows' words.
+  const text = texts.filter((delta) => delta.length > 0).join(' ')
+  sendSSE(raw, { type: 'transcript.text.done', text })
   qvac.logger.info(`  bci_transcribe stream done chars=${text.length}`)
   endSSE(raw)
+}
+
+async function drain(deltas: AsyncIterator<unknown>): Promise<void> {
+  try {
+    while ((await deltas.next()).done !== true);
+  } catch {
+    // The cancel fails the run; there is no client left to tell.
+  }
 }
 
 // Client-side validation throws synchronously; the worker's arrives on the result.

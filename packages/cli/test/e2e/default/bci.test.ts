@@ -34,7 +34,11 @@ function neural(timesteps = 4, channels = 2): Buffer {
   return bytes
 }
 
-const FILE = `data:application/octet-stream;base64,${neural().toString('base64')}`
+function dataUrl(bytes: Buffer): string {
+  return `data:application/octet-stream;base64,${bytes.toString('base64')}`
+}
+
+const FILE = dataUrl(neural())
 const BODY = { model: 'bci', file: FILE }
 
 const SEGMENTS: TranscribeSegment[] = [
@@ -99,6 +103,28 @@ describe('qvac bci: validation', () => {
     assertStatusAndError(await post({ ...BODY, language: 'en' }), 400, 'invalid_request')
   })
 
+  it('an empty recording returns 400', async () => {
+    assertStatusAndError(
+      await post({ ...BODY, file: dataUrl(neural(0)) }),
+      400,
+      'invalid_neural_data'
+    )
+    assertStatusAndError(
+      await post({ ...BODY, file: dataUrl(neural(0)), stream: true }),
+      400,
+      'invalid_neural_data'
+    )
+  })
+
+  it('a batch recording over one decode returns 400, but streams', async () => {
+    const long = dataUrl(neural(3001, 1))
+    const res = await post({ ...BODY, file: long })
+    assertStatusAndError(res, 400, 'neural_data_too_large')
+    assert.match((res.json() as { error: { message: string } }).error.message, /stream: true/)
+    // Past validation, the stream fails at the model load instead.
+    assert.equal((await post({ ...BODY, file: long, stream: true })).statusCode, 503)
+  })
+
   it('a file that is not a neural recording returns 400', async () => {
     const truncated = neural().subarray(0, 12)
     const res = await server().inject({
@@ -120,6 +146,18 @@ describe('qvac bci: validation', () => {
   it('a non-bci model returns 400 and an unknown one 404', async () => {
     assertStatusAndError(await post({ ...BODY, model: 'ocr' }), 400, 'invalid_model_type')
     assertStatusAndError(await post({ ...BODY, model: 'nope' }), 404, 'model_not_found')
+  })
+})
+
+describe('qvac bci: without the openai extension', () => {
+  const server = useServer({ config: MODELLESS_CONFIG, enableAdmin: true, extensions: ['default'] })
+
+  it('a missing file returns missing_file', async () => {
+    assertStatusAndError(
+      await server().inject({ method: 'POST', url: URL, payload: { model: 'bci' } }),
+      400,
+      'missing_file'
+    )
   })
 })
 
@@ -178,6 +216,8 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
 
   it('returns plain text, verbose_json and srt', async () => {
     stubBatch()
+    // 100 timesteps of 20 ms: longer than the segments, so nothing is clamped.
+    const timedBody = { ...BODY, file: dataUrl(neural(100)) }
     const text = await server().inject({
       method: 'POST',
       url: URL,
@@ -189,19 +229,42 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
     const verbose = await server().inject({
       method: 'POST',
       url: URL,
-      payload: { ...BODY, response_format: 'verbose_json' }
+      payload: { ...timedBody, response_format: 'verbose_json' }
     })
     const body = verbose.json() as { text: string; duration: number; segments: unknown[] }
     assert.equal(body.text, 'not too controversial')
-    assert.equal(body.duration, 1.2)
+    assert.equal(body.duration, 2)
     assert.equal(body.segments.length, 2)
 
     const srt = await server().inject({
       method: 'POST',
       url: URL,
-      payload: { ...BODY, response_format: 'srt' }
+      payload: { ...timedBody, response_format: 'srt' }
     })
     assert.match(srt.body, /00:00:00,400 --> 00:00:01,200\ncontroversial/)
+  })
+
+  it('reports the recording length, not the padded window, as the duration', async () => {
+    stubBatch()
+    // 50 timesteps is 1 s; the second segment claims to end at 1.2 s.
+    const timedBody = { ...BODY, file: dataUrl(neural(50)) }
+    const verbose = await server().inject({
+      method: 'POST',
+      url: URL,
+      payload: { ...timedBody, response_format: 'verbose_json' }
+    })
+    const body = verbose.json() as { duration: number; segments: Array<{ end: number }> }
+    assert.equal(body.duration, 1)
+    assert.deepEqual(
+      body.segments.map((segment) => segment.end),
+      [0.4, 1]
+    )
+    const vtt = await server().inject({
+      method: 'POST',
+      url: URL,
+      payload: { ...timedBody, response_format: 'vtt' }
+    })
+    assert.match(vtt.body, /00:00:00\.400 --> 00:00:01\.000\ncontroversial/)
   })
 
   it('maps a recording the addon refuses to 400 and a busy model to 429', async () => {
@@ -241,6 +304,68 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
       { type: 'transcript.text.done', text: 'not too controversial' },
       '[DONE]'
     ])
+  })
+
+  it('joins trimmed deltas with a space in the done event', async () => {
+    stubStream(['Not too.', 'controversial.'])
+    const res = await server().inject({
+      method: 'POST',
+      url: URL,
+      payload: { ...BODY, stream: true }
+    })
+    const events = collectSSE(res.body).map((e) => e.data)
+    assert.deepEqual(events.at(-2), {
+      type: 'transcript.text.done',
+      text: 'Not too. controversial.'
+    })
+  })
+
+  it('a client disconnect cancels the run without destroying the session', async () => {
+    let destroyed = 0
+    const cancelled: string[] = []
+    let onCancel = () => undefined as void
+    const runEnded = new Promise<void>((resolve) => {
+      onCancel = resolve
+    })
+    let drained = false
+    state().cancelOverride = ({ requestId }: { requestId?: string }) => {
+      cancelled.push(String(requestId))
+      onCancel()
+      return Promise.resolve()
+    }
+    state().bciTranscribeStreamOverride = (() =>
+      Promise.resolve({
+        requestId: 'bci-stream',
+        write: () => undefined,
+        end: () => undefined,
+        destroy: () => {
+          destroyed += 1
+        },
+        [Symbol.asyncIterator]: async function* () {
+          yield 'not too'
+          await runEnded
+          yield 'controversial'
+          drained = true
+          throw new Error('Stream cancelled')
+        }
+      })) as never
+
+    const address = await server().listen({ host: '127.0.0.1', port: 0 })
+    const controller = new AbortController()
+    const res = await fetch(`${address}${URL}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...BODY, stream: true }),
+      signal: controller.signal
+    })
+    const reader = res.body!.getReader()
+    await reader.read()
+    controller.abort()
+    await runEnded
+    for (let i = 0; i < 50 && !drained; i++) await new Promise((r) => setTimeout(r, 10))
+    assert.deepEqual(cancelled, ['bci-stream'])
+    assert.equal(destroyed, 0)
+    assert.ok(drained)
   })
 
   it('maps a worker error that fails the first window by its streamed code', async () => {

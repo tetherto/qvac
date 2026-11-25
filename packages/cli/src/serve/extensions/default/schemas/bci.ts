@@ -9,6 +9,10 @@ export type BciResponseFormat = (typeof BCI_RESPONSE_FORMATS)[number]
 export const BCI_DEFAULT_WINDOW_TIMESTEPS = 1500
 export const BCI_DEFAULT_HOP_TIMESTEPS = 500
 export const BCI_MAX_WINDOW_TIMESTEPS = 2900
+// The whisper encoder takes about 3000 timesteps per pass; a longer batch
+// recording is cut off or crashes the worker, so it has to stream.
+export const BCI_MAX_BATCH_TIMESTEPS = 3000
+export const BCI_TIMESTEP_MS = 20
 
 const timesteps = formNumber(z.number().int().positive()).optional()
 
@@ -70,6 +74,7 @@ export const bciTranscriptionsBody = z
 export type BciTranscriptionsBody = z.infer<typeof bciTranscriptionsBody>
 
 export const BCI_FIELD_CODES: Record<string, string> = {
+  file: 'missing_file',
   response_format: 'invalid_response_format',
   window_timesteps: 'invalid_window',
   hop_timesteps: 'invalid_window'
@@ -78,25 +83,55 @@ export const BCI_FIELD_CODES: Record<string, string> = {
 const HEADER_BYTES = 8
 const FLOAT32_BYTES = 4
 
+export interface NeuralDataProblem {
+  code: 'invalid_neural_data' | 'neural_data_too_large'
+  message: string
+}
+
 /**
- * Checks the recording's header against its length, so a truncated or wrong
- * file is a 400 before the model loads. A stream ignores the timestep count.
+ * Checks the recording's header against its length, so a truncated, empty or
+ * over-long file is a 400 before the model loads. A stream ignores the
+ * timestep count.
  */
-export function neuralDataProblem(bytes: Buffer, stream: boolean): string | null {
+export function neuralDataProblem(bytes: Buffer, stream: boolean): NeuralDataProblem | null {
   if (bytes.length < HEADER_BYTES) {
-    return `file: ${bytes.length} bytes is shorter than the 8-byte header.`
+    return invalid(`file: ${bytes.length} bytes is shorter than the 8-byte header.`)
   }
   const timestepCount = bytes.readUInt32LE(0)
   const channels = bytes.readUInt32LE(4)
-  if (channels === 0) return 'file: the header declares 0 channels.'
+  if (channels === 0) return invalid('file: the header declares 0 channels.')
   const body = bytes.length - HEADER_BYTES
   if (stream) {
+    if (body === 0) return invalid('file: the recording has no samples.')
     return body % (channels * FLOAT32_BYTES) === 0
       ? null
-      : `file: ${body} sample bytes is not a whole number of ${channels}-channel timesteps.`
+      : invalid(
+          `file: ${body} sample bytes is not a whole number of ${channels}-channel timesteps.`
+        )
   }
+  if (timestepCount === 0) return invalid('file: the header declares 0 timesteps.')
   const expected = timestepCount * channels * FLOAT32_BYTES
-  return body === expected
-    ? null
-    : `file: the header declares ${timestepCount}x${channels} samples (${expected} bytes), got ${body}.`
+  if (body !== expected) {
+    return invalid(
+      `file: the header declares ${timestepCount}x${channels} samples (${expected} bytes), got ${body}.`
+    )
+  }
+  if (timestepCount > BCI_MAX_BATCH_TIMESTEPS) {
+    return {
+      code: 'neural_data_too_large',
+      message:
+        `file: ${timestepCount} timesteps is over the ${BCI_MAX_BATCH_TIMESTEPS} a single ` +
+        'decode takes. Send it with `stream: true`.'
+    }
+  }
+  return null
+}
+
+/** The recording's length from its header, in milliseconds. */
+export function neuralDurationMs(bytes: Buffer): number {
+  return bytes.readUInt32LE(0) * BCI_TIMESTEP_MS
+}
+
+function invalid(message: string): NeuralDataProblem {
+  return { code: 'invalid_neural_data', message }
 }
