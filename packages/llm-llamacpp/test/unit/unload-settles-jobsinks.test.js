@@ -106,23 +106,129 @@ test('LlamaInterface.unload() waits for asynchronous binding cleanup', async (t)
   }
 })
 
+test('LlamaInterface.unload() preserves failed cleanup for a public retry', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = {}
+    let attempts = 0
+    const binding = {
+      createInstance: () => handle,
+      activeJobs: (candidate) => (candidate === handle ? 1 : 0),
+      destroyInstance(candidate) {
+        t.is(candidate, handle, `same handle, iteration ${iteration + 1}`)
+        attempts++
+        if (attempts === 1) {
+          if (iteration % 2 === 0) throw new Error('cleanup failed')
+          return Promise.reject(new Error('cleanup failed'))
+        }
+        return Promise.resolve()
+      }
+    }
+    const addon = new LlamaInterface(
+      binding,
+      { path: '/tmp/test.gguf', projectionPath: '', config: {} },
+      () => {}
+    )
+
+    await t.exception.all(() => addon.unload(), /cleanup failed/)
+    t.is(addon.activeJobs(), 1, `failed cleanup remains reachable, iteration ${iteration + 1}`)
+    await addon.unload()
+    t.is(attempts, 2, `cleanup retried, iteration ${iteration + 1}`)
+    t.is(addon.activeJobs(), 0, `successful cleanup clears handle, iteration ${iteration + 1}`)
+  }
+})
+
+test('LlamaInterface.unload() shares one in-flight cleanup', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let finishDestroy
+    let attempts = 0
+    const destroyed = new Promise((resolve) => {
+      finishDestroy = resolve
+    })
+    const binding = {
+      createInstance: () => ({}),
+      destroyInstance() {
+        attempts++
+        return destroyed
+      }
+    }
+    const addon = new LlamaInterface(
+      binding,
+      { path: '/tmp/test.gguf', projectionPath: '', config: {} },
+      () => {}
+    )
+
+    const first = addon.unload()
+    const second = addon.unload()
+    t.is(second, first, `concurrent callers share cleanup, iteration ${iteration + 1}`)
+    t.is(attempts, 1, `cleanup starts once, iteration ${iteration + 1}`)
+    finishDestroy()
+    await Promise.all([first, second])
+  }
+})
+
 test('unload rejection still permits a fresh load', async (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     const model = createMultiJobModel()
     model.state.configLoaded = true
-    model.addon.unload.callsFake(() => Promise.reject(new Error('cleanup failed')))
+    const stale = model.addon
+    let staleCleanupAttempts = 0
+    stale.unload.callsFake(() => {
+      staleCleanupAttempts++
+      if (staleCleanupAttempts === 1) return Promise.reject(new Error('cleanup failed'))
+      return Promise.resolve()
+    })
 
     await t.exception.all(() => model.unload(), /cleanup failed/)
     t.is(model.addon, null, `addon reset, iteration ${iteration + 1}`)
     t.absent(model.state.configLoaded, `load state reset, iteration ${iteration + 1}`)
 
     const activate = createStub(() => Promise.resolve())
-    const fresh = { activate }
+    const fresh = { activate, unload: createStub(() => Promise.resolve()) }
     model._createAddon = createStub(() => fresh)
     await model.load()
 
     t.is(model.addon, fresh, `fresh addon created, iteration ${iteration + 1}`)
     t.is(activate.callCount, 1, `fresh addon activated, iteration ${iteration + 1}`)
     t.ok(model.state.configLoaded, `fresh load completed, iteration ${iteration + 1}`)
+    await model.unload()
+    t.is(staleCleanupAttempts, 2, `failed cleanup retried, iteration ${iteration + 1}`)
+    t.is(fresh.unload.callCount, 1, `fresh addon cleaned, iteration ${iteration + 1}`)
+  }
+})
+
+test('failed load cleanup remains reachable through public unload', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const model = createMultiJobModel()
+    model.addon = null
+    let cleanupAttempts = 0
+    const partial = {
+      activate: createStub(() => Promise.reject(new Error('activation failed'))),
+      unload: createStub(() => {
+        cleanupAttempts++
+        if (cleanupAttempts === 1) {
+          if (iteration % 2 === 0) throw new Error('cleanup failed')
+          return Promise.reject(new Error('cleanup failed'))
+        }
+        return Promise.resolve()
+      })
+    }
+    model._createAddon = createStub(() => partial)
+
+    await t.exception.all(() => model.load(), /activation failed/)
+    t.is(model.addon, null, `failed addon detached, iteration ${iteration + 1}`)
+    t.absent(model.state.configLoaded, `load state remains clear, iteration ${iteration + 1}`)
+    t.is(cleanupAttempts, 1, `initial cleanup attempted, iteration ${iteration + 1}`)
+
+    await model.unload()
+    t.is(cleanupAttempts, 2, `public unload retries cleanup, iteration ${iteration + 1}`)
+
+    const fresh = {
+      activate: createStub(() => Promise.resolve()),
+      unload: createStub(() => Promise.resolve())
+    }
+    model._createAddon = createStub(() => fresh)
+    await model.load()
+    t.is(model.addon, fresh, `fresh load succeeds, iteration ${iteration + 1}`)
+    await model.unload()
   }
 })

@@ -241,6 +241,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     skipPreDownload: true
   },
 
+  // The rag-e2e-plugin fixture: @qvac/rag in the worker, no weights of its own.
+  'rag-e2e': {
+    type: 'rag-e2e',
+    modelSrc: '',
+    skipPreDownload: true
+  },
+
   'sharded-embeddings': {
     constant: { $const: 'GTE_LARGE_335M_FP16_SHARD' },
     type: 'llamacpp-embedding',

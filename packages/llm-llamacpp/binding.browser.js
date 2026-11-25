@@ -11,8 +11,8 @@
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 const { ensureMessageCacheDirectories, ensureParentDirectory } = require('./browser/cache-files.js')
 const createEngine = require('./browser/create-engine.js')
-const { browserLoadConfig } = require('./browser/load-config.js')
-const { modelFiles } = require('./browser/model-files.js')
+const { checkLoadFiles, mountLoadFiles } = require('./browser/load-config.js')
+const { mountModelFiles, unmountModelFiles } = require('./browser/model-files.js')
 const retryableModule = require('./browser/retryable-module.js')
 
 let logCallback = null
@@ -158,19 +158,9 @@ function validateJob(handle, messages) {
 
 // Mounts one model, including all sibling GGUF shards, read-only and returns
 // the primary file's path inside the engine.
-async function mount(module, handle, path) {
-  if (!path) return ''
-  const { primary, files } = await modelFiles(path)
+function mount(module, handle, path) {
   const mountpoint = `/qvac-files/${++mountCount}`
-  module.FS.mkdirTree(mountpoint)
-  try {
-    module.FS.mount(module.FS.filesystems.WORKERFS, { files }, mountpoint)
-  } catch (error) {
-    module.FS.rmdir(mountpoint)
-    throw error
-  }
-  handle.mounts.push(mountpoint)
-  return `${mountpoint}/${primary.name}`
+  return mountModelFiles(module, handle.mounts, mountpoint, path)
 }
 
 function unsupported(name) {
@@ -227,26 +217,27 @@ function createInstance(owner, configurationParams, outputCb) {
 }
 
 function activate(handle) {
-  if (handle.params.projectionPath) return unsupported('Projection model')
   return enqueue(async () => {
-    const { path, config } = handle.params
+    const { config } = handle.params
     if (config && config.parallel !== undefined && String(config.parallel) !== '1') {
       throw new Error('parallel > 1 is not supported in the browser build')
     }
-    const nativeConfig = browserLoadConfig(config)
+    checkLoadFiles(handle.params)
     const engine = await loadEngine()
     handle.engine = engine
     engine.handles.add(handle)
     const { module } = engine
-    const modelPath = await mount(module, handle, path)
     try {
+      const files = await mountLoadFiles(handle.params, (filePath) =>
+        mount(module, handle, filePath)
+      )
       handle.native = check(
         module,
         module.ccall(
           'qvac_web_create',
           'number',
           ['string', 'string', 'string'],
-          [modelPath, '', JSON.stringify(nativeConfig)]
+          [files.modelPath, files.projectionPath, JSON.stringify(files.config)]
         )
       )
       engine.instances.set(handle.native, handle)
@@ -361,33 +352,28 @@ function destroyInstance(handle) {
     // the native instance and mounting its files.
     const engine = handle.engine
     const native = handle.native
-    handle.native = 0
-    const mounts = handle.mounts.splice(0)
-    engine?.instances.delete(native)
-    let cleanupError = null
     if (native && !handle.failure) {
       try {
         await call(handle, 'qvac_web_destroy', ['number'], [native])
       } catch (error) {
-        if (!handle.failure) cleanupError = error
+        if (!handle.failure) throw error
       }
     }
+    handle.native = 0
+    engine?.instances.delete(native)
+    let cleanupError = null
     const module = engine?.module
-    for (const mountpoint of mounts) {
+    if (module) {
       try {
-        module?.FS.unmount(mountpoint)
+        unmountModelFiles(module, handle.mounts)
       } catch (error) {
         if (!handle.failure && !cleanupError) cleanupError = error
-      }
-      try {
-        module?.FS.rmdir(mountpoint)
-      } catch (error) {
-        if (!handle.failure && !cleanupError) cleanupError = error
+        if (handle.failure) handle.mounts.length = 0
       }
     }
+    if (cleanupError) throw cleanupError
     engine?.handles.delete(handle)
     handle.engine = null
-    if (cleanupError) throw cleanupError
   })
 }
 

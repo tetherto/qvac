@@ -385,6 +385,11 @@
     "modelSrc": "",
     "skipPreDownload": true
   },
+  "rag-e2e": {
+    "type": "rag-e2e",
+    "modelSrc": "",
+    "skipPreDownload": true
+  },
   "sharded-embeddings": {
     "constant": {
       "$const": "GTE_LARGE_335M_FP16_SHARD"

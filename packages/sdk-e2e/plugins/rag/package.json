@@ -1,0 +1,19 @@
+{
+  "name": "rag-e2e-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Runs @qvac/rag inside the SDK worker for the e2e suite",
+  "exports": {
+    "./plugin": "./plugin.js",
+    "./ops": {
+      "types": "./ops.d.ts",
+      "default": "./ops.js"
+    }
+  },
+  "peerDependencies": {
+    "@qvac/rag": "*",
+    "@qvac/sdk": "*",
+    "corestore": "*",
+    "zod": "*"
+  }
+}
