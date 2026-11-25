@@ -35,7 +35,7 @@ export const llmConfigBaseSchema = z.object({
     .number()
     .optional()
     .describe(
-      "Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+      "Context window size in tokens; `0` uses the model's trained context length, which auto-fit can lower to fit memory. With `parallel >= 2` the slots share this context, so each slot gets a `parallel`-th of it. Default 1024."
     ),
   temp: z.number().min(0).max(2).optional().describe('Sampling temperature (0–2). Default 0.8.'),
   top_p: z
