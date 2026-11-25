@@ -277,9 +277,19 @@ export function createRag(options: CreateRagOptions): Rag {
     runtime ??= await loadIndexRuntime(indexConfig)
     await corestore.ready()
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
+    let unclaim: () => void
+    try {
+      unclaim = acquired.indexes.claim(indexConfig, runtime)
+    } catch (error) {
+      await acquired.release()
+      throw error
+    }
     db = acquired.db
     indexes = acquired.indexes
-    release = acquired.release
+    release = async () => {
+      unclaim()
+      await acquired.release()
+    }
   }
 
   // The Corestore belongs to the caller and stays open. Every caller gets the
@@ -647,7 +657,7 @@ export function createRag(options: CreateRagOptions): Rag {
     const name = parseDropNamespace(params)
     const indexRegistry = registry()
     const dropped = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
-    await indexRegistry.drop(name, dropped.createdAt, indexConfig, runtime as IndexRuntime)
+    await indexRegistry.drop(name, dropped.createdAt)
     reported.delete(name)
     return dropped.result
   }

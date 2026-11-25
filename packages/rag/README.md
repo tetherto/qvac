@@ -317,6 +317,7 @@ interface IndexSearchResult {
 - Without `searchFiltered`, a search scoped to `documentIds` asks `search` for more rows and keeps the allowed ones, doubling until it has enough.
 - Without `compact`, removed rows stay in the provider's memory until the index is rebuilt.
 - Snapshots need both `load` and `handle.write`. Without `load`, `dir` is ignored and the index is rebuilt from HyperDB on each open.
+- A snapshot directory serves one provider and `fs` per core: `ready()` fails with `INVALID_INPUT` when another open RAG on the core uses the same `dir` with a different one. Snapshot files carry no provider name, so across processes give each provider its own `dir`.
 
 ## Memory
 

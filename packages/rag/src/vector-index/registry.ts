@@ -122,12 +122,10 @@ export interface IndexRegistry {
   ): Promise<void>
   // Forgets a dropped namespace's index and deletes its snapshot. A snapshot
   // left behind never loads: a re-created namespace has another identity.
-  drop(
-    namespace: string,
-    createdAt: number,
-    config: IndexConfig,
-    runtime: IndexRuntime
-  ): Promise<void>
+  drop(namespace: string, createdAt: number): Promise<void>
+  // Reserves the snapshot directory for this provider and file system until
+  // the returned release runs; another pair on the same core is refused.
+  claim(config: IndexConfig, runtime: IndexRuntime): () => void
   close(): Promise<void>
 }
 
@@ -155,6 +153,38 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       if (disk.get(namespace) === settled) disk.delete(namespace)
     })
     return next
+  }
+
+  // Snapshot directories in use, so two providers or file systems never write
+  // the same files.
+  const claims = new Map<
+    string,
+    { provider: NativeIndexModule; files: FileSystem | null; refs: number }
+  >()
+
+  function claim(config: IndexConfig, runtime: IndexRuntime): () => void {
+    const { dir } = config
+    const provider = runtime.native.module
+    if (dir === undefined || !provider?.load) return () => {}
+    let held = claims.get(dir)
+    if (held && (held.provider !== provider || held.files !== runtime.files)) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `index directory '${dir}' is used by another RAG on this core with a different provider or fs`
+      })
+    }
+    if (!held) {
+      held = { provider, files: runtime.files, refs: 0 }
+      claims.set(dir, held)
+    }
+    const claimed = held
+    claimed.refs++
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      if (--claimed.refs === 0 && claims.get(dir) === claimed) claims.delete(dir)
+    }
   }
 
   // RAGs on one core share an index only with the same provider and directory.
@@ -560,12 +590,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
 
   // Entries leave the map before any await, so a namespace re-created while
   // an old snapshot write finishes gets a fresh entry, never the old index.
-  async function drop(
-    namespace: string,
-    createdAt: number,
-    config: IndexConfig,
-    runtime: IndexRuntime
-  ): Promise<void> {
+  async function drop(namespace: string, createdAt: number): Promise<void> {
     const detached: Entry[] = []
     for (const [key, entry] of entries) {
       if (entry.namespace !== namespace) continue
@@ -579,14 +604,18 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       await entry.persisting
       discard(entry)
     }
-    // Every directory an index of this namespace used, not only the caller's.
-    const dirs = new Set([config.dir, ...detached.map((entry) => entry.dir)])
-    dirs.delete(undefined)
-    // Snapshots exist only where the addon and the file system loaded.
-    const { files } = runtime
-    if (dirs.size === 0 || !runtime.native.module || !files) return
-    for (const dir of dirs as Set<string>) {
-      const store = createSnapshotStore(dir, coreKey, files)
+    // Every directory an index of this namespace used or a RAG on the core
+    // claims, each through the file system that writes it.
+    const stores = new Map<string, SnapshotStore>()
+    for (const entry of detached) {
+      if (entry.dir !== undefined && entry.store) stores.set(entry.dir, entry.store)
+    }
+    for (const [dir, held] of claims) {
+      if (!stores.has(dir) && held.files) {
+        stores.set(dir, createSnapshotStore(dir, coreKey, held.files))
+      }
+    }
+    for (const store of stores.values()) {
       await onDisk(namespace, () => store.remove(namespace, createdAt))
     }
   }
@@ -656,7 +685,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     return { mode: 'index', revision: entry.revision, snapshot }
   }
 
-  return { open, status, prune, apply, drop, close }
+  return { open, status, prune, apply, drop, claim, close }
 }
 
 const SETTLED = Promise.resolve(true)

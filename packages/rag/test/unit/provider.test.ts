@@ -3,8 +3,8 @@ import tmp from 'test-tmp'
 import Corestore from 'corestore'
 import fs from 'bare-fs'
 
-import { createRag } from '../../src/index.js'
-import { SCAN_ONLY, SPACE, doc, type Test } from './helpers.js'
+import { ERR_CODES, createRag } from '../../src/index.js'
+import { SCAN_ONLY, SPACE, doc, rejectsWithCode, type Test } from './helpers.js'
 import type {
   EmbeddedDocumentInput,
   IndexHandle,
@@ -12,7 +12,8 @@ import type {
   IndexProvider,
   IndexSearchResult,
   Rag,
-  SearchHit
+  SearchHit,
+  SnapshotFileSystem
 } from '../../src/types.js'
 
 const PADDING = 0xffffffffffffffffn
@@ -252,4 +253,76 @@ test('RAGs on one core with different providers keep separate indexes', async (t
   }
   t.is(a.calls.creates, 1)
   t.is(b.calls.creates, 1)
+})
+
+test('a snapshot directory takes one provider and fs per core', async (t) => {
+  const store = await openStore(t)
+  const dir = await tmp(t)
+  const files = fs.promises as unknown as SnapshotFileSystem
+  const first = createRag({
+    corestore: store,
+    index: { dir, provider: memoryProvider({ snapshots: true }).provider, fs: files }
+  })
+  await first.ready()
+
+  const otherFormat = createRag({
+    corestore: store,
+    index: { dir, provider: memoryProvider({ snapshots: true }).provider, fs: files }
+  })
+  await rejectsWithCode(t, otherFormat.ready(), ERR_CODES.INVALID_INPUT, 'another provider', /dir/)
+  const { provider } = memoryProvider({ snapshots: true })
+  const a = createRag({ corestore: store, index: { dir: await tmp(t), provider, fs: files } })
+  await a.ready()
+  const otherFs = { ...files } as SnapshotFileSystem
+  const b = createRag({ corestore: store, index: { dir: await tmp(t), provider, fs: otherFs } })
+  await b.ready()
+  t.pass('different directories are independent')
+
+  await first.close()
+  const reopened = createRag({
+    corestore: store,
+    index: { dir, provider: memoryProvider({ snapshots: true }).provider, fs: files }
+  })
+  await reopened.ready()
+  t.pass('the directory is free once its RAG closes')
+  for (const rag of [a, b, reopened]) await rag.close()
+})
+
+test('dropNamespace deletes snapshots through the fs that wrote them', async (t) => {
+  const store = await openStore(t)
+  const dir = await tmp(t)
+  const real = fs.promises as unknown as SnapshotFileSystem
+  const unlinked: string[] = []
+  const files: SnapshotFileSystem = {
+    mkdir: (path, options) => real.mkdir(path, options),
+    readFile: (path, encoding) => real.readFile(path, encoding),
+    writeFile: (path, data) => real.writeFile(path, data),
+    rename: (from, to) => real.rename(from, to),
+    unlink: (path) => {
+      unlinked.push(path)
+      return real.unlink(path)
+    }
+  }
+  const { provider } = memoryProvider({ snapshots: true })
+  const writer = createRag({
+    corestore: store,
+    index: { dir, provider, fs: files, snapshotEvery: 1 }
+  })
+  await writer.ready()
+  t.teardown(() => writer.close())
+  const { spaceId } = await writer.createNamespace({ name: 'ns', space: SPACE })
+  await writer.ingest({ namespace: 'ns', documents: ranked(spaceId, 2) })
+  await writer.search({ scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 1 })
+  unlinked.length = 0
+
+  const dropper = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
+  await dropper.ready()
+  t.teardown(() => dropper.close())
+  await dropper.dropNamespace({ name: 'ns' })
+  t.ok(
+    unlinked.some((path) => path.endsWith('.json')),
+    'the sidecar went through the writer fs'
+  )
+  const left = fs.readdirSync(dir).flatMap((core) => fs.readdirSync(`${dir}/${core}`))
+  t.alike(left, [], 'nothing left behind')
 })
