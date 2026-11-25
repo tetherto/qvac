@@ -47,6 +47,7 @@ import {
   unregisterCorestore
 } from '@/runtime/runtime-lifecycle'
 import type { DownloadHooks } from '@/handlers/load-model/types'
+import { validateCachedFile } from '@/handlers/load-model/cached-file'
 import { Buffer } from 'bare-buffer'
 
 const logger = getEngineLogger()
@@ -238,46 +239,6 @@ async function validateFileExistence(drive: Hyperdrive, file: string) {
     blocksDownloaded,
     totalBlocks,
     totalBytes
-  }
-}
-
-async function validateCachedFile(
-  modelPath: string,
-  modelFileName: string,
-  expectedSize: number,
-  expectedChecksum?: string,
-  hooks?: DownloadHooks
-): Promise<string | null> {
-  try {
-    await fsPromises.access(modelPath)
-
-    const localStats = await fsPromises.stat(modelPath)
-    const localSize = localStats.size
-
-    // For hyperdrive: only validate if file is complete
-    // Partial files are ignored - corestore state is the source of truth for resume
-    if (localSize === expectedSize) {
-      logger.info(`✅ Model cached with correct size: ${modelPath}`)
-
-      // Validate against the expected checksum, reusing the digest only for unchanged files
-      if (expectedChecksum && expectedChecksum.length === 64) {
-        const checksum = await measureChecksum(modelPath, hooks)
-        if (checksum !== expectedChecksum) {
-          throw new ChecksumValidationFailedError(
-            `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`
-          )
-        }
-      }
-      logger.info(`✅ Model already cached and size validated: ${modelPath}`)
-      return modelPath
-    }
-
-    // File exists but incomplete - will be overwritten during download
-    // Resume state will be determined by corestore blocks, not file size
-    return null
-  } catch {
-    // Model doesn't exist, need to download
-    return null
   }
 }
 

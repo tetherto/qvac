@@ -190,6 +190,9 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     ...(stats?.encoderUsedCoreml !== undefined && {
       encoderUsedCoreml: stats.encoderUsedCoreml
     }),
+    ...(stats?.decoderUsedCoreml !== undefined && {
+      decoderUsedCoreml: stats.decoderUsedCoreml
+    }),
     ...(stats?.aoscActive !== undefined && { aoscActive: stats.aoscActive }),
     // MOSS-Transcribe-Diarize reports its counters under its own names. Its
     // stage timings land on the shared encoder/decoder fields and its segment

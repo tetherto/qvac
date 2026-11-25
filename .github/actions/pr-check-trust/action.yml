@@ -23,6 +23,9 @@ inputs:
   labels:
     description: JSON array of the PR's label names
     default: ""
+  event:
+    description: The event to judge the run as; a PR build dispatched by Merge Guard passes workflow_run
+    default: ""
 
 outputs:
   allowed:
@@ -39,7 +42,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-        EVENT: ${{ github.event_name }}
+        EVENT: ${{ inputs.event || github.event_name }}
         ACTION: ${{ inputs.action }}
         HEAD_SHA: ${{ inputs.head-sha }}
         HEAD_REPO: ${{ inputs.head-repo }}

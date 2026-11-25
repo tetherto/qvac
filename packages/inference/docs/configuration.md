@@ -73,14 +73,31 @@ Offline TDT push streams, including Parakeet TDT v3, default to 30,000 ms and
 require at least 30,000 ms. Explicit SDK overrides must be positive. Full
 TranscribePsy EU uses its own default.
 
+Standard TDT batch and push-stream transcription falls back to ggml when a
+Core ML sidecar cannot safely handle the encoder input. A loaded sidecar does
+not guarantee that every request uses Core ML; check `encoderUsedCoreml` in the
+terminal statistics for actual use.
+
+A streaming decode window is independent of the size of PCM writes: callers can
+send small writes while the engine accumulates its supported window. Unsupported
+explicit TDT windows fail through the normal request error path instead of
+producing a truncated transcript.
+
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages
 itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
 25 European languages) loads the same way from one GGUF that embeds its CAFE
 adapters and language gate; `language` selects `en` (English trunk), `other`
 (non-English adapters) or `auto` (the gate routes the recording; also the default
-when omitted). It runs on ggml only: the EU-sub Core ML bundles do not contain its
-adapters. `longFormWindowFrames` and `longFormContextFrames` bound the offline
+when omitted). On macOS and iOS the loader also stages the model's own Core ML
+bundles from `qvac_models_compiled/ggml/transcribe-psy/2026-11-25/`: the registry
+publishes `-encoder-shared` (loaded on Darwin 24 or later: macOS 15, iOS 18) and
+`-decoder`, without `metadata.json`. The fixed `-encoder`, `-encoder-other` and
+`-encoder-gate` programs, which replace the shared one on older systems, and the
+FP32 `-flexible` programs are staged too once the registry lists them. Each
+bundle is optional and the model runs on ggml without them; the EU-sub bundles do
+not contain its adapters and are not used.
+`longFormWindowFrames` and `longFormContextFrames` bound the offline
 encoder window on long recordings in 80 ms encoder frames; the default `0` takes
 the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
 Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an
