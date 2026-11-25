@@ -10,13 +10,12 @@ import {
   generateShortHash,
   calculatePercentage
 } from '@/utils/index'
-import { measureChecksum } from '@/utils/checksum'
 import { validateAndJoinPath } from '@/utils/path-security'
 import {
   buildBlobBinding,
-  downloadSingleFileFromRegistry,
-  validateCachedFile
+  downloadSingleFileFromRegistry
 } from '@/handlers/load-model/registry-download-utils'
+import { validateCachedFile } from '@/handlers/load-model/cached-file'
 import { DownloadCancelledError, RegistryDownloadFailedError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import type { DownloadHooks } from '@/handlers/load-model/types'
@@ -248,18 +247,14 @@ async function checkLegacyOnnxCache(
 
   for (const file of files) {
     const filePath = getLegacyOnnxPath(cacheKey, file.targetName)
-
-    try {
-      const stats = await fsPromises.stat(filePath)
-      if (stats.size !== file.expectedSize) return null
-
-      if (file.sha256Checksum && file.sha256Checksum.length === 64) {
-        const checksum = await measureChecksum(filePath, hooks)
-        if (checksum !== file.sha256Checksum) return null
-      }
-    } catch {
-      return null
-    }
+    const cached = await validateCachedFile(
+      filePath,
+      file.targetName,
+      file.expectedSize,
+      file.sha256Checksum,
+      hooks
+    )
+    if (!cached) return null
 
     if (file.primary === true) {
       primaryPath = filePath
@@ -306,18 +301,14 @@ async function checkLegacyFlatCache(
 
   for (const file of files) {
     const flatPath = getSingleFileCachePath(file.registryPath)
-
-    try {
-      const stats = await fsPromises.stat(flatPath)
-      if (stats.size !== file.expectedSize) return null
-
-      if (file.sha256Checksum && file.sha256Checksum.length === 64) {
-        const checksum = await measureChecksum(flatPath, hooks)
-        if (checksum !== file.sha256Checksum) return null
-      }
-    } catch {
-      return null
-    }
+    const cached = await validateCachedFile(
+      flatPath,
+      file.targetName,
+      file.expectedSize,
+      file.sha256Checksum,
+      hooks
+    )
+    if (!cached) return null
 
     if (file.key === primaryKey) {
       primaryPath = flatPath

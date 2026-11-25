@@ -1,4 +1,5 @@
 import test from 'brittle'
+import type { TranscribeStreamRequest } from '@qvac/inference/surface'
 import {
   createTranscribeStreamSession,
   processLine,
@@ -12,8 +13,12 @@ interface FakeRequestStream {
   destroy(): void
 }
 
-function createDuplexFactory(lines: string[]) {
-  return async function () {
+function createDuplexFactory(
+  lines: string[],
+  onRequest?: (request: TranscribeStreamRequest) => void
+) {
+  return async function (request: TranscribeStreamRequest) {
+    onRequest?.(request)
     const requestStream: FakeRequestStream = {
       write() {},
       end() {},
@@ -88,6 +93,50 @@ test('transcribe stream session rejects stats when the response stream fails', a
       t.ok(outcome.reason instanceof TranscriptionFailedError)
     }
   }
+})
+
+test('TDT window rejection reaches the stream and terminal promises', async (t) => {
+  const chunkMs = 1000
+  const message = 'Offline TDT push streams require at least 30000 ms'
+  const session = await createTranscribeStreamSession(
+    { modelId: 'parakeet', parakeetStreamingConfig: { chunkMs, emitPartials: false } },
+    undefined,
+    processLine,
+    'TranscribeStreamSession',
+    createDuplexFactory([JSON.stringify({ type: 'error', message })], (request) => {
+      t.alike(
+        request.parakeetStreamingConfig,
+        { chunkMs, emitPartials: false },
+        'the SDK forwards the requested decode window and partial-output setting'
+      )
+    }) as never
+  )
+
+  const outcomes = await Promise.allSettled([collect(session), session.stats, session.diagnostics])
+  for (const outcome of outcomes) {
+    t.is(outcome.status, 'rejected')
+    if (outcome.status === 'rejected') {
+      t.ok(outcome.reason instanceof TranscriptionFailedError)
+      t.ok(outcome.reason.message.includes(message), 'the minimum window reaches the caller')
+    }
+  }
+})
+
+test('transcribe stream session preserves Core ML fallback statistics', async (t) => {
+  const stats = { encoderOnCoreml: 1, encoderUsedCoreml: 0 }
+  const session = await createTranscribeStreamSession(
+    { modelId: 'parakeet' },
+    undefined,
+    processLine,
+    'TranscribeStreamSession',
+    createDuplexFactory([
+      JSON.stringify({ type: 'transcribeStream', text: 'complete transcript' }),
+      JSON.stringify({ type: 'transcribeStream', done: true, stats })
+    ]) as never
+  )
+
+  t.alike(await collect(session), ['complete transcript'])
+  t.alike(await session.stats, stats)
 })
 
 test('transcribe stream session resolves undefined stats after a premature close', async (t) => {

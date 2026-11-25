@@ -32,6 +32,10 @@ on:
         description: Build consumers against their providers' released npm packages, not the providers' source
         type: boolean
         default: false
+      all-on:
+        description: Comma-separated path globs whose change selects every tagged package, e.g. shared CI files
+        type: string
+        default: ""
       event:
         description: A pull_request event payload rebuilt from the API, for a workflow_run build; empty reads the run's own
         type: string
@@ -41,7 +45,7 @@ on:
         description: JSON object of target to matrix rows
         value: ${{ jobs.select.outputs.matrices }}
       projects:
-        description: JSON array of selected packages with their gate key
+        description: JSON array of selected packages with their status key
         value: ${{ jobs.select.outputs.projects }}
       runners:
         description: JSON map of reusable-runner-names.yml runner key to label
@@ -96,6 +100,7 @@ jobs:
           LABELS: ${{ inputs.labels }}
           TAGS: ${{ inputs.tags }}
           RELEASED_PROVIDERS: ${{ inputs.released-providers }}
+          ALL_ON: ${{ inputs.all-on }}
           PR_EVENT: ${{ inputs.event }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
