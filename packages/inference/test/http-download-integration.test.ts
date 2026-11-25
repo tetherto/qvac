@@ -39,14 +39,14 @@ interface Server {
   base: string
   served206: () => boolean
   requestedRange: () => boolean
-  truncated: () => boolean
+  shortRangeRequests: () => number
   close: () => Promise<void>
 }
 
 async function startServer(): Promise<Server> {
   let sent206 = false
   let sawRange = false
-  let truncated = false
+  let shortRangeRequests = 0
   const server = http.createServer((req, res) => {
     const url = req.url ?? '/'
     if (url === '/redirect') {
@@ -66,10 +66,18 @@ async function startServer(): Promise<Server> {
       res.end(CONTENT)
       return
     }
-    if (url === '/truncate-once' && range === undefined && !truncated) {
-      truncated = true
-      res.writeHead(200, { 'content-length': String(CONTENT.length) })
-      res.end(CONTENT.subarray(0, CONTENT.length / 2))
+    if (url === '/short-range-once' && range !== undefined) {
+      shortRangeRequests++
+      const match = /bytes=(\d+)-/.exec(String(range))
+      const start = match && match[1] ? parseInt(match[1]) : 0
+      // The first reply ends cleanly at half of what is left: its Content-Range
+      // still names the whole file, so the transfer is short of its total.
+      const end = shortRangeRequests === 1 ? start + (CONTENT.length - start) / 2 : CONTENT.length
+      res.writeHead(206, {
+        'content-range': `bytes ${start}-${end - 1}/${CONTENT.length}`,
+        'content-length': String(end - start)
+      })
+      res.end(CONTENT.subarray(start, end))
       return
     }
     if (url === '/slow-cancel' && range === undefined) {
@@ -99,7 +107,7 @@ async function startServer(): Promise<Server> {
     base: `http://127.0.0.1:${port}`,
     served206: () => sent206,
     requestedRange: () => sawRange,
-    truncated: () => truncated,
+    shortRangeRequests: () => shortRangeRequests,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   }
 }
@@ -173,7 +181,7 @@ test('downloadModelFromHttp: replaces a partial when the server ignores Range wi
   )
 })
 
-test('downloadHttpFileToPath: retries a cleanly truncated response before publishing', async (t) => {
+test('downloadHttpFileToPath: resumes a range reply that ends short of its declared total', async (t) => {
   const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })
   fs.mkdirSync(cacheDir, { recursive: true })
@@ -183,16 +191,17 @@ test('downloadHttpFileToPath: retries a cleanly truncated response before publis
     fs.rmSync(cacheDir, { recursive: true, force: true })
   })
 
-  const finalPath = path.join(cacheDir, 'truncated.gguf')
+  const finalPath = path.join(cacheDir, 'short-range.gguf')
+  fs.writeFileSync(partialDownloadPath(finalPath), CONTENT.subarray(0, 50_000))
   await downloadHttpFileToPath({
-    url: `${server.base}/truncate-once`,
+    url: `${server.base}/short-range-once`,
     finalPath,
-    downloadKey: 'truncated',
+    downloadKey: 'short-range',
     expectedSize: CONTENT.length,
     expectedChecksum: sha256(CONTENT)
   })
 
-  t.ok(server.truncated(), 'the first response ended before its declared length')
+  t.is(server.shortRangeRequests(), 2, 'the short reply was resumed with a second range request')
   t.ok(
     bytesEqual(fs.readFileSync(finalPath) as Buffer, CONTENT),
     'only the verified file was published'
@@ -249,10 +258,15 @@ test('downloadHttpFileToPath: cancellation publishes nothing and a later call re
       expectedChecksum: sha256(CONTENT),
       signal: controller.signal,
       progressCallback: () => {
-        if (!cancelled) {
-          cancelled = true
-          setTimeout(() => controller.abort(undefined), 0)
+        if (cancelled) return
+        cancelled = true
+        // Cancel once the first bytes are on disk, so there is a partial to resume.
+        const partial = partialDownloadPath(finalPath)
+        const abortOnceWritten = () => {
+          if (fs.existsSync(partial) && fs.statSync(partial).size > 0) controller.abort(undefined)
+          else setTimeout(abortOnceWritten, 1)
         }
+        abortOnceWritten()
       }
     }),
     DownloadCancelledError
