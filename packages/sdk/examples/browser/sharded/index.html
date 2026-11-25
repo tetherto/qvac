@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sharded model · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>Sharded model</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">First shard URL (<code>*-00001-of-000NN.gguf</code>)</label>
+        <input id="model-url" type="url" />
+        <label for="model-files">Or every shard of a local split GGUF</label>
+        <input id="model-files" type="file" accept=".gguf" multiple />
+        <div class="row">
+          <button id="load">Load model</button>
+          <button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="detail">
+          From a URL, the SDK downloads every shard. Picked files are mounted together, so the
+          shards stay siblings.
+        </p>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Run a completion</h2>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="2">
+What are the benefits of sharding large language models?</textarea>
+        <button id="run" disabled>Run completion</button>
+        <pre id="output"></pre>
+        <pre id="stats"></pre>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

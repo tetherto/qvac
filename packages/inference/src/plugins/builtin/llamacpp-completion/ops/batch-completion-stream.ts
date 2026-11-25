@@ -23,6 +23,7 @@ import {
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
 import { resolveDeferredTools, toWireTool, type DeferredResolution } from '@/utils/tools/defer'
+import { resolveMediaContent } from '@/plugins/builtin/llamacpp-completion/ops/media-content'
 
 const logger = getEngineLogger()
 
@@ -76,12 +77,19 @@ type BatchPromptRenderOptions = {
   modelConfig: unknown
 }
 
-function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
+async function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
   const run = model.run.bind(model) as unknown as (
     prompts: AddonBatchPrompt[]
   ) => Promise<AddonBatchResponse>
 
-  return run(prompts)
+  return run(
+    await Promise.all(
+      prompts.map(async (prompt) => ({
+        ...prompt,
+        prompt: await resolveMediaContent(prompt.prompt)
+      }))
+    )
+  )
 }
 
 function mergeGenerationParams(

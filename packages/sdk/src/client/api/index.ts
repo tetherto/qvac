@@ -1,4 +1,5 @@
 export { loadModel } from './load-model'
+export { mountBrowserFile, mountBrowserFiles } from './mount-browser-file'
 export { downloadAsset } from './download-asset'
 export { batchCompletion } from './batch-completion'
 export { completion } from './completion-stream'

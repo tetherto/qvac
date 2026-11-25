@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tool calling and reasoning · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>Tool calling and reasoning</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <label for="model-files">Or a local GGUF file</label>
+        <input id="model-files" type="file" accept=".gguf" />
+        <div class="row">
+          <button id="load">Load model</button>
+          <button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="detail">
+          Loads with <code>tools: true</code>. Qwen3.5 models use the built-in Qwen3.5 tool dialect.
+        </p>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Ask a question that needs tools</h2>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="2">
+What's the weather in Tokyo and my horoscope for Aquarius?</textarea>
+        <button id="run" disabled>Run with tools</button>
+        <h3>Thinking</h3>
+        <pre id="thinking"></pre>
+        <h3>Tool calls and results</h3>
+        <pre id="tool-calls"></pre>
+        <h3>Answer</h3>
+        <pre id="output"></pre>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

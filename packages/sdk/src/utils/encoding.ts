@@ -24,3 +24,9 @@ export function encodeBase64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
   return btoa(binary)
 }
+
+/** Decodes RPC bytes in runtimes where messages are plain `Uint8Array`s. */
+export function decodeUtf8(bytes: Uint8Array): string {
+  if (typeof TextDecoder !== 'undefined') return new TextDecoder().decode(bytes)
+  return (bytes as Uint8Array & { toString(encoding: string): string }).toString('utf8')
+}

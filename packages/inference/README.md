@@ -1,6 +1,6 @@
 # @qvac/inference
 
-The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process without a worker or subprocess. Native GGML RPC is available as an opt-in distributed GPU path. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
+The inference engine of the QVAC SDK. It runs directly on the [Bare runtime](https://bare.pears.com), and its browser entry runs in a Web Worker with browser-compatible addon packages. Native GGML RPC remains an opt-in Bare capability. You register the inference engines you need and call the same API surface as `@qvac/sdk`.
 
 > _Part of the **QVAC** ecosystem_
 >
@@ -11,13 +11,16 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 ## Why this exists
 
-`@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
+`@qvac/inference` is the engine layer of the SDK, written in TypeScript: the client API, request engine, and plugin system. `@qvac/sdk` launches it in the runtime-specific worker used by Node, Electron, Expo, Pear, or a browser. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
 
 `@qvac/inference` ships no plugins by default and has no required model or RPC server addon dependencies. Model addons are optional peers; RPC serving uses an explicitly registered provider. You install only the addon packages your app registers, so the resulting binary scales with the engines and services you actually assemble.
 
 ## Requirements
 
-- A Bare runtime (see the `bare` version in `engines`). The package ships compiled JavaScript with type declarations; when working from source, run `npm run build` first.
+- Bare consumers need the `bare` version declared in `engines`.
+- Browser consumers need OPFS, Web Locks, `fetch`, and a Dedicated Worker. Call `prepareBrowserRuntime()` from `@qvac/inference/browser` before initializing the engine.
+
+The package ships compiled JavaScript with type declarations; when working from source, run `npm run build` first.
 
 ## Install
 

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LoRA adapter · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>LoRA adapter</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <label for="model-files">Or a local GGUF file</label>
+        <input id="model-files" type="file" accept=".gguf" />
+        <label for="adapter-path">Adapter path in browser storage (OPFS)</label>
+        <input id="adapter-path" type="text" />
+        <label for="adapter-files">Or a local LoRA adapter GGUF</label>
+        <input id="adapter-files" type="file" accept=".gguf" />
+        <div class="row">
+          <button id="load">Load model</button>
+          <button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="detail">
+          The default adapter path is where the finetuning page saves its adapter. An adapter must
+          be trained for the loaded model.
+        </p>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Compare</h2>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="2">What is the capital of Japan?</textarea>
+        <button id="run" disabled>Run with and without the adapter</button>
+        <div class="columns">
+          <div>
+            <h3>Base model</h3>
+            <pre id="base-output"></pre>
+          </div>
+          <div>
+            <h3>With adapter</h3>
+            <pre id="lora-output"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

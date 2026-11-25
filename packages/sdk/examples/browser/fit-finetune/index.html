@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Model fit and finetuning · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>Model fit and finetuning</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Check the fit before loading</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <button id="fit">Assess model fit</button>
+        <pre id="fit-result"></pre>
+        <p class="detail">
+          The fit is sized from a model's registry description, which a URL does not have, and the
+          browser cannot read free GPU memory, so the verdict is <code>unknown</code> with a
+          <code>reason</code>. Show it as "can't say", never as "no".
+        </p>
+      </section>
+
+      <section>
+        <h2>2. Finetune a LoRA adapter</h2>
+        <p class="detail">
+          Loads the model, trains a small adapter on a built-in dataset of short answers, and saves
+          it in browser storage. Training may fall back to the CPU for operations WebGPU lacks, so
+          it can take 20 minutes or more.
+        </p>
+        <div class="row">
+          <button id="finetune">Load and finetune</button>
+          <button id="cancel" class="secondary" disabled>Cancel</button>
+        </div>
+        <pre id="progress"></pre>
+        <pre id="result"></pre>
+        <p class="detail">
+          Then open the <a href="../lora/">LoRA page</a> to compare answers with it.
+        </p>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

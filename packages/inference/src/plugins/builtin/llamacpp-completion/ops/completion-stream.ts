@@ -22,6 +22,7 @@ import {
   resolveCacheFilePath
 } from '@/plugins/ops/kv-cache-utils'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
+import { resolveMediaContent } from '@/plugins/builtin/llamacpp-completion/ops/media-content'
 import { shouldCommitCachedTurn } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 import {
   createKvCacheSession,
@@ -181,8 +182,8 @@ function transformMessage(message: HistoryMsg | Tool): ChatHistory[] {
   return transformed
 }
 
-function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOptions) {
-  return model.run(prompt, opts)
+async function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOptions) {
+  return model.run(await resolveMediaContent(prompt), opts)
 }
 
 let warnedAttachments = false

@@ -29,7 +29,9 @@ import {
   close as closeRPC,
   createDuplexSession,
   getWorkerLifeSignal,
-  notifyChannelClosed
+  notifyChannelClosed,
+  mountBrowserFile as mountBrowserFileRPC,
+  mountBrowserFiles as mountBrowserFilesRPC
 } from '#rpc'
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
 import {
@@ -54,6 +56,7 @@ import {
 const logger = getClientLogger()
 
 let rpcInstance: Promise<RPC> | null = null
+let closePromise: Promise<void> | null = null
 let commandCounter = 0
 let firstConnectionPending = true
 
@@ -884,7 +887,35 @@ async function duplexProfiled<T extends Request>(
 /** Owner shutdown. Every session handle opened on this runtime ends with it. */
 export async function close() {
   endAllSessions('shutdown')
-  if (!rpcInstance) return
-  invalidateRPCInstance()
-  await closeRPC()
+  if (closePromise) return closePromise
+  if (!rpcInstance && !getWorkerLifeSignal()) return
+
+  const closingRPC = rpcInstance
+  if (closingRPC) invalidateRPCInstance()
+  const closing = (async () => {
+    try {
+      await closeRPC()
+    } catch (error) {
+      const lifeSignal = getWorkerLifeSignal()
+      if (closingRPC && !rpcInstance && lifeSignal && !lifeSignal.aborted) {
+        rpcInstance = closingRPC
+      }
+      throw error
+    }
+  })()
+  closePromise = closing
+
+  try {
+    await closing
+  } finally {
+    if (closePromise === closing) closePromise = null
+  }
+}
+
+export async function mountBrowserFile(file: File): Promise<string> {
+  return mountBrowserFileRPC(file)
+}
+
+export async function mountBrowserFiles(files: readonly File[]): Promise<string[]> {
+  return mountBrowserFilesRPC(files)
 }

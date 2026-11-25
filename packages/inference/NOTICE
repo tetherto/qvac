@@ -1021,6 +1021,11 @@ JavaScript Dependencies
   which-runtime@1.4.0
     https://github.com/holepunchto/which-runtime
 
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  ieee754@1.2.1
+    https://github.com/feross/ieee754
+
 --- isc (ISC License) ---
 
   bits-to-bytes@1.3.0
@@ -1038,12 +1043,18 @@ JavaScript Dependencies
 
 --- mit (MIT License) ---
 
+  @noble/hashes@2.4.0
+    https://github.com/paulmillr/noble-hashes
+  base64-js@1.5.1
+    https://github.com/beatgammit/base64-js
   big-sparse-array@1.0.3
     https://github.com/mafintosh/big-sparse-array
   binary-stream-equals@1.0.0
     https://github.com/mafintosh/binary-stream-equals
   bogon@1.3.0
     https://github.com/mafintosh/bogon
+  buffer@6.0.3
+    https://github.com/feross/buffer
   codecs@3.1.0
     https://github.com/mafintosh/codecs
   corestore@7.16.1
@@ -1084,6 +1095,8 @@ JavaScript Dependencies
     https://github.com/mafintosh/mutexify
   nat-sampler@1.0.1
     https://github.com/mafintosh/nat-sampler
+  path-browserify@1.0.1
+    https://github.com/browserify/path-browserify
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
   protomux@3.13.1

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QVAC browser examples</title>
+    <link rel="stylesheet" href="./shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>Browser examples</h1>
+        </div>
+        <div class="readiness">
+          <span id="readiness" class="status pending">Checking WebGPU…</span>
+          <button id="webgpu-help" class="secondary" hidden>Browser settings</button>
+        </div>
+      </header>
+      <p class="detail">
+        Each page runs one SDK feature in a Dedicated Worker on WebGPU. Models download once into
+        the browser's private storage (OPFS) and are reused by every page.
+      </p>
+      <ul class="pages">
+        <li>
+          <a href="./completion/">
+            <strong>Completion</strong>Streaming, generation parameters, stats and the backend
+            device.
+          </a>
+        </li>
+        <li>
+          <a href="./cancel/">
+            <strong>Cancel</strong>Cancel a run by request id, then run again on the same model.
+          </a>
+        </li>
+        <li>
+          <a href="./tools/">
+            <strong>Tool calling and reasoning</strong>A tool round trip with Qwen3.5, with its
+            thinking shown separately.
+          </a>
+        </li>
+        <li>
+          <a href="./sharded/">
+            <strong>Sharded model</strong>Load a split GGUF from a URL or from picked files.
+          </a>
+        </li>
+        <li>
+          <a href="./multimodal/">
+            <strong>Multimodal</strong>Ask about an image, with a projection model.
+          </a>
+        </li>
+        <li>
+          <a href="./lora/">
+            <strong>LoRA adapter</strong>The same prompt with and without an adapter.
+          </a>
+        </li>
+        <li>
+          <a href="./speculative/">
+            <strong>Speculative decoding</strong>An external MTP draft model, with accepted-token
+            stats.
+          </a>
+        </li>
+        <li>
+          <a href="./batch/">
+            <strong>Batch completion</strong>Three prompts decoded together with
+            <code>parallel: 2</code>.
+          </a>
+        </li>
+        <li>
+          <a href="./kv-cache/">
+            <strong>KV cache on disk</strong>Turn 1, reload the page, turn 2 reuses the saved cache.
+          </a>
+        </li>
+        <li>
+          <a href="./fit-finetune/">
+            <strong>Model fit and finetuning</strong><code>assessModelFit</code>, then a short
+            finetune that saves a LoRA adapter.
+          </a>
+        </li>
+      </ul>
+    </main>
+    <dialog id="webgpu-dialog">
+      <form method="dialog">
+        <div class="row dialog-heading">
+          <h2>Enable Vulkan in Chrome on Linux</h2>
+          <button class="secondary" value="close">Close</button>
+        </div>
+        <p>
+          Chrome did not expose a WebGPU adapter with <code>shader-f16</code>. A page cannot change
+          browser settings.
+        </p>
+        <ol>
+          <li>Open <code>chrome://flags/#enable-vulkan</code> in the address bar.</li>
+          <li>Set <strong>Vulkan</strong> to <strong>Enabled</strong>.</li>
+          <li>Relaunch Chrome and reopen this page.</li>
+        </ol>
+        <p class="detail">Do not enable Unsafe WebGPU, Ignore GPU blocklist, or Dawn overrides.</p>
+      </form>
+    </dialog>
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>

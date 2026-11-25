@@ -286,3 +286,11 @@ export async function createDuplexSession(payload: string, commandId: number) {
   requestStream.write(new TextEncoder().encode(payload))
   return { requestStream, responseStream }
 }
+
+export function mountBrowserFile(_file: File): never {
+  throw new Error('mountBrowserFile is only available in a browser.')
+}
+
+export function mountBrowserFiles(_files: readonly File[]): never {
+  throw new Error('mountBrowserFiles is only available in a browser.')
+}

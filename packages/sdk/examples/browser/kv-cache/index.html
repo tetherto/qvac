@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KV cache on disk · QVAC browser</title>
+    <link rel="stylesheet" href="../shared/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav><a href="../">← All examples</a></nav>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC SDK in the browser</p>
+          <h1>KV cache on disk</h1>
+        </div>
+        <span id="readiness" class="status pending">Checking WebGPU…</span>
+      </header>
+
+      <section>
+        <h2>1. Load a model</h2>
+        <label for="model-url">GGUF URL</label>
+        <input id="model-url" type="url" />
+        <div class="row">
+          <button id="load">Load model</button>
+          <button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="detail"></p>
+        <p id="load-status" class="detail"></p>
+      </section>
+
+      <section>
+        <h2>2. Reuse a conversation across a page reload</h2>
+        <p class="detail">
+          Turn 1 runs with <code>kvCache: true</code>, and the SDK saves its cache to browser
+          storage. After a reload, turn 2 continues the conversation from that saved cache, so only
+          the new message is processed. The control runs turn 2 without a cache.
+        </p>
+        <div class="row">
+          <button id="turn1" disabled>1. Run turn 1</button>
+          <button id="reload" class="secondary">2. Reload page</button>
+          <button id="turn2" disabled>3. Run turn 2</button>
+          <button id="control" disabled>4. Control, no cache</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Prompt tokens processed</th>
+              <th>First token</th>
+              <th>Answer</th>
+            </tr>
+          </thead>
+          <tbody id="runs"></tbody>
+        </table>
+        <button id="clear" class="secondary">Delete saved caches</button>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
