@@ -31,6 +31,7 @@ import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry
 import {
   findCoremlCompanionSet,
   findLocallyCachedCoremlCompanionSet,
+  getCoremlOsSelection,
   getCoremlSidecarSpec,
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
@@ -486,7 +487,11 @@ export async function downloadModelFromRegistry(
               shouldClearCache: ctx.shouldClearCache
             })
             try {
-              await writeCachedCoremlCompanionSet(coremlSet)
+              await writeCachedCoremlCompanionSet(
+                coremlSet,
+                undefined,
+                getCoremlOsSelection(modelMetadata, platform)
+              )
             } catch (error) {
               logger.warn('Unable to save Core ML cache metadata', { registryPath, error })
             }

@@ -273,17 +273,33 @@ export function selectCoremlBundles(
   const staged: BundleSpec[] = []
   for (const bundle of complete) {
     if (!bundle.replaces) continue
-    const loads =
-      bundle.minDarwinMajor === undefined ||
-      darwinMajor === undefined ||
-      darwinMajor >= bundle.minDarwinMajor
-    if (loads) bundle.replaces.forEach((suffix) => replaced.add(suffix))
+    if (osLoads(bundle, darwinMajor)) bundle.replaces.forEach((suffix) => replaced.add(suffix))
     else replaced.add(bundle.targetSuffix)
   }
   for (const bundle of complete) {
     if (!replaced.has(bundle.targetSuffix)) staged.push(bundle)
   }
   return staged
+}
+
+function osLoads(bundle: BundleSpec, darwinMajor: number | undefined): boolean {
+  return (
+    bundle.minDarwinMajor === undefined ||
+    darwinMajor === undefined ||
+    darwinMajor >= bundle.minDarwinMajor
+  )
+}
+
+/**
+ * The part of the bundle selection that depends on the OS: the replacing
+ * bundles this OS loads, or `''` for a family with none. A set staged under
+ * one selection is stale under another, such as after an upgrade to macOS 15.
+ */
+export function coremlOsSelection(bundles: readonly BundleSpec[], darwinMajor?: number): string {
+  return bundles
+    .filter((bundle) => bundle.replaces && osLoads(bundle, darwinMajor))
+    .map((bundle) => bundle.targetSuffix)
+    .join(',')
 }
 
 /** The string a Core ML companion set's key is the short hash of. */

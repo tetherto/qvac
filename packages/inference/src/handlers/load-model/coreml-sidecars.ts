@@ -4,14 +4,16 @@ import { generateShortHash } from '@/utils/formatting'
 import {
   COREML_COMPONENTS,
   coremlBundleComponents,
+  coremlOsSelection,
   getCatalogCoremlSidecars,
   getCoremlSetKeySource,
   getCoremlSidecarSpec,
+  getSingleFileCacheName,
   selectCoremlBundles,
   type CoremlSidecarSpec
 } from '@/utils/cache/layout'
 import { getDarwinMajor } from '@/utils/darwin-version'
-import { getModelsCacheDir } from '@/utils/cache/paths'
+import { getModelsCacheDir, hasFileOfSize } from '@/utils/cache/paths'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
@@ -40,7 +42,9 @@ const cachedFileSchema = z.object({
 const cachedSetSchema = z.object({
   setKey: z.string(),
   primaryKey: z.literal('modelPath'),
-  files: z.array(cachedFileSchema)
+  files: z.array(cachedFileSchema),
+  // The OS-dependent bundle choice the set was staged under; absent for ''.
+  osSelection: z.string().optional()
 })
 
 /**
@@ -161,10 +165,16 @@ function isValidCachedSet(
   return true
 }
 
+/**
+ * The set saved when the model's bundles were last staged from live registry
+ * metadata. A set staged under another OS-dependent choice is not reused: a
+ * device that staged the fixed encoders on macOS 14 looks again on macOS 15.
+ */
 export async function readCachedCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined,
-  cacheDir = getModelsCacheDir()
+  cacheDir = getModelsCacheDir(),
+  darwinMajor = getDarwinMajor(platform)
 ): Promise<CompanionSet | undefined> {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
@@ -172,20 +182,36 @@ export async function readCachedCoremlCompanionSet(
   try {
     const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, spec, cacheDir), 'utf8')
     const parsed = cachedSetSchema.safeParse(JSON.parse(raw))
-    if (!parsed.success || !isValidCachedSet(parsed.data, model, spec)) return undefined
-    return parsed.data
+    if (!parsed.success) return undefined
+    const { osSelection = '', ...set } = parsed.data
+    if (osSelection !== coremlOsSelection(spec.bundles, darwinMajor)) return undefined
+    return isValidCachedSet(set, model, spec) ? set : undefined
   } catch {
     return undefined
   }
 }
 
+/** The OS-dependent bundle choice for `model` on this device, saved with its staged set. */
+export function getCoremlOsSelection(
+  model: RegistryItem,
+  platform: string | undefined,
+  darwinMajor = getDarwinMajor(platform)
+): string {
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? coremlOsSelection(spec.bundles, darwinMajor) : ''
+}
+
 export async function writeCachedCoremlCompanionSet(
   set: CompanionSet,
-  cacheDir = getModelsCacheDir()
+  cacheDir = getModelsCacheDir(),
+  osSelection = ''
 ): Promise<void> {
   const setDir = validateAndJoinPath(cacheDir, 'sets', set.setKey)
   await fsPromises.mkdir(setDir, { recursive: true })
-  await fsPromises.writeFile(validateAndJoinPath(setDir, CACHE_METADATA_NAME), JSON.stringify(set))
+  await fsPromises.writeFile(
+    validateAndJoinPath(setDir, CACHE_METADATA_NAME),
+    JSON.stringify(osSelection === '' ? set : { ...set, osSelection })
+  )
 }
 
 export function findCatalogCoremlCompanionSet(
@@ -220,7 +246,7 @@ export async function findLocallyCachedCoremlCompanionSet(
   darwinMajor = getDarwinMajor(platform)
 ): Promise<CompanionSet | undefined> {
   const set =
-    (await readCachedCoremlCompanionSet(model, platform, cacheDir)) ??
+    (await readCachedCoremlCompanionSet(model, platform, cacheDir, darwinMajor)) ??
     findCatalogCoremlCompanionSet(model, platform, darwinMajor)
   if (!set) return undefined
 
@@ -234,6 +260,33 @@ export async function findLocallyCachedCoremlCompanionSet(
     }
   }
   return set
+}
+
+/**
+ * Where the loader keeps a Core ML family's model when the catalog does not
+ * list its bundles: the set it staged from live registry metadata, or the GGUF
+ * alone when the registry had no bundles for it then. `undefined` when neither
+ * is fully on disk, and for every other model.
+ */
+export async function findCachedLiveCoremlModelPath(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir(),
+  darwinMajor = getDarwinMajor(platform)
+): Promise<string | undefined> {
+  if (!getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)) return undefined
+
+  const set = await findLocallyCachedCoremlCompanionSet(model, platform, cacheDir, darwinMajor)
+  const primary = set?.files.find((file) => file.key === set.primaryKey)
+  if (set && primary) {
+    return validateAndJoinPath(cacheDir, 'sets', set.setKey, primary.targetName)
+  }
+
+  const single = validateAndJoinPath(
+    cacheDir,
+    getSingleFileCacheName(model.registryPath, generateShortHash)
+  )
+  return (await hasFileOfSize(single, model.expectedSize)) ? single : undefined
 }
 
 function createCompanionSet(

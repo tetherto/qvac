@@ -20,6 +20,7 @@ import {
   getSingleFileCacheName
 } from '@/utils/cache/layout'
 import { hasFileOfSize } from '@/utils/cache/paths'
+import { findCachedLiveCoremlModelPath } from '@/handlers/load-model/coreml-sidecars'
 import { getDarwinMajor } from '@/utils/darwin-version'
 import { generateShortHash } from '@/utils/formatting'
 import { joinWithinBase } from '@/utils/path-security'
@@ -109,8 +110,11 @@ async function cachedCatalogPath(entry: RegistryItem): Promise<string | undefine
   if (flat !== undefined) return flat
 
   const { platform } = getRuntimeContext()
-  const layout = getModelCacheLayout(entry, platform, generateShortHash, getDarwinMajor(platform))
-  if (layout === undefined) return undefined
+  const darwinMajor = getDarwinMajor(platform)
+  const layout = getModelCacheLayout(entry, platform, generateShortHash, darwinMajor)
+  if (layout === undefined) {
+    return await findCachedLiveCoremlModelPath(entry, platform, cacheDir, darwinMajor)
+  }
 
   for (const file of layout.files) {
     if (!(await hasFileOfSize(joinWithinBase(cacheDir, file.path), file.size))) return undefined

@@ -12,11 +12,15 @@ import {
   getCoremlSidecarSpec,
   getRegistryModelPlatformRefusal,
   readCachedCoremlCompanionSet,
-  writeCachedCoremlCompanionSet
+  writeCachedCoremlCompanionSet,
+  findCachedLiveCoremlModelPath,
+  getCoremlOsSelection
 } from '@/handlers/load-model/coreml-sidecars'
+import { generateShortHash } from '@/utils/formatting'
 import { getDarwinMajor } from '@/utils/darwin-version'
 import {
   getCoremlSidecarSpec as getLayoutSidecarSpec,
+  getSingleFileCacheName,
   selectCoremlBundles
 } from '@/utils/cache/layout'
 
@@ -656,8 +660,9 @@ test('Core ML sidecars: a cached full EU set without metadata.json is reused', a
     'darwin',
     24
   )
-  await writeCachedCoremlCompanionSet(set!, cacheDir)
-  const cached = await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir)
+  const selection = getCoremlOsSelection(TRANSCRIBEPSY_EU, 'darwin', 24)
+  await writeCachedCoremlCompanionSet(set!, cacheDir, selection)
+  const cached = await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24)
   t.alike(
     cached?.files.map((file) => file.targetName),
     set!.files.map((file) => file.targetName),
@@ -669,6 +674,88 @@ test('Core ML sidecars: a cached full EU set without metadata.json is reused', a
     ...set!,
     files: set!.files.filter((file) => file.targetName !== `${EU}-decoder.mlmodelc/model.mil`)
   }
-  await writeCachedCoremlCompanionSet(broken, cacheDir)
-  t.absent(await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir))
+  await writeCachedCoremlCompanionSet(broken, cacheDir, selection)
+  t.absent(await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24))
+})
+
+test('Core ML sidecars: a set staged before an OS upgrade is looked up again', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-coreml-cache-'))
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const registry = client(publishedEuBundles([`${EU}-encoder-shared`, `${EU}-decoder`]))
+
+  // macOS 14 stages the decoder alone and saves that choice with the set.
+  const older = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 23)
+  await writeCachedCoremlCompanionSet(
+    older!,
+    cacheDir,
+    getCoremlOsSelection(TRANSCRIBEPSY_EU, 'darwin', 23)
+  )
+  t.ok(
+    await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 23),
+    'reused on the same OS'
+  )
+  t.absent(
+    await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24),
+    'stale after the upgrade to macOS 15, so the loader asks the registry again'
+  )
+
+  const modern = await findCoremlCompanionSet(registry, TRANSCRIBEPSY_EU, 'darwin', 24)
+  await writeCachedCoremlCompanionSet(
+    modern!,
+    cacheDir,
+    getCoremlOsSelection(TRANSCRIBEPSY_EU, 'darwin', 24)
+  )
+  const cached = await readCachedCoremlCompanionSet(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24)
+  t.alike(stagedBundles(cached), [`${EU}-decoder`, `${EU}-encoder-shared`])
+  t.is(getCoremlOsSelection(audio8('audio8-codec-decoder-q8_0.gguf'), 'darwin', 24), '')
+})
+
+test('Core ML sidecars: a model staged from live metadata is found on disk without the catalog', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-coreml-cache-'))
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const sparse = (target: string, size: number) => {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    const fd = fs.openSync(target, 'w')
+    fs.ftruncateSync(fd, size)
+    fs.closeSync(fd)
+  }
+
+  t.absent(
+    await findCachedLiveCoremlModelPath(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24),
+    'nothing on disk'
+  )
+
+  // The set the loader staged and saved.
+  const set = await findCoremlCompanionSet(
+    client(publishedEuBundles([`${EU}-encoder-shared`, `${EU}-decoder`])),
+    TRANSCRIBEPSY_EU,
+    'darwin',
+    24
+  )
+  for (const file of set!.files) {
+    sparse(path.join(cacheDir, 'sets', set!.setKey, file.targetName), file.expectedSize)
+  }
+  await writeCachedCoremlCompanionSet(
+    set!,
+    cacheDir,
+    getCoremlOsSelection(TRANSCRIBEPSY_EU, 'darwin', 24)
+  )
+  t.is(
+    await findCachedLiveCoremlModelPath(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24),
+    path.join(cacheDir, 'sets', set!.setKey, `${EU}.gguf`),
+    'the staged set'
+  )
+  t.absent(
+    await findCachedLiveCoremlModelPath(TRANSCRIBEPSY_EU, 'linux', cacheDir, 24),
+    'no Core ML family off Apple'
+  )
+
+  // The GGUF alone, loaded while the registry had no bundles.
+  fs.rmSync(path.join(cacheDir, 'sets'), { recursive: true, force: true })
+  const single = path.join(
+    cacheDir,
+    getSingleFileCacheName(TRANSCRIBEPSY_EU.registryPath, generateShortHash)
+  )
+  sparse(single, TRANSCRIBEPSY_EU.expectedSize)
+  t.is(await findCachedLiveCoremlModelPath(TRANSCRIBEPSY_EU, 'darwin', cacheDir, 24), single)
 })
