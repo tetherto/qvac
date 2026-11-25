@@ -488,8 +488,12 @@ safeTest(
     t.comment(`average single wall TPS: ${avgSingleWallTps}`)
 
     const batchModel = await setupModel(t, { parallel: '4', backend: 'vulkan' })
+    // Twice: the first batch prefills from empty slots, the timed one from slots
+    // that already hold the shared system prompt, which takes other pipelines.
     if (warmUpBeforeTiming) {
-      await (await batchModel.run(CASES.map(buildBatchItem))).await()
+      for (let pass = 0; pass < 2; pass++) {
+        await (await batchModel.run(CASES.map(buildBatchItem))).await()
+      }
     }
     const batchInput = CASES.map((item) => ({
       id: item.id,
