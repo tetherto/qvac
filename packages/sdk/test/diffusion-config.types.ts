@@ -39,6 +39,17 @@ acceptConfig({
 // @ts-expect-error the tokenizer uses the shared model-source type
 acceptConfig({ tokenizerSrc: true })
 
+acceptConfig({
+  mode: 'diffusion',
+  prediction: 'eps',
+  taesdModelSrc: '/models/taesd.safetensors',
+  coremlUnetModelSrc:
+    'registry://s3/qvac_models_compiled/ggml/stable-diffusion/2026-11-19/sd21base_unet_p6.mlmodelc',
+  coremlTaeDecoderModelSrc: { src: '/models/taesd_decoder.mlmodelc' }
+})
+// @ts-expect-error a Core ML sidecar uses the shared model-source type
+acceptConfig({ coremlUnetModelSrc: true })
+
 function acceptGeneration(_params: import('@qvac/inference/surface').DiffusionClientParams) {}
 
 acceptGeneration({
