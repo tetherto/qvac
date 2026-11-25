@@ -207,7 +207,6 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   CONTEXT_OVERFLOW: (response) => {
     return new ContextOverflowError(
       {
-        ...(response.typedFields?.['cacheFileOverflow'] === true && { cacheFileOverflow: true }),
         promptTokens: readOptionalNumberField(response.typedFields, 'promptTokens'),
         cachedTokens: readOptionalNumberField(response.typedFields, 'cachedTokens'),
         requiredTokens: readOptionalNumberField(response.typedFields, 'requiredTokens'),

@@ -1121,7 +1121,6 @@ test('completion: kv-cache drops a cache file over the slot limit as a context o
   )
   t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
-  t.ok(refusal instanceof Error && /saved KV cache.*8192.*raise ctx_size/.test(refusal.message))
   t.alike(conversations.discarded, [cachePaths[1]], 'rollback discards the held conversation')
   t.is((refusal as { ctxSize?: number }).ctxSize, 8192, 'the limit is the slot limit')
   t.is(turnCalls.length, 3, 'the retry reaches the model')

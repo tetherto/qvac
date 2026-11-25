@@ -210,7 +210,6 @@ export class CompletionFailedError extends QvacErrorBase {
 
 /** The overflow sizes as one record; fields admit explicit `undefined` so a parser result assigns directly. */
 export type ContextOverflowErrorSizes = {
-  cacheFileOverflow?: true | undefined
   promptTokens?: number | undefined
   cachedTokens?: number | undefined
   requiredTokens?: number | undefined
@@ -259,7 +258,6 @@ function normalizeContextOverflowArgs(
  * works on the consumer side.
  */
 export class ContextOverflowError extends QvacErrorBase {
-  readonly cacheFileOverflow?: true
   /** The prompt alone, in tokens; unset when the source reported KV cells. */
   readonly promptTokens?: number
   /** Cached conversation on a warm-cache overflow, in `ctxSize` units. */
@@ -304,13 +302,11 @@ export class ContextOverflowError extends QvacErrorBase {
           n.ctxSize !== undefined ? String(n.ctxSize) : '',
           n.modelId ?? '',
           n.cachedTokens !== undefined ? String(n.cachedTokens) : '',
-          n.requiredTokens !== undefined ? String(n.requiredTokens) : '',
-          n.cacheFileOverflow ? 'cacheFile' : ''
+          n.requiredTokens !== undefined ? String(n.requiredTokens) : ''
         ],
         n.cause
       )
     )
-    if (n.cacheFileOverflow) this.cacheFileOverflow = true
     if (n.promptTokens !== undefined) this.promptTokens = n.promptTokens
     if (n.ctxSize !== undefined) this.ctxSize = n.ctxSize
     if (n.modelId !== undefined) this.modelId = n.modelId
@@ -320,7 +316,6 @@ export class ContextOverflowError extends QvacErrorBase {
 
   toErrorResponseFields(): Record<string, unknown> {
     return {
-      ...(this.cacheFileOverflow && { cacheFileOverflow: true }),
       ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
       ...(this.cachedTokens !== undefined && { cachedTokens: this.cachedTokens }),
       ...(this.requiredTokens !== undefined && { requiredTokens: this.requiredTokens }),

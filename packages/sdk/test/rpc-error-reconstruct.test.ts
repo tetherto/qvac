@@ -192,19 +192,6 @@ test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t)
   t.is(r.ctxSize, 8192)
 })
 
-test('reconstructError: an oversized cache file keeps the worker recovery message', (t) => {
-  const cause = new Error('cache exceeds the slot limit')
-  const envelope = createErrorResponse(
-    new InferenceContextOverflowError({ cacheFileOverflow: true, ctxSize: 8192 }, 'llm', cause)
-  )
-  t.is(envelope.typedFields?.['cacheFileOverflow'], true)
-  const error = reconstructError(envelope)
-  t.ok(error instanceof ContextOverflowError && error.cacheFileOverflow && error.ctxSize === 8192)
-  t.ok(error.message.includes('raise ctx_size.'))
-  t.is(error.message, envelope.message)
-  t.is(error.stack?.split('\n')[0], `CONTEXT_OVERFLOW: ${envelope.message}`)
-})
-
 test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
   // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
   // so every size field can be absent on the wire. The reconstructor must

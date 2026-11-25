@@ -286,7 +286,6 @@ test('cache-file overflows parse only the counts after the quoted path', (t) => 
     const message = refusal.replace('a b', "room's (12 tokens, max 30)\narchive")
     t.ok(isAddonContextOverflowError(new Error(message)))
     t.alike(parseContextOverflowMessage(message), {
-      cacheFileOverflow: true,
       ctxSize: 8192,
       ...(refusal.startsWith('acceptLoadedState:') && { cachedTokens: 9000, requiredTokens: 9000 })
     })

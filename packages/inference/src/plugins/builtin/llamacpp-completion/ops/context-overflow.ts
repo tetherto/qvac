@@ -65,7 +65,6 @@ export function isAddonContextOverflowError(err: unknown): boolean {
 }
 
 export type ContextOverflowSizes = {
-  cacheFileOverflow?: true
   /** The prompt alone, in tokens; unset when the guard reports KV cells. */
   promptTokens?: number
   /** Cached conversation on a warm-cache guard, in `ctxSize` units. */
@@ -87,12 +86,11 @@ type PatternEntry = {
 const MESSAGE_PATTERNS: PatternEntry[] = [
   {
     pattern: CACHE_LIMIT,
-    map: ([ctx]) => ({ cacheFileOverflow: true, ctxSize: ctx! })
+    map: ([ctx]) => ({ ctxSize: ctx! })
   },
   {
     pattern: CACHE_LIMIT_WITH_COUNT,
     map: ([cached, ctx]) => ({
-      cacheFileOverflow: true,
       cachedTokens: cached!,
       requiredTokens: cached!,
       ctxSize: ctx!
