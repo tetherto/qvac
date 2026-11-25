@@ -39,7 +39,9 @@ async function loadParlerTTS(params = {}) {
     'topP',
     'maxFrames',
     'minNewTokens',
-    'normalizeNumbers'
+    'normalizeNumbers',
+    'streamChunkTokens',
+    'streamFirstChunkTokens'
   ]) {
     if (params[k] !== undefined) options[k] = params[k]
   }

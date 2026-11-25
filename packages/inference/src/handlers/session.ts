@@ -5,6 +5,7 @@ import type {
   CloseSessionResponse
 } from '@/schemas/session'
 import { openSession, closeSession, finishSessionClose } from '@/runtime/session-registry'
+import { assertSessionGrantValid } from '@/runtime/session-grants'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { getModelIdsLeasedBy } from '@/runtime/model-registry'
 import { disposeSessionVectorIndexes } from '@/runtime/vector-index-registry'
@@ -14,7 +15,8 @@ import { getEngineLogger } from '@/logging/index'
 const logger = getEngineLogger()
 
 export function handleOpenSession(request: OpenSessionRequest): OpenSessionResponse {
-  const entry = openSession(request.sessionId, request.name)
+  if (request.grant) assertSessionGrantValid(request.sessionId, request.grant)
+  const entry = openSession(request.sessionId, request.name, request.grant)
   return { type: 'openSession', success: true, sessionId: entry.id }
 }
 

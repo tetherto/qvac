@@ -13,6 +13,12 @@ export interface PivotModelConfig {
   dstVocabSrc?: ModelSrcInput
 }
 
+/**
+ * Vocab sources beside a Bergamot model. A pair-named model
+ * (`model.<pair>.intgemm.alphas.bin`) ships `vocab.<pair>.spm` (CJK pairs: a
+ * `srcvocab`/`trgvocab` split); a multilingual pack (`model.intgemm.alphas.bin`,
+ * `langPair` empty) ships one shared `vocab.spm`.
+ */
 export function buildBergamotVocabSources(basePath: string, langPair: string) {
   if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
     return {
@@ -21,26 +27,38 @@ export function buildBergamotVocabSources(basePath: string, langPair: string) {
     }
   }
 
-  const sharedVocab = `${basePath}vocab.${langPair}.spm`
+  const sharedVocab = langPair ? `${basePath}vocab.${langPair}.spm` : `${basePath}vocab.spm`
   return { srcVocabSrc: sharedVocab, dstVocabSrc: sharedVocab }
 }
 
-export function deriveBergamotVocabSources(modelSrc: string) {
-  const match = modelSrc.match(/^pear:\/\/([a-f0-9]+)\/model\.([a-z]+)\.intgemm\.alphas\.bin$/)
-  if (!match?.[1] || !match[2]) return null
+function fromModelMatch(match: RegExpMatchArray | null) {
+  if (!match?.[1]) return null
+  return buildBergamotVocabSources(match[1], match[2] ?? '')
+}
 
-  const basePath = `pear://${match[1]}/`
-  const langPair = match[2]
-  return buildBergamotVocabSources(basePath, langPair)
+export function deriveBergamotVocabSources(modelSrc: string) {
+  return fromModelMatch(
+    modelSrc.match(/^(pear:\/\/[a-f0-9]+\/(?:.+\/)?)model\.(?:([a-z]+)\.)?intgemm\.alphas\.bin$/)
+  )
 }
 
 export function deriveBergamotRegistryVocabSources(modelSrc: string) {
-  const match = modelSrc.match(/^(registry:\/\/.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/)
-  if (!match?.[1] || !match[2]) return null
+  return fromModelMatch(
+    modelSrc.match(/^(registry:\/\/.+\/)model\.(?:([a-z]+)\.)?intgemm\.alphas\.bin$/)
+  )
+}
 
-  const basePath = match[1]
-  const langPair = match[2]
-  return buildBergamotVocabSources(basePath, langPair)
+/** A model file on disk (absolute or relative, POSIX or Windows separators). */
+export function deriveBergamotLocalVocabSources(modelSrc: string) {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(modelSrc)) return null
+  return fromModelMatch(modelSrc.match(/^(.*[/\\])model\.(?:([a-z]+)\.)?intgemm\.alphas\.bin$/))
+}
+
+/** Vocab sources derived beside a registry://, pear:// or local model source. */
+export function deriveBergamotVocabSourcesFor(modelSrc: string) {
+  if (modelSrc.startsWith('pear://')) return deriveBergamotVocabSources(modelSrc)
+  if (modelSrc.startsWith('registry://')) return deriveBergamotRegistryVocabSources(modelSrc)
+  return deriveBergamotLocalVocabSources(modelSrc)
 }
 
 /**
@@ -66,11 +84,7 @@ export async function resolveBergamotVocab(
   let dstSrc: ModelSrcInput | undefined = dstVocabSrc
 
   if (!srcSrc || !dstSrc) {
-    const derived = ctx.modelSrc.startsWith('pear://')
-      ? deriveBergamotVocabSources(ctx.modelSrc)
-      : ctx.modelSrc.startsWith('registry://')
-        ? deriveBergamotRegistryVocabSources(ctx.modelSrc)
-        : null
+    const derived = deriveBergamotVocabSourcesFor(ctx.modelSrc)
     if (derived) {
       srcSrc = srcSrc ?? derived.srcVocabSrc
       dstSrc = dstSrc ?? derived.dstVocabSrc
@@ -79,7 +93,7 @@ export async function resolveBergamotVocab(
 
   if (!srcSrc || !dstSrc) {
     throw new ModelLoadFailedError(
-      'Bergamot requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.'
+      'Bergamot requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig, or load a registry://, pear:// or local model file named model[.<pair>].intgemm.alphas.bin to use the vocab beside it.'
     )
   }
 
@@ -104,11 +118,7 @@ export async function resolveBergamotVocab(
   let pivotDstSrc: ModelSrcInput | undefined = pivotModel.dstVocabSrc
 
   if (!pivotSrcSrc || !pivotDstSrc) {
-    const pivotDerived = pivotModel.modelSrc.startsWith('pear://')
-      ? deriveBergamotVocabSources(pivotModel.modelSrc)
-      : pivotModel.modelSrc.startsWith('registry://')
-        ? deriveBergamotRegistryVocabSources(pivotModel.modelSrc)
-        : null
+    const pivotDerived = deriveBergamotVocabSourcesFor(pivotModel.modelSrc)
     if (pivotDerived) {
       pivotSrcSrc = pivotSrcSrc ?? pivotDerived.srcVocabSrc
       pivotDstSrc = pivotDstSrc ?? pivotDerived.dstVocabSrc
@@ -117,7 +127,7 @@ export async function resolveBergamotVocab(
 
   if (!pivotSrcSrc || !pivotDstSrc) {
     throw new ModelLoadFailedError(
-      'Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.'
+      'Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig, or load a registry://, pear:// or local model file named model[.<pair>].intgemm.alphas.bin to use the vocab beside it.'
     )
   }
 
