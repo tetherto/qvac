@@ -14,8 +14,9 @@ import {
 } from '@/serve/core/startup'
 import { createModelRegistry } from '@/serve/core/model-registry'
 import { createEphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
-import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
+import { createLoadManager, defaultLoadFn, type LoadModelFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
+import { createSdkWarnings } from '@/serve/core/sdk-warnings'
 import type { QvacContext } from '@/serve/core/context'
 import { createCoreServer } from '@/serve/core/server'
 import { writeReadySignal } from '@/serve/core/ready-signal'
@@ -100,11 +101,16 @@ async function buildServerParts(
   const overrideRef: { current: QvacContext['loadModelOverride'] } = {
     current: options.loadModelOverride
   }
+  const sdkWarnings = createSdkWarnings(logger)
+  const loadWithSdkWarnings: LoadModelFn = (opts) => {
+    sdkWarnings.ensure()
+    return defaultLoadFn(opts)
+  }
   const loadManager = createLoadManager(
     registry,
     logger,
     { concurrency: serveConfig.load.concurrency, timeoutMs: serveConfig.load.timeoutMs },
-    () => overrideRef.current ?? defaultLoadFn
+    () => overrideRef.current ?? loadWithSdkWarnings
   )
 
   const qvacContext: QvacContext = {
@@ -138,6 +144,10 @@ async function buildServerParts(
     allowedHosts: serveConfig.allowedHosts,
     publicBaseUrl: serveConfig.publicBaseUrl,
     extensions
+  })
+  app.addHook('preClose', (done) => {
+    sdkWarnings.stop()
+    done()
   })
 
   await mountExtensions(app, extensions)

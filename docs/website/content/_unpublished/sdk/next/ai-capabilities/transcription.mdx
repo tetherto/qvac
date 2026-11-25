@@ -11,7 +11,7 @@ Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://gith
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
-`transcribe()` returns the full transcription as a single `string`. Its returned promise also exposes `stats`: await it after transcription to read terminal engine statistics. For Parakeet offline ASR, `encoderOnCoreml` reports whether a Core ML sidecar loaded, while `encoderUsedCoreml` reports whether this run encoded on Core ML. The stats promise resolves to `undefined` when the engine does not report statistics. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time. Both whisper and parakeet expose duplex `transcribeStream()` sessions; see "Streaming with `transcribeStream()`" below.
+`transcribe()` returns the full transcription as a single `string`. Its returned promise also exposes `stats`: await it after transcription to read terminal engine statistics. For Parakeet offline ASR, `encoderOnCoreml` reports whether a Core ML sidecar loaded, `encoderUsedCoreml` whether this run encoded on Core ML, and `decoderUsedCoreml` whether every transcription in the run decoded on the Core ML decoder sidecar. The stats promise resolves to `undefined` when the engine does not report statistics. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time. Both whisper and parakeet expose duplex `transcribeStream()` sessions; see "Streaming with `transcribeStream()`" below.
 
 ## Functions
 
@@ -80,9 +80,13 @@ await loadModel({
 
 On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming Sortformer v2.1. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
 
+For standard Parakeet TDT batch and push-stream transcription, the native engine falls back to ggml when the Core ML sidecar cannot safely handle the encoder input. A loaded sidecar does not guarantee that every request uses Core ML; check `encoderUsedCoreml` in the terminal statistics for actual use.
+
 TranscribePsy EU-sub publishes a separate Core ML distribution. `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose encoder and decoder bundles the SDK downloads and stages beside it, so both stages run on the Apple Neural Engine; `stats.encoderUsedCoreml` on the `transcribe()` call reports it. That constant loads on macOS and iOS only: elsewhere the load is refused up front, and `PARAKEET_TRANSCRIBEPSY_250M_Q8_0` is the one to use.
 
-**TranscribePsy EU.** The full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`) covers 25 European languages from one GGUF that embeds its CAFE language adapters and gate, and it runs on ggml on every platform: it has no Core ML distribution, and the EU-sub bundles do not contain its adapters. `language` in `modelConfig` picks the route: `"en"` decodes on the English trunk, `"other"` on the non-English adapters, and `"auto"` (the default when omitted) runs the gate on the first 20 seconds of the recording and routes it.
+**TranscribePsy EU.** The full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`) covers 25 European languages from one GGUF that embeds its CAFE language adapters and gate, and it runs on ggml on every platform. `language` in `modelConfig` picks the route: `"en"` decodes on the English trunk, `"other"` on the non-English adapters, and `"auto"` (the default when omitted) runs the gate on the first 20 seconds of the recording and routes it.
+
+On macOS and iOS the same constant also runs on Core ML: the SDK downloads the model's own Core ML bundles from the registry and stages them beside the GGUF. The registry publishes a shared-weight encoder, which runs the English trunk, the adapter route and the gate, and a decoder bundle that batches long offline inputs. The shared encoder needs macOS 15 or iOS 18 or later; on older systems the SDK stages only the decoder and the encoder runs on ggml. If the registry later adds the three fixed encoders and the FP32 `-flexible` programs for streaming, the SDK stages those too, the fixed encoders only where the shared one cannot load. Without the bundles the model runs on ggml, and `stats.encoderUsedCoreml` reports which path a run took. The EU-sub bundles do not contain the adapters or the gate, and the engine rejects them for this model. A local GGUF needs no SDK option: put the bundles beside it under the model's file name (`transcribepsy-250m-eu-encoder.mlmodelc` and so on) and the engine finds them.
 
 **Backend selection.** `modelConfig.backend` selects the native backend explicitly: `auto` (the default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU`, and the load fails if that backend is unavailable instead of falling back to the CPU. The same selector reaches `assessModelFit`, where it also overrides the GPU gate. Core ML sidecars keep their own routing; a ggml selector does not move them.
 
@@ -241,16 +245,18 @@ console.log(stats?.audioDuration, stats?.realTimeFactor);
 
 ### Parakeet duplex streaming
 
-Pass `parakeetStreamingConfig` to `transcribeStream()` to override per-call streaming knobs (each falls back to its `parakeetConfig.streaming*` load-time counterpart):
+Pass `parakeetStreamingConfig` to `transcribeStream()` to override per-call streaming knobs (each falls back to its `modelConfig.streaming*` load-time counterpart):
+
+Standard offline TDT models, including Parakeet TDT v3, default to a 30-second decode window and reject explicitly shorter windows to prevent phrase loss. Omit both `modelConfig.streamingChunkMs` and `parakeetStreamingConfig.chunkMs` to use the native default, or set a window of at least `30000` ms. Keep the default 10-second left context and 2-second right lookahead. Small PCM writes, including 1-second and 5-second writes, remain supported: write size does not set the decode window, and ending the stream flushes the remaining audio. First output typically requires a decode window plus lookahead. Cache-aware streaming models use their own cadence.
 
 ```ts
 const session = await transcribeStream({
   modelId,
   parakeetStreamingConfig: {
-    chunkMs: 1000,            // encoder cadence
+    chunkMs: 30000,           // standard offline TDT decode window
     historyMs: 30000,         // sortformer rolling-history window
-    leftContextMs: 500,       // ASR encoder left-context window
-    rightLookaheadMs: 200,    // ASR encoder right-lookahead window
+    leftContextMs: 10000,     // ASR encoder left-context window
+    rightLookaheadMs: 2000,   // ASR encoder right-lookahead window
     emitPartials: true,       // emit partial segments before chunk boundaries
     emitEnergyVad: false,     // CTC/TDT energy-based VAD hint (engine-internal)
   },
