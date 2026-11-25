@@ -164,7 +164,26 @@ export function prepare(env, afterSdkBuild = () => {}) {
   // sdk-e2e installs @qvac/rag from packages/rag, whose exports point at dist.
   run('npm', ['run', 'prepare:rag'], { cwd: E2E, env })
   writeFileSync(join(E2E, '.npmrc'), npmrc)
-  run('npm', ['install', '--install-links'], { cwd: E2E, env })
+  try {
+    run('npm', ['install', '--install-links'], { cwd: E2E, env })
+  } catch (err) {
+    // DIAG: dump npm's debug log and the @qvac tree for the Windows ENOENT.
+    const ls = (d) => (existsSync(d) ? readdirSync(d, { withFileTypes: true }).map((e) => `${e.name}${e.isSymbolicLink() ? ' -> link' : e.isDirectory() ? '/' : ''}`) : '(missing)')
+    console.log('DIAG node_modules/@qvac:', ls(join(E2E, 'node_modules', '@qvac')))
+    console.log('DIAG node_modules/@qvac/sdk-e2e:', ls(join(E2E, 'node_modules', '@qvac', 'sdk-e2e')))
+    console.log('DIAG node_modules (top 80):', [].concat(ls(join(E2E, 'node_modules'))).slice(0, 80))
+    const cache = run('npm', ['config', 'get', 'cache'], { cwd: E2E, env, capture: true }).trim()
+    const logs = join(cache, '_logs')
+    const last = readdirSync(logs).filter((f) => f.endsWith('-debug-0.log')).sort().pop()
+    const text = readFileSync(join(logs, last), 'utf8').split(/\r?\n/)
+    console.log(`::group::DIAG ${last} lines mentioning sdk-e2e`)
+    text.forEach((l, i) => { if (/sdk-e2e|sdk-tests/i.test(l)) console.log(`${i}: ${l}`) })
+    console.log('::endgroup::')
+    console.log(`::group::DIAG ${last} last 400 lines`)
+    console.log(text.slice(-400).join('\n'))
+    console.log('::endgroup::')
+    throw err
+  }
   run('npm', ['run', 'build'], { cwd: E2E, env })
   return mqttCerts(env)
 }
