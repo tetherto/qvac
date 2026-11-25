@@ -487,6 +487,56 @@ export class RequestRejectedByPolicyError extends QvacErrorBase {
   }
 }
 
+/** The limit a request ran past: see `DeadlineExceededError`. */
+export type DeadlineBoundary = 'queue' | 'load' | 'run' | 'idle'
+
+/**
+ * Thrown when a request runs past a deadline the runtime enforces. The caller
+ * receives it when the deadline passes; the request's native work is told to
+ * stop and keeps its admission slot until it has stopped.
+ *
+ * `boundary` names the limit: `queue` (waiting for an admission slot), `load`
+ * (loading a model), `run` (from admission to the end) or `idle` (time since
+ * the last progress). `capability` is the capability contract the limit was
+ * configured under; it is absent for `loadModel` and for a plugin handler
+ * outside every contract.
+ */
+export class DeadlineExceededError extends QvacErrorBase {
+  readonly requestId: string
+  readonly boundary: DeadlineBoundary
+  readonly timeoutMs: number
+  readonly capability: string | undefined
+  readonly modelId: string | undefined
+
+  constructor(
+    requestId: string,
+    boundary: DeadlineBoundary,
+    timeoutMs: number,
+    capability?: string,
+    modelId?: string,
+    cause?: unknown
+  ) {
+    super(
+      createErrorOptions(ERROR_CODES.DEADLINE_EXCEEDED, [requestId, boundary, timeoutMs], cause)
+    )
+    this.requestId = requestId
+    this.boundary = boundary
+    this.timeoutMs = timeoutMs
+    this.capability = capability
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      requestId: this.requestId,
+      boundary: this.boundary,
+      timeoutMs: this.timeoutMs,
+      ...(this.capability !== undefined && { capability: this.capability }),
+      ...(this.modelId !== undefined && { modelId: this.modelId })
+    }
+  }
+}
+
 /**
  * Thrown when a long-running inference request was cancelled before
  * completion. The `events` stream on `CompletionRun` ends normally with

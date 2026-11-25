@@ -70,6 +70,7 @@ export const ERROR_CODES = {
   CONTEXT_OVERFLOW: 52421,
   INVALID_AUDIO_INPUT: 52422,
   AUDIO_ENCODE_FAILED: 52424,
+  DEADLINE_EXCEEDED: 52425,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -445,6 +446,11 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'AUDIO_ENCODE_FAILED',
     message: (format: string, details?: string) =>
       `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
+  },
+  [ERROR_CODES.DEADLINE_EXCEEDED]: {
+    name: 'DEADLINE_EXCEEDED',
+    message: (requestId: string, boundary: string, timeoutMs: string) =>
+      `Request "${requestId}" exceeded its ${boundary} deadline of ${timeoutMs}ms`
   },
 
   // Vector index

@@ -277,6 +277,7 @@ export const llmPlugin = definePlugin({
                 }
               } else {
                 bufferedEvents.push(...events)
+                ctx.touch()
               }
             }
             result = await stream.next()
@@ -456,6 +457,7 @@ export const llmPlugin = definePlugin({
               }
             } else {
               batchedEvents.push(...events)
+              ctx.touch()
             }
             result = await stream.next()
           }
