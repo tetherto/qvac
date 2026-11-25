@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { trackedRequestSchema } from '@/schemas/request-base'
 import { ggmlModelConfigShape } from '@/schemas/ggml-model-config'
+import { base64String } from '@/schemas/base64'
 import {
   base64ByteLength,
   rawRgbByteLength,
@@ -64,8 +65,8 @@ function checkRawRgbLength(
 
 const wireFields = {
   modelId,
-  left: z.base64().min(1).describe(viewDescription('left')),
-  right: z.base64().min(1).describe(viewDescription('right')),
+  left: base64String().min(1).describe(viewDescription('left')),
+  right: base64String().min(1).describe(viewDescription('right')),
   ...dimensionFields
 }
 
@@ -133,12 +134,10 @@ export const estimateDisparityResponseSchema = z
       .int()
       .positive()
       .describe('Disparity map height, equal to the input height.'),
-    disparity: z
-      .base64()
-      .describe(
-        'Disparity of the left view in input pixels, row-major `[height, width]`, as base64 of ' +
-          'little-endian float32 values (`width * height * 4` bytes).'
-      ),
+    disparity: base64String().describe(
+      'Disparity of the left view in input pixels, row-major `[height, width]`, as base64 of ' +
+        'little-endian float32 values (`width * height * 4` bytes).'
+    ),
     stats: stereoDepthStatsSchema.optional()
   })
   .superRefine((response, ctx) => {

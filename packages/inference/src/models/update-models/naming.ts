@@ -513,6 +513,14 @@ function isIndicConformer(filename: string, lowerPath: string) {
 
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
+  const coremlComponent = lowerPath.match(
+    /(?:^|\/)(transcribepsy-250m-eu-(?:decoder|encoder-shared))\.mlmodelc\/(.+)$/
+  )
+  if (coremlComponent) {
+    const [, bundle, component] = coremlComponent
+    return `PARAKEET_${cleanPart(bundle!)}_${cleanPart(component!)}`
+  }
+
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
   if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {

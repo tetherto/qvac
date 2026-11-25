@@ -307,9 +307,76 @@ export const toolsSimpleFunctionGemma4 = createToolsTest(
   { toolDialect: 'gemma4', resourceKey: 'tools-gemma4' }
 )
 
+const PROJECT_NAME_TOOL = {
+  type: 'function' as const,
+  name: 'get_project_name',
+  description: 'Return the name of the current project.',
+  parameters: { type: 'object' as const, properties: {}, required: [] }
+}
+const PROJECT_NAME_PROMPT = {
+  role: 'user',
+  content: 'What is the name of the current project? Use the tool to find out.'
+}
+
+// The client runs the streamed call and answers it by id; the next turn can only
+// name the project if it read that result.
+export const toolsResultNextTurn: TestDefinition = {
+  testId: 'tools-result-next-turn',
+  params: {},
+  expectation: { validation: 'contains-all', contains: ['acme-widgets'] },
+  metadata: { category: 'tools', dependency: 'tools', estimatedDurationMs: 30000 },
+  steps: [
+    { useModel: { deps: ['tools'], as: 'model' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [PROJECT_NAME_PROMPT],
+          tools: [PROJECT_NAME_TOOL],
+          stream: true,
+          generationParams: { temp: 0, seed: 42 }
+        },
+        as: 'first'
+      }
+    },
+    { project: { from: '$first', path: 'toolCalls', as: 'calls' } },
+    {
+      assert: {
+        on: '$calls',
+        named: 'toolCallShape',
+        with: { name: 'get_project_name', argKeys: [], declared: ['get_project_name'] }
+      }
+    },
+    { project: { from: '$calls', path: '[0].id', as: 'callId' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            PROJECT_NAME_PROMPT,
+            { role: 'assistant', content: '', toolCalls: '$calls' },
+            { role: 'tool', toolCallId: '$callId', content: 'acme-widgets' }
+          ],
+          tools: [PROJECT_NAME_TOOL],
+          stream: false,
+          generationParams: { temp: 0, seed: 42 }
+        },
+        as: 'second'
+      }
+    },
+    { project: { from: '$second', path: 'text', as: 'answer' } },
+    { assert: { on: '$answer', use: 'expectation' } }
+  ]
+}
+
 export const toolsTests = [
   toolsSimpleFunction,
   toolsMultipleFunctions,
+  toolsResultNextTurn,
   toolsSimpleFunctionQwen35,
   toolsSimpleFunctionGemma4,
   ...additionalToolsTests

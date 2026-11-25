@@ -1,4 +1,5 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
+import { readStructured, repairToolArguments } from '@/utils/tools/repair'
 
 export type ParserResult = {
   matched: boolean
@@ -94,6 +95,14 @@ export function generateStableToolCallId(name: string, args: Record<string, unkn
   return `call_${Math.abs(hash).toString(36)}_${sequence}`
 }
 
+// OpenAI-style calls carry `arguments` as a JSON string.
+export function withObjectArguments(obj: unknown): unknown {
+  if (!obj || typeof obj !== 'object' || !('arguments' in obj)) return obj
+  if (typeof obj.arguments !== 'string') return obj
+  const parsed = readStructured(obj.arguments, new Set(['object']))
+  return parsed === null ? obj : { ...obj, arguments: parsed }
+}
+
 export function isValidToolCall(obj: unknown): obj is {
   name: string
   arguments: Record<string, unknown>
@@ -109,6 +118,31 @@ export function isValidToolCall(obj: unknown): obj is {
     return false
   }
   return true
+}
+
+type DecodedCall = { name: string; arguments: Record<string, unknown>; id?: string | undefined }
+
+// Every parser's last step: repair the arguments against the declared schema,
+// validate them, and give the call its id from the repaired arguments.
+export function acceptToolCall(
+  decoded: DecodedCall,
+  tools: Tool[],
+  raw: string,
+  options: { repair?: boolean } = {}
+): { call: ToolCall; error?: undefined } | { call?: undefined; error: ToolCallError } {
+  const tool = tools.find((t) => t.name === decoded.name)
+  const repair = tool && options.repair !== false
+  const args = repair ? repairToolArguments(decoded.arguments, tool.parameters) : decoded.arguments
+  const validation = validateToolArguments(decoded.name, args, tools)
+  if (!validation.isValid && validation.error) return { error: { ...validation.error, raw } }
+  return {
+    call: {
+      id: decoded.id || generateStableToolCallId(decoded.name, args),
+      name: decoded.name,
+      arguments: args,
+      raw
+    }
+  }
 }
 
 export function validateToolArguments(

@@ -21,7 +21,7 @@ export const sessionCancelIsScopedToOwnSession: TestDefinition = {
 export const sessionSharedModelSurvivesUnload: TestDefinition = {
   testId: 'session-shared-model-survives-unload',
   params: {
-    prompt: 'Reply with only the word APPLE.',
+    prompt: 'Say APPLE. Reply with only the word APPLE and nothing else.',
     expectedAnswerContains: 'APPLE'
   },
   expectation: { validation: 'function', fn: () => true },

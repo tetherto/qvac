@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, unlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -21,6 +21,7 @@ import {
   toSdkChatArgs,
   type OpenAIMessage
 } from '@/serve/extensions/openai/schemas/chat'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import {
   parseExpiresAfter,
   parseMetadata,
@@ -362,7 +363,7 @@ describe('openaiMessagesToHistory', () => {
       assert.deepEqual(await readFile(tmpPaths[0]!), Buffer.from(PNG_BASE64, 'base64'))
       assert.deepEqual(await readFile(tmpPaths[1]!), Buffer.from(JPEG_BASE64, 'base64'))
     } finally {
-      await Promise.all(tmpPaths.map((path) => unlink(path)))
+      await Promise.all(tmpPaths.map(removePrivateTempFile))
     }
   })
 
