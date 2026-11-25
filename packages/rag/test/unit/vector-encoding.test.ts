@@ -203,6 +203,41 @@ test('an f16 namespace rejects components above 65504', async (t) => {
   )
 })
 
+test('port vectors are range-checked before rounding', async (t) => {
+  const store = new Corestore(await tmp(t))
+  const rag = createRag({
+    corestore: store,
+    embeddings: {
+      space: SPACE,
+      embedDocuments: (texts) =>
+        Promise.resolve(Float32Array.from(texts.flatMap(() => [65519, 0, 0]))),
+      embedQuery: () => Promise.resolve(Float32Array.from([1, 0, 0]))
+    }
+  })
+  t.teardown(async () => {
+    await rag.close()
+    await store.close()
+  })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE, vectorEncoding: 'f16' })
+  await rejectsWithCode(
+    t,
+    rag.ingest({ namespace: 'ns', documents: [{ id: 'text', text: 'a cat' }] }),
+    ERR_CODES.INVALID_INPUT,
+    '65519 from the port, which rounds to 65504, is rejected',
+    /65504/
+  )
+  await rejectsWithCode(
+    t,
+    rag.ingest({
+      namespace: 'ns',
+      documents: [{ id: 'given', chunks: [{ content: 'x', embedding: [65519, 0, 0], spaceId }] }]
+    }),
+    ERR_CODES.INVALID_INPUT,
+    'as it is when precomputed'
+  )
+})
+
 test('f16 search scores the rounded vectors through the index, the scan and a rebuild', async (t) => {
   const { rag, store, spaceId } = await openF16(t)
   const expected = expectedScores()

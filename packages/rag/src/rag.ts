@@ -422,6 +422,8 @@ export function createRag(options: CreateRagOptions): Rag {
         } else {
           const document = toValidDocument(job, space.spaceId)
           checkChunks(namespace, ns, space, document)
+          // Port vectors are checked against the encoding's range before rounding.
+          for (const chunk of document.chunks) roundToEncoding(chunk.embedding, encoding)
           committed = await withTransaction(instance, (tx) =>
             signal?.aborted
               ? Promise.resolve(null)
@@ -458,7 +460,6 @@ export function createRag(options: CreateRagOptions): Rag {
           signal
         )
         batch.forEach(({ job, ordinal }, row) => {
-          roundToEncoding(rows[row], encoding)
           job.vectors[ordinal] = rows[row]
           job.missing--
         })
