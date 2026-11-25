@@ -1134,8 +1134,15 @@ test('browser run data rejects media paths and keeps byte markers', async (t) =>
     [{ role: 'user', type: 'media', content: '/images/cat.png' }],
     [{ role: 'user', content: [{ type: 'media', content: '/images/cat.png' }] }]
   ]
-  for (const messages of pathCases) {
-    const item = { type: 'text', input: JSON.stringify(messages) }
+  const escapedInputs = [
+    '[{"role":"user","\\u0074ype":"\\u006dedia","content":"/x.png"}]',
+    '[{"role":"user","content":[{"type":"\\u006dedia","content":"/x.png"}]}]'
+  ]
+  for (const input of [
+    ...pathCases.map((messages) => JSON.stringify(messages)),
+    ...escapedInputs
+  ]) {
+    const item = { type: 'text', input }
     await t.exception.all(() => prepareRunData([item]), /Media paths are not supported/)
     await t.exception.all(
       () => prepareRunData([{ messages: [item] }]),
@@ -1180,4 +1187,52 @@ test('browser binding runJob queues by default like native 20x', async (t) => {
   )
   while (isolated.activeJobs(handle) !== 0) await delay()
   await isolated.destroyInstance(handle)
+})
+
+test('a cancel that lands before submit survives an engine cancel that suspends 20x', async (t) => {
+  const isolated = isolatedBinding((options) => {
+    const engine = cooperativeEngine(options)
+    const ccall = engine.ccall
+    engine.ccall = function (name, returnType, types, args) {
+      if (name !== 'qvac_web_cancel_job') return ccall.call(this, name, returnType, types, args)
+      return delay().then(() => ccall.call(this, name, returnType, types, args))
+    }
+    return engine
+  })
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    const admission = isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    const id = [...handle.jobs.keys()].at(-1)
+    const cancelled = isolated.cancelJob(handle, id)
+    t.ok((await admission).accepted, `admitted ${iteration + 1}`)
+    await cancelled
+    t.is(handle.failure, null, `engine kept ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('cooperative cancel survives an engine cancel that suspends 20x', async (t) => {
+  const isolated = isolatedBinding((options) => {
+    const engine = cooperativeEngine(options)
+    const ccall = engine.ccall
+    engine.ccall = function (name, returnType, types, args) {
+      if (name === 'qvac_web_step')
+        return delay().then(() => ccall.call(this, name, returnType, types, args))
+      if (name !== 'qvac_web_cancel_job') return ccall.call(this, name, returnType, types, args)
+      return delay().then(() => ccall.call(this, name, returnType, types, args))
+    }
+    return engine
+  })
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    const admission = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    await isolated.cancelJob(handle, admission.id)
+    t.is(handle.failure, null, `engine kept ${iteration + 1}`)
+    const next = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    t.ok(next.accepted, `next run admitted ${iteration + 1}`)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+    await isolated.destroyInstance(handle)
+  }
 })

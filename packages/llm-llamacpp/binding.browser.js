@@ -181,6 +181,7 @@ function callSync(handle, name, types, args, prepare) {
     if (prepare) prepare(module)
     const status = module.ccall(name, 'number', types, args)
     if (typeof status?.then === 'function') {
+      status.then(null, () => {})
       const error = new Error(`${name} suspended in a synchronous engine call`)
       poison(engine, error)
       throw error
@@ -492,7 +493,7 @@ function runJob(handle, data, rejectWhenBusy = false) {
         )
         job.submitted = true
         if (job.cancelled) {
-          callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+          await call(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
         }
         handle.activeSlots = callSync(handle, 'qvac_web_active_slots', ['number'], [handle.native])
       } catch (error) {
@@ -511,8 +512,10 @@ async function cancelJob(handle, id) {
   if (!job) return
   job.cancelled = true
   if (handle.cooperative && handle.native) {
+    // Cancelling an admitted job tears its slot down, which synchronizes with
+    // the GPU and so may suspend.
     await enqueue(() =>
-      callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+      call(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
     )
     schedulePump()
   }

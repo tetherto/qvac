@@ -50,7 +50,8 @@ interface LlmLlamacpp {
      * and queued, across all concurrent `run()` calls — plus any finetuning in
      * progress (its pause checkpoint is removed so the next `finetune()` starts
      * fresh). For cancelling a single request or batch group, use
-     * `response.cancel()` on that call's response instead.
+     * `response.cancel()` on that call's response instead. Resolves once the
+     * cancelled work has stopped, so a following `run()` is not refused as busy.
      */
     cancel(): Promise<void>;
     pause(): Promise<void>;

@@ -16,7 +16,7 @@ function isMediaPath(item) {
 // worker, not the engine's filesystem. Bytes arrive as top-level media items
 // and leave content-less markers in the text, so only a path is rejected.
 function rejectMediaPaths(input) {
-  if (typeof input !== 'string' || !input.includes('"media"')) return
+  if (typeof input !== 'string') return
   let messages
   try {
     messages = JSON.parse(input)
