@@ -111,9 +111,12 @@ async function run() {
 }
 
 async function unload() {
-  for (const modelId of [baseId, loraId]) await unloadModel({ modelId, clearStorage: false })
+  // Each id is cleared once unloaded, so a retry after a failure skips it.
+  if (baseId) await unloadModel({ modelId: baseId, clearStorage: false })
+  baseId = undefined
+  if (loraId) await unloadModel({ modelId: loraId, clearStorage: false })
+  loraId = undefined
   log('▸ Unloaded both models')
-  baseId = loraId = undefined
   $('#run').disabled = true
   $('#unload').disabled = true
   $('#load').disabled = false

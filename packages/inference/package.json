@@ -186,8 +186,6 @@
     "hyperdrive": "./dist/browser/unsupported/hyperdrive.js",
     "hyperswarm": "./dist/browser/unsupported/hyperswarm.js",
     "tar-stream": "./dist/browser/unsupported/tar-stream.js",
-    "@qvac/rag": "./dist/browser/unsupported/rag.js",
-    "@qvac/rag/errors": "./dist/browser/unsupported/rag-errors.js",
     "@qvac/registry-client": "./dist/browser/unsupported/registry-client.js",
     "@qvac/langdetect-text": "./dist/browser/unsupported/langdetect-text.js",
     "@qvac/ggml-rpc-server": "./dist/browser/unsupported/ggml-rpc-server.js",
