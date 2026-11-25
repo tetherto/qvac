@@ -1,10 +1,9 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
-  generateStableToolCallId,
+  acceptToolCall,
   coerceByParameterTypes,
   parameterAllowsNull,
   parameterTypes,
-  validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
 
@@ -178,18 +177,10 @@ export function parseDsmlFormat(text: string, tools: Tool[]): ParserResult {
       continue
     }
 
-    const validation = validateToolArguments(name, args, tools)
-    if (!validation.isValid && validation.error) {
-      errors.push({ ...validation.error, raw })
-      continue
-    }
-
-    toolCalls.push({
-      id: generateStableToolCallId(name, args),
-      name,
-      arguments: args,
-      raw
-    })
+    // Values are typed per parameter above; `string="true"` is the model's own word.
+    const accepted = acceptToolCall({ name, arguments: args }, tools, raw, { repair: false })
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   if (toolCalls.length === 0 && FALLBACK_DIALECT_REGEX.test(textOutsideInvokes(text, invokes))) {

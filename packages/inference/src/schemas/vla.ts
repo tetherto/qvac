@@ -1,6 +1,5 @@
 import { z } from 'zod'
-
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+import { base64String } from '@/schemas/base64'
 
 // ============================================
 // Embodiment selection (GR00T only)
@@ -242,7 +241,7 @@ export const vlaRunRequestSchema = z.object({
   type: z.literal('vlaRun'),
   modelId: z.string(),
   images: z
-    .array(z.string().min(1).regex(BASE64_PATTERN))
+    .array(base64String().min(1))
     .min(1)
     .describe(
       'Base64-encoded preprocessed images, one per camera. Each entry is the ' +
@@ -254,31 +253,22 @@ export const vlaRunRequestSchema = z.object({
     ),
   imgWidth: z.number().int().positive(),
   imgHeight: z.number().int().positive(),
-  state: z
-    .string()
-    .regex(BASE64_PATTERN)
-    .describe(
-      'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA, GR00T) ' +
-        'this is length `hparams.maxStateDim` — use ' +
-        '`vlaPadState(state, hparams.maxStateDim)` to zero-pad. For ' +
-        "discrete-state models (π₀.₅, `stateInputMode: 'discrete'`) the state " +
-        'is tokenised into the prompt and this buffer is ignored — encode an ' +
-        'empty `Float32Array(0)` (which is the empty string).'
-    ),
-  tokens: z
-    .string()
+  state: base64String().describe(
+    'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA, GR00T) ' +
+      'this is length `hparams.maxStateDim` — use ' +
+      '`vlaPadState(state, hparams.maxStateDim)` to zero-pad. For ' +
+      "discrete-state models (π₀.₅, `stateInputMode: 'discrete'`) the state " +
+      'is tokenised into the prompt and this buffer is ignored — encode an ' +
+      'empty `Float32Array(0)` (which is the empty string).'
+  ),
+  tokens: base64String()
     .min(1)
-    .regex(BASE64_PATTERN)
     .describe('Base64-encoded `Int32Array` of length `hparams.tokenizerMaxLength`.'),
-  mask: z
-    .string()
+  mask: base64String()
     .min(1)
-    .regex(BASE64_PATTERN)
     .describe('Base64-encoded `Uint8Array` of length `hparams.tokenizerMaxLength`.'),
-  noise: z
-    .string()
+  noise: base64String()
     .min(1)
-    .regex(BASE64_PATTERN)
     .optional()
     .describe(
       'Optional base64-encoded `Float32Array` of length ' +
@@ -290,10 +280,8 @@ export const vlaRunRequestSchema = z.object({
 export type VlaRunRequest = z.input<typeof vlaRunRequestSchema>
 
 export const vlaRunResponseSchema = z.object({
-  actions: z
-    .string()
+  actions: base64String()
     .min(1)
-    .regex(BASE64_PATTERN)
     .describe('Base64-encoded `Float32Array` of length `hparams.chunkSize * hparams.actionDim`.'),
   actionDim: z.number().int().positive(),
   chunkSize: z.number().int().positive(),

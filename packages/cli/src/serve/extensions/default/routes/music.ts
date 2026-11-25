@@ -1,4 +1,3 @@
-import { unlink } from 'node:fs/promises'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod, ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
@@ -11,6 +10,7 @@ import {
   type AudioGenResult
 } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import { errorResponses, type ErrorCodes } from '@/serve/lib/error-responses'
 import { multipartToBodyOptional } from '@/serve/lib/multipart'
 import { resolveBinaryInput, type BinaryInput } from '@/serve/lib/binary-input'
@@ -423,7 +423,7 @@ async function writeAudioInputs(
 ): Promise<{ paths: AudioPaths; cleanup: () => Promise<void> }> {
   const paths: AudioPaths = {}
   async function cleanup(): Promise<void> {
-    await Promise.all(Object.values(paths).map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(Object.values(paths).map(removePrivateTempFile))
   }
   try {
     for (const [field, input] of Object.entries(inputs) as Array<[AudioField, BinaryInput]>) {

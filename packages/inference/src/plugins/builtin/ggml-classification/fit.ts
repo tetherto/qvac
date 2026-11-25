@@ -1,6 +1,6 @@
 import type { ClassificationFitRequest } from '@qvac/classification-ggml'
-import path from 'bare-path'
 
+import { fitModelPath } from '@/model-fit/model-path'
 import type { ClassificationConfig } from '@/schemas/index'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
@@ -16,6 +16,6 @@ export function classificationFitRequest(load: FitLoad): FitRequestPlan {
   const modelPath = config.modelPath ?? load.modelPath
   if (!modelPath) return { unknown: 'the classification model path is not resolved' }
 
-  const request: ClassificationFitRequest = { modelPath: path.resolve(modelPath) }
+  const request: ClassificationFitRequest = { modelPath: fitModelPath(modelPath) }
   return { request }
 }
