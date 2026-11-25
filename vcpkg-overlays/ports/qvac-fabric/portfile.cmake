@@ -4,8 +4,8 @@ vcpkg_from_github(
   # QVAC-26667: tetherto/qvac-fabric-llm.cpp#497 (temp-12032 + QVAC_FABRIC_SERVER_CONTEXT, and
   # common_json_error's out-of-line destructor), until a qvac-fabric port release ships them.
   # packages/fabric builds its runtime from it too, as the destructor must come from the runtime.
-  REF 0e391ce0577d72b7adf36a55a78c3c0b9aa1f724
-  SHA512 ec2cd6b0e9630c7cabd60d070f8b7e7d26ab59919ae31bb99a1d9c1b467817e705657d7172d62624db3fa6a2222700d93f4c7d31a5e987603bed0385891b656b
+  REF 5cce236f1316fdae0645d6503f230e1cf72b652c
+  SHA512 e6b2996a3509f104d825c77408ab96da3420d564972b30a45e91b95ec8c754b310ecb6efe63719807c7e25b6a62f7436633acb2ef0ef70249f9fb680edb82e51
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
