@@ -8,12 +8,11 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
 
 /**
  * Subscribes to every server-side log through a single stream: SDK server logs,
- * per-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG
- * logs — without having to open a {@link loggingStream} per id.
+ * per-model addon logs (llamacpp, whispercpp, …) for all loaded models — without
+ * having to open a {@link loggingStream} per id.
  *
  * Each delivered log keeps its origin in `log.id`: `SDK_LOG_ID` for SDK server
- * logs, the model id for model logs, or the RAG workspace key. Use it to tell the
- * sources apart.
+ * logs or the model id for model logs. Use it to tell the sources apart.
  *
  * Internally this opens a {@link loggingStream} on the reserved `SDK_ALL_LOG_ID`
  * stream that the worker fans every log into.

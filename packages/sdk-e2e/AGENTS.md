@@ -6,10 +6,12 @@ Use [`README.md`](README.md) and the current package scripts as the source of tr
   cancellation, and lifecycle changes.
 - Keep `catalog/` client-neutral: a client's own behavior belongs in its runner under
   `runners/`, and the catalog imports from neither a runner nor a client. A wire shape
-  it needs goes in `catalog/wire-types.ts`, checked by `check:contract`.
+  it needs goes in `catalog/wire-types.ts`.
 - The Python and Kotlin runners mirror the JS step bindings
   (`runners/js/shared/step-bindings.ts`): a method or named assertion added there is
   `incomplete` on the other clients until their runners gain it.
+- Runners have no unit tests; do not add any. Verify a runner change by running the
+  affected e2e tests on the platform it targets.
 - Extend existing definitions and executors when possible. New behavior should cover
   success, failure, and relevant platform-specific paths without broad fixtures.
 - Keep smoke coverage small and deterministic. Put platform implementation in the

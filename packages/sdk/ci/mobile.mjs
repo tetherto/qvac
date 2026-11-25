@@ -64,7 +64,7 @@ export function family(app, platform) {
 // Unique per attempt; both phases of a job compute the same one.
 const runIdOf = (fam, env) => `${fam}-pr0-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT || 1}`
 
-// main's Kotlin consumer build: this commit's sdk and inference packed into packages/sdk-kotlin, then the app.
+// main's Kotlin consumer build: this commit's sdk built against its inference, then the app, which bundles that sdk.
 function buildKotlin(env) {
   const { ndk } = JSON.parse(readFileSync(join(ROOT, 'nx.json'), 'utf8')).targetDefaults.build
     .metadata.toolchain.android
@@ -74,25 +74,10 @@ function buildKotlin(env) {
   run('npx', ['tsc', '--project', 'tsconfig.json'], { cwd: SDK, env })
   run('npm', ['run', 'postcompile:aliases'], { cwd: SDK, env })
   run('git', ['checkout', '--', 'package.json'], { cwd: SDK, env })
-  const pack = (cwd) =>
-    run('npm', ['pack', '--ignore-scripts', '--silent'], { cwd, env, capture: true }).trim()
-  const sdkTgz = pack(SDK)
-  // A dispatch's inference version installs that published @qvac/inference instead of this commit's.
-  const { inference } = runOptions(env.CI_SUITE)
-  const infSpec = inference
-    ? `npm:@qvac/inference@${inference}`
-    : `file:../inference/${pack(join(ROOT, 'packages/inference'))}`
-  const kotlin = join(ROOT, 'packages/sdk-kotlin')
-  run('npm', ['pkg', 'set', `overrides.@qvac/inference=${infSpec}`], {
-    cwd: kotlin,
+  run('node', ['runners/kotlin/scripts/device.mjs', 'build', '--prebuilt-sdk', '--maven'], {
+    cwd: E2E,
     env
   })
-  run(
-    'npm',
-    ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock', `../sdk/${sdkTgz}`],
-    { cwd: kotlin, env }
-  )
-  run('node', ['runners/kotlin/scripts/device.mjs', 'build', '--prebuilt-sdk'], { cwd: E2E, env })
 }
 
 function build(app, env) {

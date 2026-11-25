@@ -8,7 +8,7 @@ export interface AddonMessage {
     /**
      * Per-call sampling overrides forwarded by `LlmLlamacpp.run()` from
      * `RunOptions.generationParams`. Carried on the `text` message and consumed
-     * by the native binding so each `runJob` can use a different temp / top_p /
+     * by the selected binding so each `runJob` can use a different temp / top_p /
      * seed / etc. without re-loading the model.
      */
     generationParams?: GenerationParams;
@@ -22,12 +22,12 @@ export interface AddonMediaMessage {
 }
 export type AddonRunJobMessage = AddonMessage | AddonMediaMessage;
 /**
- * Discriminated admission result: the native binding only sets `id` when the
- * scheduler minted one, so a job id exists exactly when the job was accepted.
+ * Discriminated admission result: the binding only sets `id` when a job was
+ * accepted.
  */
 export type AdmissionResult = {
     accepted: true;
-    /** Native-assigned job id used to route this request's streamed output. */
+    /** Binding-assigned job id used to route this request's streamed output. */
     id: number;
 } | {
     accepted: false;
@@ -35,19 +35,19 @@ export type AdmissionResult = {
 };
 export type AddonRunJobResult = AdmissionResult;
 export interface AddonBatchRunItem {
-    /** Optional caller-supplied id; the native binding auto-assigns one when omitted. */
+    /** Optional caller-supplied id; the binding auto-assigns one when omitted. */
     id?: string;
     messages: AddonRunJobMessage[];
 }
 /**
  * Batch admission result. The per-sequence `ids` are reported on both
- * branches (they are assigned while parsing the batch input); the native
+ * branches (they are assigned while parsing the batch input); the binding
  * group id used to route the batch's terminal events exists only when the
  * batch was accepted.
  */
 export type AddonBatchRunResult = {
     accepted: true;
-    /** Native group id used by the batch handler to route this group's terminal events. */
+    /** Binding group id used by the batch handler to route this group's terminal events. */
     id: number;
     ids: string[];
 } | {
@@ -61,7 +61,7 @@ export interface AddonConfigurationParams {
     config: Record<string, unknown>;
 }
 export type AddonOutputCallback = (addon: unknown, event: unknown, data: unknown, error: unknown, jobId: unknown) => void;
-/** `calcTokens` input as the native binding takes it: `history` and `tools` are JSON array text. */
+/** `calcTokens` binding input: `history` and `tools` are JSON array text. */
 export interface AddonCalcTokensParams {
     text?: string;
     history?: string;
@@ -80,7 +80,7 @@ export interface LlamaBinding {
     calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
     runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
     runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
-    destroyInstance(handle: unknown): void;
+    destroyInstance(handle: unknown): Promise<void> | void;
 }
 export type MappedAddonEvent = {
     type: string;
@@ -88,23 +88,24 @@ export type MappedAddonEvent = {
     error: unknown;
 };
 /**
- * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
+ * Normalize a raw binding event into `Output` / `Error` / `JobEnded` /
  * `FinetuneProgress`, or `null` to drop it.
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
 /**
- * An interface between Bare addon in C++ and JS runtime.
+ * The JavaScript interface to the native or WebAssembly engine binding.
  */
 export declare class LlamaInterface {
     private readonly _binding;
     private _handle;
+    private _unloading;
     constructor(binding: unknown, configurationParams: AddonConfigurationParams, outputCb: AddonOutputCallback);
     /**
      * Moves addon to the LISTENING state after all the initialization is done
      */
     activate(): Promise<void>;
     /**
-     * Active jobs (in-flight + queued) per the native scheduler — the
+     * Active jobs (in-flight + queued) reported by the binding — the
      * authoritative admission count.
      */
     activeJobs(): number;
@@ -119,14 +120,13 @@ export declare class LlamaInterface {
     activeSlots(): number;
     /**
      * Cancel every inference job live at the moment of this call (or pause a
-     * running finetune). Snapshot-based: the native binding captures the live
+     * running finetune). Snapshot-based: the binding captures the live
      * job ids synchronously before deferring the cancellation, so a job started
      * after this call is never touched.
      */
     cancel(savePauseCheckpoint?: number): Promise<void>;
     /**
-     * Cancel a single job by its native-assigned id, leaving other concurrent
-     * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
+     * Cancel a single job by its binding-assigned id, leaving other jobs running.
      */
     cancelJob(id: number): Promise<void>;
     /**
@@ -144,12 +144,12 @@ export declare class LlamaInterface {
      */
     calcTokens(params: AddonCalcTokensParams): Promise<number>;
     /**
-     * Run finetuning when native binding provides support.
+     * Run finetuning when the selected binding provides support.
      */
     finetune(finetuningParams: FinetuneOptions): Promise<number | false>;
     /**
      * Run one inference job with an array of message objects, or a batch of
-     * jobs with an array of `{id?, messages}` items. The native binding mints
+     * jobs with an array of `{id?, messages}` items. The binding mints
      * the job id (single) / group id (batch) and returns it so concurrent jobs
      * can be routed; a batch result also carries the per-item `ids` assigned
      * to each sequence.

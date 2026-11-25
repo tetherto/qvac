@@ -19,7 +19,7 @@
       },
       "dependsOn": [
         {
-          "projects": ["@qvac/cli"],
+          "projects": ["@qvac/cli", "@qvac/ai-sdk-provider"],
           "target": "build"
         }
       ]
@@ -32,7 +32,7 @@
       },
       "dependsOn": [
         {
-          "projects": ["@qvac/cli"],
+          "projects": ["@qvac/cli", "@qvac/ai-sdk-provider"],
           "target": "build"
         }
       ]

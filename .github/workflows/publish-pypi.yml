@@ -56,13 +56,13 @@ jobs:
       matrix: ${{ steps.mode.outputs.matrix }}
     steps:
       - name: Checkout scripts
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             packages/sdk/package.json
             packages/sdk-python
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - id: mode
@@ -105,25 +105,30 @@ jobs:
         working-directory: packages/sdk-python
     steps:
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-python@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-python@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           python-version: "3.10"
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
+        with:
+          node-version: lts/*
       - name: Install build tooling
         run: |
           python3 -m venv .venv
           .venv/bin/pip install --quiet -U pip
           .venv/bin/pip install --quiet build twine
           .venv/bin/pip install --quiet -e ".[gen]"
-      - name: Contract check
-        run: .venv/bin/python3 scripts/generate.py --check
+      - name: Generate the client
+        run: |
+          node ../sdk/ci/clients.mjs prepare-sdk
+          .venv/bin/python3 scripts/generate.py
       - name: Build
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
       - name: Check metadata
         run: .venv/bin/twine check dist/*
-      - uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: dist-sdk-python
           path: packages/sdk-python/dist/*
@@ -144,18 +149,18 @@ jobs:
       id-token: write
     steps:
       - name: Checkout scripts
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           sparse-checkout: |
             packages/sdk/package.json
             packages/sdk-python
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: lts/*
       - if: ${{ !inputs.publish_pypi_only }}
         run: node packages/sdk-python/ci/release.mjs wait-npm
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/download-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: dist-sdk-python
           path: dist
@@ -183,30 +188,34 @@ jobs:
         working-directory: packages/sdk-python
     steps:
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-python@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-python@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           python-version: "3.10"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/setup-node@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           node-version: "22"
       - run: python -m pip install --upgrade pip build
       # All-public @qvac deps, no auth: npm install in ../sdk fetches the addons with their published prebuilds.
       - run: python scripts/build_worker.py
+      # The worker build installed and built the SDK the generator exports the contract from.
+      - run: |
+          python -m pip install -e ".[gen]"
+          python scripts/generate.py
       - env:
           WHEEL_PLATFORM: ${{ matrix.platform }}
         run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
       # A wheel records no commit and a rebuild is not byte-identical, so a re-run replaces the assets. A release push
-      # waits for publish-npm.yml's release; the version check above ties the tag to this commit.
+      # waits for publish-npm.yml's release; the version check in setup ties the tag to this commit.
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.setup.outputs.tag }}
         run: |
           node ci/release.mjs wait-release "$TAG"
           gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
-      - uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/upload-artifact@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0
         with:
           name: fat-wheel-${{ matrix.label }}
           path: packages/sdk-python/dist/*.whl

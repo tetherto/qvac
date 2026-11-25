@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0] - 2026-11-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. It also brings 0.32's
+  Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)), which installs CUDA
+  automatically. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.31.x or
+  0.32.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
+- This package needed no code change for the new fabric.
+
 ## [0.7.0] - 2026-11-19
 
 ### Breaking

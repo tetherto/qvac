@@ -11,6 +11,7 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   batchCompletion: true,
   embeddings: true,
   imageEmbedding: true,
+  stereoDepth: true,
   decision: true,
   rerank: true,
   transcribe: true,
@@ -27,7 +28,6 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   loadModel: true,
   downloadAsset: true,
   modelRegistry: true,
-  rag: true,
   rpcServer: true,
   rpcDiscovery: true,
   world: true

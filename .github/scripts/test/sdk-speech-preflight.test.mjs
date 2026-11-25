@@ -204,6 +204,12 @@ function packageFixture(root, slug, host) {
   writeFileSync(join(workdir, 'index.js'), 'module.exports = {}\n')
   const addon = bundled ? `${mangledAddonName(name)}.bare` : expectedAddonFile(name, host)
   writeFileSync(join(workdir, 'prebuilds', host, addon), slug)
+  if (slug === 'fabric' && host === 'linux-x64') {
+    const module = 'qvac__fabric-linux-x64-cuda'
+    mkdirSync(join(workdir, 'prebuilds', host, module), { recursive: true })
+    writeFileSync(join(workdir, 'prebuilds', host, module + '.bare'), 'carrier')
+    writeFileSync(join(workdir, 'prebuilds', host, module, 'libqvac-ggml-cuda.so'), 'CUDA')
+  }
   return workdir
 }
 
@@ -251,20 +257,27 @@ test('packs and installs only the current host, then verifies the actual npm ins
   const root = temporary(t)
   const host = `${process.platform}-${process.arch}`
   const packages = packFixtures(root, host)
-  assert.equal(packages.length, PACKAGES.length * 2 - BUNDLED.size)
+  assert.equal(packages.length, PACKAGES.length * 2 - BUNDLED.size + (host === 'linux-x64' ? 1 : 0))
   assert.deepEqual(
     new Set(packages.map((p) => p.name)),
-    new Set(
-      PACKAGES.flatMap((slug) =>
+    new Set([
+      ...PACKAGES.flatMap((slug) =>
         BUNDLED.has(slug) ? [`@qvac/${slug}`] : [`@qvac/${slug}`, `@qvac/${slug}-${host}`]
-      )
-    )
+      ),
+      ...(host === 'linux-x64' ? ['@qvac/fabric-linux-x64-cuda'] : [])
+    ])
   )
   const bci = packages.find((p) => p.name === '@qvac/bci-whispercpp')
   assert.deepEqual(
     bci.native.map(({ name }) => name),
     [join(host, 'qvac__bci-whispercpp.bare')]
   )
+  if (host === 'linux-x64') {
+    const base = packages.find((p) => p.name === '@qvac/fabric-linux-x64')
+    const cuda = packages.find((p) => p.name === '@qvac/fabric-linux-x64-cuda')
+    assert.ok(cuda.native.some((file) => file.name.endsWith('libqvac-ggml-cuda.so')))
+    assert.ok(!base.native.some((file) => file.name.includes('-cuda')))
+  }
   const consumer = installFixture(root, packages)
   verifySpeechPreflight(consumer, { ...CONFIG, host, packages })
 })

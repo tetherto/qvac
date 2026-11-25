@@ -1,5 +1,5 @@
 name: Check PR trust
-description: Decide whether a pull_request_target run may proceed. Load it from the default branch, never the PR.
+description: Decide whether a PR build may run its code. Load it from the default branch, never the PR.
 
 inputs:
   github-token:
@@ -7,6 +7,24 @@ inputs:
     required: true
   label:
     description: Extra label a fork PR must carry, on top of SHA-bound fork-ci approval
+    default: ""
+  action:
+    description: The PR event the run stands for, e.g. synchronize or labeled
+    default: ""
+  head-sha:
+    description: The PR head commit the run builds
+    default: ""
+  head-repo:
+    description: The PR's head repository, from the API
+    default: ""
+  draft:
+    description: true for a draft PR
+    default: "false"
+  labels:
+    description: JSON array of the PR's label names
+    default: ""
+  event:
+    description: The event to judge the run as; a PR build dispatched by Merge Guard passes workflow_run
     default: ""
 
 outputs:
@@ -24,12 +42,12 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-        EVENT: ${{ github.event_name }}
-        ACTION: ${{ github.event.action }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        EVENT: ${{ inputs.event || github.event_name }}
+        ACTION: ${{ inputs.action }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        HEAD_REPO: ${{ inputs.head-repo }}
         BASE_REPO: ${{ github.repository }}
-        IS_DRAFT: ${{ github.event.pull_request.draft }}
+        IS_DRAFT: ${{ inputs.draft }}
         LABEL_NAME: ${{ inputs.label }}
-        LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        LABELS_JSON: ${{ inputs.labels }}
       run: node "$GITHUB_ACTION_PATH/pr-check-trust.mjs"

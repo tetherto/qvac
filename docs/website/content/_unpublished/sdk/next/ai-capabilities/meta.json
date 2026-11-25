@@ -22,6 +22,7 @@
     "image-classification",
     "decisions",
     "reranking",
-    "image-embeddings"
+    "image-embeddings",
+    "stereo-depth"
   ]
 }

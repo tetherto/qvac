@@ -1,9 +1,9 @@
-import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyRequest } from 'fastify'
 import type { z } from 'zod'
 import { batchCompletion, SDK_SERVER_ERROR_CODES, type CompletionFinal, type Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import { errorResponses } from '@/serve/lib/error-responses'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { resolveModelAlias } from '@/serve/core/config/models'
@@ -82,7 +82,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_response_format:
                 'A prompt has a bad `response_format`, or one combined with `tools`',
               invalid_tool_choice: "A prompt's `tool_choice` names no declared tool",
-              unsupported_image_content: 'An image is not a PNG or JPEG data URL',
+              unsupported_image_content:
+                'An image is not a PNG or JPEG data URL, or is on a non-user message',
               context_length_exceeded: 'The batch does not fit the context window'
             },
             404: { model_not_found: 'Unknown alias' },
@@ -240,7 +241,7 @@ async function runBatch(
       ...(stats !== undefined ? { stats } : {})
     }
   } finally {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
   }
 }
 

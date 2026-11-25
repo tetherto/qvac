@@ -1,26 +1,9 @@
 import { z } from 'zod'
+import { base64ByteLength, rawRgbByteLength, validateRawRgbDimensions } from '@/schemas/raw-rgb'
+import { ggmlModelConfigShape } from '@/schemas/ggml-model-config'
+import { base64String } from '@/schemas/base64'
 
-export const imageEmbeddingConfigSchema = z.object({
-  backend: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Exact GGML device name, such as CPU, CUDA0, Vulkan0 or MTL0. Omit to select GPU, then CPU. Metal and Metal0 are accepted aliases. An unavailable explicit device fails to load.'
-    ),
-  threads: z
-    .number()
-    .int()
-    .min(1)
-    .max(1024)
-    .optional()
-    .describe('CPU thread count, from 1 to 1024. Omit to use the native default.'),
-  backendsDir: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('Directory of GGML backend modules. Omit to use the modules shipped with Fabric.')
-})
+export const imageEmbeddingConfigSchema = z.object({ ...ggmlModelConfigShape })
 
 const imageFields = {
   width: z
@@ -42,41 +25,16 @@ const imageFields = {
   channels: z.literal(3).optional().describe('Packed RGB channel count. Must be 3.')
 }
 
-function validateDimensions(
-  input: { width?: number | undefined; height?: number | undefined; channels?: 3 | undefined },
-  ctx: z.RefinementCtx
-) {
-  const present = [input.width, input.height, input.channels].filter(
-    (value) => value !== undefined
-  ).length
-  if (present !== 0 && present !== 3) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['width'],
-      message: 'Raw RGB image requires width, height and channels together'
-    })
-  }
-}
-
-function base64ByteLength(value: string) {
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
-  return (value.length / 4) * 3 - padding
-}
-
 export const imageEmbeddingInputSchema = z
   .object({
     ...imageFields,
-    image: z.base64().min(1).describe('JPEG/PNG bytes, or packed RGB bytes, encoded as base64.')
+    image: base64String().min(1).describe('JPEG/PNG bytes, or packed RGB bytes, encoded as base64.')
   })
-  .superRefine(validateDimensions)
+  .superRefine(validateRawRgbDimensions)
   .superRefine((input, ctx) => {
     // Checked on the encoded string so the worker rejects bad RGB input before queueing or decoding.
-    if (
-      input.width !== undefined &&
-      input.height !== undefined &&
-      input.channels !== undefined &&
-      base64ByteLength(input.image) !== input.width * input.height * input.channels
-    ) {
+    const expected = rawRgbByteLength(input)
+    if (expected !== undefined && base64ByteLength(input.image) !== expected) {
       ctx.addIssue({
         code: 'custom',
         path: ['image'],
@@ -90,14 +48,10 @@ export const imageEmbeddingClientInputSchema = z
     ...imageFields,
     image: z.instanceof(Uint8Array).refine((value) => value.byteLength > 0, 'Image cannot be empty')
   })
-  .superRefine(validateDimensions)
+  .superRefine(validateRawRgbDimensions)
   .superRefine((input, ctx) => {
-    if (
-      input.width !== undefined &&
-      input.height !== undefined &&
-      input.channels !== undefined &&
-      input.image.byteLength !== input.width * input.height * input.channels
-    ) {
+    const expected = rawRgbByteLength(input)
+    if (expected !== undefined && input.image.byteLength !== expected) {
       ctx.addIssue({
         code: 'custom',
         path: ['image'],

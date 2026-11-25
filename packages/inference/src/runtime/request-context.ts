@@ -22,6 +22,7 @@ export type RequestKind =
   | 'batchCompletion'
   | 'embeddings'
   | 'imageEmbedding'
+  | 'stereoDepth'
   | 'decision'
   | 'rerank'
   | 'transcribe'
@@ -39,7 +40,6 @@ export type RequestKind =
   | 'loadModel'
   | 'downloadAsset'
   | 'modelRegistry'
-  | 'rag'
   | 'rpcServer'
   | 'rpcDiscovery'
 
@@ -118,6 +118,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
+  })
+  // BridgeDepth runs one job at a time per model. Queue here so a cancelled
+  // waiting request never reaches the addon. Shallower than the other lanes
+  // because each waiting request holds both views as base64. A max-size raw
+  // RGB pair is about 134 MB, so 8 waiting requests hold about 1.1 GB.
+  r.policy({
+    kind: 'stereoDepth',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 8
   })
   // Laya owns one active job per model. Wait in the registry so cancelling a
   // queued request never reaches the addon or interrupts the active job.

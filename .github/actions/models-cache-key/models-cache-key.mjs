@@ -57,6 +57,12 @@ export function loadManifest(workdir, path = 'test/integration/models.manifest.j
 
 function main(env) {
   const cache = modelCache(env.WORKDIR, env.TARGET)
+  // metadata.modelCache.plan: restored per model by _desktop.yml, never as a whole.
+  if (cache?.plan) {
+    console.log(`${cache.path}: planned per model by the target`)
+    appendFileSync(env.GITHUB_OUTPUT, `key=\nrestore-prefix=\nfill=false\nplan=true\npaths<<EOF\n\nEOF\n`)
+    return
+  }
   let r
   if (cache) {
     const keyText = cache.keyFiles.map((f) => readFileSync(join(env.WORKDIR, f), 'utf8')).join('\0')
@@ -81,7 +87,7 @@ function main(env) {
   }
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
+    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\nplan=false\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
   )
 }
 

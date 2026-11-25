@@ -17,6 +17,16 @@ the exported inference surface rather than maintaining an independent schema.
 Read the current source before documenting defaults; configuration fields and
 defaults are intentionally not duplicated here.
 
+The diffusion addon selects the performance profile. See the
+[diffusion config schema](../src/schemas/sdcpp-config.ts) for defaults and
+overrides and the [video generation guide](../../../docs/website/content/_unpublished/sdk/next/ai-capabilities/video-generation.mdx#performance-profiles)
+for supported hardware and LTX output limits.
+
+Load-time fit checks and `assessModelFit` size bounded video at its declared
+maximum width, height, and frame count. If any limit exceeds what the
+[fitter](../src/plugins/builtin/sdcpp-generation/fit.ts) can size, the fit is
+`unknown`.
+
 `includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
 `false` for workers that only process raw PCM or streaming audio, and list the
 required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
@@ -63,6 +73,16 @@ Offline TDT push streams, including Parakeet TDT v3, default to 30,000 ms and
 require at least 30,000 ms. Explicit SDK overrides must be positive. Full
 TranscribePsy EU uses its own default.
 
+Standard TDT batch and push-stream transcription falls back to ggml when a
+Core ML sidecar cannot safely handle the encoder input. A loaded sidecar does
+not guarantee that every request uses Core ML; check `encoderUsedCoreml` in the
+terminal statistics for actual use.
+
+A streaming decode window is independent of the size of PCM writes: callers can
+send small writes while the engine accumulates its supported window. Unsupported
+explicit TDT windows fail through the normal request error path instead of
+producing a truncated transcript.
+
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages
 itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
@@ -76,3 +96,22 @@ the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
 Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an
 encoder-less GGUF whose encoder and decoder bundles the loader stages beside it on
 macOS and iOS; on any other platform that load is refused before the download.
+
+Image diffusion (`sdcpp-generation`, `mode: 'diffusion'`) takes optional Apple
+Core ML sidecars for SD 1.x/2.x models, SDXS included: `coremlUnetModelSrc` (the
+UNet) and `coremlTaeDecoderModelSrc` (the tiny-autoencoder decoder), plus
+`taesdModelSrc` (TAESD weights that replace the full VAE on every platform). The
+plugin resolves them into the `coremlUnetModelPath`, `coremlTaeDecoderModelPath`
+and `taesdModelPath` artifacts, which become the addon's `files.coremlUnet`,
+`files.coremlTaeDecoder` and `files.taesd`. A sidecar source is a local
+`.mlmodelc` directory or a `registry://` address of one: the registry loader
+stages every component under the bundle directory, from the catalog's listing,
+the listing saved by an earlier download, or the live registry's, and returns the
+directory. HTTP and `pear://` sidecar sources, the sidecars off macOS and iOS,
+and all three sources outside image diffusion are refused before any download.
+The plugin never sets `prediction`, which belongs to the UNet export (`'eps'` for
+the SD 2.1-base sidecar on SD 2.1). A diffusion request with a `lora` is refused
+on a Core ML UNet, and a load with either sidecar gets an `unknown` fit verdict
+without running the fitter. `SD_COREML_COMPUTE_UNITS` (`cpu_ne`, `all`,
+`cpu_gpu`, `cpu`) is a process-wide environment variable the engine reads at load
+time; it has no per-load config field.

@@ -7,8 +7,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.Base64
 import io.tether.qvac.sdk.QvacClient
-import io.tether.qvac.sdk.QvacAttachment
 import io.tether.qvac.sdk.QvacCompletionOptions
+import io.tether.qvac.sdk.QvacContentPart
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.QvacGenerationOptions
 import io.tether.qvac.sdk.QvacMessage
@@ -216,10 +216,13 @@ class FeatureLabRunner(
         return client.completion.run(
             modelId = modelId,
             history = listOf(
-                QvacMessage.user(
-                    content = prompt,
-                    attachments = attachment?.let { listOf(QvacAttachment(it.absolutePath)) }.orEmpty(),
-                ),
+                if (attachment == null) {
+                    QvacMessage.user(prompt)
+                } else {
+                    QvacMessage.user(
+                        listOf(QvacContentPart.Media(attachment.absolutePath), QvacContentPart.Text(prompt)),
+                    )
+                },
             ),
             options = QvacCompletionOptions(
                 captureThinking = true,

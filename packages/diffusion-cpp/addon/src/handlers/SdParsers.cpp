@@ -153,6 +153,7 @@ scheduler_t parseScheduler(const std::string& name) {
       {"kl_optimal", KL_OPTIMAL_SCHEDULER},
       {"bong_tangent", BONG_TANGENT_SCHEDULER},
       {"ltx2", LTX2_SCHEDULER},
+      {"flux", FLUX_SCHEDULER},
   };
   if (auto it = schedulers.find(name); it != schedulers.end()) {
     return it->second;
@@ -162,7 +163,7 @@ scheduler_t parseScheduler(const std::string& name) {
       "scheduler: unknown value '" + name +
           "'. Valid: discrete, karras, exponential, ays, gits, "
           "sgm_uniform, simple, lcm, smoothstep, kl_optimal, bong_tangent, "
-          "ltx2");
+          "ltx2, flux");
 }
 
 sd_cache_mode_t parseCacheMode(const std::string& name) {

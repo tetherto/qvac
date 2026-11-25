@@ -18,15 +18,15 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
-      platforms: ['desktop-python', 'kotlin-android']
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin']
     }
   },
   {
     match: /^tts-moss-/,
     skip: {
       reason:
-        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory; the Python client has no MOSS step bindings.',
-      platforms: ['mobile', 'desktop-python']
+        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory, and their 13.5 GiB model set is checked on the JS desktop legs; the Python client has no MOSS step bindings.',
+      platforms: ['mobile', 'desktop-python', 'desktop-kotlin']
     }
   },
   // ── every leg but Snap ───────────────────────────────────────────────────
@@ -34,7 +34,7 @@ const RULES: Rule[] = [
     match: /^snap-storage-/,
     skip: {
       reason: 'Snap storage tests require the strict-confined Snap consumer',
-      platforms: ['desktop', 'desktop-python', 'electron', 'mobile']
+      platforms: ['desktop', 'desktop-python', 'desktop-kotlin', 'electron', 'mobile']
     }
   },
 
@@ -273,7 +273,7 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'The plugin strips main-gpu on single-GPU devices, and the ocr-main-gpu resource is desktop, Electron and Snap only',
-      platforms: ['mobile', 'desktop-python']
+      platforms: ['mobile', 'desktop-python', 'desktop-kotlin']
     }
   },
 
@@ -314,6 +314,7 @@ const RULES: Rule[] = [
         'desktop-linux',
         'desktop-windows',
         'desktop-python',
+        'desktop-kotlin',
         'electron-linux',
         'electron-windows',
         'snap',
@@ -326,7 +327,14 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'The Core ML sidecar cache check is an iOS device check: it asserts the bundle landed in the app cache',
-      platforms: ['desktop', 'desktop-python', 'electron', 'snap', 'mobile-android']
+      platforms: [
+        'desktop',
+        'desktop-python',
+        'desktop-kotlin',
+        'electron',
+        'snap',
+        'mobile-android'
+      ]
     }
   },
   {
@@ -337,6 +345,7 @@ const RULES: Rule[] = [
         'desktop-linux',
         'desktop-windows',
         'desktop-python',
+        'desktop-kotlin',
         'electron-linux',
         'electron-windows',
         'snap',
@@ -382,15 +391,24 @@ const RULES: Rule[] = [
       platforms: ['desktop-python']
     }
   },
+  {
+    match: /^rpc-server-(?!device-map)/,
+    skip: {
+      reason:
+        'The worker the Python wheel ships bundles no RPC server provider, so startRpcServer has nothing to start',
+      platforms: ['desktop-python']
+    }
+  },
 
   // ── the Kotlin client ────────────────────────────────────────────────────
-  // As for Python: skip only claims that belong to the JS client.
+  // As for Python: skip only claims that belong to the JS client. Both Kotlin legs run the same
+  // client, so each of these names both.
   {
     match: ['model-load-llm-legacy-no-mmap-rejected'],
     skip: {
       reason:
         "Asserts 50010, the code the JS client's strict load schema gives a modelConfig with the removed no_mmap key before sending. The Kotlin client sends the config as is and the worker drops the unknown key, so the claim belongs to the JS client",
-      platforms: ['kotlin-android']
+      platforms: ['kotlin-android', 'desktop-kotlin']
     }
   },
   {
@@ -398,7 +416,7 @@ const RULES: Rule[] = [
     skip: {
       reason:
         "Asserts the JS client's runtime refusal of a load with no modelType. The Kotlin SDK takes the model type as a required parameter, so the same call does not compile",
-      platforms: ['kotlin-android']
+      platforms: ['kotlin-android', 'desktop-kotlin']
     }
   },
   {
@@ -411,15 +429,39 @@ const RULES: Rule[] = [
     skip: {
       reason:
         "Asserts the message the JS client's request schema gives before sending. The Kotlin SDK's typed requests cannot hold an unknown emotion or a non-boolean sample, and admit a negative endOfTurnSilenceMs that the worker rejects later on the session, with a message that names no field",
-      platforms: ['kotlin-android']
+      platforms: ['kotlin-android', 'desktop-kotlin']
     }
   },
   {
     match: /^plugin-(echo-|invoke-unknown-handler$)/,
     skip: {
       reason:
-        'The echo plugin is a JS module the JS consumers register in their worker config; the Kotlin app runs the runtime profile the Kotlin SDK ships, which bundles only the built-in plugins',
-      platforms: ['kotlin-android']
+        'The echo plugin is a JS module the JS consumers register in their worker config; the Python and Kotlin legs run the worker their package ships, which bundles only the built-in plugins',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin']
+    }
+  },
+  {
+    match: /^(no-lingering-bare-|worker-restart-)/,
+    skip: {
+      reason:
+        "Asserts on the Bare worker processes the JS client spawns, by reading this process's own child table. The Kotlin desktop client runs its worker in-process as a BareKit worklet, so there is no child process to check",
+      platforms: ['desktop-kotlin']
+    }
+  },
+  {
+    match: /^qvac-rag-.*-bare$/,
+    skip: {
+      reason:
+        'Runs @qvac/rag in the rag-e2e-plugin worker fixture, which the JS consumers register in their worker config; the Python and Kotlin legs run the worker their package ships, which bundles only the built-in plugins, and the mobile consumer has no step interpreter',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
+    }
+  },
+  {
+    match: /^qvac-rag-.*-node$/,
+    skip: {
+      reason:
+        'Runs @qvac/rag in the JS consumer process through the ragLocal binding, which only the desktop and Electron consumers have',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
     }
   },
 

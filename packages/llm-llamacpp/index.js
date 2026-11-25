@@ -273,19 +273,19 @@ function normalizeFinetuneParams(opts) {
     return out;
 }
 /**
- * Validates the single disk path. For a sharded GGUF, pass only the first
+ * Validates the single model path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 function validateModelPath(files) {
     if (!Array.isArray(files) || files.length === 0) {
-        throw new TypeError("files.model must contain one absolute disk path");
+        throw new TypeError("files.model must contain one absolute model path");
     }
     if (files.length !== 1) {
-        throw new TypeError("Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+        throw new TypeError("Weight streaming is no longer supported. Pass only one path in files.model; " +
             "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.");
     }
     if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
-        throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+        throw new TypeError("files.model[0] must be an absolute path string; weight buffers are not supported");
     }
     if (files[0].endsWith(".tensors.txt")) {
         throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
@@ -314,7 +314,7 @@ function sanitizePromptForLog(prompt) {
         return msg;
     });
 }
-/** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
+/** LLM client wrapping LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp = class LlmLlamacpp {
     static validateModelPath = validateModelPath;
     static assessFit = fit_1.assessFit;
@@ -333,6 +333,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     _rejectWhenBusy;
     _jobSinks;
     _batchHandler;
+    _pendingCleanup;
     _checkpointSaveDir;
     constructor({ files, config, logger = null, opts = {} }) {
         this._modelPath = validateModelPath(files?.model);
@@ -355,6 +356,7 @@ const LlmLlamacpp = class LlmLlamacpp {
         this._finetuneJob = (0, infer_base_1.createJobHandler)({ cancel: () => this.addon?.cancel() });
         this._run = (0, infer_base_1.exclusiveRunQueue)();
         this.addon = null;
+        this._pendingCleanup = new Set();
         this._checkpointSaveDir = null;
         // Concurrency is the caller's configured `parallel` (n_seq_max); values
         // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
@@ -419,11 +421,16 @@ const LlmLlamacpp = class LlmLlamacpp {
             this.logger.error("Error during model load:", loadError);
             // Best-effort cleanup of the partially-initialized addon so a subsequent
             // load() does not leak a zombie native instance.
+            const partialAddon = this.addon;
             try {
-                await this.addon?.unload?.();
+                await partialAddon?.unload?.();
             }
-            catch { }
-            this.addon = null;
+            catch {
+                if (partialAddon)
+                    this._pendingCleanup.add(partialAddon);
+            }
+            if (this.addon === partialAddon)
+                this.addon = null;
             throw loadError;
         }
         this.logger.info("Model load completed successfully");
@@ -716,7 +723,7 @@ const LlmLlamacpp = class LlmLlamacpp {
             return;
         this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error, jobId);
     }
-    /** Instantiate the native addon with the given parameters. */
+    /** Instantiate the selected engine binding with the given parameters. */
     _createAddon(configurationParams) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- resolved lazily so this module loads without prebuilds.
         const binding = require("./binding");
@@ -799,13 +806,33 @@ const LlmLlamacpp = class LlmLlamacpp {
                 // Native cleanup is unconditional: whatever settlement does, the
                 // addon must be released and the instance left cleanly unloaded.
                 this._jobSinks.clear();
-                if (this.addon) {
-                    await this.addon.unload();
-                    // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-                    // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-                    this.addon = null;
+                const currentAddon = this.addon;
+                const cleanup = new Set(this._pendingCleanup);
+                if (currentAddon)
+                    cleanup.add(currentAddon);
+                this._pendingCleanup.clear();
+                let cleanupError = null;
+                try {
+                    for (const addon of cleanup) {
+                        try {
+                            await addon.unload();
+                        }
+                        catch (error) {
+                            this._pendingCleanup.add(addon);
+                            cleanupError ??= error instanceof Error ? error : new Error(String(error));
+                        }
+                    }
                 }
-                this.state.configLoaded = false;
+                finally {
+                    // Reset JavaScript state even when native cleanup reports an error.
+                    // A later load must create a new addon instead of reusing a disposed
+                    // or partially destroyed handle.
+                    if (this.addon === currentAddon)
+                        this.addon = null;
+                    this.state.configLoaded = false;
+                }
+                if (cleanupError)
+                    throw cleanupError;
             }
         });
     }

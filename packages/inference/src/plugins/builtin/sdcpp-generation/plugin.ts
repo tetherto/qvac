@@ -6,7 +6,7 @@ import ImgStableDiffusion, {
 import {
   definePlugin,
   defineHandler,
-  sdcppConfigSchema,
+  sdcppLoadConfigSchema,
   diffusionRequestSchema,
   diffusionStreamResponseSchema,
   videoRequestSchema,
@@ -29,7 +29,7 @@ import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logg
 import { ModelLoadFailedError } from '@/errors/index'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
-import { diffusion } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
+import { diffusion, markCoremlUnetModel } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
 import {
   markLtxVideoModel,
   markH3VideoModel,
@@ -53,6 +53,7 @@ import {
 } from '@/plugins/builtin/sdcpp-generation/load-files'
 import { toEsrganAddonConfig } from '@/plugins/builtin/sdcpp-generation/upscaler-config'
 import { splitWorldConfig } from '@/plugins/builtin/sdcpp-generation/world-config'
+import { coremlSidecarRefusal } from '@/plugins/builtin/sdcpp-generation/coreml'
 
 // Wait for op cleanup before emitting completion.
 async function* withCompletionFrame<TChunk, TResult>(
@@ -87,6 +88,9 @@ type DiffusionArtifactKey =
   | 'esrganModelPath'
   | 'taehvModelPath'
   | 'seedScenePath'
+  | 'taesdModelPath'
+  | 'coremlUnetModelPath'
+  | 'coremlTaeDecoderModelPath'
 
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
@@ -98,7 +102,7 @@ export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
   displayName: 'Image Generation & Upscaling (stable-diffusion.cpp)',
   addonPackage: ADDON_DIFFUSION,
-  loadConfigSchema: sdcppConfigSchema,
+  loadConfigSchema: sdcppLoadConfigSchema,
   fitRequest: sdcppFitRequest,
   assessFit: diffusionAssessFit,
 
@@ -141,6 +145,9 @@ export const diffusionPlugin = definePlugin({
           'modelConfig.llmModelSrc (Qwen3.5) and modelConfig.vaeModelSrc.'
       )
     }
+    // Checked before any companion download, the sidecars being platform-bound.
+    const coremlRefusal = coremlSidecarRefusal(cfg, ctx.platform)
+    if (coremlRefusal) throw new ModelLoadFailedError(coremlRefusal)
     // A high-noise expert only has somewhere to go in the Wan 2.2 A14B video
     // layout: every other mode builds a model with no second-expert slot, and
     // embeddingsConnectorsModelSrc selects LTX-2 instead. Check it ahead of the
@@ -260,6 +267,9 @@ export const diffusionPlugin = definePlugin({
       embeddingsConnectorsModelSrc,
       taehvModelSrc,
       sceneSrc,
+      taesdModelSrc,
+      coremlUnetModelSrc,
+      coremlTaeDecoderModelSrc,
       upscaler,
       ...rest
     } = cfg
@@ -324,7 +334,10 @@ export const diffusionPlugin = definePlugin({
       embeddingsConnectorsModelSrc,
       esrganModelSrc,
       taehvModelSrc,
-      sceneSrc
+      sceneSrc,
+      taesdModelSrc,
+      coremlUnetModelSrc,
+      coremlTaeDecoderModelSrc
     }
     const hasSources = Object.values(sources).some(Boolean)
 
@@ -348,7 +361,10 @@ export const diffusionPlugin = definePlugin({
       embeddingsConnectorsModelPath,
       esrganModelPath,
       taehvModelPath,
-      seedScenePath
+      seedScenePath,
+      taesdModelPath,
+      coremlUnetModelPath,
+      coremlTaeDecoderModelPath
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
       clipGModelSrc ? resolve(clipGModelSrc) : undefined,
@@ -364,7 +380,10 @@ export const diffusionPlugin = definePlugin({
       embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined,
       taehvModelSrc ? resolve(taehvModelSrc) : undefined,
-      sceneSrc ? resolve(sceneSrc) : undefined
+      sceneSrc ? resolve(sceneSrc) : undefined,
+      taesdModelSrc ? resolve(taesdModelSrc) : undefined,
+      coremlUnetModelSrc ? resolve(coremlUnetModelSrc) : undefined,
+      coremlTaeDecoderModelSrc ? resolve(coremlTaeDecoderModelSrc) : undefined
     ])
 
     return {
@@ -384,7 +403,10 @@ export const diffusionPlugin = definePlugin({
         ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
         ...(esrganModelPath && { esrganModelPath }),
         ...(taehvModelPath && { taehvModelPath }),
-        ...(seedScenePath && { seedScenePath })
+        ...(seedScenePath && { seedScenePath }),
+        ...(taesdModelPath && { taesdModelPath }),
+        ...(coremlUnetModelPath && { coremlUnetModelPath }),
+        ...(coremlTaeDecoderModelPath && { coremlTaeDecoderModelPath })
       }
     }
   },
@@ -465,12 +487,14 @@ export const diffusionPlugin = definePlugin({
       return { model }
     }
 
+    const files = imageFilesFor(modelPath, artifacts)
     const model = new ImgStableDiffusion({
-      files: imageFilesFor(modelPath, artifacts),
+      files,
       config: imageConfigFor(config),
       logger,
       opts: { stats: true }
     })
+    if (files.coremlUnet) markCoremlUnetModel(model)
 
     return { model }
   },

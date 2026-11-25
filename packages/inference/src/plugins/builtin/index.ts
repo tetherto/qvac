@@ -1,5 +1,6 @@
 export { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 export { imageEmbeddingPlugin } from '@/plugins/builtin/ggml-image-embedding/plugin'
+export { stereoDepthPlugin } from '@/plugins/builtin/ggml-stereo-depth/plugin'
 export { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
 export { decisionPlugin } from '@/plugins/builtin/llamacpp-decision/plugin'
 export { rerankPlugin } from '@/plugins/builtin/llamacpp-rerank/plugin'

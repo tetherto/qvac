@@ -69,6 +69,12 @@ pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
 See [FLUX.3 Image Klein](docs/flux3.md) for pinned, checksum-verified downloads,
 the shared MOSS registry baseline, and text-to-image and reference-editing examples.
 
+## Fibo 2.0 Edit Turbo setup
+
+See [Fibo 2.0 Edit Turbo](docs/fibo2-edit-turbo.md) for the pinned Q4_0 download
+bundle, four-step reference-editing example, and native integration checks.
+Source builds have been validated on CUDA and Vulkan; see the guide for limits.
+
 ## MOSS-Image setup
 
 Download the pinned SFT diffusion model, Qwen3.5 encoder, small FLUX.2 VAE,
@@ -263,7 +269,9 @@ try {
 }
 ```
 
-`coremlUnet` supports SD 1.x/2.x, including SDXS. Use the prediction type,
+`coremlUnet` supports SD 1.x/2.x, including SDXS, and SDXL. An SDXL UNet ships as
+a folder of chunks (`*chunk1.mlmodelc`, `*chunk2.mlmodelc`); pass the folder.
+Use the prediction type,
 resolution and prompt limits of the export. `coremlTaeDecoder` requires SDXS's
 built-in tiny autoencoder or `files.taesd` for SD/SDXL. `files.taesd` replaces
 the full VAE for every encoding and decoding operation, so `files.vae` is
@@ -648,7 +656,7 @@ Reference-validation compatibility: `init_images` on SD1/SD2/SDXL is now
 rejected by the loaded native model after job submission, rather than by the
 JavaScript file/prediction checks. Await the response's `.await()` promise to
 handle the error. The native message is
-`img2img: init_images requires a model supporting reference editing (FLUX.2 or Qwen-Image-2.1).`
+`img2img: init_images requires a model supporting reference editing.`
 Callers matching the former JavaScript error text must update their handling.
 The former rejection of `init_image` with `files.llm` but no explicit
 `'flux2_flow'` prediction is also removed; native model capabilities determine

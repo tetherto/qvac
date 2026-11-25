@@ -112,7 +112,7 @@ export const bciConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Android and Linux: the directory scanned, as given, for the ggml backend modules. Defaults to the directory next to the loaded addon module.'
+      'Directory scanned as given for the ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships. The first load or fit check in a process decides; later values are ignored.'
     ),
   embedderModelSrc: modelSrcInputSchema
     .optional()

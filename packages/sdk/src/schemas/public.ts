@@ -10,6 +10,8 @@ export {
   rerankConfigBaseSchema as llamacppRerankConfigSchema,
   imageEmbeddingConfigSchema as ggmlImageEmbeddingConfigSchema,
   type ImageEmbeddingConfig as GgmlImageEmbeddingConfig,
+  stereoDepthConfigSchema as ggmlStereoDepthConfigSchema,
+  type StereoDepthConfig as GgmlStereoDepthConfig,
   modelSrcInputSchema as modelSourceSchema,
   type LlmConfigInput as LlamacppCompletionConfig,
   type EmbedConfigInput as LlamacppEmbeddingConfig,

@@ -278,6 +278,7 @@ describe('writeStreamingResponse: reasoning', () => {
     assert.equal(completed['output_text'], 'Done.')
     assert.deepEqual(completed['usage'], {
       input_tokens: 50,
+      input_tokens_details: { cached_tokens: 0 },
       output_tokens: 6,
       total_tokens: 56
     })
@@ -304,7 +305,7 @@ describe('writeStreamingResponse: reasoning', () => {
       (completed['output'] as Array<{ type: string }>).map((o) => o.type),
       ['reasoning', 'function_call']
     )
-    assert.equal(completed['status'], 'requires_action')
+    assert.equal(completed['status'], 'completed')
   })
 })
 

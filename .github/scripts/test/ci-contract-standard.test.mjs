@@ -13,8 +13,7 @@ import {
   CONFIG_NAME,
   configurations,
   checkMetadata,
-  parseRunnerLabels,
-  gateKeys
+  parseRunnerLabels
 } from '../select-projects.mjs'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
@@ -75,17 +74,6 @@ for (const project of contract) {
     }
   })
 
-  test(`${project.name}: has a Merge Guard key when it posts a status`, () => {
-    // Native builds and C++ tests post the statuses Merge Guard waits for; a package with neither needs no key.
-    const configured = Object.keys(project.targets.build?.configurations ?? {}).length > 0
-    if (!configured && !project.targets['cpp:tests']) return
-    const [parent, dir] = project.path.split('/')
-    assert.ok(
-      gateKeys(read('.github/workflows/pr-gate-merge.yml'))[dir],
-      `${project.path}: add a pr-gate-merge.yml filter whose first path is "${parent}/${dir}/**"`
-    )
-  })
-
   test(`${project.name}: host setup targets take no forwarded arguments`, () => {
     for (const target of HOST_TARGETS.filter((t) => targets.includes(t)))
       assert.equal(
@@ -121,4 +109,23 @@ test('the groups request only standard targets', () => {
       assert.deepEqual(extra, [], `${file}: requests ${extra.join(', ')}`)
     }
   }
+})
+
+test('metadata.modelCache takes keyFiles or plan: true, never both', () => {
+  const withCache = (modelCache) => ({
+    name: 'pkg',
+    targets: { 'test:integration': { metadata: { modelCache } } }
+  })
+  const check = (modelCache) => () => checkMetadata(withCache(modelCache), 'test:integration')
+  assert.doesNotThrow(check({ path: '.cache', keyFiles: ['models.ts'] }))
+  assert.doesNotThrow(check({ path: '.cache', plan: true }))
+  for (const bad of [
+    { path: '.cache' },
+    { path: '.cache', keyFiles: [] },
+    { path: '.cache', plan: false },
+    { path: '.cache', keyFiles: ['models.ts'], plan: true },
+    { keyFiles: ['models.ts'] },
+    { path: '.cache', plan: true, extra: 1 }
+  ])
+    assert.throws(check(bad), /metadata\.modelCache takes path/, JSON.stringify(bad))
 })

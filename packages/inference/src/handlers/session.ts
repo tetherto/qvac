@@ -33,7 +33,7 @@ export async function handleCloseSession(
   closeSession(sessionId)
   try {
     const cancelled = await getRequestRegistry().drainSession(sessionId, 'sessionClosed')
-    disposeSessionVectorIndexes(sessionId)
+    await disposeSessionVectorIndexes(sessionId)
 
     const releasedModels = getModelIdsLeasedBy(sessionId)
     for (const modelId of releasedModels) {

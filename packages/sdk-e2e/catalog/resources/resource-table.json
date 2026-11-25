@@ -251,7 +251,8 @@
   "tools-gemma4": {
     "on": [
       "desktop-linux",
-      "desktop-python"
+      "desktop-python",
+      "desktop-kotlin"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -381,6 +382,11 @@
   },
   "echo": {
     "type": "echo",
+    "modelSrc": "",
+    "skipPreDownload": true
+  },
+  "rag-e2e": {
+    "type": "rag-e2e",
     "modelSrc": "",
     "skipPreDownload": true
   },
@@ -878,7 +884,8 @@
   "world": {
     "on": [
       "desktop-linux",
-      "desktop-python"
+      "desktop-python",
+      "desktop-kotlin"
     ],
     "constant": {
       "$const": "ABOT_WORLD_0_5B_Q8_0"

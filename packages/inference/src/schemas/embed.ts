@@ -5,10 +5,11 @@ import {
   imageEmbeddingStatsSchema
 } from './image-embedding'
 import { trackedRequestSchema } from '@/schemas/request-base'
+import { base64String } from '@/schemas/base64'
 
 const mediaSourceSchema = z
   .discriminatedUnion('type', [
-    z.object({ type: z.literal('base64'), value: z.string().min(1).base64() }),
+    z.object({ type: z.literal('base64'), value: base64String().min(1) }),
     z.object({ type: z.literal('filePath'), value: z.string().min(1) })
   ])
   .describe(

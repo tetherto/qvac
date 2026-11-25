@@ -10,7 +10,8 @@ import {
   generateShardFilenames,
   calculatePercentage
 } from '@/utils/index'
-import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { getSingleFileCachePath, hasFileOfSize } from '@/utils/cache/paths'
+import { acceptsLegacyFlatCache } from '@/utils/cache/layout'
 import { getModelByPath, type RegistryItem } from '@/models/registry/index'
 import { acquireRegistryClient, type RegistryWait } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
@@ -33,6 +34,11 @@ import {
   getCoremlSidecarSpec,
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
+import {
+  downloadCoremlBundleFromRegistry,
+  findRegistryCoremlBundleSet,
+  getCoremlBundle
+} from '@/handlers/load-model/coreml-bundle'
 import {
   DownloadCancelledError,
   ModelNotFoundError,
@@ -296,16 +302,6 @@ async function downloadShardedFilesFromRegistry(
   return getShardPath(cacheKey, shards[0]!.filename)
 }
 
-// A size check only: the single-file path validates the file before using it.
-async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
-  if (expectedSize <= 0) return false
-  try {
-    return (await fsPromises.stat(path)).size === expectedSize
-  } catch {
-    return false
-  }
-}
-
 export async function downloadModelFromRegistry(
   registryPath: string,
   registrySource: string,
@@ -330,6 +326,38 @@ export async function downloadModelFromRegistry(
         createRegistryCacheKey(registryPath),
         ctx.signal
       )
+      // A compiled Core ML bundle is a directory of component files, staged
+      // with its layout for an addon that takes the bundle's path.
+      const coremlBundle = getCoremlBundle(registrySource, registryPath)
+      if (coremlBundle) {
+        return await downloadCoremlBundleFromRegistry({
+          bundle: coremlBundle,
+          downloadKey,
+          findInRegistry: async () => {
+            // Released before the bundle downloads, which lease the client per file.
+            await using lease = await acquireRegistryClient({
+              wait: 'download',
+              signal: ctx.signal
+            })
+            // Await inside the scope so the lease outlives the lookup.
+            return await findRegistryCoremlBundleSet(lease.client, coremlBundle)
+          },
+          progressCallback: ctx.broadcastProgress,
+          signal: ctx.signal,
+          hooks: {
+            ...hooks,
+            markCacheHit: () => {
+              hooks?.markCacheHit?.()
+              ctx.setCacheHit(true)
+            },
+            markCacheMiss: () => {
+              hooks?.markCacheMiss?.()
+              ctx.setCacheHit(false)
+            }
+          },
+          shouldClearCache: ctx.shouldClearCache
+        })
+      }
       if (shardInfo.isSharded) {
         const cacheKey = generateShortHash(registryPath)
         const localShardMeta = modelMetadata?.shardMetadata
@@ -504,7 +532,7 @@ export async function downloadModelFromRegistry(
         return await downloadCompanionSetFromRegistry({
           companionSet: modelMetadata.companionSet,
           downloadKey,
-          allowLegacyFlatCache: modelMetadata.addon === 'nmt',
+          allowLegacyFlatCache: acceptsLegacyFlatCache(modelMetadata.addon),
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
           hooks: companionHooks,
