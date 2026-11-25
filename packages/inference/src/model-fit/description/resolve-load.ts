@@ -33,6 +33,7 @@ import {
   type FitStubSetMember,
   type FitStubUnavailableReason
 } from '@/model-fit/description/fetch'
+import { fitModelPath } from '@/model-fit/model-path'
 
 export interface LoadDescription {
   transcriptionWorkload?: TranscriptionFitWorkload | undefined
@@ -175,7 +176,8 @@ function stubSetFor(registryPath: string): FitStubSet | undefined {
 const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([
   ModelType.nmtcppTranslation,
   ModelType.ggmlClassification,
-  ModelType.ggmlImageEmbedding
+  ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth
 ])
 
 class NoStubError extends Error {
@@ -227,7 +229,7 @@ export async function resolveLoadFromStubs(
     const location = srcString(src)
     // Fitters take absolute paths only, while a load also takes one relative
     // to the working directory.
-    if (location !== '' && fs.existsSync(location)) return path.resolve(location)
+    if (location !== '' && fs.existsSync(location)) return fitModelPath(location)
     // No fitter reads a compiled Core ML bundle: a plugin that takes one
     // answers `unknown` for the load, so the bundle needs no description.
     if (coremlBundleNameOf(location) !== undefined) return location
