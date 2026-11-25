@@ -293,6 +293,14 @@ test('registerPlugin rejects a duplex handler or a typed QVAC operation in a thi
       ),
       'a typed QVAC operation under a dotted contract'
     )
+    t.absent(
+      rejectionReason(
+        plugin('names', { toString: handler('reply') }, [
+          { id: 'acme.names', version: 1, operations: ['toString'] }
+        ])
+      ),
+      'an operation named like an Object.prototype property'
+    )
   } finally {
     clearPlugins()
   }

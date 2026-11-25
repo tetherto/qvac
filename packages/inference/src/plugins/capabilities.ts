@@ -187,7 +187,7 @@ function findQvacCallShapeProblem(
 // its contract by operation name could not tell which one applies.
 function findThirdPartyTypedOperation(contract: CapabilityContract): string | undefined {
   for (const operation of [...contract.operations, ...contract.optionalOperations]) {
-    if (QVAC_OPERATION_CALL_SHAPES[operation] === undefined) continue
+    if (!Object.hasOwn(QVAC_OPERATION_CALL_SHAPES, operation)) continue
     const owner = Object.values(CAPABILITY_CONTRACTS).find(
       (qvac) => qvac.operations.includes(operation) || qvac.optionalOperations.includes(operation)
     )
