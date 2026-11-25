@@ -18,6 +18,7 @@
 #include <exception>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <regex>
 #include <stdexcept>
 #include <string_view>
@@ -308,32 +309,79 @@ bool acceptsScore(
   return false;
 }
 
-common_json scoreLevels(const server_decision_context& decision) {
+common_json
+scoreLevels(const server_decision_context& decision, const llama_model* model) {
   // Upstream's limits differ by type (h2o-lightning from one level up to its
-  // option count, minicpm-ocr-jev no score questions at all, most from 2 to
-  // 10), and the option count is private, so the parser is asked: once per
-  // level count, at load. No type accepts more than 255 options.
-  constexpr size_t kMaxLevels = 256;
-  size_t lowest = 0;
-  size_t highest = 0;
-  common_json criteria = common_json::array();
-  for (size_t n = 1; n <= kMaxLevels; ++n) {
-    criteria.push_back("level " + std::to_string(n - 1));
-    if (acceptsScore(decision, criteria)) {
-      lowest = lowest == 0 ? n : lowest;
-      highest = n;
-    }
-  }
-  if (lowest == 0) {
+  // label count, minicpm-ocr-jev no score questions at all, most from 2 to
+  // 10), and the option count is private, so the parser is asked, at load.
+  // h2o-lightning's labels are distinct single tokens, so no type takes more
+  // levels than the vocabulary has tokens; every other type takes at most 255.
+  const size_t limit = std::max<size_t>(
+      255,
+      static_cast<size_t>(
+          std::max(0, llama_vocab_n_tokens(llama_model_get_vocab(model)))));
+  const auto range = levelRange(
+      [&decision](size_t n) {
+        common_json criteria = common_json::array();
+        for (size_t i = 0; i < n; ++i) {
+          criteria.push_back("level " + std::to_string(i));
+        }
+        return acceptsScore(decision, criteria);
+      },
+      limit);
+  if (!range) {
     return common_json(nullptr);
   }
   common_json levels = common_json::object();
-  levels["min"] = static_cast<int>(lowest);
-  levels["max"] = static_cast<int>(highest);
+  levels["min"] = static_cast<int64_t>(range->min);
+  levels["max"] = static_cast<int64_t>(range->max);
   return levels;
 }
 
 } // namespace
+
+std::optional<LevelRange>
+levelRange(const std::function<bool(size_t)>& accepts, size_t limit) {
+  // The lowest: every type starts at 1 or 2, so a short scan finds it, and a
+  // type none of whose first counts is accepted takes no score questions.
+  constexpr size_t kLowestScan = 16;
+  size_t lowest = 0;
+  for (size_t n = 1; n <= std::min(limit, kLowestScan) && lowest == 0; ++n) {
+    if (accepts(n)) {
+      lowest = n;
+    }
+  }
+  if (lowest == 0) {
+    return std::nullopt;
+  }
+  // The highest: double while accepted, then halve the gap between the last
+  // accepted count and the first rejected one.
+  size_t good = lowest;
+  size_t bad = limit + 1;
+  for (size_t n = lowest * 2; n <= limit; n *= 2) {
+    if (!accepts(n)) {
+      bad = n;
+      break;
+    }
+    good = n;
+  }
+  if (bad == limit + 1 && good < limit) {
+    if (accepts(limit)) {
+      good = limit;
+    } else {
+      bad = limit;
+    }
+  }
+  while (bad - good > 1) {
+    const size_t mid = good + ((bad - good) / 2);
+    if (accepts(mid)) {
+      good = mid;
+    } else {
+      bad = mid;
+    }
+  }
+  return LevelRange{lowest, good};
+}
 
 std::string noulSemantics(common_decision_type type) {
   switch (type) {
@@ -381,7 +429,7 @@ std::string buildInfo(State& d) {
   }
   const server_context_meta meta = d.ctx->get_meta();
 
-  const common_json levels = scoreLevels(decision);
+  const common_json levels = scoreLevels(decision, model);
 
   common_json info = common_json::object();
   info["decision_type"] = std::string(decisionTypeName(decision.type));
@@ -649,21 +697,27 @@ std::string runStates(
     failRequest("\"states\" must be a non-empty array");
   }
 
-  // The request without "states", serialized once: an object that holds at
-  // least "questions" and no "state". Each worker appends the state it claims
-  // and keeps that one body for its run, so a batch holds one copy of the
-  // shared inputs (questions, files) plus one body per worker, not one per
-  // state, and a stop before a state is claimed serializes nothing more.
+  // The request without "states", serialized once: an object without
+  // "state", and empty when the request has nothing else (upstream then
+  // rejects each state's request for its missing "questions"). Each worker
+  // appends the state it claims and keeps that one body for its run, so a
+  // batch holds one copy of the shared inputs (questions, files) plus one body
+  // per worker, not one per state, and a stop before a state is claimed
+  // serializes nothing more.
   common_json shared = request;
   shared.erase("states");
   const std::string sharedText = shared.dump();
-  const auto bodyFor = [&d, &sharedText, &states](size_t i) {
+  const bool sharedEmpty = shared.empty();
+  const auto bodyFor = [&d, &sharedText, sharedEmpty, &states](size_t i) {
     d.batchBodies.fetch_add(1, std::memory_order_relaxed);
     const std::string state = states[i].dump();
     std::string body;
     body.reserve(sharedText.size() + state.size() + 10);
     body.append(sharedText, 0, sharedText.size() - 1);
-    body += ",\"state\":";
+    if (!sharedEmpty) {
+      body += ',';
+    }
+    body += "\"state\":";
     body += state;
     body += '}';
     return body;

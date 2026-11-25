@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <llama/common/common.h>
@@ -29,6 +30,20 @@ constexpr int DECISION_MAX_JSON_DEPTH = 128;
 /// for a type this addon does not list, which callers must not treat as
 /// either.
 std::string noulSemantics(common_decision_type type);
+
+/// The level counts a score question may have, inclusive.
+struct LevelRange {
+  size_t min;
+  size_t max;
+};
+
+/// The range of counts @p accepts takes, up to @p limit, or none when it takes
+/// no count from 1 to 16. @p accepts must take one contiguous range of counts
+/// that starts within 1 to 16, as upstream's parser does for score levels
+/// (h2o-lightning from 1 up to its label count, the others from 2 to 10). It
+/// is asked a few dozen times, not once per count.
+std::optional<LevelRange>
+levelRange(const std::function<bool(size_t)>& accepts, size_t limit);
 
 /// Size limits of the media files (images, audio) a request carries, checked
 /// from each file's header before it is decoded; a file over one is rejected

@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -497,6 +498,49 @@ TEST_F(
   EXPECT_TRUE(next.contains("answers"));
 }
 
+namespace {
+
+/// levelRange() over a predicate that takes [lo, hi], with the number of
+/// times it was asked.
+std::pair<std::optional<qdecision::LevelRange>, size_t>
+rangeOf(size_t lo, size_t hi, size_t limit) {
+  size_t asked = 0;
+  const auto range = qdecision::levelRange(
+      [&](size_t n) {
+        ++asked;
+        return n >= lo && n <= hi;
+      },
+      limit);
+  return {range, asked};
+}
+
+} // namespace
+
+TEST(LevelRangeTest, FindsTheAcceptedRange) {
+  for (const auto& [lo, hi] : std::vector<std::pair<size_t, size_t>>{
+           {2, 10},
+           {1, 1},
+           {1, 255},
+           {1, 256},
+           {1, 257},
+           {1, 1000},
+           {2, 4097}}) {
+    const auto [range, asked] = rangeOf(lo, hi, 150000);
+    ASSERT_TRUE(range.has_value()) << lo << ".." << hi;
+    EXPECT_EQ(range->min, lo) << lo << ".." << hi;
+    EXPECT_EQ(range->max, hi) << lo << ".." << hi;
+    // A few dozen questions, not one per count.
+    EXPECT_LE(asked, 64U) << lo << ".." << hi;
+  }
+}
+
+TEST(LevelRangeTest, StopsAtTheLimitAndReportsNoneWhenNothingIsTaken) {
+  const auto capped = rangeOf(1, 5000, 1000).first;
+  ASSERT_TRUE(capped.has_value());
+  EXPECT_EQ(capped->max, 1000U);
+  EXPECT_FALSE(rangeOf(1, 0, 1000).first.has_value());
+}
+
 TEST(NoulSemanticsTest, ListsEveryKnownTypeAndNothingElse) {
   EXPECT_EQ(
       qdecision::noulSemantics(COMMON_DECISION_TYPE_LEV), "expected_rating");
@@ -700,6 +744,20 @@ TEST_F(DecisionContextModelTest, RejectsMalformedBatches) {
     EXPECT_EQ(outcome.second.rfind("invalid request: ", 0), 0U)
         << outcome.second;
   }
+}
+
+TEST_F(
+    DecisionContextModelTest, ABatchWithoutQuestionsGetsUpstreamsDiagnostic) {
+  // Only "states": each state's request is still valid JSON, so upstream names
+  // the missing field instead of failing to parse the body.
+  const auto outcome = runOutcome(
+      *context_,
+      json{{"states", json::array({kStates[0]})}}.dump(),
+      kNeverStop);
+  EXPECT_EQ(outcome.first, "[ Decision :: InvalidRequest ]");
+  EXPECT_EQ(
+      outcome.second,
+      "invalid request: states[0]: \"questions\" must be a non-empty object");
 }
 
 TEST_F(DecisionContextModelTest, AFailingStateFailsTheBatchAndIsNamed) {
