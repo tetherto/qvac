@@ -100,16 +100,13 @@ runs:
         tar -xzf "$RUNNER_TEMP/rocm.tar.gz" -C "$RUNNER_TEMP/rocm"
         rm -f "$RUNNER_TEMP/rocm.tar.gz"
 
-    # Save only from trusted contexts. Empty head.repo.full_name means this is
-    # not a pull_request (push / workflow_dispatch / merge_group / workflow_call
-    # without a PR payload). A set value must match this repo — fork PRs restore
-    # only. Same shape as cache-models.
+    # Saves on the events qvac-actions' cache-save allows. Any other event (pull_request_target, workflow_run, ...)
+    # saves into the base branch's scope; a pull_request save stays in the PR's own scope.
     - name: Save ROCm SDK cache (trusted contexts)
       if: >-
         steps.preinstalled.outputs.hit != 'true' &&
         steps.cache-rocm.outputs.cache-hit != 'true' &&
-        (github.event.pull_request.head.repo.full_name == '' ||
-         github.event.pull_request.head.repo.full_name == github.repository)
+        contains(fromJSON('["push","workflow_dispatch","merge_group","schedule","pull_request"]'), github.event_name)
       uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         path: ${{ runner.temp }}/rocm

@@ -3,17 +3,22 @@ name: Check Approvals
 on:
   issue_comment:
     types: [created]
-  pull_request_target:
-    types: [opened, labeled, synchronize, ready_for_review, reopened, edited]
-    branches: [main, master, release-*]
+  # Each PR events run starts the default branch's copy with the App key, for fork PRs as well; it checks out nothing.
+  workflow_run:
+    workflows: [PR events]
+    types: [requested]
 
 permissions:
   contents: read
   pull-requests: write
   issues: write
+  statuses: write
+
+# Runs on the default branch's ref, so a save would land in its cache; this workflow uses none.
+cache-mode: none
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.issue.number || format('{0}-{1}', github.event.workflow_run.head_repository.full_name, github.event.workflow_run.head_branch) }}
   cancel-in-progress: false
 
 jobs:
@@ -23,27 +28,63 @@ jobs:
     timeout-minutes: 30
     continue-on-error: true
     if: >-
-      (
+      github.event_name == 'workflow_run' || (
         github.event_name == 'issue_comment' &&
         contains(github.event.comment.body, 'review') &&
         github.event.issue.pull_request != null
-      ) || (
-        github.event_name == 'pull_request_target' &&
-        !github.event.pull_request.draft
       )
     steps:
+      # Every open, non-draft PR whose head is the triggering commit, from the API; the trigger gives only its head.
+      - name: Find the pull request
+        id: pr
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BASES: ^(main|release-[^/]*)$
+        run: |
+          numbers=$(gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f per_page=100 \
+            -f head="${HEAD_REPO%%/*}:$HEAD_BRANCH" --jq '
+              [.[] | select(.head.sha == env.HEAD_SHA
+                and (.head.repo.full_name | ascii_downcase) == (env.HEAD_REPO | ascii_downcase)
+                and (.draft | not) and (.base.ref | test(env.BASES)))]
+              | map(.number | tostring) | join(" ")')
+          [ -n "$numbers" ] || echo "::notice::No open non-draft PR at $HEAD_SHA to check"
+          [ -z "$numbers" ] || echo "PRs at $HEAD_SHA: $numbers"
+          echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
+
       - name: Install @qvac/ci
+        if: github.event_name == 'issue_comment' || steps.pr.outputs.numbers != ''
         run: npm install -g @qvac/ci@0.2.0
 
       - name: Check Approvals
+        if: github.event_name == 'issue_comment' || steps.pr.outputs.numbers != ''
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_APP_ID: ${{ secrets.APP_ID }}
           GITHUB_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          PR_NUMBERS: ${{ steps.pr.outputs.numbers || github.event.issue.number }}
         run: |
-          qvac-ci pending-approvals \
-            --pr-number "${{ github.event.pull_request.number || github.event.issue.number }}" \
-            --maintainers-team 'qvac-internal-mgmt' \
-            --team-leads-team 'qvac-internal-merge' \
-            --min-approvals '2'
+          rc=0
+          for pr in $PR_NUMBERS; do
+            qvac-ci pending-approvals \
+              --pr-number "$pr" \
+              --maintainers-team 'qvac-internal-mgmt' \
+              --team-leads-team 'qvac-internal-merge' \
+              --min-approvals '2' || rc=1
+          done
+          exit "$rc"
+
+      # The required check: a workflow_run job is not a check on the PR, so the run reports as a status on its head.
+      - name: Report on the pull request
+        if: steps.pr.outputs.numbers != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=success -f context='Check Approvals' \
+            -f description='Approval status is in the PR comment' -f target_url="$RUN_URL" > /dev/null

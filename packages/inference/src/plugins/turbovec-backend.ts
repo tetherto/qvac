@@ -1,4 +1,4 @@
-import type { TurboVecIndex } from '@qvac/rag'
+import type { TurboVecIndex, TurboVecIndexSearchResult } from '@/plugins/turbovec-index'
 import { getTurboVecIndexProvider } from '@/plugins/registry'
 import {
   VECTOR_ID_RESERVED,
@@ -6,14 +6,16 @@ import {
   type VectorIndexHit,
   type VectorIndexIvfSettings
 } from '@/schemas/index'
-import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
+import type {
+  OpenVectorIndex,
+  VectorIndexBackend,
+  VectorIndexState
+} from '@/runtime/vector-index-backend'
 
 // The native index pads short result rows with UINT64_MAX.
 const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
 
 const IVF_UNSUPPORTED_MESSAGE = 'The vector index provider does not support IVF search'
-
-type TurboVecIndexSearchResult = ReturnType<TurboVecIndex['search']>
 
 /**
  * The native index reports only its effective bit width after a load. Three
@@ -54,9 +56,13 @@ function toHitRows(result: TurboVecIndexSearchResult): VectorIndexHit[][] {
 export type IndexWithControls = TurboVecIndex & {
   readonly calibrated?: boolean
   readonly stagedSearch?: boolean
-  setStagedSearch?: (enabled: boolean) => void
-  buildIvf?: (nLists: number, nIter?: number) => void
-  searchIvf?: (queries: Float32Array, k: number, nProbe: number) => TurboVecIndexSearchResult
+  setStagedSearch?: (enabled: boolean) => void | Promise<void>
+  buildIvf?: (nLists: number, nIter?: number) => void | Promise<void>
+  searchIvf?: (
+    queries: Float32Array,
+    k: number,
+    nProbe: number
+  ) => TurboVecIndexSearchResult | Promise<TurboVecIndexSearchResult>
 }
 
 function sameListBuild(a: VectorIndexIvfSettings, b: VectorIndexIvfSettings) {
@@ -71,10 +77,15 @@ function openIndex(
   // after a change; running it eagerly keeps that cost out of the first
   // query's latency.
   let needsPrepare = true
-  function prepareOnce() {
+  async function prepareOnce() {
     if (needsPrepare) {
-      index.prepare()
       needsPrepare = false
+      try {
+        await index.prepare()
+      } catch (error) {
+        needsPrepare = true
+        throw error
+      }
     }
   }
   const ivfSupported = index.buildIvf !== undefined && index.searchIvf !== undefined
@@ -83,6 +94,29 @@ function openIndex(
   function markChanged() {
     needsPrepare = true
     ivfBuilt = false
+  }
+  function ivfState() {
+    if (!ivfSupported) return undefined
+    return ivfSettings && { ...ivfSettings, built: ivfBuilt }
+  }
+  // The native getters throw once the index is disposed, so callers read the
+  // state inside the operation that changed it.
+  function state(): VectorIndexState {
+    return {
+      length: index.length,
+      calibrated: index.calibrated,
+      stagedSearch: index.stagedSearch,
+      ivf: ivfState()
+    }
+  }
+  // One call at a time per index: each one reads and updates the prepare and
+  // IVF flags around its native await, and an interleaved add or remove would
+  // leave IVF marked built over lists the native index has dropped.
+  let tail: Promise<unknown> = Promise.resolve()
+  function exclusive<T>(run: () => Promise<T>): Promise<T> {
+    const result = tail.then(run, run)
+    tail = result.catch(() => {})
+    return result
   }
   return {
     get dim() {
@@ -99,71 +133,79 @@ function openIndex(
       return index.stagedSearch
     },
     get ivf() {
-      if (!ivfSupported) return undefined
-      return ivfSettings && { ...ivfSettings, built: ivfBuilt }
+      return ivfState()
     },
-    setStagedSearch(enabled) {
-      // Without the getter the setting could not be confirmed, so a provider
-      // needs both halves of the control.
-      if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
-        throw new Error('The vector index provider does not support staged search controls')
-      }
-      index.setStagedSearch(enabled)
-      return index.stagedSearch
-    },
-    setIvf(settings) {
-      if (!index.buildIvf || !index.searchIvf) {
-        throw new Error(IVF_UNSUPPORTED_MESSAGE)
-      }
-      if (settings === null) {
-        ivfSettings = null
-        ivfBuilt = false
-        return null
-      }
-      const listsCurrent = ivfBuilt && ivfSettings !== null && sameListBuild(ivfSettings, settings)
-      if (!listsCurrent) {
-        // Mark the lists stale before building. If the build throws, search
-        // scans every entry instead of probing lists the native index may
-        // already have dropped.
-        ivfBuilt = false
-        index.buildIvf(settings.nLists, settings.nIter ?? 0)
-        ivfBuilt = true
-      }
-      ivfSettings = settings
-      return { ...ivfSettings, built: ivfBuilt }
-    },
-    add(vectors, ids) {
-      index.addWithIds(vectors, ids)
-      markChanged()
-    },
-    search(queries, k, nProbe) {
-      if (nProbe !== undefined && ivfSettings === null) {
-        throw new Error(
-          ivfSupported
-            ? 'nProbe applies only to IVF search; call setIvf() first'
-            : IVF_UNSUPPORTED_MESSAGE
-        )
-      }
-      prepareOnce()
-      if (ivfSettings && ivfBuilt && index.searchIvf) {
-        return toHitRows(index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe))
-      }
-      return toHitRows(index.search(queries, k))
-    },
-    contains(id) {
-      return index.contains(id)
-    },
-    remove(id) {
-      const removed = index.remove(id)
-      if (removed) markChanged()
-      return removed
-    },
-    write(path) {
-      index.write(path)
-    },
-    dispose() {
-      index.dispose()
-    }
+    setStagedSearch: (enabled) =>
+      exclusive(async () => {
+        // Without the getter the setting could not be confirmed, so a provider
+        // needs both halves of the control.
+        if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
+          throw new Error('The vector index provider does not support staged search controls')
+        }
+        await index.setStagedSearch(enabled)
+        return index.stagedSearch
+      }),
+    setIvf: (settings) =>
+      exclusive(async () => {
+        if (!index.buildIvf || !index.searchIvf) {
+          throw new Error(IVF_UNSUPPORTED_MESSAGE)
+        }
+        if (settings === null) {
+          ivfSettings = null
+          ivfBuilt = false
+          return null
+        }
+        const listsCurrent =
+          ivfBuilt && ivfSettings !== null && sameListBuild(ivfSettings, settings)
+        if (!listsCurrent) {
+          // Mark the lists stale before building. If the build throws, search
+          // scans every entry instead of probing lists the native index may
+          // already have dropped.
+          ivfBuilt = false
+          await index.buildIvf(settings.nLists, settings.nIter ?? 0)
+          ivfBuilt = true
+        }
+        ivfSettings = settings
+        return { ...ivfSettings, built: ivfBuilt }
+      }),
+    add: (vectors, ids) =>
+      exclusive(async () => {
+        markChanged()
+        await index.addWithIds(vectors, ids)
+        return state()
+      }),
+    search: (queries, k, nProbe) =>
+      exclusive(async () => {
+        if (nProbe !== undefined && ivfSettings === null) {
+          throw new Error(
+            ivfSupported
+              ? 'nProbe applies only to IVF search; call setIvf() first'
+              : IVF_UNSUPPORTED_MESSAGE
+          )
+        }
+        await prepareOnce()
+        if (ivfSettings && ivfBuilt && index.searchIvf) {
+          return toHitRows(await index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe))
+        }
+        return toHitRows(await index.search(queries, k))
+      }),
+    contains: (ids) =>
+      exclusive(async () => {
+        const present: boolean[] = []
+        for (const id of ids) present.push(await index.contains(id))
+        return present
+      }),
+    remove: (ids, removed) =>
+      exclusive(async () => {
+        for (const id of ids) {
+          const present = await index.remove(id)
+          if (present) markChanged()
+          removed.push(present)
+        }
+        return state()
+      }),
+    write: (path) => exclusive(async () => await index.write(path)),
+    dispose: () => exclusive(async () => await index.dispose())
   }
 }
 
