@@ -1,5 +1,9 @@
 import path from 'bare-path'
-import type { TranslationNmtcppConfig, TranslationNmtcppFiles } from '@qvac/translation-nmtcpp'
+import type {
+  TranslationNmtcppConfig,
+  TranslationNmtcppFiles,
+  TranslationNmtcppParams
+} from '@qvac/translation-nmtcpp'
 
 import { BERGAMOT_CJK_LANG_PAIRS, type NmtConfig } from '@/schemas/index'
 
@@ -12,6 +16,11 @@ import { BERGAMOT_CJK_LANG_PAIRS, type NmtConfig } from '@/schemas/index'
 function deriveColocatedBergamotVocabPaths(modelPath: string) {
   const dirPath = path.dirname(modelPath)
   const basePath = path.basename(modelPath)
+  // A multilingual pack (TranslatePsy Nano) has one shared, pair-less vocab.
+  if (basePath === 'model.intgemm.alphas.bin') {
+    const sharedPath = path.join(dirPath, 'vocab.spm')
+    return { srcVocabPath: sharedPath, dstVocabPath: sharedPath }
+  }
   const match = basePath.match(/^model\.([a-z]+)\.intgemm\.alphas\.bin$/)
   if (!match?.[1]) return null
 
@@ -49,6 +58,20 @@ export function nmtFilesFor(
     ...(pivotSrcVocabPath && { pivotSrcVocab: pivotSrcVocabPath }),
     ...(pivotDstVocabPath && { pivotDstVocab: pivotDstVocabPath })
   }
+}
+
+/**
+ * The language pair the addon is constructed with. Bergamot uses it only to
+ * prepend pair-specific Opus-MT tokens (`en:pt` → `>>por<<`). A tagged
+ * TranslatePsy Nano pack takes its target from the `##<TO>` tag the translate
+ * op adds, and an Opus-MT token in front of that tag derails the decode, so
+ * the pack is passed as its direction (`en` → `xx`), which no addon rule keys on.
+ */
+export function nmtParamsFor(nmtConfig: NmtConfig): TranslationNmtcppParams {
+  if (nmtConfig.engine === 'Bergamot' && nmtConfig.targetTag === true) {
+    return { srcLang: nmtConfig.from, dstLang: 'xx' }
+  }
+  return { srcLang: nmtConfig.from, dstLang: nmtConfig.to }
 }
 
 /** The addon config for one translation load, shared with its fit request. */
