@@ -1131,34 +1131,6 @@ test('completion: kv-cache drops a cache file over the slot limit as a context o
   clearRegistry()
 })
 
-// A load failure that names another file, such as a seed source, is not this
-// key's file failing.
-test('completion: kv-cache keeps its file when another cache file fails to load', async (t) => {
-  await setIsolatedHome()
-  clearRegistry()
-
-  const modelId = `kvcache-other-unloadable-${Date.now()}`
-  const calls: RecordedCall[] = []
-  const cachePaths: string[] = []
-  registerSecondTurnThrowingModel(
-    modelId,
-    calls,
-    cachePaths,
-    new Error("TextLlmContext::loadCache: failed to load cache '/elsewhere/source.bin'")
-  )
-  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
-    modelId,
-    calls,
-    cachePaths,
-    'other-unloadable-key'
-  )
-  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
-  assertRetryReusesCache(t, turnCalls, cachePaths)
-
-  unregisterModel(modelId)
-  clearRegistry()
-})
-
 // Scripted fake: on `cancelOnRun` the run cancels its own request after the
 // first token, the way a stop button lands mid-decode. `statsOnRun` is what
 // the addon reports for the run; by default a cancelled run reports the

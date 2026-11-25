@@ -340,6 +340,7 @@ function normalizeContextOverflowArgs(
  * response).
  */
 export class ContextOverflowError extends QvacErrorBase {
+  readonly cacheFileOverflow?: true
   /** The prompt alone, in tokens; unset when the source reported KV cells. */
   readonly promptTokens?: number
   /** Cached conversation on a warm-cache overflow, in `ctxSize` units. */
@@ -390,6 +391,7 @@ export class ContextOverflowError extends QvacErrorBase {
         n.cause
       )
     )
+    if (n.cacheFileOverflow) this.cacheFileOverflow = true
     if (n.promptTokens !== undefined) this.promptTokens = n.promptTokens
     if (n.ctxSize !== undefined) this.ctxSize = n.ctxSize
     if (n.modelId !== undefined) this.modelId = n.modelId
@@ -399,6 +401,7 @@ export class ContextOverflowError extends QvacErrorBase {
 
   toErrorResponseFields(): Record<string, unknown> {
     return {
+      ...(this.cacheFileOverflow && { cacheFileOverflow: true }),
       ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
       ...(this.cachedTokens !== undefined && { cachedTokens: this.cachedTokens }),
       ...(this.requiredTokens !== undefined && { requiredTokens: this.requiredTokens }),

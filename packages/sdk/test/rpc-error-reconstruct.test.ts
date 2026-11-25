@@ -195,11 +195,12 @@ test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t)
 test('reconstructError: an oversized cache file keeps the worker recovery message', (t) => {
   const cause = new Error('cache exceeds the slot limit')
   const envelope = createErrorResponse(
-    new InferenceContextOverflowError({ ctxSize: 8192 }, 'llm', cause)
+    new InferenceContextOverflowError({ cacheFileOverflow: true, ctxSize: 8192 }, 'llm', cause)
   )
-  envelope.message = 'The saved KV cache exceeds the slot limit. Retry the request.'
+  t.is(envelope.typedFields?.['cacheFileOverflow'], true)
   const error = reconstructError(envelope)
-  t.ok(error instanceof ContextOverflowError && error.ctxSize === 8192)
+  t.ok(error instanceof ContextOverflowError && error.cacheFileOverflow && error.ctxSize === 8192)
+  t.ok(error.message.includes('Retry the request.'))
   t.is(error.message, envelope.message)
   t.is(error.stack?.split('\n')[0], `CONTEXT_OVERFLOW: ${envelope.message}`)
 })
