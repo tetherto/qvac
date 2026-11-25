@@ -87,7 +87,7 @@ const documentSchema = z.object({
   generation: z.number().int().positive(),
   contentHash: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  chunkCount: z.number().int().positive()
+  chunkCount: z.number().int().nonnegative()
 })
 
 const chunkSchema = z.object({
@@ -331,7 +331,7 @@ async function readDocument(
     })
   }
   return {
-    document: { id: fields.id, metadata: fields.metadata, chunks },
+    document: { id: fields.id, metadata: fields.metadata, spaceId: header.spaceId, chunks },
     generation: fields.generation,
     contentHash: fields.contentHash
   }

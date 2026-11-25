@@ -41,7 +41,7 @@ export interface SnapshotStore {
   remove(namespace: string, createdAt: number): Promise<void>
 }
 
-interface FileSystem {
+export interface FileSystem {
   mkdir(path: string, options: { recursive: boolean }): Promise<unknown>
   readFile(path: string, encoding: 'utf8'): Promise<string>
   writeFile(path: string, data: string): Promise<void>
@@ -53,21 +53,18 @@ interface FileSystem {
 // snapshot it describes. A snapshot gets a new file per revision and the
 // sidecar is renamed into place after it, so a crash at any point leaves a
 // sidecar that matches the file it names.
-export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore {
+export function createSnapshotStore(
+  dir: string,
+  coreKey: string,
+  files: FileSystem
+): SnapshotStore {
   const root = `${dir}/${coreKey}`
-  let fs: Promise<FileSystem> | null = null
-
-  function fileSystem(): Promise<FileSystem> {
-    if (!fs) fs = import('bare-fs').then((module) => module.promises as unknown as FileSystem)
-    return fs
-  }
 
   function base(namespace: string): string {
     return qvacCrypto.createHash('sha256').update(namespace).digest('hex').slice(0, 32) as string
   }
 
   async function readSidecar(namespace: string): Promise<Sidecar | null> {
-    const files = await fileSystem()
     try {
       return JSON.parse(await files.readFile(`${root}/${base(namespace)}.json`, 'utf8')) as Sidecar
     } catch {
@@ -95,7 +92,6 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
     },
 
     async write(identity, start) {
-      const files = await fileSystem()
       await files.mkdir(root, { recursive: true })
       const name = base(identity.namespace)
       const previous = await readSidecar(identity.namespace)
@@ -122,7 +118,6 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
     },
 
     async remove(namespace, createdAt) {
-      const files = await fileSystem()
       const sidecar = await readSidecar(namespace)
       if (sidecar && sidecar.createdAt !== createdAt) return
       await files.unlink(`${root}/${base(namespace)}.json`).catch(() => {})
@@ -131,4 +126,26 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
       }
     }
   }
+}
+
+type FileSystemLoader = () => Promise<FileSystem>
+
+let loadingFs: Promise<FileSystem> | null = null
+let fsLoader: FileSystemLoader = importBareFs
+
+// Cached like the index module, and loaded by `ready()` for the same reason.
+export function loadSnapshotFileSystem(): Promise<FileSystem> {
+  if (!loadingFs) loadingFs = fsLoader()
+  return loadingFs
+}
+
+// Tests swap the loader to simulate a host that seals module loading.
+export function setSnapshotFileSystemLoader(next: FileSystemLoader | null): void {
+  fsLoader = next ?? importBareFs
+  loadingFs = null
+}
+
+async function importBareFs(): Promise<FileSystem> {
+  const module = await import('bare-fs')
+  return module.promises as unknown as FileSystem
 }

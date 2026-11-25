@@ -175,11 +175,17 @@ export interface NativeCalls {
   compacts: number
 }
 
+// The installed TurboVec module, with the default loader restored.
+export async function realNativeIndex(): Promise<NativeIndexModule> {
+  setNativeIndexLoader(null)
+  const { module } = await loadNativeIndex()
+  if (!module) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
+  return module
+}
+
 // Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
 export async function countNativeCalls(t: Test): Promise<NativeCalls> {
-  setNativeIndexLoader(null)
-  const real = (await loadNativeIndex()) as NativeIndexModule
-  if (!real) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
+  const real = await realNativeIndex()
   const calls: NativeCalls = { creates: 0, loads: 0, compacts: 0 }
   function counted(native: NativeIndex): NativeIndex {
     const compact = native.compact.bind(native)

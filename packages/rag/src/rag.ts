@@ -23,6 +23,7 @@ import {
 import {
   parseDelete,
   parseDropNamespace,
+  parseIndexStatus,
   parseExport,
   parseImport,
   parseIngest,
@@ -65,13 +66,16 @@ import {
   type SearchQuery
 } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
+import { loadNativeIndex } from './vector-index/native.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
 import {
   DEFAULT_INDEX_STORAGE,
   createIndexRegistry,
   type IndexConfig,
-  type IndexRegistry
+  type IndexRegistry,
+  type IndexRuntime
 } from './vector-index/registry.js'
+import { loadSnapshotFileSystem } from './vector-index/snapshots.js'
 import { indexSearch } from './vector-index/search.js'
 import type {
   Hypercore,
@@ -93,6 +97,9 @@ import type {
   ImportNamespaceParams,
   ImportOptions,
   ImportResult,
+  IndexFallbackReason,
+  IndexStatus,
+  IndexStatusParams,
   IngestedDocument,
   IngestOptions,
   IngestParams,
@@ -117,6 +124,7 @@ const SEARCH_INDEX_ATTEMPTS = 3
 interface SearchHandles {
   instance: HyperDBInstance
   indexRegistry: IndexRegistry
+  indexRuntime: IndexRuntime
 }
 
 // One HyperDB per core, shared by every RAG opened on it. Separate instances
@@ -197,6 +205,18 @@ async function openDatabase(core: Hypercore): Promise<OpenDatabase> {
   return { db: instance, indexes: createIndexRegistry(instance, toHex(core.key)) }
 }
 
+// The file system loads without a snapshot directory too: dropping a namespace
+// deletes the snapshots other RAGs on the core wrote.
+async function loadIndexRuntime(): Promise<IndexRuntime> {
+  const native = await loadNativeIndex()
+  if (!native.module) return { native, files: null }
+  try {
+    return { native, files: await loadSnapshotFileSystem() }
+  } catch (error) {
+    return { native, files: null, filesError: error }
+  }
+}
+
 function toHex(bytes: Uint8Array | null | undefined): string {
   if (!bytes) return 'unknown'
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -214,8 +234,18 @@ export function createRag(options: CreateRagOptions): Rag {
   const chunker = createChunker(options.chunking)
 
   const indexConfig: IndexConfig = parseIndexOptions(options.index)
+  const onIndexFallback = options.onIndexFallback
+  if (onIndexFallback !== undefined && typeof onIndexFallback !== 'function') {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'onIndexFallback must be a function'
+    })
+  }
+  // The last fallback reason reported per namespace, so each is reported once.
+  const reported = new Map<string, IndexFallbackReason>()
   let db: HyperDBInstance | null = null
   let indexes: IndexRegistry | null = null
+  let runtime: IndexRuntime | null = null
   let release: (() => Promise<void>) | null = null
   let opening: Promise<void> | null = null
   let closed = false
@@ -241,6 +271,9 @@ export function createRag(options: CreateRagOptions): Rag {
   }
 
   async function open(): Promise<void> {
+    // Before anything else, so a host that seals module loading once ready()
+    // resolves keeps the index.
+    runtime ??= await loadIndexRuntime()
     await corestore.ready()
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
     db = acquired.db
@@ -292,7 +325,11 @@ export function createRag(options: CreateRagOptions): Rag {
   }
 
   function searchHandles(): SearchHandles {
-    return { instance: database(), indexRegistry: registry() }
+    return {
+      instance: database(),
+      indexRegistry: registry(),
+      indexRuntime: runtime as IndexRuntime
+    }
   }
 
   async function createNamespace(params: CreateNamespaceParams): Promise<NamespaceInfo> {
@@ -609,8 +646,28 @@ export function createRag(options: CreateRagOptions): Rag {
     const name = parseDropNamespace(params)
     const indexRegistry = registry()
     const dropped = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
-    await indexRegistry.drop(name, dropped.createdAt, indexConfig)
+    await indexRegistry.drop(name, dropped.createdAt, indexConfig, runtime as IndexRuntime)
+    reported.delete(name)
     return dropped.result
+  }
+
+  async function indexStatus(params: IndexStatusParams): Promise<IndexStatus> {
+    const namespace = parseIndexStatus(params)
+    const { instance, indexRegistry, indexRuntime } = searchHandles()
+    await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
+    return indexRegistry.status(namespace, indexConfig, indexRuntime)
+  }
+
+  function reportFallback(handles: SearchHandles, namespace: string): void {
+    if (!onIndexFallback) return
+    const status = handles.indexRegistry.status(namespace, indexConfig, handles.indexRuntime)
+    // A scan for one query, such as one TurboVec can't quantize, is not reported.
+    if (status.mode !== 'scan' || reported.get(namespace) === status.reason) return
+    reported.set(namespace, status.reason)
+    try {
+      const { mode: _mode, ...fallback } = status
+      onIndexFallback({ namespace, ...fallback })
+    } catch {}
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
@@ -681,13 +738,14 @@ export function createRag(options: CreateRagOptions): Rag {
   // handles are taken before the call's first await, so close() can't drain
   // between resolving the query and the search.
   async function runSearch(
-    { instance, indexRegistry }: SearchHandles,
+    handles: SearchHandles,
     scope: SearchScope,
     query: SearchQuery,
     k: number,
     options: SearchOptions
   ): Promise<SearchHit[]> {
-    const open = () => indexRegistry.open(scope.namespace, indexConfig)
+    const { instance, indexRegistry, indexRuntime } = handles
+    const open = () => indexRegistry.open(scope.namespace, indexConfig, indexRuntime)
     for (let attempt = 0; ; attempt++) {
       const result = await withSnapshot(instance, async (reader) => {
         const { ns, space } = await readNamespace(reader, scope.namespace)
@@ -696,7 +754,10 @@ export function createRag(options: CreateRagOptions): Rag {
         const scan = () => scanSearch(reader, space, scope, query, k, options)
         if (attempt === SEARCH_INDEX_ATTEMPTS) return await scan()
         const hits = await indexSearch(reader, ns.revision, space, scope, query, k, open, options)
-        if (hits === 'unavailable') return await scan()
+        if (hits === 'unavailable') {
+          reportFallback(handles, scope.namespace)
+          return await scan()
+        }
         return hits
       })
       if (result !== 'stale') return result
@@ -716,6 +777,7 @@ export function createRag(options: CreateRagOptions): Rag {
     importNamespace: (params, options) => track(() => importNamespace(params, options)),
     listNamespaces: () => track(() => listNamespaces()),
     dropNamespace: (params) => track(() => dropNamespace(params)),
+    indexStatus: (params) => track(() => indexStatus(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
       return {
@@ -742,8 +804,8 @@ interface Committed {
   revision: number
 }
 
-// Chunks every text document before anything is written, so text that yields
-// no chunks fails the whole call.
+// Chunks every text document before anything is written. Text that yields no
+// chunks is stored as a document without chunks.
 function prepareJobs(
   documents: ParsedDocument[],
   chunker: Chunker,
@@ -763,12 +825,6 @@ function prepareJobs(
     let chunks = entry.kind === 'chunked' ? entry.document.chunks : []
     if (entry.kind === 'text') {
       chunks = entry.document.text.trim() === '' ? [] : chunker(id, entry.document.text)
-      if (chunks.length === 0) {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.INVALID_INPUT,
-          adds: `document '${id}' has no text to chunk`
-        })
-      }
       chunked++
       onProgress?.({ stage: 'chunk', done: chunked, total: textTotal })
     }
@@ -817,6 +873,7 @@ function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
   return {
     id: job.id,
     metadata: job.metadata,
+    spaceId,
     chunks: job.chunks.map((chunk, ordinal) => ({
       id: chunk.id,
       content: chunk.content,
@@ -843,8 +900,8 @@ async function commitDocument(
     })
   }
   // The namespace may have been dropped and re-created in another space.
-  const spaceId = document.chunks[0]?.spaceId
-  if (spaceId !== ns.spaceId) {
+  const spaceId = document.chunks[0]?.spaceId ?? document.spaceId
+  if (spaceId !== undefined && spaceId !== ns.spaceId) {
     throw new QvacErrorRAG({
       code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
       adds: `namespace '${namespace}' is now in space ${ns.spaceId}`
