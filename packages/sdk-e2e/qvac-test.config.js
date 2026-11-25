@@ -1,4 +1,25 @@
 // SDK tests configuration
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const configDir = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * The mobile app's dependencies: this package's, plus expo-bare-kit when
+ * QVAC_E2E_EXPO_BARE_KIT is 1, which makes the SDK's Expo plugin hand Bare Kit
+ * to it. A map's `file:` paths are absolute, since the app is built elsewhere.
+ */
+function mobileDependencies() {
+  if (process.env.QVAC_E2E_EXPO_BARE_KIT !== '1') return 'auto'
+  const { dependencies } = JSON.parse(readFileSync(path.join(configDir, 'package.json'), 'utf8'))
+  const resolved = Object.entries(dependencies).map(([name, spec]) => [
+    name,
+    spec.startsWith('file:') ? `file:${path.resolve(configDir, spec.slice('file:'.length))}` : spec
+  ])
+  return { ...Object.fromEntries(resolved), 'expo-bare-kit': '0.3.1' }
+}
+
 /** @type {import('@qvac/test-suite').QvacTestConfig} */
 export default {
   // All MQTT configuration under one object
@@ -122,7 +143,7 @@ export default {
       platforms: ['ios', 'android'],
       entry: './dist/runners/js/mobile/consumer.js',
       include: ['./dist/runners/js/**', './dist/catalog/**'],
-      dependencies: 'auto',
+      dependencies: mobileDependencies(),
       metroConfig: './metro.config.js',
       qvacConfig: './fixtures/qvac.config.e2e.mobile.json',
       expoPlugins: [['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]],
