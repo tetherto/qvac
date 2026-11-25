@@ -10974,6 +10974,94 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-encoder-shared.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU shared encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-encoder-shared.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU shared encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-encoder-shared.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU shared encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/transcribe-psy/2026-11-25/transcribepsy-250m-eu-encoder-shared.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU shared encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
     "engine": "@qvac/transcription-parakeet",
     "description": "TranscribePsy 250M EU GGUF for 25 European languages",
