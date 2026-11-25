@@ -764,7 +764,8 @@ async def _completion_stream(
         return {
             "text": await streamed if streamed else await run.text(),
             "toolCalls": [
-                {"name": call.name, "arguments": call.arguments} for call in calls
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in calls
             ],
             "stats": _jsonable(final.stats),
             "stopReason": final.stop_reason,
@@ -1210,6 +1211,28 @@ class Interpreter:
         teardown: list[dict[str, Any]] | None = None,
     ) -> StepResult:
         teardown = teardown or []
+        # Started-call list up front: `repeat` copies the scope, and a list first made in a
+        # copy is lost.
+        scope: dict[str, Any] = {"params": params, _STARTED: []}
+        # Released only once no started call runs, so none of them loses its model.
+        try:
+            return await self._run_declared(steps, scope, expectation, teardown)
+        except asyncio.CancelledError:
+            started = [pending.task for pending in self._started(scope)]
+            for task in started:
+                task.cancel()
+            await asyncio.gather(*started, return_exceptions=True)
+            raise
+        finally:
+            await self._resources.release_test_scope()
+
+    async def _run_declared(
+        self,
+        steps: list[dict[str, Any]],
+        scope: dict[str, Any],
+        expectation: dict[str, Any],
+        teardown: list[dict[str, Any]],
+    ) -> StepResult:
         # Evict anything this test did not declare before it starts, so a run does not
         # depend on the order tests happened to arrive in.
         declared = {
@@ -1219,8 +1242,6 @@ class Interpreter:
             for dep in step["useModel"].get("deps", [])
         }
         await self._resources.evict_all_except(declared)
-
-        scope: dict[str, Any] = {"params": params}
 
         body = await self._run_body(steps, scope, expectation)
         failed_teardown = await self._run_teardown(teardown, scope, expectation)
@@ -1403,6 +1424,24 @@ class Interpreter:
         collect: str | None,
     ) -> Any:
         """One call, folded if the step asked for a fold."""
+        response = await self._dispatch(method, call, params, collect)
+        # Step loads bypass `useModel`; tell the resource manager who owns the model.
+        # Here, not in `_call_value`, so a `callError` load that succeeds is tracked too.
+        if method == "loadModel" and isinstance(response, dict):
+            model_id = response.get("modelId")
+            if isinstance(model_id, str):
+                self._resources.adopt_test_load(model_id)
+        elif method == "unloadModel" and isinstance(params.get("modelId"), str):
+            self._resources.released(params["modelId"])
+        return response
+
+    async def _dispatch(
+        self,
+        method: str,
+        call: Callable[[Any, dict[str, Any]], Any] | None,
+        params: dict[str, Any],
+        collect: str | None,
+    ) -> Any:
         if collect:
             stream = STREAMS.get(method)
             if stream is None:
@@ -1684,11 +1723,10 @@ class Interpreter:
         self, params: dict[str, Any] | None, scope: dict[str, Any]
     ) -> dict[str, Any]:
         """Resolve a call's parameters, dropping the ones that resolved to nothing."""
-        resolved = self._resolve(params or {}, scope)
-        return {k: v for k, v in resolved.items() if v is not _MISSING}
+        return self._resolve(params or {}, scope)
 
     def _resolve(self, value: Any, scope: dict[str, Any]) -> Any:
-        """Replace `$name` / `$params.x` references, recursively."""
+        """Replace `$name` / `$params.x` references, recursively; a missing `$x?` drops its key."""
         if isinstance(value, str) and value.startswith("$"):
             if value.endswith("?"):
                 try:
@@ -1697,7 +1735,8 @@ class Interpreter:
                     return _MISSING
             return _walk(scope, value[1:])
         if isinstance(value, dict):
-            return {k: self._resolve(v, scope) for k, v in value.items()}
+            resolved = {k: self._resolve(v, scope) for k, v in value.items()}
+            return {k: v for k, v in resolved.items() if v is not _MISSING}
         if isinstance(value, list):
             return [self._resolve(v, scope) for v in value]
         return value

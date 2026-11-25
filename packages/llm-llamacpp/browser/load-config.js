@@ -1,3 +1,5 @@
+const { parseModelPath } = require('./model-files.js')
+
 // Mounted browser files cannot be memory-mapped, locked or opened with direct
 // I/O. Preserve the native addon's alias validation, then select plain reads.
 const LEGACY_LOAD_KEYS = [
@@ -10,26 +12,32 @@ const LEGACY_LOAD_KEYS = [
   'no_direct_io',
   'mlock'
 ]
-const EXTERNAL_DRAFT_KEYS = ['spec-draft-model', 'spec_draft_model']
 const UNSUPPORTED_BROWSER_KEYS = [
-  'lora',
   'rpc-servers',
   'rpc_servers',
   'rpc',
   'backendsDir',
-  'openclCacheDir'
+  'openclCacheDir',
+  'lora-scaled',
+  'lora_scaled',
+  'control-vector',
+  'control_vector',
+  'control-vector-scaled',
+  'control_vector_scaled'
 ]
+const FILE_KEYS = ['lora', 'spec-draft-model', 'spec_draft_model']
 
 function browserLoadConfig(config = {}) {
+  if (
+    Object.prototype.hasOwnProperty.call(config, 'spec_draft_model') &&
+    Object.prototype.hasOwnProperty.call(config, 'spec-draft-model')
+  ) {
+    throw new Error('spec_draft_model and spec-draft-model must not both be set')
+  }
+
   for (const key of LEGACY_LOAD_KEYS) {
     if (config[key] !== undefined) {
       throw new Error(`${key} is not supported in the browser build; model files use plain reads`)
-    }
-  }
-
-  for (const key of EXTERNAL_DRAFT_KEYS) {
-    if (config[key] !== undefined && config[key] !== '') {
-      throw new Error(`${key} is not supported in the browser build`)
     }
   }
 
@@ -40,6 +48,8 @@ function browserLoadConfig(config = {}) {
   }
 
   const { load_mode: underscore, 'load-mode': hyphen, ...rest } = config
+  // An empty lora means none; native would read the next key as its path.
+  if (rest.lora === '') delete rest.lora
   for (const [key, value] of [
     ['load_mode', underscore],
     ['load-mode', hyphen]
@@ -65,4 +75,52 @@ function browserLoadConfig(config = {}) {
   ])
 }
 
-module.exports = { browserLoadConfig }
+// Validates the load config and the syntax of every file path, without
+// starting the engine or reading OPFS.
+function checkLoadFiles(params) {
+  const config = browserLoadConfig(params.config)
+  for (const path of [params.path, params.projectionPath, ...FILE_KEYS.map((key) => config[key])]) {
+    if (path) parseModelPath(path)
+  }
+  return config
+}
+
+// The engine parses lora as CSV; quote the path so it stays one field.
+function csvField(value) {
+  return /[",]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
+
+async function mountLoadFiles(params, mountFile) {
+  const config = checkLoadFiles(params)
+  const mountedPaths = new Map()
+  async function mountOnce(sourcePath) {
+    if (!sourcePath) return ''
+    if (!mountedPaths.has(sourcePath)) {
+      mountedPaths.set(sourcePath, await mountFile(sourcePath))
+    }
+    return mountedPaths.get(sourcePath)
+  }
+
+  const modelPath = await mountOnce(params.path)
+  const projectionPath = await mountOnce(params.projectionPath)
+  for (const key of FILE_KEYS) {
+    if (!config[key]) continue
+    try {
+      config[key] = await mountOnce(config[key])
+    } catch (error) {
+      if (key !== 'lora' || error?.name !== 'NotFoundError' || !config.lora.includes(',/')) {
+        throw error
+      }
+      const hinted = new Error(
+        `${error.message} (lora takes one adapter path in the browser build)`,
+        { cause: error }
+      )
+      hinted.name = error.name
+      throw hinted
+    }
+  }
+  if (config.lora) config.lora = csvField(config.lora)
+  return { modelPath, projectionPath, config }
+}
+
+module.exports = { browserLoadConfig, checkLoadFiles, mountLoadFiles }

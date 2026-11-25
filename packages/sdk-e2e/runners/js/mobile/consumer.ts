@@ -139,7 +139,7 @@ async function ensureMobileE2EConfig(useResilienceConfig: boolean) {
 
   const fixtureName = useResilienceConfig
     ? 'qvac.config.e2e.resilience.mobile.json'
-    : 'qvac.config.e2e.json'
+    : 'qvac.config.e2e.mobile.json'
 
   // @ts-ignore - assets.ts generated at consumer build time (consumer root, 4 levels up from dist/runners/js/mobile/)
   const assets = await import('../../../../assets')

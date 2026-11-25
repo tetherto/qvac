@@ -7,14 +7,11 @@ import { getEngineLogger } from '@/logging/index'
 const logger = getEngineLogger()
 
 const KV_CACHE_POLICY_DEFAULTS: Readonly<Record<string, unknown>> = {
-  cache_share_across_keys: false
+  cache_share_across_keys: false,
+  verbosity: 0
 }
 
-const KV_CACHE_RUNTIME_ONLY_KEYS: ReadonlySet<string> = new Set([
-  'openclCacheDir',
-  'verbosity',
-  'cache_ram_mib'
-])
+const KV_CACHE_RUNTIME_ONLY_KEYS: ReadonlySet<string> = new Set(['openclCacheDir', 'cache_ram_mib'])
 
 const KV_CACHE_DIR_IDS_DIR = 'kv-cache-dir-ids'
 const KV_CACHE_DIR_ID_PATTERN = /^[0-9a-f]{16}$/

@@ -22,6 +22,23 @@ export const COREML_COMPONENTS = [
   'weights/weight.bin'
 ] as const
 
+/**
+ * The name of the compiled Core ML bundle a source or registry path names (a
+ * `.mlmodelc` directory, with or without a trailing slash), or `undefined`
+ * when it names anything else. Such a source is staged as a directory: the
+ * diffusion addon takes its Core ML sidecars by path instead of finding them
+ * beside the GGUF.
+ */
+export function coremlBundleNameOf(location: string): string | undefined {
+  const name = location
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop()
+  return name !== undefined && name.length > '.mlmodelc'.length && name.endsWith('.mlmodelc')
+    ? name
+    : undefined
+}
+
 type BundleSpec = { sourceName: string; targetSuffix: string }
 
 /**

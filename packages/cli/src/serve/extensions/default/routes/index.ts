@@ -5,6 +5,7 @@ import kvCache from '@/serve/extensions/default/routes/kv-cache'
 import modelFit from '@/serve/extensions/default/routes/model-fit'
 import music from '@/serve/extensions/default/routes/music'
 import ocr from '@/serve/extensions/default/routes/ocr'
+import plugins from '@/serve/extensions/default/routes/plugins'
 import registry from '@/serve/extensions/default/routes/registry'
 import runtime from '@/serve/extensions/default/routes/runtime'
 import system from '@/serve/extensions/default/routes/system'
@@ -25,5 +26,6 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   registry,
   upscale,
   music,
-  world
+  world,
+  plugins
 ]

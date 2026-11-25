@@ -59,6 +59,32 @@ import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 /** How the shared step interpreter reaches this SDK. */
 
+// Loaded on the first `ragLocal` call, so a @qvac/rag that fails to load fails only the rag cases.
+let localRag: Promise<(op: string, params?: Record<string, unknown>) => Promise<unknown>> | null =
+  null
+
+async function createLocalRag() {
+  const { createRagOps } = await import('rag-e2e-plugin/ops')
+  return createRagOps({
+    root: os.tmpdir(),
+    join: (...parts) => path.join(...parts),
+    async removeDir(dir) {
+      await fs.promises.rm(dir, { recursive: true, force: true })
+    },
+    async listDir(dir) {
+      try {
+        return await fs.promises.readdir(dir)
+      } catch {
+        return []
+      }
+    },
+    async embed(modelId, text) {
+      const { embedding } = await embed({ modelId, text })
+      return embedding
+    }
+  })
+}
+
 /** Contract method name -> the SDK function that serves it. */
 const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   // --- inference, request/reply -------------------------------------------
@@ -209,6 +235,16 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
 
   // --- plugins -------------------------------------------------------------
   invokePlugin: async (params) => ({ result: await invokePlugin(params) }),
+
+  // --- @qvac/rag in this process ---------------------------------------------
+  // The same ops the `rag-e2e-plugin` runs in the worker, here on Node with an embeddings
+  // port over the SDK's `embed()`, the way an app uses @qvac/rag beside the SDK. The
+  // result sits under `result`, as it does for `invokePlugin`.
+  ragLocal: async (params: never) => {
+    const p = params as { op: string; params?: Record<string, unknown> }
+    localRag ??= createLocalRag()
+    return { result: await (await localRag)(p.op, p.params) }
+  },
 
   // --- transcription sessions ----------------------------------------------
   //
@@ -2040,7 +2076,10 @@ const ASSERTIONS: Record<
   }
 }
 
-export function createStepBindings(resources: ResourceManager): StepBindings {
+/** `endTest` is typed here too: published `@qvac/test-suite` up to 0.15.0 lacks it and never calls it. */
+export function createStepBindings(
+  resources: ResourceManager
+): StepBindings & { endTest(): Promise<void> } {
   return {
     async useModel(deps) {
       const ids: string[] = []
@@ -2108,7 +2147,16 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
       if (!call) {
         throw new StepIncompleteError(`SDK method "${method}" is not wired into these bindings yet`)
       }
-      return call(params as never)
+      const value = await call(params as never)
+      // Step loads bypass `useModel`; tell the resource manager who owns the model.
+      if (method === 'loadModel') {
+        const modelId = (value as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.adoptTestLoad(modelId)
+      } else if (method === 'unloadModel') {
+        const modelId = (params as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.released(modelId)
+      }
+      return value
     },
 
     async modelSource(dep) {
@@ -2153,6 +2201,10 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
 
     async evictAllExcept(keep) {
       await resources.evictExcept([...keep])
+    },
+
+    async endTest() {
+      await resources.releaseTestScope()
     }
   }
 }
