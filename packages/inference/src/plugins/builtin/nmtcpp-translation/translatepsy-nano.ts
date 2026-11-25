@@ -38,13 +38,22 @@ const PACK_LAYOUT_RE =
 const PACK_FAMILY_RE = /TranslatePsy-(AfriNano|EuroNano)(?=[/\\])/i
 
 const TARGET_TAG_RE = /^\s*##[A-Z]{2,3}(?:\s|$)/
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i
+
+// A URL's query and fragment are not part of its path: Hub download links end
+// in `?download=true`. A local path is read as written, since `?` and `#` are
+// valid in file names.
+function sourcePath(modelSrc: string): string {
+  return URL_SCHEME_RE.test(modelSrc) ? modelSrc.replace(/[?#].*$/, '') : modelSrc
+}
 
 /** Detects a TranslatePsy Nano pack from its source path. */
 export function detectTranslatePsyNanoPack(modelSrc: string): TranslatePsyNanoPack | null {
-  const layout = modelSrc.match(PACK_LAYOUT_RE)
+  const path = sourcePath(modelSrc)
+  const layout = path.match(PACK_LAYOUT_RE)
   if (!layout?.[1]) return null
 
-  const family = modelSrc.match(PACK_FAMILY_RE)?.[1]
+  const family = path.match(PACK_FAMILY_RE)?.[1]
   return {
     ...(family && { family: FAMILIES[family.toLowerCase()]! }),
     direction: layout[1].toLowerCase() as TranslatePsyNanoDirection

@@ -35,6 +35,20 @@ test('detect: registry paths and the Hugging Face layout', (t) => {
   )
   t.alike(
     detectTranslatePsyNanoPack(
+      `https://huggingface.co/${EURO}/en-xx/Tiny/intgemm/model.intgemm.alphas.bin?download=true`
+    ),
+    { family: 'EuroNano', direction: 'en-xx' },
+    'Hub download link with a query'
+  )
+  t.alike(
+    detectTranslatePsyNanoPack(
+      `https://huggingface.co/${AFRI}/en-xx/Base/intgemm/model.intgemm.alphas.bin#main`
+    ),
+    { family: 'AfriNano', direction: 'en-xx' },
+    'URL with a fragment'
+  )
+  t.alike(
+    detectTranslatePsyNanoPack(
       '/home/u/.cache/huggingface/hub/models--qvac--TranslatePsy-AfriNano/snapshots/7a79/en-xx/Tiny/intgemm/model.intgemm.alphas.bin'
     ),
     { family: 'AfriNano', direction: 'en-xx' },
@@ -59,6 +73,11 @@ test('detect: plain Bergamot models and renamed copies are not Nano packs', (t) 
   t.is(detectTranslatePsyNanoPack('/models/sw/model.intgemm.alphas.bin'), null)
   t.is(detectTranslatePsyNanoPack('pear://abc123/model.intgemm.alphas.bin'), null)
   t.is(detectTranslatePsyNanoPack(`${AFRI}/en-xx/Base/fp32/model.npz.best-chrf.npz`), null)
+  t.is(
+    detectTranslatePsyNanoPack('/models/en-xx/Tiny/intgemm/model.intgemm.alphas.bin?copy'),
+    null,
+    'a local path is read as written'
+  )
 })
 
 test('resolve: targetTag forces or disables Nano handling', (t) => {
@@ -175,6 +194,15 @@ test('resolveConfig: a local en-xx pack derives its colocated vocab.spm', async 
   )
   t.is(config['targetTag'], true)
   t.alike(artifacts, { srcVocabPath: `${dir}vocab.spm`, dstVocabPath: `${dir}vocab.spm` })
+})
+
+test('resolveConfig: a Hub download link with a query still resolves to targetTag', async (t) => {
+  const vocab = `https://huggingface.co/${EURO}/en-xx/Tiny/intgemm/vocab.spm?download=true`
+  const { config } = await resolveConfig(
+    { from: 'en', to: 'pt', srcVocabSrc: vocab, dstVocabSrc: vocab },
+    `https://huggingface.co/${EURO}/en-xx/Tiny/intgemm/model.intgemm.alphas.bin?download=true`
+  )
+  t.is(config['targetTag'], true, 'tagged, so en→pt gets ##PT and not the Opus-MT >>por<< token')
 })
 
 test('resolveConfig: an xx-en pack takes no tag', async (t) => {
