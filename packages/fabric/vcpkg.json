@@ -73,6 +73,11 @@
     {
       "name": "dawn",
       "version": "20260410.140140"
+    },
+    {
+      "name": "qvac-fabric",
+      "version": "12032.0.1",
+      "port-version": 1
     }
   ]
 }

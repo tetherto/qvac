@@ -220,6 +220,12 @@ async function runCase(t, { useGpu, label, flashAttn }) {
     result.segments.length > 0,
     `${label}: must produce at least 1 segment (got ${result.segments.length})`
   )
+  const transcript = result.segments.map((segment) => segment.text).join(' ')
+  console.log(`[${label}] transcript=${JSON.stringify(transcript)}`)
+  t.ok(
+    /\balice\b/i.test(transcript) && /\bbook\b/i.test(transcript),
+    `${label}: must recognize the Alice sample, rather than produce unrelated text`
+  )
   return result
 }
 
