@@ -1,3 +1,4 @@
+import type { AbortSignal } from 'bare-abort-controller'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { QvacErrorBase } from '@qvac/error'
@@ -29,7 +30,7 @@ interface TrackedIndex {
 }
 
 const indexes = new Map<string, TrackedIndex>()
-const pendingIndexes = new Set<Promise<OpenVectorIndex>>()
+const pendingIndexes = new Set<Promise<unknown>>()
 
 function requireBackend(): VectorIndexBackend {
   const backend = getTurboVecBackend()
@@ -46,44 +47,77 @@ function getIndex(indexId: string): OpenVectorIndex {
 // Backends throw plain TypeError/RangeError/Error values from the native
 // layer; wrap them so the caller receives a coded error with the original
 // message preserved as cause. `describe` adds caller context to the message
-// and is evaluated at throw time, so it can report progress made so far.
+// and is evaluated at throw time, so it can report progress made so far. A
+// rejection with the abort reason of `signal` passes through unwrapped, so the
+// handler can tell a cancel from a native failure.
 async function runBackend<T>(
   action: () => Promise<T>,
+  signal?: AbortSignal,
   describe?: (detail: string) => string
 ): Promise<T> {
   try {
     return await action()
   } catch (error) {
-    failBackend(error, describe)
+    failBackend(error, signal, describe)
   }
 }
 
-function failBackend(error: unknown, describe?: (detail: string) => string): never {
+function failBackend(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  describe?: (detail: string) => string
+): never {
   if (error instanceof QvacErrorBase) throw error
+  if (signal?.aborted && error === signal.reason) throw error
   const detail = error instanceof Error ? error.message : String(error)
   throw new VectorIndexFailedError(describe ? describe(detail) : detail, error)
 }
 
-// Keep pending opens reachable by shutdown until their indexes are registered.
-async function openVectorIndex(
+// Shutdown waits for pending opens to register or finish cleanup. After a
+// cancelled load, dispose the index when it opens. If disposal fails, keep
+// the index registered so shutdown can retry.
+function openVectorIndex(
   sessionId: string,
-  action: () => OpenVectorIndex | Promise<OpenVectorIndex>
-) {
+  action: () => OpenVectorIndex | Promise<OpenVectorIndex>,
+  signal?: AbortSignal
+): Promise<{ index: OpenVectorIndex; indexId: string }> {
   const opening = (async () => {
     try {
       return await action()
     } catch (error) {
-      failBackend(error)
+      failBackend(error, undefined)
     }
   })()
-  pendingIndexes.add(opening)
-  try {
-    const index = await opening
-    const indexId = track(index, sessionId)
-    return { index, indexId }
-  } finally {
-    pendingIndexes.delete(opening)
-  }
+  return new Promise((resolve, reject) => {
+    let abandoned = false
+    const onAbort = () => {
+      abandoned = true
+      reject(signal?.reason)
+    }
+    const settled = opening.then(
+      async (index) => {
+        if (abandoned) {
+          try {
+            await index.dispose()
+          } catch (error) {
+            track(index, sessionId)
+            getEngineLogger().warn('Failed to dispose a vector index opened after a cancel:', error)
+          }
+          return
+        }
+        signal?.removeEventListener('abort', onAbort)
+        resolve({ index, indexId: track(index, sessionId) })
+      },
+      (error: unknown) => {
+        signal?.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+    pendingIndexes.add(settled)
+    void settled.then(() => pendingIndexes.delete(settled))
+    if (signal?.aborted) onAbort()
+    else signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /**
@@ -147,10 +181,15 @@ export async function createVectorIndex(params: {
   }
 }
 
-export async function loadVectorIndex(params: { path: string; sessionId?: string | undefined }) {
+export async function loadVectorIndex(
+  params: { path: string; sessionId?: string | undefined },
+  signal?: AbortSignal
+) {
   const backend = requireBackend()
-  const { index, indexId } = await openVectorIndex(resolveSessionId(params), () =>
-    backend.load(resolveVectorIndexPath(params.path))
+  const { index, indexId } = await openVectorIndex(
+    resolveSessionId(params),
+    () => backend.load(resolveVectorIndexPath(params.path)),
+    signal
   )
   return {
     indexId,
@@ -161,11 +200,10 @@ export async function loadVectorIndex(params: { path: string; sessionId?: string
   }
 }
 
-export async function addVectors(params: {
-  indexId: string
-  ids: VectorIdWire[]
-  vectors: number[][]
-}) {
+export async function addVectors(
+  params: { indexId: string; ids: VectorIdWire[]; vectors: number[][] },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
   if (params.ids.length !== params.vectors.length) {
     throw new VectorIndexInvalidVectorsError(
@@ -174,32 +212,43 @@ export async function addVectors(params: {
   }
   const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
-  const state = await runBackend(() => index.add(vectors, ids))
+  const state = await runBackend(() => index.add(vectors, ids, signal), signal)
   return { length: state.length, ...indexState(state) }
 }
 
-export async function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
+export async function setVectorIndexStagedSearch(
+  params: { indexId: string; enabled: boolean },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
-  return { stagedSearch: await runBackend(() => index.setStagedSearch(params.enabled)) }
+  return {
+    stagedSearch: await runBackend(() => index.setStagedSearch(params.enabled, signal), signal)
+  }
 }
 
-export async function setVectorIndexIvf(params: {
-  indexId: string
-  ivf: VectorIndexIvfSettings | null
-}) {
+export async function setVectorIndexIvf(
+  params: { indexId: string; ivf: VectorIndexIvfSettings | null },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
-  return { ivf: await runBackend(() => index.setIvf(params.ivf)) }
+  return { ivf: await runBackend(() => index.setIvf(params.ivf, signal), signal) }
 }
 
-export async function searchVectors(params: {
-  indexId: string
-  queries: number[][]
-  k: number
-  nProbe?: number | undefined
-}) {
+export async function searchVectors(
+  params: {
+    indexId: string
+    queries: number[][]
+    k: number
+    nProbe?: number | undefined
+  },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
   const queries = flattenRows(params.queries, index.dim, 'queries')
-  const results = await runBackend(() => index.search(queries, params.k, params.nProbe))
+  const results = await runBackend(
+    () => index.search(queries, params.k, params.nProbe, signal),
+    signal
+  )
   return { results }
 }
 
@@ -211,28 +260,46 @@ export async function searchVectors(params: {
  * which is why the handle documents its own `length` as of the last call that
  * reported one.
  */
-export async function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
+export async function removeVectors(
+  params: { indexId: string; ids: VectorIdWire[] },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
   const removed: boolean[] = []
   const state = await runBackend(
     () =>
       index.remove(
         params.ids.map((id) => BigInt(id)),
-        removed
+        removed,
+        signal
       ),
+    signal,
     (detail) =>
       `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
   )
   return { removed, length: state.length, ...indexState(state) }
 }
 
-export async function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
+export async function containsVectors(
+  params: { indexId: string; ids: VectorIdWire[] },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
-  const present = await runBackend(() => index.contains(params.ids.map((id) => BigInt(id))))
+  const present = await runBackend(
+    () =>
+      index.contains(
+        params.ids.map((id) => BigInt(id)),
+        signal
+      ),
+    signal
+  )
   return { present }
 }
 
-export async function writeVectorIndex(params: { indexId: string; path: string }) {
+export async function writeVectorIndex(
+  params: { indexId: string; path: string },
+  signal?: AbortSignal
+) {
   const index = getIndex(params.indexId)
   const snapshotPath = resolveVectorIndexPath(params.path)
   try {
@@ -243,7 +310,7 @@ export async function writeVectorIndex(params: { indexId: string; path: string }
       error
     )
   }
-  await runBackend(() => index.write(snapshotPath))
+  await runBackend(() => index.write(snapshotPath, signal), signal)
   return { path: snapshotPath }
 }
 
