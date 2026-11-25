@@ -739,8 +739,10 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_finetune(int handle, int jobId,
               handle, jobId, "FinetuneProgress", sizeof("FinetuneProgress") - 1,
               payload.data(), static_cast<int>(payload.size()));
           if (listenerStop != 0) {
+            // pause() from a progress listener stops with a checkpoint.
             model.setFinetuneCancelSavesCheckpoint(
-                false, {static_cast<uint64_t>(jobId)});
+                qvac_web_cancel_mode(handle, jobId) == 2,
+                {static_cast<uint64_t>(jobId)});
             model.cancelById(jobId);
           }
         };

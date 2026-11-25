@@ -3367,9 +3367,21 @@ test('a failed write for another cache key fails only its own requests 20x', asy
       t.is(failed.length, 1, `own key failure reported ${iteration + 1}`)
       t.is(failed[0]?.error?.name, 'QuotaExceededError', `own key error ${iteration + 1}`)
       const pending = Uint8Array.of(module.runCalls)
-      for (let unkeyed = 0; unkeyed < 2; unkeyed++) {
-        t.alike(await run('unkeyed', null), [], `unkeyed run ${unkeyed} ${iteration + 1}`)
+      const warnings = []
+      binding.setLogger((priority, message) => {
+        if (priority === 1) warnings.push(message)
+      })
+      try {
+        for (let unkeyed = 0; unkeyed < 2; unkeyed++) {
+          t.alike(await run('unkeyed', null), [], `unkeyed run ${unkeyed} ${iteration + 1}`)
+        }
+      } finally {
+        binding.releaseLogger()
       }
+      t.ok(
+        warnings.length > 0 && warnings.every((message) => message.includes(cacheKey)),
+        `retried write is logged ${iteration + 1}`
+      )
 
       await t.exception.all(
         () => binding.destroyInstance(handle),
@@ -3506,5 +3518,64 @@ test('browser assessFit hands the engine the mounted asset paths 20x', async (t)
   } finally {
     if (previous === undefined) delete globalThis[MOUNTED_FILES_KEY]
     else globalThis[MOUNTED_FILES_KEY] = previous
+  }
+})
+
+function checkpointListingEngine(options) {
+  const module = persistenceOrderingEngine(options)
+  const ccall = module.ccall
+  module.checkpointListings = []
+  module.ccall = function (name, returnType, types, args) {
+    if (name === 'qvac_web_finetune') {
+      const { checkpointSaveDir } = JSON.parse(args[2])
+      let names = []
+      try {
+        names = module.FS.readdir(checkpointSaveDir).filter((entry) => !entry.startsWith('.'))
+      } catch {}
+      module.checkpointListings.push(names)
+    }
+    return ccall.call(this, name, returnType, types, args)
+  }
+  return module
+}
+
+test('cancel cleans the checkpoints of the run it cancelled, not a later one 20x', async (t) => {
+  const opfs = installOpfsRoot()
+  binding._setEngineFactoryForTest(checkpointListingEngine)
+  try {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const pause = `/cancel-later-b-${iteration}/pause_checkpoint_step_00000003`
+      await opfsWrite(opfs.root, `${pause}/state.bin`, Uint8Array.of(3))
+      await opfsWrite(opfs.root, `${pause}/${CHECKPOINT_COMPLETE_FILE}`, CHECKPOINT_COMPLETE_BYTES)
+      const handle = binding.createInstance(
+        {},
+        { path: '', projectionPath: '', config: {} },
+        () => {}
+      )
+      await binding.activate(handle)
+      const module = handle.engine.module
+      const run = (name) => ({
+        trainDatasetDir: `/cancel-later-${name}-${iteration}/train.txt`,
+        outputParametersDir: `/cancel-later-${name}-${iteration}/out`,
+        checkpointSaveDir: `/cancel-later-${name}-${iteration}`
+      })
+      await binding.finetune(handle, run('a'))
+      await eventually(() => binding.activeJobs(handle) === 0)
+      const before = module.checkpointListings.length
+
+      const cancelled = binding.cancel(handle)
+      await binding.finetune(handle, run('b'))
+      await cancelled
+      await eventually(() => module.checkpointListings.length === before + 1)
+      await eventually(() => binding.activeJobs(handle) === 0)
+      t.alike(
+        module.checkpointListings[before],
+        ['pause_checkpoint_step_00000003'],
+        `later run keeps its pause checkpoint ${iteration + 1}`
+      )
+      await binding.destroyInstance(handle)
+    }
+  } finally {
+    opfs.restore()
   }
 })

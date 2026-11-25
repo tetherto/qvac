@@ -493,6 +493,10 @@ async function persistJobFiles(handle, job) {
       await persistTree(module, path)
     } catch (error) {
       if (ownKeys.has(pathParts(path).join('/'))) throw error
+      log(
+        `Cache write for ${path} failed and will be retried: ${error?.message ?? error}`,
+        LOG_PRIORITY.WARNING
+      )
     }
   }
   for (const path of job.finetunePaths) {
@@ -774,13 +778,15 @@ function cancel(handle, savePauseCheckpoint = 0, clearPauseCheckpoints = true) {
     cancelJob(handle, id, savePauseCheckpoint, discardPauseCheckpoint)
   )
   if (pendingFinetune) pending.push(pendingFinetune.settled)
+  // Read now: a finetune admitted before the cleanup runs replaces it.
+  const checkpointSaveDir = handle.checkpointSaveDir
   return Promise.all(pending).then(async () => {
-    if (clearPauseCheckpoints && !savePauseCheckpoint && handle.checkpointSaveDir) {
+    if (clearPauseCheckpoints && !savePauseCheckpoint && checkpointSaveDir) {
       await enqueue(() =>
         cleanupCheckpointDirectories(
           handle,
           handle.engine?.module,
-          handle.checkpointSaveDir,
+          checkpointSaveDir,
           'pause_checkpoint_step_'
         )
       )

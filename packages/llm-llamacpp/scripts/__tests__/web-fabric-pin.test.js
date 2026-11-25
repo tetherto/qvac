@@ -53,6 +53,10 @@ test('caret ranges match the @qvac/fabric versions they allow', () => {
 test('the browser build pins the Fabric release that @qvac/fabric is built from', (t) => {
   const range = readJson(path.join(packageRoot, 'package.json')).dependencies['@qvac/fabric']
   const workspaceVersion = readJson(path.join(fabricRoot, 'package.json')).version
+  if (!/^\d+\.\d+\.\d+$/.test(workspaceVersion)) {
+    t.skip(`@qvac/fabric ${workspaceVersion} is a prerelease`)
+    return
+  }
   if (!satisfies(workspaceVersion, range)) {
     // The workspace @qvac/fabric is ahead of this package's range. The check
     // runs again when this package moves to the new @qvac/fabric.
