@@ -315,7 +315,7 @@
       },
       "configurations": {
         "linux-x64-gpu2204": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set GGML_CUDA_DISABLE_MMQ_SRC1_SHARING=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set GGML_CUDA_DISABLE_MMQ_COL_OUTER=1",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
