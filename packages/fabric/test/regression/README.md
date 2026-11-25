@@ -342,7 +342,9 @@ from `temp-12032`:
 | Windows x64 | Six `/MDd` boundary tests and the Release boundary test; locally packed Fabric/LLM packages under Bare 1.36.0; CPU with SmolLM2 135M and CUDA with Gemma 3 1B (27/27 layers) and Qwen 3.5 2B (26/26 layers), using an RTX 3080 Ti Laptop GPU and CUDA 13.2. Each model completed two requests and unloaded with exit zero. The module audit found one base and app-local qvac/MSVC DLLs. |
 | Android arm64 | NDK 29 CPU build, allocation/logger/abort probes on a Pixel 10 Pro XL, and two Qwen 3 0.6B CPU requests with clean unload under Bare 1.36.0 over ADB. The shell app loads from local npm tarballs without LD_LIBRARY_PATH; the NDK's libc++_shared.so is included in this test fixture. This does not test APK packaging or its linker namespace. |
 
-The source pin is `b21b1ce813` and includes the Android RUNPATH fix. CMake suppresses Android
+That validation used source `b21b1ce813`, including the Android RUNPATH fix.
+The current draft port pins `9918014b76442a3da8e63c470221e167dc3b8209`, rebased
+onto the latest `temp-12032` and including the logger cleanup. CMake suppresses Android
 INSTALL_RPATH, so the source explicitly emits `$ORIGIN` for core and backend
 libraries, and Fabric emits the companion directory on its `.bare` module.
 `ci/verify-android-shared-core.mjs` checks the emitted binaries and rejects
@@ -350,12 +352,12 @@ the original missing-RUNPATH package. Android supports DT_RUNPATH from API 24;
 these builds target API 29. Windows still uses isolated `/MD` overrides;
 production CRT flags and consumer migration remain separate work.
 
-The Linux inference trace still shows Bare answering versioned new/delete
-imports. Successful inference and the ELF package checks therefore do not
-establish correct runtime binding under Bare.
+Linux binding audits found the same Bare interception of the allocation-operator
+family in released Fabric and the shared-core build. No other C++ runtime symbols
+from the audited QVAC libraries resolved to Bare. This is preexisting behavior
+and is resolved as a migration blocker; allocation-failure/new-handler behavior
+has not been exercised. Bare-sidecar inference passed outside the sandbox.
 
-The strict runtime-binding audit remains required: versioned imports alone
-have not eliminated Bare's allocator interposition. Windows stream/vector
-ownership, Android APK loading, bare-sidecar, coexistence and GPU/NPU execution
-remain cutover acceptance work. These draft PRs do not migrate all consumer
-addons or remove their compatibility paths.
+Windows stream/vector ownership, Android APK loading and remaining GPU/NPU
+execution coverage remain cutover acceptance work. These draft PRs do not
+migrate all consumer addons or remove their compatibility paths.
