@@ -101,14 +101,14 @@ See the [API reference](/rag/api-reference) for the full API.
 
 ## React Native and Expo
 
-`@qvac/rag` is not supported in React Native or Expo apps yet. Build retrieval from the SDK instead: embed with [`embed()`](/sdk/reference/api#embed) or `embedBatch()`, index the vectors with [`createVectorIndex()`](/sdk/reference/api#createvectorindex), and keep the documents in your own store. The [TurboVec index](/rag/examples/turbovec-index) example shows how.
+`@qvac/rag` is not supported in React Native or Expo apps yet. Build retrieval from the SDK instead: embed with [`embed()`](/sdk/reference/api#embed) or `embedBatch()`, index the vectors with [`createVectorIndex()`](/sdk/reference/api#createvectorindex), and keep the documents in your own store. The [TurboVec index](/rag/turbovec-index) example shows how.
 
 ## Python and Kotlin
 
 `@qvac/rag` is JavaScript only. From Python or Kotlin, either:
 
 - **Use the CLI vector stores.** Run `qvac serve openai` with an embedding model and call `/v1/files` and `/v1/vector_stores` from any OpenAI client. See [Vector stores](/cli/http-server#vector-stores).
-- **Build retrieval from the SDK.** Embed with `embed_batch` (Python) or `client.embeddings.embed` (Kotlin), index the vectors with `vector_index` (Python) or `client.vectorIndex` (Kotlin), and keep the documents in your own store. The [TurboVec index](/rag/examples/turbovec-index), [MongoDB](/rag/examples/external-vector-db#mongodb) and [SQLite](/rag/examples/external-vector-db#sqlite) examples show both languages.
+- **Build retrieval from the SDK.** Embed with `embed_batch` (Python) or `client.embeddings.embed` (Kotlin), index the vectors with `vector_index` (Python) or `client.vectorIndex` (Kotlin), and keep the documents in your own store. The [TurboVec index](/rag/turbovec-index), [MongoDB](/rag/external-vector-db#mongodb) and [SQLite](/rag/external-vector-db#sqlite) examples show both languages.
 
 ```python
 from openai import OpenAI
