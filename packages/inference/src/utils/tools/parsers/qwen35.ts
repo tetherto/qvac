@@ -126,6 +126,10 @@ function decodeFunctionCall(
   const schemaProperties = parameters?.properties ?? {}
   const required = parameters?.required ?? []
   const args: Record<string, unknown> = {}
+  // A parameter that never closes would otherwise vanish and leave its default.
+  if (/<parameter=/i.test(paramsBlock.replace(PARAM_REGEX, ''))) {
+    return { error: { code: 'PARSE_ERROR', message: 'Unclosed <parameter> in tool call', raw } }
+  }
   try {
     for (const pm of paramsBlock.matchAll(PARAM_REGEX)) {
       const paramName = pm[1]!.trim()

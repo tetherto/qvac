@@ -531,6 +531,18 @@ test('a structured parameter written as text is decoded', (t) => {
   })
 })
 
+test('a parameter that never closes is not dropped from the call', (t) => {
+  const bare = '<function=login><parameter=password>secret</function>'
+  const wrapped = `<tool_call>\n${bare}\n</tool_call>`
+  for (const text of [bare, wrapped]) {
+    for (let split = 0; split <= text.length; split++) {
+      const r = run([text.slice(0, split), text.slice(split)], [LOGIN])
+      t.is(r.calls.length + r.finalCalls.length, 0, `split ${split}: no call`)
+    }
+  }
+  t.ok(run([wrapped], [LOGIN]).errors > 0, 'the wrapped frame reports an error')
+})
+
 test('a valid array is not read as an object followed by prose', (t) => {
   const tool: Tool = {
     type: 'function',
