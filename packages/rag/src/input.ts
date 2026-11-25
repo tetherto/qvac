@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
+import { hasProtoKey, metadataProblem, name, optionalJson, rowSizeProblem, text } from './limits.js'
 import type { DeleteDocumentsParams, ImportOptions, IngestOptions } from './types.js'
 
 export interface ValidChunk {
@@ -43,10 +44,10 @@ const vectorSchema = z.union([z.instanceof(Float32Array), z.array(z.number())])
 
 const chunkSchema = z
   .object({
-    id: z.string().min(1).optional(),
-    content: z.string(),
+    id: name.optional(),
+    content: text,
     // The encoding stores '' as absent, so it could not be read back.
-    metadataJson: z.string().min(1).optional(),
+    metadataJson: optionalJson,
     embedding: vectorSchema,
     spaceId: z.string().min(1).optional()
   })
@@ -56,7 +57,7 @@ const metadataSchema = z.record(z.string(), z.unknown()).optional()
 
 const documentSchema = z
   .object({
-    id: z.string().min(1),
+    id: name,
     metadata: metadataSchema,
     spaceId: z.string().min(1).optional(),
     chunks: z.array(chunkSchema)
@@ -65,17 +66,17 @@ const documentSchema = z
 
 const textDocumentSchema = z
   .object({
-    id: z.string().min(1),
-    text: z.string(),
+    id: name,
+    text,
     metadata: metadataSchema
   })
   .strict()
 
 const textChunkSchema = z
   .object({
-    id: z.string().min(1).optional(),
-    content: z.string(),
-    metadataJson: z.string().min(1).optional(),
+    id: name.optional(),
+    content: text,
+    metadataJson: optionalJson,
     // Carried by `rag-extract` chunks; not stored.
     tokenCount: z.number().optional()
   })
@@ -83,7 +84,7 @@ const textChunkSchema = z
 
 const chunkedDocumentSchema = z
   .object({
-    id: z.string().min(1),
+    id: name,
     metadata: metadataSchema,
     chunks: z.array(textChunkSchema)
   })
@@ -91,15 +92,19 @@ const chunkedDocumentSchema = z
 
 const ingestSchema = z
   .object({
-    namespace: z.string().min(1),
+    namespace: name,
     documents: z.array(z.unknown()).min(1)
   })
   .strict()
 
-const signalSchema = z.custom<AbortSignal>(
-  (value) => typeof (value as { aborted?: unknown } | null)?.aborted === 'boolean',
-  'signal must be an AbortSignal'
-)
+const signalSchema = z.custom<AbortSignal>((value) => {
+  const signal = value as Partial<AbortSignal> | null
+  return (
+    typeof signal?.aborted === 'boolean' &&
+    typeof signal.addEventListener === 'function' &&
+    typeof signal.removeEventListener === 'function'
+  )
+}, 'signal must be an AbortSignal')
 
 const ingestOptionsSchema = z
   .object({
@@ -115,8 +120,8 @@ const ingestOptionsSchema = z
 
 const deleteSchema = z
   .object({
-    namespace: z.string().min(1),
-    documentIds: z.array(z.string().min(1))
+    namespace: name,
+    documentIds: z.array(name)
   })
   .strict()
 
@@ -171,14 +176,40 @@ function toJsonMetadata(
   metadata: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
   if (metadata === undefined) return undefined
+  let json: Record<string, unknown>
   try {
-    return JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
+    json = JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
   } catch (error) {
     throw new QvacErrorRAG({
       code: ERR_CODES.INVALID_INPUT,
       adds: `document '${id}' metadata is not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`
     })
   }
+  const problem = metadataProblem(json)
+  if (problem) {
+    throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `document '${id}' ${problem}` })
+  }
+  return json
+}
+
+// Text documents' chunks are checked once chunked.
+function checkParsedRows(namespace: string, parsed: ParsedDocument): void {
+  const { id, metadata } = parsed.document
+  const chunks = parsed.kind === 'text' ? [] : parsed.document.chunks
+  const dimensions =
+    parsed.kind === 'embedded' ? (parsed.document.chunks[0]?.embedding.length ?? 0) : 0
+  checkRows(namespace, id, metadata, chunks, dimensions)
+}
+
+export function checkRows(
+  namespace: string,
+  documentId: string,
+  metadata: Record<string, unknown> | undefined,
+  chunks: ValidTextChunk[],
+  dimensions: number
+): void {
+  const problem = rowSizeProblem(namespace, documentId, metadata, chunks, dimensions)
+  if (problem) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: problem })
 }
 
 export function parseIngest(params: unknown): {
@@ -191,6 +222,7 @@ export function parseIngest(params: unknown): {
   const seen = new Set<string>()
   const documents = parsed.data.documents.map((input, index) => {
     const document = parseDocument(input, `documents.${index}`)
+    checkParsedRows(parsed.data.namespace, document)
     if (seen.has(document.document.id)) {
       throw new QvacErrorRAG({ code: ERR_CODES.DUPLICATE_DOCUMENT_ID, adds: document.document.id })
     }
@@ -206,6 +238,13 @@ function parseDocument(input: unknown, path: string): ParsedDocument {
   const record = (typeof input === 'object' && input !== null ? input : {}) as {
     text?: unknown
     chunks?: unknown
+    metadata?: unknown
+  }
+  if (hasProtoKey(record.metadata)) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: `${path}.metadata has a '__proto__' key`
+    })
   }
   if ('text' in record) {
     const doc = parseWith(textDocumentSchema, input, path)
@@ -346,19 +385,19 @@ export function parseSearch(params: unknown): ValidSearch {
 const MAX_PAGE = 1024
 
 const readFields = {
-  documentId: z.string().min(1),
+  documentId: name,
   generation: z.number().int().positive().optional(),
   fromOrdinal: z.number().int().nonnegative().optional(),
   limit: z.number().int().positive().max(MAX_PAGE).optional()
 }
-const readSchema = z.object({ namespace: z.string().min(1), ...readFields }).strict()
+const readSchema = z.object({ namespace: name, ...readFields }).strict()
 const scopedReadSchema = z.object(readFields).strict()
 
 const listFields = {
-  after: z.string().min(1).optional(),
+  after: name.optional(),
   limit: z.number().int().positive().max(MAX_PAGE).optional()
 }
-const listSchema = z.object({ namespace: z.string().min(1), ...listFields }).strict()
+const listSchema = z.object({ namespace: name, ...listFields }).strict()
 const scopedListSchema = z.object(listFields).strict().optional()
 
 export interface ValidRead {
@@ -414,8 +453,8 @@ export function parseScopedListDocuments(params: unknown): ValidList {
 
 const exportSchema = z
   .object({
-    namespace: z.string().min(1),
-    documentIds: z.array(z.string().min(1)).optional()
+    namespace: name,
+    documentIds: z.array(name).optional()
   })
   .strict()
 
@@ -423,7 +462,7 @@ const exportOptionsSchema = z.object({ signal: signalSchema.optional() }).strict
 
 const importSchema = z
   .object({
-    namespace: z.string().min(1),
+    namespace: name,
     source: z.custom<AsyncIterable<Uint8Array>>(
       (value) =>
         typeof (value as { [Symbol.asyncIterator]?: unknown } | null)?.[Symbol.asyncIterator] ===
@@ -446,7 +485,7 @@ const importOptionsSchema = z
   .strict()
   .optional()
 
-const dropSchema = z.object({ name: z.string().min(1) }).strict()
+const dropSchema = z.object({ name }).strict()
 
 export function parseExport(
   params: unknown,
@@ -485,7 +524,7 @@ export function parseImport(
   }
 }
 
-const indexStatusSchema = z.object({ namespace: z.string().min(1) }).strict()
+const indexStatusSchema = z.object({ namespace: name }).strict()
 
 export function parseIndexStatus(params: unknown): string {
   const parsed = indexStatusSchema.safeParse(params)
@@ -499,8 +538,8 @@ export function parseDropNamespace(params: unknown): string {
   return parsed.data.name
 }
 
-export function parseNamespaceName(name: unknown): string {
-  const parsed = z.string().min(1).safeParse(name)
+export function parseNamespaceName(value: unknown): string {
+  const parsed = name.safeParse(value)
   if (!parsed.success) throw invalidInput(parsed.error)
   return parsed.data
 }

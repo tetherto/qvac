@@ -120,13 +120,21 @@ export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: Read
   let done = false
 
   async function nextChunk(): Promise<IteratorResult<Uint8Array>> {
-    if (!stop) return await iterator.next()
+    if (!stop) {
+      try {
+        return await iterator.next()
+      } catch (error) {
+        throw sourceFailed(error)
+      }
+    }
     if (stop.stopped) throw cancelled()
     try {
       // `wake` is set first: the source may itself trigger the stop inside `next()`.
       return await new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
         stop.wake = () => reject(cancelled())
-        iterator.next().then(resolve, reject)
+        Promise.resolve()
+          .then(() => iterator.next())
+          .then(resolve, (error: unknown) => reject(sourceFailed(error)))
       })
     } finally {
       stop.wake = null
@@ -195,6 +203,16 @@ export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: Read
       else await returning
     }
   }
+}
+
+// The source's own error is kept as `cause`.
+function sourceFailed(error: unknown): QvacErrorRAG {
+  if (error instanceof QvacErrorRAG) return error
+  return new QvacErrorRAG({
+    code: ERR_CODES.IMPORT_SOURCE_FAILED,
+    adds: error instanceof Error ? error.message : String(error),
+    cause: error instanceof Error ? error : undefined
+  })
 }
 
 function cancelled(): QvacErrorRAG {

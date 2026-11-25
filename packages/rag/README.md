@@ -141,7 +141,14 @@ Each document is one of:
 
 Within one document, either every chunk has an `embedding` or none does. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected. Text and pre-chunked chunks are sent to the port in batches of 32.
 
-- The whole call is validated, and text is chunked, before anything is written.
+Input limits, all failing with `INVALID_INPUT`:
+
+- Namespace names, document and chunk IDs, text, chunk `content` and `metadataJson`, `metadata` keys and string values, and the `space` fields must be well-formed UTF-16: a lone surrogate, such as half an emoji left by cutting a string, is rejected rather than stored as U+FFFD. The same holds for names and IDs passed to every other call (`INVALID_SCOPE` in a scope).
+- `metadata` can't have a `__proto__` key.
+- Each stored row must fit in 8 MiB (UTF-8): a chunk's namespace, document ID, chunk ID, `content`, `metadataJson` and `dimensions × 4` vector bytes, and a document's namespace, ID and `metadata` as JSON. Text documents are checked once chunked.
+- `signal` must be an `AbortSignal`, with `aborted`, `addEventListener` and `removeEventListener`.
+
+- The whole call is validated, including the limits above, and text is chunked, before anything is written.
 - Each document commits in its own HyperDB batch, in input order, as soon as all its chunks are embedded. If a later document fails, earlier ones stay committed.
 - `signal` is checked between embedding batches and before each document's commit. An abort does not throw: committed documents stay, the rest are listed in `skipped`, and `cancelled` is `true`.
 - `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written or found unchanged).
@@ -204,7 +211,7 @@ Lists a namespace's documents in document ID order. Returns `{ documents, next }
 
 ### `exportNamespace({ namespace, documentIds? }, { signal? }?)`
 
-Returns an `AsyncIterable<Uint8Array>` of the namespace in the `QVRAGX1` format: a header with the full embedding space, its `spaceId` and the namespace's lineage, then each document with its chunks (IDs, text, metadata and float32 vectors), then the delete records of deleted documents, then a trailer with counts. Native IDs, index snapshots and quantized vectors are not exported; the target builds its own index.
+Returns an `AsyncIterable<Uint8Array>` of the namespace in the `QVRAGX1` format: a header with the full embedding space, its `spaceId` and the namespace's lineage, then each document with its chunks (IDs, text, metadata and float32 vectors), then the delete records of deleted documents, then a trailer with counts. Each document and delete record carries a hash over its ID and generation. Native IDs, index snapshots and quantized vectors are not exported; the target builds its own index.
 
 The stream reads one database snapshot, so commits made while it runs don't appear in it, and it yields one chunk at a time: memory stays flat whatever the namespace size, and a slow consumer slows the export. With `documentIds`, only those documents and their delete records are exported; IDs the namespace doesn't have are left out. Bad input throws at the call; an aborted `signal` fails the iteration with `OPERATION_CANCELLED`, and `close()` ends an open export with `NOT_READY`. A chunk or document that encodes to more than 64 MiB fails the iteration with `INVALID_INPUT`, since import would refuse it.
 
@@ -217,7 +224,9 @@ for await (const bytes of rag.exportNamespace({ namespace: 'handbook' })) out.wr
 
 Reads a `QVRAGX1` stream from `source` (any `AsyncIterable<Uint8Array>`) into `namespace`. A missing namespace is created with the export's space and lineage, and `index` sets its storage as in `createNamespace`. Returns `{ documents, skipped, cancelled, revision }`.
 
-Before writing anything, the import checks that the header's space hashes to its `spaceId` (`IMPORT_INVALID` otherwise), that an existing namespace is in the same space (`EMBEDDING_SPACE_MISMATCH`), and that it has the same lineage (`IMPORT_LINEAGE_MISMATCH`). An empty namespace takes the export's lineage. Two namespaces with different lineages are never merged; to combine them, `ingest` the exported chunks with their vectors and `spaceId`, which gives them fresh generations.
+Before writing anything, the import checks that the header's space hashes to its `spaceId` (`IMPORT_INVALID` otherwise), that an existing namespace is in the same space (`EMBEDDING_SPACE_MISMATCH`), and that it has the same lineage (`IMPORT_LINEAGE_MISMATCH`). A namespace without documents takes the export's lineage, and its delete records, which belong to the old lineage, are removed. Two namespaces with different lineages are never merged; to combine them, `ingest` the exported chunks with their vectors and `spaceId`, which gives them fresh generations.
+
+A missing namespace is created, and an empty one takes the lineage, in the same batch as the first document or delete record, so an import that fails or is cancelled before then leaves nothing behind. An export with neither creates the namespace once its trailer is read. If an ingest commits into an empty namespace before the import's first write, the import fails with `IMPORT_LINEAGE_MISMATCH`; an ingest still embedding when the import adopts the namespace commits normally. A `source` that throws fails the import with `IMPORT_SOURCE_FAILED`, with the source's error as `cause`.
 
 Documents keep their exported generation and commit one at a time, like `ingest`. For each document:
 
@@ -232,7 +241,7 @@ Documents keep their exported generation and commit one at a time, like `ingest`
 
 A delete record removes the target's document unless the target holds a newer generation (`deleted` in `documents`, or skipped as `superseded`), and is kept, so importing an older export later can't bring the document back.
 
-Each document is checked before it commits: contiguous ordinals, `dimensions × 4` vector bytes, finite components, and a content hash that matches its text, metadata and, when the source document was ingested with vectors, its vectors. A bad document, a stream cut short, a missing or wrong trailer, or a frame over 64 MiB fails with `IMPORT_INVALID`; documents committed before it stay, and a document is never committed in part. Memory holds one document's chunks at a time. An abort through `signal`, or `close()`, stops the import, even one waiting on a `source` that has stopped sending: it keeps what is committed and returns `cancelled: true`. Before the header is read there is nothing to keep, so it fails instead, with `OPERATION_CANCELLED` (`NOT_READY` for `close()`). The check before each commit runs once the write lock is held. `onProgress({ documents, deletes })` reports the documents and delete records read.
+Each document is checked before it commits: contiguous ordinals, `dimensions × 4` vector bytes, finite components, a content hash that matches its text, metadata and, when the source document was ingested with vectors, its vectors, a check over its ID and generation, and the input limits of `ingest`. Each delete record is checked against its ID and generation. Generations above 2^32 are refused. Exports from 0.11.0 carry no ID checks and import without them. A bad document, a stream cut short, a missing or wrong trailer, or a frame over 64 MiB fails with `IMPORT_INVALID`; documents committed before it stay, and a document is never committed in part. Memory holds one document's chunks at a time. An abort through `signal`, or `close()`, stops the import, even one waiting on a `source` that has stopped sending: it keeps what is committed and returns `cancelled: true`. Before the header is read there is nothing to keep, so it fails instead, with `OPERATION_CANCELLED` (`NOT_READY` for `close()`). The check before each commit runs once the write lock is held. `onProgress({ documents, deletes })` reports the documents and delete records read.
 
 An export of a namespace that has since been dropped imports like any other: into a new or empty namespace it restores the documents with their lineage.
 
