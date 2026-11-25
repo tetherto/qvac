@@ -442,6 +442,11 @@ function logStreamingProgress(response, tag) {
 // 1B throughput/correctness run is too slow or complicated for mobile and legacy macOS x64.
 const skipHeavyPlatform = isMobile || isDarwin
 
+// Vulkan compiles each pipeline on its first use in a process, which takes
+// seconds on a cold driver shader cache. An untimed pass of the same workload
+// keeps those compiles out of the timed runs the TPS assertion compares.
+const warmUpBeforeTiming = isLinuxX64 && !useCpu
+
 safeTest(
   'continuous batching answers 16 prompts correctly and improves Linux GPU TPS',
   { timeout: 900_000, skip: skipHeavyPlatform },
@@ -450,6 +455,11 @@ safeTest(
     // Keep it pinned so enabling a new default backend cannot change what it
     // measures; CUDA remains covered by the rest of the suite.
     const singleModel = await setupModel(t, { backend: 'vulkan' })
+    if (warmUpBeforeTiming) {
+      for (const item of CASES) {
+        await collectText(await singleModel.run(buildPrompt(item), runOptionsForCase(item)))
+      }
+    }
     const singleNativeTpsValues = []
     const singleWallTpsValues = []
     for (const item of CASES) {
@@ -478,6 +488,13 @@ safeTest(
     t.comment(`average single wall TPS: ${avgSingleWallTps}`)
 
     const batchModel = await setupModel(t, { parallel: '4', backend: 'vulkan' })
+    // Twice: the first batch prefills from empty slots, the timed one from slots
+    // that already hold the shared system prompt, which takes other pipelines.
+    if (warmUpBeforeTiming) {
+      for (let pass = 0; pass < 2; pass++) {
+        await (await batchModel.run(CASES.map(buildBatchItem))).await()
+      }
+    }
     const batchInput = CASES.map((item) => ({
       id: item.id,
       prompt: buildPrompt(item),
