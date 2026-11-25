@@ -1192,7 +1192,7 @@ function fitValidationEngine() {
   let result = '{}'
   return {
     FS: {
-      filesystems: { WORKERFS: {} },
+      filesystems: { WORKERFS: { stream_ops: { read() {} } } },
       mkdirTree() {},
       mount(_type, { files }, mountpoint) {
         for (const file of files) mounted.set(`${mountpoint}/${file.name}`, file)
