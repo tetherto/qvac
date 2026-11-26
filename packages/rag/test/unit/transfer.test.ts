@@ -12,6 +12,7 @@ import { FRAME, MAGIC, chunkFrame, jsonFrame } from '../../src/transfer/frames.j
 import { hashContent } from '../../src/writes.js'
 import {
   SPACE,
+  delay,
   doc,
   inspect,
   mutate,
@@ -855,7 +856,7 @@ test('an import stopped while it waits for the write lock writes nothing', async
     { signal: controller.signal as AbortSignal }
   )
   // Every frame is in memory, so the import reaches the lock within a few ticks.
-  await new Promise((resolve) => setTimeout(resolve, 50, null))
+  await delay(50)
   controller.abort(new Error('stop'))
   release()
   await ingesting

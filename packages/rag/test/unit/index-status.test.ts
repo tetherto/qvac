@@ -8,6 +8,7 @@ import { forgetLoadedModules, importers, type NativeIndex } from '../../src/vect
 import {
   SCAN_ONLY,
   SPACE,
+  delay,
   doc,
   realNativeIndex,
   rejectsWithCode,
@@ -383,6 +384,6 @@ test('an async onIndexFallback that rejects is ignored', async (t) => {
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
   t.alike(await searchIds(rag, spaceId), ['a'])
-  await new Promise((resolve) => setTimeout(resolve, 20, null))
+  await delay(20)
   t.alike(unhandled, [], 'no unhandled rejection')
 })

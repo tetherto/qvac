@@ -160,16 +160,26 @@ export async function rejectsWithCode(
   }
 }
 
+// The runtime's timers; the test tsconfig loads no types that declare them.
+const timers = globalThis as unknown as {
+  setTimeout: (callback: () => void, ms: number) => unknown
+  clearTimeout: (timer: unknown) => void
+}
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => timers.setTimeout(resolve, ms))
+}
+
 // A hang fails the test instead of stalling the run.
 export async function settles<T>(promise: Promise<T>, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let timer: unknown
   const timeout = new Promise<never>((resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} did not settle`)), 5000)
+    timer = timers.setTimeout(() => reject(new Error(`${label} did not settle`)), 5000)
   })
   try {
     return await Promise.race([promise, timeout])
   } finally {
-    clearTimeout(timer)
+    timers.clearTimeout(timer)
   }
 }
 

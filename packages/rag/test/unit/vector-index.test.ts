@@ -19,6 +19,7 @@ import {
 import {
   SPACE,
   countNativeCalls,
+  delay,
   doc,
   inspect,
   currentProvider,
@@ -482,14 +483,6 @@ test('an abort stops a search waiting for the index, and the rebuild still finis
   t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a'])
   t.is(gated.creates(), 1, 'one build: the next search reused the rebuild the abort left running')
 })
-
-const timers = globalThis as unknown as {
-  setTimeout: (callback: () => void, ms: number) => void
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => timers.setTimeout(resolve, ms))
-}
 
 function faultyLoader(real: RealProvider, broken: 'addWithIds' | 'search') {
   const counts = { creates: 0 }
