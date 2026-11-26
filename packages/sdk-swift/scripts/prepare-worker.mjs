@@ -2,17 +2,26 @@
 // Bundles this checkout's worker for an app folder: reads <app>/qvac.config.json
 // and writes the Swift package <app>/QvacWorker.
 //
-//   node scripts/prepare-worker.mjs <app folder> [host...]
+//   node scripts/prepare-worker.mjs <app folder> [host...] [--install-missing-prebuilds]
 //
 // Hosts default to this Mac. Needs packages/sdk built and installed, with the
-// platform packages of each host.
+// platform packages of each host; --install-missing-prebuilds installs the
+// missing mobile ones the bundle needs into packages/sdk, changing its
+// package.json.
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { parseArgs } from 'node:util'
 
-const [appArg, ...hostArgs] = process.argv.slice(2)
+const { values: options, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { 'install-missing-prebuilds': { type: 'boolean', default: false } }
+})
+const [appArg, ...hostArgs] = positionals
 if (appArg === undefined) {
-  console.error('Usage: node scripts/prepare-worker.mjs <app folder> [host...]')
+  console.error(
+    'Usage: node scripts/prepare-worker.mjs <app folder> [host...] [--install-missing-prebuilds]'
+  )
   process.exit(1)
 }
 
@@ -36,6 +45,7 @@ const bundle = await bundleSdk({
   language: 'swift',
   outputDir,
   hosts,
+  installMissingPrebuilds: options['install-missing-prebuilds'],
   quiet: true
 })
 

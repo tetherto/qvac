@@ -4,6 +4,29 @@
   "tags": ["ci:sdk"],
   "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
   "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-swift",
+        "command": "node ci/checks.mjs typecheck"
+      },
+      "metadata": {
+        "setup": ["python"],
+        "runner": "macos_26"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-swift",
+        "command": "node ci/checks.mjs unit"
+      },
+      "metadata": {
+        "setup": ["python"],
+        "runner": "macos_26",
+        "sources": ["self"]
+      }
+    },
     "test:integration": {
       "executor": "nx:run-commands",
       "options": {

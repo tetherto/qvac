@@ -218,5 +218,15 @@ node scripts/prepare-worker.mjs Smoke
 swift run --package-path Smoke Smoke
 ```
 
-CI runs the catalog through this client on macOS and iOS with the other
-languages' e2e (see `packages/sdk-e2e/runners/swift/README.md`).
+`sdk-checks.yml` runs this package's checks on the hosted macOS runner, on
+every pull request that reaches it, through `node ci/checks.mjs`:
+
+- `typecheck` generates the client, builds the package, and builds the iOS
+  example for the simulator with a worker bundled from this checkout
+  (`prepare-worker.mjs --install-missing-prebuilds` installs the simulator's
+  platform packages it needs).
+- `unit` generates the client and runs `swift test`.
+
+Run either from `packages/sdk-swift` the same way. CI runs the catalog through
+this client on macOS and iOS with the other languages' e2e (see
+`packages/sdk-e2e/runners/swift/README.md`).

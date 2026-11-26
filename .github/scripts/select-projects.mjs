@@ -70,6 +70,9 @@ const METADATA = {
   perfReport: ['test:integration'],
   // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
   setup: ['lint', 'typecheck', 'test:unit', 'verify:generated', 'verify:deps'],
+  // The runner key (reusable-runner-names.yml) a package's checks job runs on instead of Ubuntu, such as macos_26 for a
+  // package only Apple's toolchain builds. Every check target that names one names the same.
+  runner: ['lint', 'typecheck', 'test:unit', 'verify:generated', 'verify:deps'],
   // How the checks install the package in place of the pnpm workspace: npm alone, as a consumer would, its own
   // sdk-source:workspace script, or self, its targets alone; published also checks against npm on its release branch.
   sources: ['test:unit']
@@ -285,6 +288,16 @@ export const nativeBuild = (n) =>
   Object.keys(n.data.targets.build?.configurations ?? {}).length > 0
 export const jsBuild = (n) => Boolean(n.data.targets.build) && !nativeBuild(n)
 
+// The runner label of a package's checks job, from its check targets' metadata.runner; empty runs it on Ubuntu.
+export function checkRunner(n, labels) {
+  const keys = [...new Set(CHECK_TARGETS.map((t) => n.data.targets[t]?.metadata?.runner).filter(Boolean))]
+  if (keys.length > 1)
+    throw new Error(`${n.name}: its check targets name different runners: ${keys.join(', ')}`)
+  if (!keys.length) return ''
+  if (!labels[keys[0]]) throw new Error(`${n.name}: metadata.runner names unknown runner key ${keys[0]}`)
+  return labels[keys[0]]
+}
+
 // configs, when set, keeps only those configurations: a mobile dispatch runs its one platform. prLabels and baseRef
 // route the configurations that declare ci.labels; see routeLabelled. releasedProviders builds consumers against
 // their providers' installed npm release: no provider rows for them, and no provider prebuilds to restore.
@@ -338,6 +351,7 @@ export function select({
       checkSetup: [
         ...new Set(CHECK_TARGETS.flatMap((t) => n.data.targets[t]?.metadata?.setup ?? []))
       ],
+      checkRunner: checkRunner(n, labels),
       releaseGuard: Boolean(n.data.targets.publish?.metadata?.publish?.releaseGuard),
       prebuildStatus: PREBUILD_KEYS.includes(c.key),
       cppStatus: CPP_TEST_KEYS.includes(c.key)
