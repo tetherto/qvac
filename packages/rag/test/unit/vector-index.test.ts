@@ -7,14 +7,30 @@ import { AbortController } from 'bare-abort-controller'
 import { ERR_CODES, computeSpaceId, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
 import {
-  loadNativeIndex,
-  setNativeIndexLoader,
   type NativeIndex,
   type NativeIndexModule,
   type NativeSearchResult
 } from '../../src/vector-index/native.js'
-import { createSnapshotStore, type SnapshotIdentity } from '../../src/vector-index/snapshots.js'
-import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
+import {
+  createSnapshotStore,
+  type FileSystem,
+  type SnapshotIdentity
+} from '../../src/vector-index/snapshots.js'
+import {
+  SPACE,
+  countNativeCalls,
+  delay,
+  doc,
+  inspect,
+  currentProvider,
+  realNativeIndex,
+  rejectsWithCode,
+  settles,
+  useProvider,
+  useScan,
+  type RealProvider,
+  type Test
+} from './helpers.js'
 import type {
   EmbeddedDocumentInput,
   EmbeddingSpace,
@@ -37,7 +53,7 @@ async function openStore(t: Test): Promise<Store> {
 }
 
 async function openOn(t: Test, { store, dir }: Store, index: IndexOptions = {}): Promise<Rag> {
-  const rag = createRag({ corestore: store, index: { dir, ...index } })
+  const rag = createRag({ corestore: store, index: { dir, provider: currentProvider(), ...index } })
   await rag.ready()
   t.teardown(() => rag.close())
   return rag
@@ -218,24 +234,44 @@ test('a stale snapshot never brings back deleted or superseded chunks', async (t
   t.alike(contents(hits), [], 'its IDs map to nothing current')
 })
 
+// Holds the first rebuild's native add until `release()`.
+function gatedRebuild(real: RealProvider) {
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let entered = () => {}
+  const reached = new Promise<void>((resolve) => (entered = resolve))
+  let creates = 0
+  const module: NativeIndexModule = {
+    create(dim, storage) {
+      const native = real.create(dim, storage)
+      if (++creates > 1) return native
+      const add = native.addWithIds.bind(native)
+      native.addWithIds = (vectors, ids) => {
+        entered()
+        return gate.then(() => add(vectors, ids))
+      }
+      return native
+    },
+    load: (path) => real.load(path)
+  }
+  return { module, release, reached, creates: () => creates }
+}
+
 test('a commit during a search never hides the document it replaces', async (t) => {
-  await countNativeCalls(t)
-  const real = await loadNativeIndex()
+  const gated = gatedRebuild(await realNativeIndex())
+  useProvider(t, gated.module)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['old', [1, 0, 0]]])] })
-  await search(rag, spaceId, [1, 0, 0])
 
-  // Holding the loader keeps the search between its snapshot and the index
+  // Holding the rebuild keeps the search between its snapshot and the index
   // lookup while the replacement commits, so the open index is a revision
   // ahead of the search's reader.
-  let release = () => {}
-  const gate = new Promise<void>((resolve) => (release = resolve))
-  setNativeIndexLoader(() => gate.then(() => real))
   const pending = search(rag, spaceId, [1, 0, 0])
+  await gated.reached
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['new', [1, 0, 0]]])] })
-  release()
+  gated.release()
   t.alike(contents(await pending), ['new'], 'retried on a reader that matches the index')
 })
 
@@ -336,8 +372,7 @@ for (const storage of ['f32', 'q8'] as const) {
         documents.push(doc(`d${i}`, '', chunks))
       }
 
-      setNativeIndexLoader(() => Promise.resolve(null))
-      t.teardown(() => setNativeIndexLoader(null))
+      useScan(t)
       const scan = await openOn(t, handle)
       const { spaceId } = await scan.createNamespace({ name: 'ns', space, index: { storage } })
       for (const document of documents) {
@@ -353,7 +388,7 @@ for (const storage of ['f32', 'q8'] as const) {
       }
       await scan.close()
 
-      setNativeIndexLoader(null)
+      useProvider(t, undefined)
       const indexed = await openOn(t, handle)
       const actual: SearchHit[][] = []
       for (const query of queries) {
@@ -398,8 +433,7 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
     return results
   }
 
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useScan(t)
   const scan = await openOn(t, handle)
   const { spaceId } = await scan.createNamespace({
     name: 'ns',
@@ -411,7 +445,7 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
   const expected = await run(scan, spaceId)
   await scan.close()
 
-  setNativeIndexLoader(null)
+  useProvider(t, undefined)
   const indexed = await openOn(t, handle)
   t.alike(await run(indexed, spaceId), expected)
   t.alike(expected[0], ['d01'], 'key order for a namespace')
@@ -419,21 +453,14 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
 })
 
 test('an abort stops a search waiting for the index, and the rebuild still finishes', async (t) => {
-  const calls = await countNativeCalls(t)
-  const real = await loadNativeIndex()
+  const gated = gatedRebuild(await realNativeIndex())
+  useProvider(t, gated.module)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
 
-  let release = () => {}
-  const gate = new Promise<void>((resolve) => (release = resolve))
-  let entered = () => {}
-  const reached = new Promise<void>((resolve) => (entered = resolve))
-  setNativeIndexLoader(() => {
-    entered()
-    return gate.then(() => real)
-  })
+  const { reached, release } = gated
   const controller = new AbortController()
   const pending = rag.search({
     scope: { namespace: 'ns' },
@@ -454,18 +481,10 @@ test('an abort stops a search waiting for the index, and the rebuild still finis
 
   release()
   t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a'])
-  t.is(calls.creates, 1, 'one build: the next search reused the rebuild the abort left running')
+  t.is(gated.creates(), 1, 'one build: the next search reused the rebuild the abort left running')
 })
 
-const timers = globalThis as unknown as {
-  setTimeout: (callback: () => void, ms: number) => void
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => timers.setTimeout(resolve, ms))
-}
-
-function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') {
+function faultyLoader(real: RealProvider, broken: 'addWithIds' | 'search') {
   const counts = { creates: 0 }
   const wrap = (native: NativeIndex): NativeIndex =>
     new Proxy(native, {
@@ -487,10 +506,8 @@ function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') 
 
 for (const broken of ['addWithIds', 'search'] as const) {
   test(`a failing native ${broken} falls back to the scan`, async (t) => {
-    await countNativeCalls(t)
-    const real = (await loadNativeIndex()) as NativeIndexModule
-    const { module, counts } = faultyLoader(real, broken)
-    setNativeIndexLoader(() => Promise.resolve(module))
+    const { module, counts } = faultyLoader(await realNativeIndex(), broken)
+    useProvider(t, module)
     const handle = await openStore(t)
     const rag = await openOn(t, handle)
     const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -519,7 +536,7 @@ function gate(): Gate {
 }
 
 // Lets a test hold one native call, as if it were queued on the worker.
-function controlledLoader(real: NativeIndexModule) {
+function controlledLoader(real: RealProvider) {
   const controls = {
     creates: 0,
     searches: 0,
@@ -555,8 +572,9 @@ function controlledLoader(real: NativeIndexModule) {
             runSearch(() => target.search(...args))
         }
         if (key === 'searchFiltered') {
-          return (...args: Parameters<NativeIndex['searchFiltered']>) =>
-            runSearch(() => target.searchFiltered(...args))
+          const searchFiltered = target.searchFiltered as NonNullable<NativeIndex['searchFiltered']>
+          return (...args: Parameters<typeof searchFiltered>) =>
+            runSearch(() => searchFiltered.apply(target, args))
         }
         if (key === 'addWithIds') {
           return async (vectors: Float32Array, ids: BigUint64Array): Promise<void> => {
@@ -583,9 +601,8 @@ function controlledLoader(real: NativeIndexModule) {
 }
 
 async function useControlledIndex(t: Test) {
-  await countNativeCalls(t)
-  const loaded = controlledLoader((await loadNativeIndex()) as NativeIndexModule)
-  setNativeIndexLoader(() => Promise.resolve(loaded.module))
+  const loaded = controlledLoader(await realNativeIndex())
+  useProvider(t, loaded.module)
   return loaded.controls
 }
 
@@ -775,8 +792,7 @@ test('TurboVec storage is opt-in and needs dimensions divisible by 8 up to 1,024
 })
 
 test('search falls back to the scan without the addon', async (t) => {
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useScan(t)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -917,7 +933,7 @@ test('replay compacts the rows it removes', async (t) => {
 })
 
 test('removing a dropped namespace keeps the snapshot of its re-created successor', async (t) => {
-  const store = createSnapshotStore(await tmp(t), 'core')
+  const store = createSnapshotStore(await tmp(t), 'core', fs.promises as unknown as FileSystem)
   const identity = (createdAt: number): SnapshotIdentity => ({
     namespace: 'ns',
     createdAt,
@@ -935,4 +951,87 @@ test('removing a dropped namespace keeps the snapshot of its re-created successo
 
   await store.remove('ns', 2)
   t.is(await store.read(identity(2)), null, 'a removal for its own namespace deletes it')
+})
+
+test('close settles after the host closes the corestore with unsnapshotted commits', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = createRag({ corestore: handle.store, index: { dir: handle.dir } })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+
+  await handle.store.close()
+  await settles(rag.close(), 'close')
+  t.pass('close settled')
+})
+
+test('a failed sidecar write leaves no snapshot file behind', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle, { snapshotEvery: 1 })
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  const sidecar = snapshotFiles(handle.dir).find((file) => file.endsWith('.json')) as string
+  const tvecs = () => snapshotFiles(handle.dir).filter((file) => file.endsWith('.tvec'))
+  const first = tvecs()
+
+  // A directory in its place makes every sidecar write fail.
+  fs.mkdirSync(`${sidecar}.tmp`)
+  for (const id of ['b', 'c', 'd']) {
+    await rag.ingest({ namespace: 'ns', documents: [doc(id, spaceId, [[id, [0, 1, 0]]])] })
+  }
+  t.alike(tvecs(), first, 'only the snapshot the sidecar names is left')
+  fs.rmdirSync(`${sidecar}.tmp`)
+
+  await rag.ingest({ namespace: 'ns', documents: [doc('e', spaceId, [['e', [0, 0, 1]]])] })
+  t.is(tvecs().length, 1, 'a successful snapshot leaves one file')
+  t.is(sidecarRevision(handle.dir), 5, 'and the sidecar names it')
+})
+
+test('snapshot files the sidecar does not name are removed on open, snapshot and drop', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.close()
+
+  const sidecar = snapshotFiles(handle.dir).find((file) => file.endsWith('.json')) as string
+  const base = sidecar.slice(0, -'.json'.length)
+  const coreDir = base.split('/').slice(0, -1).join('/')
+  const leftovers = [`${base}.7.tvec.tmp.4242.3.c0ffee`, `${base}.9.tvec`, `${base}.json.tmp`]
+  const unrelated = [
+    `${coreDir}/notes.txt`,
+    `${coreDir}/${'0'.repeat(32)}.3.tvec`,
+    `${base}.tvec.bak`
+  ]
+  const named = snapshotFiles(handle.dir)
+  for (const file of [...leftovers, ...unrelated]) fs.writeFileSync(file, 'x')
+
+  const reopened = await openOn(t, handle)
+  t.alike(
+    contents(await search(reopened, spaceId, [1, 0, 0], 1)),
+    ['a'],
+    'the snapshot still loads'
+  )
+  t.alike(
+    snapshotFiles(handle.dir),
+    [...named, ...unrelated].sort(),
+    'open removes leftovers and keeps the named snapshot and other files'
+  )
+
+  fs.writeFileSync(`${base}.8.tvec`, 'x')
+  await reopened.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+  await reopened.close()
+  t.absent(fs.existsSync(`${base}.8.tvec`), 'the next snapshot removes a file it does not name')
+
+  const again = await openOn(t, handle)
+  fs.writeFileSync(`${base}.8.tvec.tmp.1.1.ab`, 'x')
+  await again.dropNamespace({ name: 'ns' })
+  t.alike(snapshotFiles(handle.dir), unrelated.sort(), 'drop removes every file of the namespace')
 })

@@ -85,7 +85,7 @@ jobs:
       group: opencode-upstream-compat
       cancel-in-progress: false
     env:
-      QVAC_SMOKE_MODEL: qwen3.5-0.8b
+      QVAC_SMOKE_MODEL: qwen3.5-2b
       QVAC_READY_TIMEOUT_MS: "1800000"
       QVAC_UPSTREAM_TIMEOUT_MS: "300000"
       OPENCODE_TIMEOUT: 45m

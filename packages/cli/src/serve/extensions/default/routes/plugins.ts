@@ -3,7 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
 import { invokePlugin, invokePluginStream, MODEL_TYPES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
-import { errorResponses } from '@/serve/lib/error-responses'
+import { ADMIN_REFUSED, errorResponses } from '@/serve/lib/error-responses'
 import { endSSE, initSSE, sendSSE } from '@/serve/lib/sse'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { resolveAndCheckModel } from '@/serve/core/plugins/require-model'
@@ -85,10 +85,7 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
                 handler_type_mismatch: '`stream` does not match whether the handler streams',
                 invalid_request: 'The body carries an unknown field'
               },
-              403: {
-                admin_disabled: 'The server was started without `--enable-admin`',
-                origin_not_allowed: 'A browser request from an origin outside the CORS allowlist'
-              },
+              403: ADMIN_REFUSED,
               404: {
                 model_not_found: 'No `serve.models` alias is called `model`',
                 handler_not_found: 'The plugin has no handler called `handler`'
