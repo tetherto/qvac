@@ -1,43 +1,17 @@
-import type { IndexFallbackReason, IndexStorage } from '../types.js'
+import type {
+  IndexFallbackReason,
+  IndexHandle,
+  IndexProvider,
+  IndexSearchResult,
+  IndexStorage
+} from '../types.js'
+import { forgetSnapshotFileSystem } from './snapshots.js'
 
-// The subset of `@qvac/turbovec-ggml`'s IdMapIndex this package uses. The
-// addon is an optional peer, so its own types are not part of ours.
-// An index runs its calls in call order; `length` counts finished calls only.
-
-export interface NativeSearchResult {
-  scores: Float32Array
-  ids: BigUint64Array
-  k: number
-}
-
-export interface NativeIndex {
-  readonly length: number
-  readonly dim: number
-  readonly bitWidth: number
-  addWithIds(vectors: Float32Array, ids: BigUint64Array): Promise<void>
-  remove(id: bigint): Promise<boolean>
-  compact(): Promise<void>
-  contains(id: bigint): Promise<boolean>
-  search(
-    queries: Float32Array,
-    k: number,
-    options?: { signal?: AbortSignal }
-  ): Promise<NativeSearchResult>
-  searchFiltered(
-    queries: Float32Array,
-    k: number,
-    allowedIds: BigUint64Array,
-    options?: { signal?: AbortSignal }
-  ): Promise<NativeSearchResult>
-  prepare(): Promise<void>
-  write(path: string): Promise<void>
-  dispose(): Promise<void>
-}
-
-export interface NativeIndexModule {
-  create(dim: number, storage: IndexStorage): NativeIndex
-  load(path: string): Promise<NativeIndex>
-}
+// `@qvac/turbovec-ggml` is the default provider. The addon is an optional
+// peer, so its own types are not part of ours.
+export type NativeIndex = IndexHandle
+export type NativeIndexModule = IndexProvider
+export type NativeSearchResult = IndexSearchResult
 
 // UINT64_MAX pads short result rows.
 export const PADDING_ID = 0xffffffffffffffffn
@@ -53,40 +27,45 @@ export const BIT_WIDTHS: Record<IndexStorage, number> = {
 }
 
 interface IdMapIndexClass {
-  new (options: { dim: number; storage: IndexStorage }): NativeIndex
-  load(path: string): Promise<NativeIndex>
+  new (options: { dim: number; storage: IndexStorage }): IndexHandle
+  load(path: string): Promise<IndexHandle>
 }
 
 export type NativeIndexLoad =
   | { module: NativeIndexModule }
   | { module: null; reason: Extract<IndexFallbackReason, `addon-${string}`>; error?: unknown }
 
-type Loader = () => Promise<NativeIndexModule | null>
+// The dynamic imports `ready()` runs. Tests replace them to simulate a host
+// that refuses module loading after startup.
+export const importers = {
+  turbovec: (): Promise<unknown> => import('@qvac/turbovec-ggml'),
+  bareFs: (): Promise<unknown> => import('bare-fs')
+}
 
 let loading: Promise<NativeIndexLoad> | null = null
-let loader: Loader = importTurboVec
 
 // Resolves without a module when the addon is not installed or cannot load on
 // this runtime; search then scans HyperDB instead. The result is cached, so a
 // host that seals addon loading must let `ready()` run this first.
 export function loadNativeIndex(): Promise<NativeIndexLoad> {
-  if (!loading) {
-    loading = loader().then(
-      (module): NativeIndexLoad =>
-        module ? { module } : { module: null, reason: 'addon-missing' },
-      (error: unknown): NativeIndexLoad =>
-        isMissing(error)
-          ? { module: null, reason: 'addon-missing' }
-          : { module: null, reason: 'addon-load-failed', error }
-    )
-  }
+  loading ??= settleNativeIndex(importTurboVec())
   return loading
 }
 
-// Tests swap the loader to compare against the scan path.
-export function setNativeIndexLoader(next: Loader | null): void {
-  loader = next ?? importTurboVec
+// Forgets cached imports, so the next `ready()` runs `importers` again.
+export function forgetLoadedModules(): void {
   loading = null
+  forgetSnapshotFileSystem()
+}
+
+function settleNativeIndex(importing: Promise<IndexProvider | null>): Promise<NativeIndexLoad> {
+  return importing.then(
+    (module): NativeIndexLoad => (module ? { module } : { module: null, reason: 'addon-missing' }),
+    (error: unknown): NativeIndexLoad =>
+      isMissing(error)
+        ? { module: null, reason: 'addon-missing' }
+        : { module: null, reason: 'addon-load-failed', error }
+  )
 }
 
 function isMissing(error: unknown): boolean {
@@ -94,12 +73,10 @@ function isMissing(error: unknown): boolean {
   return code === 'MODULE_NOT_FOUND' && specifier === '@qvac/turbovec-ggml'
 }
 
-async function importTurboVec(): Promise<NativeIndexModule | null> {
+async function importTurboVec(): Promise<IndexProvider | null> {
   // The binding only loads under Bare.
   if ((globalThis as { Bare?: unknown }).Bare === undefined) return null
-  const imported = (await import('@qvac/turbovec-ggml')) as unknown as {
-    default?: IdMapIndexClass
-  }
+  const imported = (await importers.turbovec()) as { default?: IdMapIndexClass }
   const IdMapIndex = imported.default
   if (typeof IdMapIndex !== 'function') return null
   // The package imports anywhere but loads its native binding on first use,

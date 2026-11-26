@@ -39,6 +39,63 @@ export interface IndexOptions {
   dir?: string
   // Committed batches between snapshots. Defaults to 256.
   snapshotEvery?: number
+  // Replaces `@qvac/turbovec-ggml`.
+  provider?: IndexProvider
+  // Replaces `bare-fs` for snapshot sidecars.
+  fs?: SnapshotFileSystem
+}
+
+// One row per query; ids past the last hit are 2^64 - 1.
+export interface IndexSearchResult {
+  scores: Float32Array
+  ids: BigUint64Array
+  k: number
+}
+
+// An index runs its calls in call order, and `length` counts finished calls only.
+export interface IndexHandle {
+  readonly length: number
+  readonly dim: number
+  // Checked against the namespace's storage when a snapshot loads.
+  readonly bitWidth?: number
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): Promise<void>
+  // Resolves whether the id was present.
+  remove(id: bigint): Promise<boolean>
+  contains(id: bigint): Promise<boolean>
+  // Best first, by dot product.
+  search(
+    queries: Float32Array,
+    k: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  // Without it, scoped searches over-fetch from `search` and filter.
+  searchFiltered?(
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  // Frees removed rows. Without it, they stay until the index is rebuilt.
+  compact?(): Promise<void>
+  // A hint to warm up before searches.
+  prepare?(): Promise<void>
+  // With the provider's `load`, enables snapshots.
+  write?(path: string): Promise<void>
+  dispose(): Promise<void>
+}
+
+export interface IndexProvider {
+  create(dim: number, storage: IndexStorage): IndexHandle | Promise<IndexHandle>
+  load?(path: string): Promise<IndexHandle>
+}
+
+// The subset of `fs.promises` snapshots use.
+export interface SnapshotFileSystem {
+  mkdir(path: string, options: { recursive: boolean }): Promise<unknown>
+  readFile(path: string, encoding: 'utf8'): Promise<string>
+  writeFile(path: string, data: string): Promise<unknown>
+  rename(from: string, to: string): Promise<unknown>
+  unlink(path: string): Promise<unknown>
 }
 
 export interface CreateRagOptions {

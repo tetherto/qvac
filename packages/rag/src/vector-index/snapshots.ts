@@ -1,6 +1,7 @@
 import qvacCrypto from '#crypto'
 
-import type { IndexStorage } from '../types.js'
+import { importers } from './native.js'
+import type { IndexStorage, SnapshotFileSystem } from '../types.js'
 
 // What a snapshot was taken of. A snapshot is used only when every field
 // matches the namespace, so a namespace re-created under the same name, or a
@@ -41,13 +42,7 @@ export interface SnapshotStore {
   remove(namespace: string, createdAt: number): Promise<void>
 }
 
-export interface FileSystem {
-  mkdir(path: string, options: { recursive: boolean }): Promise<unknown>
-  readFile(path: string, encoding: 'utf8'): Promise<string>
-  writeFile(path: string, data: string): Promise<void>
-  rename(from: string, to: string): Promise<void>
-  unlink(path: string): Promise<void>
-}
+export type FileSystem = SnapshotFileSystem
 
 // Files live under `<dir>/<core key>/`, one sidecar per namespace naming the
 // snapshot it describes. A snapshot gets a new file per revision and the
@@ -133,24 +128,19 @@ export function createSnapshotStore(
   }
 }
 
-type FileSystemLoader = () => Promise<FileSystem>
-
 let loadingFs: Promise<FileSystem> | null = null
-let fsLoader: FileSystemLoader = importBareFs
 
 // Cached like the index module, and loaded by `ready()` for the same reason.
 export function loadSnapshotFileSystem(): Promise<FileSystem> {
-  if (!loadingFs) loadingFs = fsLoader()
+  if (!loadingFs) loadingFs = importBareFs()
   return loadingFs
 }
 
-// Tests swap the loader to simulate a host that seals module loading.
-export function setSnapshotFileSystemLoader(next: FileSystemLoader | null): void {
-  fsLoader = next ?? importBareFs
+export function forgetSnapshotFileSystem(): void {
   loadingFs = null
 }
 
 async function importBareFs(): Promise<FileSystem> {
-  const module = await import('bare-fs')
-  return module.promises as unknown as FileSystem
+  const module = (await importers.bareFs()) as { promises: FileSystem }
+  return module.promises
 }

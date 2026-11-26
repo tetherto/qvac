@@ -22,6 +22,7 @@ export const SPACE = {
  * - `root`: a writable directory for stores
  * - `join(...parts)`, `removeDir(path)`, `listDir(path)`
  * - `embed(modelId, text)`: one vector as a number array
+ * - `indexProvider`, `fs`: optional; passed to `createRag({ index })`
  */
 export function createRagOps(host) {
   const stores = new Map()
@@ -95,7 +96,15 @@ export function createRagOps(host) {
         await host.removeDir(index)
       }
       const corestore = new Corestore(data)
-      const rag = createRag({ corestore, embeddings: port(embedModelId), index: { dir: index } })
+      const rag = createRag({
+        corestore,
+        embeddings: port(embedModelId),
+        index: {
+          dir: index,
+          ...(host.indexProvider && { provider: host.indexProvider }),
+          ...(host.fs && { fs: host.fs })
+        }
+      })
       await rag.ready()
       stores.set(store, { rag, corestore })
       return { store }

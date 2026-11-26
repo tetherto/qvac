@@ -856,20 +856,14 @@ const CASES: Case[] = [
   {
     id: 'index-status',
     about:
-      'after a search, the index status is index with a snapshot on Bare and scan without the TurboVec binding on Node',
+      'after a search, the namespace is searched by its index: TurboVec in the worker on Bare, the SDK vector index as provider on Node',
     expectation: { validation: 'contains-all', contains: ['volcanoes'] },
     steps: (d) => [
       ...setup(d),
       ingestCorpus(d),
       op(d, 'indexStatus', { store: 'main', namespace: NS }, 'before'),
       project('$before', 'result', 'unopened'),
-      named(
-        '$unopened',
-        'fieldsMatch',
-        d === 'bare'
-          ? { fields: ['mode'], expected: { mode: 'unopened' } }
-          : { fields: ['mode', 'reason'], expected: { mode: 'scan', reason: 'addon-missing' } }
-      ),
+      named('$unopened', 'fieldsMatch', { fields: ['mode'], expected: { mode: 'unopened' } }),
       op(
         d,
         'search',
@@ -880,25 +874,17 @@ const CASES: Case[] = [
       { assert: { on: '$top', use: 'expectation' } },
       op(d, 'indexStatus', { store: 'main', namespace: NS }, 'after'),
       project('$after', 'result', 'status'),
-      named(
-        '$status',
-        'fieldsMatch',
-        d === 'bare'
-          ? // Four commits; a snapshot directory is configured, and nothing is written below snapshotEvery.
-            {
-              fields: ['mode', 'revision', 'snapshot'],
-              expected: { mode: 'index', revision: 4, snapshot: 'none' }
-            }
-          : { fields: ['mode', 'reason'], expected: { mode: 'scan', reason: 'addon-missing' } }
-      ),
+      // Four commits; a snapshot directory is configured, and nothing is written below snapshotEvery.
+      named('$status', 'fieldsMatch', {
+        fields: ['mode', 'revision', 'snapshot'],
+        expected: { mode: 'index', revision: 4, snapshot: 'none' }
+      }),
       ...rejects(d, 'indexStatus', { store: 'main', namespace: 'missing' }, 'NAMESPACE_NOT_FOUND')
     ]
   },
   {
     id: 'index-snapshot',
-    about:
-      'on Bare, closing writes a snapshot of the TurboVec index a search loaded, and a reopen uses it',
-    drivers: ['bare'],
+    about: 'closing writes a snapshot of the index a search loaded, and a reopen uses it',
     expectation: { validation: 'contains-all', contains: ['volcanoes'] },
     steps: (d) => [
       ...setup(d),

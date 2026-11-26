@@ -2,7 +2,7 @@
 
 Embedded ingestion and retrieval for QVAC apps. `@qvac/rag` stores document chunks and their embeddings in HyperDB and answers scoped vector searches over them. It runs on Bare and Node, and does not depend on `@qvac/sdk` or `@qvac/inference`.
 
-It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is chunked with [`rag-extract/chunk`](https://github.com/tetherto/rag-extract) and embedded through an embeddings port you supply. Search uses a TurboVec index per namespace when `@qvac/turbovec-ggml` is installed, and an exact scan of HyperDB otherwise.
+It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is chunked with [`rag-extract/chunk`](https://github.com/tetherto/rag-extract) and embedded through an embeddings port you supply. Search uses a TurboVec index per namespace when `@qvac/turbovec-ggml` is installed, or an index the host supplies, and an exact scan of HyperDB otherwise.
 
 ## Installation
 
@@ -17,6 +17,8 @@ For indexed search on Bare, also install the optional peer:
 ```bash
 npm install @qvac/turbovec-ggml
 ```
+
+TurboVec's binding only loads under Bare. On Node, pass an index through `index.provider` for indexed search.
 
 ## Usage
 
@@ -102,12 +104,14 @@ The port must be in the namespace's space: `computeSpaceId(port.space)` has to e
 
 `chunking` is `{ chunkSize?, chunkOverlap? }` in tokens, passed to `rag-extract/chunk` for text documents (defaults 256 and 50). `chunkOverlap` must be smaller than `chunkSize`.
 
-`index` configures the vector index, used only when `@qvac/turbovec-ggml` loads:
+`index` configures the vector index, used only when `@qvac/turbovec-ggml` loads or `provider` is given:
 
 - `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only.
 - `snapshotEvery`: committed batches between snapshots, default 256. A snapshot is also written on `close()`.
+- `provider`: an index implementation to use instead of `@qvac/turbovec-ggml`; see [Index providers](#index-providers).
+- `fs`: the file system snapshot sidecars go through instead of `bare-fs`, such as Node's `fs.promises`. It needs `mkdir`, `readFile`, `writeFile`, `rename` and `unlink`.
 
-`ready()` loads `@qvac/turbovec-ggml` and `bare-fs` before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
+`ready()` loads `@qvac/turbovec-ggml` and `bare-fs`, unless `provider` and `fs` replace them, before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
 
 `onIndexFallback(event)` is called when a namespace's searches switch to the scan, once per namespace and reason, with `{ namespace, reason, error? }`. The reasons are the ones `indexStatus` reports. An error it throws, or a promise it returns that rejects, is ignored.
 
@@ -248,7 +252,7 @@ Deletes the namespace with all its documents, chunks, delete records and index s
 
 Reports how `namespace` is searched, without building its index:
 
-- `{ mode: 'index', revision, snapshot }`: by the index, caught up to `revision`. `snapshot` is `'off'` without `index.dir`, `'none'` before any snapshot was loaded or written, `'ok'` after one was, or `{ error }` after a snapshot read or write failed, until the next write succeeds.
+- `{ mode: 'index', revision, snapshot }`: by the index, caught up to `revision`. `snapshot` is `'off'` without `index.dir` or when the provider has no `load`, `'none'` before any snapshot was loaded or written, `'ok'` after one was, or `{ error }` after a snapshot read or write failed, until the next write succeeds.
 - `{ mode: 'scan', reason, error? }`: by the scan. `reason` is `'addon-missing'` (`@qvac/turbovec-ggml` is not installed, or the runtime is not Bare), `'addon-load-failed'`, `'rebuild-failed'` or `'search-failed'`; `error` is the original failure. A namespace whose index failed scans until the RAG is reopened.
 - `{ mode: 'unopened' }`: the index has not been built since `ready()`; the next search builds it.
 
@@ -264,6 +268,56 @@ Its `readDocument` and `listDocuments` take the same parameters without `namespa
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })
 await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: ['travel'] } })
 ```
+
+## Index providers
+
+`index.provider` replaces TurboVec, so a host can search through an index it already runs, for example one in a worker. RAGs on one core share an index per namespace only when they share the provider object and `dir`.
+
+```ts
+interface IndexProvider {
+  create(dim: number, storage: IndexStorage): IndexHandle | Promise<IndexHandle>
+  load?(path: string): Promise<IndexHandle>
+}
+
+interface IndexHandle {
+  readonly length: number // rows after the calls that have finished
+  readonly dim: number
+  readonly bitWidth?: number // checked against `storage` when a snapshot loads
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): Promise<void>
+  remove(id: bigint): Promise<boolean> // whether the id was present
+  contains(id: bigint): Promise<boolean>
+  search(
+    queries: Float32Array,
+    k: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  dispose(): Promise<void>
+  searchFiltered?(
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  compact?(): Promise<void>
+  prepare?(): Promise<void>
+  write?(path: string): Promise<void>
+}
+
+// Best first by dot product; ids past the last hit are 2^64 - 1.
+interface IndexSearchResult {
+  scores: Float32Array
+  ids: BigUint64Array
+  k: number
+}
+```
+
+- Calls on one handle must take effect in the order they are made.
+- Vectors are float32, row-major. Cosine namespaces pass unit vectors, so the dot product is the cosine. Every hit is rescored exactly from HyperDB, so the index only has to rank candidates well.
+- `storage` is the namespace's `index.storage`; a provider may ignore it.
+- Without `searchFiltered`, a search scoped to `documentIds` asks `search` for more rows and keeps the allowed ones, doubling until it has enough.
+- Without `compact`, removed rows stay in the provider's memory until the index is rebuilt.
+- Snapshots need both `load` and `handle.write`. Without `load`, `dir` is ignored and the index is rebuilt from HyperDB on each open.
+- A snapshot directory serves one provider and `fs` per core: `ready()` fails with `INVALID_INPUT` when another open RAG on the core uses the same `dir` with a different one. Snapshot files carry no provider name, so across processes give each provider its own `dir`.
 
 ## Memory
 

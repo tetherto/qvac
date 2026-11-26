@@ -7,7 +7,6 @@ import { AbortController } from 'bare-abort-controller'
 import { ERR_CODES, computeSpaceId, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
 import {
-  setNativeIndexLoader,
   type NativeIndex,
   type NativeIndexModule,
   type NativeSearchResult
@@ -22,8 +21,12 @@ import {
   countNativeCalls,
   doc,
   inspect,
+  currentProvider,
   realNativeIndex,
   rejectsWithCode,
+  useProvider,
+  useScan,
+  type RealProvider,
   type Test
 } from './helpers.js'
 import type {
@@ -48,7 +51,7 @@ async function openStore(t: Test): Promise<Store> {
 }
 
 async function openOn(t: Test, { store, dir }: Store, index: IndexOptions = {}): Promise<Rag> {
-  const rag = createRag({ corestore: store, index: { dir, ...index } })
+  const rag = createRag({ corestore: store, index: { dir, provider: currentProvider(), ...index } })
   await rag.ready()
   t.teardown(() => rag.close())
   return rag
@@ -230,7 +233,7 @@ test('a stale snapshot never brings back deleted or superseded chunks', async (t
 })
 
 // Holds the first rebuild's native add until `release()`.
-function gatedRebuild(real: NativeIndexModule) {
+function gatedRebuild(real: RealProvider) {
   let release = () => {}
   const gate = new Promise<void>((resolve) => (release = resolve))
   let entered = () => {}
@@ -254,8 +257,7 @@ function gatedRebuild(real: NativeIndexModule) {
 
 test('a commit during a search never hides the document it replaces', async (t) => {
   const gated = gatedRebuild(await realNativeIndex())
-  setNativeIndexLoader(() => Promise.resolve(gated.module))
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, gated.module)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -368,8 +370,7 @@ for (const storage of ['f32', 'q8'] as const) {
         documents.push(doc(`d${i}`, '', chunks))
       }
 
-      setNativeIndexLoader(() => Promise.resolve(null))
-      t.teardown(() => setNativeIndexLoader(null))
+      useScan(t)
       const scan = await openOn(t, handle)
       const { spaceId } = await scan.createNamespace({ name: 'ns', space, index: { storage } })
       for (const document of documents) {
@@ -385,7 +386,7 @@ for (const storage of ['f32', 'q8'] as const) {
       }
       await scan.close()
 
-      setNativeIndexLoader(null)
+      useProvider(t, undefined)
       const indexed = await openOn(t, handle)
       const actual: SearchHit[][] = []
       for (const query of queries) {
@@ -430,8 +431,7 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
     return results
   }
 
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useScan(t)
   const scan = await openOn(t, handle)
   const { spaceId } = await scan.createNamespace({
     name: 'ns',
@@ -443,7 +443,7 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
   const expected = await run(scan, spaceId)
   await scan.close()
 
-  setNativeIndexLoader(null)
+  useProvider(t, undefined)
   const indexed = await openOn(t, handle)
   t.alike(await run(indexed, spaceId), expected)
   t.alike(expected[0], ['d01'], 'key order for a namespace')
@@ -452,8 +452,7 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
 
 test('an abort stops a search waiting for the index, and the rebuild still finishes', async (t) => {
   const gated = gatedRebuild(await realNativeIndex())
-  setNativeIndexLoader(() => Promise.resolve(gated.module))
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, gated.module)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -491,7 +490,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => timers.setTimeout(resolve, ms))
 }
 
-function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') {
+function faultyLoader(real: RealProvider, broken: 'addWithIds' | 'search') {
   const counts = { creates: 0 }
   const wrap = (native: NativeIndex): NativeIndex =>
     new Proxy(native, {
@@ -514,7 +513,7 @@ function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') 
 for (const broken of ['addWithIds', 'search'] as const) {
   test(`a failing native ${broken} falls back to the scan`, async (t) => {
     const { module, counts } = faultyLoader(await realNativeIndex(), broken)
-    setNativeIndexLoader(() => Promise.resolve(module))
+    useProvider(t, module)
     const handle = await openStore(t)
     const rag = await openOn(t, handle)
     const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -543,7 +542,7 @@ function gate(): Gate {
 }
 
 // Lets a test hold one native call, as if it were queued on the worker.
-function controlledLoader(real: NativeIndexModule) {
+function controlledLoader(real: RealProvider) {
   const controls = {
     creates: 0,
     searches: 0,
@@ -579,8 +578,9 @@ function controlledLoader(real: NativeIndexModule) {
             runSearch(() => target.search(...args))
         }
         if (key === 'searchFiltered') {
-          return (...args: Parameters<NativeIndex['searchFiltered']>) =>
-            runSearch(() => target.searchFiltered(...args))
+          const searchFiltered = target.searchFiltered as NonNullable<NativeIndex['searchFiltered']>
+          return (...args: Parameters<typeof searchFiltered>) =>
+            runSearch(() => searchFiltered.apply(target, args))
         }
         if (key === 'addWithIds') {
           return async (vectors: Float32Array, ids: BigUint64Array): Promise<void> => {
@@ -608,8 +608,7 @@ function controlledLoader(real: NativeIndexModule) {
 
 async function useControlledIndex(t: Test) {
   const loaded = controlledLoader(await realNativeIndex())
-  setNativeIndexLoader(() => Promise.resolve(loaded.module))
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, loaded.module)
   return loaded.controls
 }
 
@@ -799,8 +798,7 @@ test('TurboVec storage is opt-in and needs dimensions divisible by 8 up to 1,024
 })
 
 test('search falls back to the scan without the addon', async (t) => {
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useScan(t)
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
