@@ -105,6 +105,19 @@ async def test_open_session_registers_the_session_and_stamps_every_call():
     assert owner.sent[-1]["sessionId"] == session.session_id
 
 
+async def test_the_grant_rides_on_the_open_and_stays_on_the_handle():
+    owner = FakeTransport()
+    restricted = await open_session(
+        owner, grant=["transcription/transcribe", "runtime/loadModel"]
+    )
+    unrestricted = await open_session(owner)
+
+    assert owner.sent[0]["grant"] == ["transcription/transcribe", "runtime/loadModel"]
+    assert "grant" not in owner.sent[1]
+    assert restricted.grant == ("transcription/transcribe", "runtime/loadModel")
+    assert unrestricted.grant is None
+
+
 async def test_a_payload_cannot_name_another_session():
     owner = FakeTransport()
     session = await open_session(owner)

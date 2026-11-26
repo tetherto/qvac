@@ -13,7 +13,17 @@ interface Fake {
   suspendLatch?: Promise<void>
   stateLatch?: Promise<void>
   infoError?: Error
+  capabilitiesError?: Error | undefined
 }
+
+const CAPABILITIES = [
+  {
+    id: 'transcription',
+    version: 1,
+    operations: ['transcribe'],
+    partialOperations: ['transcribeStream']
+  }
+]
 
 function fakeOperations(fake: Fake): RuntimeOperations {
   /* lunte-disable require-await */
@@ -36,6 +46,10 @@ function fakeOperations(fake: Fake): RuntimeOperations {
     getLoadedModelInfo: async ({ modelId }): Promise<LoadedModelInfo> => {
       if (fake.infoError) throw fake.infoError
       return infoFor(modelId)
+    },
+    getRuntimeCapabilities: async () => {
+      if (fake.capabilitiesError) throw fake.capabilitiesError
+      return CAPABILITIES
     }
   }
   /* lunte-enable require-await */
@@ -229,6 +243,27 @@ describe('runtime routes with --enable-admin', () => {
     assert.equal(res.statusCode, 500)
     assert.equal(code(res), 'runtime_resume_failed')
     assert.equal((await app.inject({ method: 'GET', url: '/probe' })).statusCode, 503)
+  })
+
+  it('lists the runtime capability contracts, also while suspended', async () => {
+    const res = await app.inject({ method: 'GET', url: '/qvac/v1/runtime/capabilities' })
+    assert.equal(res.statusCode, 200, res.payload)
+    assert.deepEqual(res.json(), { object: 'list', data: CAPABILITIES })
+
+    await app.inject({ method: 'POST', url: '/qvac/v1/runtime/suspend' })
+    const suspended = await app.inject({ method: 'GET', url: '/qvac/v1/runtime/capabilities' })
+    assert.equal(suspended.statusCode, 200, suspended.payload)
+  })
+
+  it('reports a failed capabilities read as 500 runtime_query_failed', async () => {
+    fake.capabilitiesError = new Error('worker gone')
+    try {
+      const res = await app.inject({ method: 'GET', url: '/qvac/v1/runtime/capabilities' })
+      assert.equal(res.statusCode, 500)
+      assert.equal(code(res), 'runtime_query_failed')
+    } finally {
+      fake.capabilitiesError = undefined
+    }
   })
 
   it('lists only loaded aliases, without the on-disk path', async () => {

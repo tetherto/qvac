@@ -151,9 +151,116 @@ export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
   metadata: { category: 'speculative-decoding', dependency: 'none', estimatedDurationMs: 5000 }
 }
 
+/** Asserts the completion drafted at least one token and accepted no more than it drafted. */
+const drafts: Step[] = [
+  { project: { from: '$stats', path: 'draftTokens', as: 'draftTokens' } },
+  { assert: { on: '$draftTokens', named: 'atLeast', with: { value: 1 } } },
+  {
+    assert: {
+      on: '$stats',
+      named: 'atLeastField',
+      with: { field: 'draftTokens', atLeast: 'draftAcceptedTokens' }
+    }
+  }
+]
+
+// The drafter's block is 9 tokens; the default n_max of 3 would use a third of it.
+const DSPARK_DRAFT_N_MAX = 9
+
+export const speculativeDecodingDspark: TestDefinition = {
+  testId: 'speculative-decoding-dspark',
+  params: { prompt: PLANETS_PROMPT },
+  expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
+  steps: [
+    ...completesWith(
+      {
+        ctx_size: 2048,
+        spec_type: 'draft-dspark',
+        spec_draft_n_max: DSPARK_DRAFT_N_MAX,
+        draftModelSrc: '$draft.modelSrc'
+      },
+      'llm-dspark',
+      [{ modelSource: { dep: 'llm-dspark-draft', as: 'draft' } }]
+    ),
+    ...drafts
+  ],
+  finally: unloads,
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-dspark', 'llm-dspark-draft'],
+    estimatedDurationMs: 300000
+  }
+}
+
+export const speculativeDecodingAuto: TestDefinition = {
+  testId: 'speculative-decoding-auto',
+  params: { prompt: PLANETS_PROMPT },
+  expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
+  steps: [
+    // `auto` reads `draft-dspark` from the drafter's header.
+    ...completesWith(
+      {
+        ctx_size: 2048,
+        spec_type: 'auto',
+        spec_draft_n_max: DSPARK_DRAFT_N_MAX,
+        draftModelSrc: '$draft.modelSrc'
+      },
+      'llm-dspark',
+      [{ modelSource: { dep: 'llm-dspark-draft', as: 'draft' } }]
+    ),
+    ...drafts
+  ],
+  finally: unloads,
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-dspark', 'llm-dspark-draft'],
+    estimatedDurationMs: 300000
+  }
+}
+
+export const speculativeDecodingAutoUndetectedRejected: TestDefinition = {
+  testId: 'speculative-decoding-auto-undetected-rejected',
+  params: {},
+  expectation: { validation: 'throws-error', errorContains: 'detected no speculative type' },
+  steps: [
+    // A plain model has no DFlash, DSpark or MTP header for `auto` to read.
+    { modelSource: { dep: 'llm-no-mtp', as: 'src' } },
+    { modelSource: { dep: 'llm-no-mtp', as: 'draft' } },
+    {
+      callError: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { ctx_size: 2048, spec_type: 'auto', draftModelSrc: '$draft.modelSrc' }
+        },
+        as: 'err'
+      }
+    },
+    {
+      assert: {
+        on: '$err',
+        named: 'errorMatches',
+        with: { messageContains: 'detected no speculative type' }
+      }
+    }
+  ],
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-no-mtp'],
+    estimatedDurationMs: 120000
+  }
+}
+
 export const speculativeDecodingTests = [
   speculativeDecodingMtp,
   speculativeDecodingMtpExternalHead,
   speculativeDecodingNone,
-  speculativeDecodingDraftNMaxOutOfRangeRejected
+  speculativeDecodingDraftNMaxOutOfRangeRejected,
+  speculativeDecodingDspark,
+  speculativeDecodingAuto,
+  speculativeDecodingAutoUndetectedRejected
 ]

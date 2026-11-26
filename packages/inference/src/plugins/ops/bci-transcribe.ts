@@ -148,6 +148,8 @@ export async function* bciTranscribe(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break
+    // Counted before filtering: an update that carries only silence yields nothing.
+    ctx.touch()
     requestLogger.debug('BCI Transcription Update:', output)
 
     const chunks = Array.isArray(output) ? output : [output]
@@ -296,6 +298,8 @@ export async function* bciTranscribeStream(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break
+    // Counted before filtering: an update that carries only silence yields nothing.
+    ctx.touch()
     requestLogger.debug('BCI Stream Transcription Update:', output)
 
     const chunks = Array.isArray(output) ? output : [output]

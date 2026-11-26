@@ -3,15 +3,31 @@ import { z } from 'zod'
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 import { fromZodError } from '../validation.js'
 import { DEFAULT_SNAPSHOT_EVERY, type IndexConfig } from './registry.js'
-import type { IndexStorage } from '../types.js'
+import type { IndexProvider, IndexStorage, SnapshotFileSystem } from '../types.js'
 
 // TurboVec's rotation works on blocks of 8 and is capped at 1,024 dimensions.
 const TURBOVEC_MAX_DIMENSIONS = 1024
 
+function hasMethods<T>(names: string[], message: string) {
+  return z.custom<T>((value) => {
+    const record = value as Record<string, unknown> | null
+    return (
+      typeof record === 'object' &&
+      record !== null &&
+      names.every((name) => typeof record[name] === 'function')
+    )
+  }, message)
+}
+
 const indexOptionsSchema = z
   .object({
     dir: z.string().min(1).optional(),
-    snapshotEvery: z.number().int().positive().optional()
+    snapshotEvery: z.number().int().positive().optional(),
+    provider: hasMethods<IndexProvider>(['create'], 'provider needs a create function').optional(),
+    fs: hasMethods<SnapshotFileSystem>(
+      ['mkdir', 'readFile', 'writeFile', 'rename', 'unlink'],
+      'fs needs mkdir, readFile, writeFile, rename and unlink'
+    ).optional()
   })
   .strict()
 
@@ -26,7 +42,9 @@ export function parseIndexOptions(options: unknown): IndexConfig {
   if (!parsed.success) throw fromZodError(ERR_CODES.INVALID_INPUT, parsed.error, 'index')
   return {
     dir: parsed.data?.dir,
-    snapshotEvery: parsed.data?.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY
+    snapshotEvery: parsed.data?.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
+    provider: parsed.data?.provider,
+    fs: parsed.data?.fs
   }
 }
 

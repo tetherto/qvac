@@ -162,6 +162,8 @@ mode exits `0` once every model is judged.
   language pair (`from`, `to`). A translation model is judged once downloaded.
 - A companion file on its own, such as a projector, VAE or codec, cannot be
   judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it.
+  The error is followed by a hint, and catalog mode lists these models under
+  their own heading.
 
 **Examples:**
 

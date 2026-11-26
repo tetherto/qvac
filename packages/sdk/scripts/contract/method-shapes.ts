@@ -34,6 +34,7 @@ export const methodShapes = {
   finetune: 'reply',
   getLoadedModelInfo: 'reply',
   getModelInfo: 'reply',
+  getRuntimeCapabilities: 'reply',
   getSystemResources: 'reply',
   heartbeat: 'reply',
   loadModel: 'reply',

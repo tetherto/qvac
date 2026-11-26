@@ -1,9 +1,13 @@
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 
 // `QVRAGX1` stream: this magic, then frames of [u32 LE payload length][u8 type]
-// [payload]. Text fields are JSON; a chunk frame's vector is raw float32 LE.
+// [payload]. Text fields are JSON; a chunk frame's vector is raw float32 LE, or
+// float16 LE when the header says `vectorEncoding: 'f16'`.
 export const MAGIC = new Uint8Array([0x51, 0x56, 0x52, 0x41, 0x47, 0x58, 0x31, 0x0a]) // "QVRAGX1\n"
+// Format 2 adds the header's `vectorEncoding`. 'f32' namespaces still export
+// format 1, so earlier versions can import them.
 export const FORMAT_VERSION = 1
+export const FORMAT_VERSION_ENCODED = 2
 
 export const FRAME = Object.freeze({
   HEADER: 1,
@@ -115,18 +119,32 @@ export interface ReadStop {
 // frame as they arrive. Once `stop` is halted, reads fail with
 // OPERATION_CANCELLED, including one already waiting on the source.
 export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: ReadStop): FrameReader {
-  const iterator = source[Symbol.asyncIterator]()
+  let iterator: AsyncIterator<Uint8Array> | null = null
   let carry: Uint8Array | null = null
   let done = false
 
+  // Opened on the first read, so a source that throws here fails as the source.
+  function sourceIterator(): AsyncIterator<Uint8Array> {
+    iterator ??= source[Symbol.asyncIterator]()
+    return iterator
+  }
+
   async function nextChunk(): Promise<IteratorResult<Uint8Array>> {
-    if (!stop) return await iterator.next()
+    if (!stop) {
+      try {
+        return await sourceIterator().next()
+      } catch (error) {
+        throw sourceFailed(error)
+      }
+    }
     if (stop.stopped) throw cancelled()
     try {
       // `wake` is set first: the source may itself trigger the stop inside `next()`.
       return await new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
         stop.wake = () => reject(cancelled())
-        iterator.next().then(resolve, reject)
+        Promise.resolve()
+          .then(() => sourceIterator().next())
+          .then(resolve, (error: unknown) => reject(sourceFailed(error)))
       })
     } finally {
       stop.wake = null
@@ -190,11 +208,22 @@ export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: Read
     async close() {
       if (done) return
       done = true
+      if (!iterator) return
       const returning = Promise.resolve(iterator.return?.())
       if (stop?.stopped) returning.catch(() => {})
       else await returning
     }
   }
+}
+
+// The source's own error is kept as `cause`.
+function sourceFailed(error: unknown): QvacErrorRAG {
+  if (error instanceof QvacErrorRAG) return error
+  return new QvacErrorRAG({
+    code: ERR_CODES.IMPORT_SOURCE_FAILED,
+    adds: error instanceof Error ? error.message : String(error),
+    cause: error instanceof Error ? error : undefined
+  })
 }
 
 function cancelled(): QvacErrorRAG {

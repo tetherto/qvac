@@ -81,6 +81,8 @@ test('transcribeStatsSchema: accepts the full addon stats surface', (t) => {
     modelLoadMs: 250,
     totalEncodedFrames: 120,
     encoderOnCoreml: 1,
+    encoderUsedCoreml: 1,
+    decoderUsedCoreml: 1,
     aoscActive: 1,
     prefillTime: 40,
     audioTokens: 750,
@@ -163,4 +165,11 @@ test('buildAsrBackendDiagnostics: every GPU backend id resolves', (t) => {
     t.is(d?.selectedBackend, name.toLowerCase(), `${name} maps to its lowercase name`)
     t.is(d?.graphicsApi, name.toLowerCase(), `${name} is a known graphics API`)
   }
+})
+
+test('transcribeStatsSchema: decoderUsedCoreml round-trips and must be numeric', (t) => {
+  const parsed = transcribeStatsSchema.parse({ encoderUsedCoreml: 1, decoderUsedCoreml: 0 })
+  t.is(parsed.encoderUsedCoreml, 1)
+  t.is(parsed.decoderUsedCoreml, 0, 'a ggml decode is reported, not dropped')
+  t.exception(() => transcribeStatsSchema.parse({ decoderUsedCoreml: 'yes' }))
 })
