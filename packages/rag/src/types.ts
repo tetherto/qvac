@@ -50,7 +50,29 @@ export interface CreateRagOptions {
   // Used only when `@qvac/turbovec-ggml` is installed; without it search
   // scans the database.
   index?: IndexOptions
+  // Called once per namespace each time its searches switch to the scan.
+  // A throw or a rejected promise from it is ignored.
+  onIndexFallback?: (event: IndexFallbackEvent) => void
 }
+
+// Why a namespace is searched by scan instead of its index.
+export type IndexFallbackReason =
+  'addon-missing' | 'addon-load-failed' | 'rebuild-failed' | 'search-failed'
+
+export interface IndexFallbackEvent {
+  namespace: string
+  reason: IndexFallbackReason
+  error?: unknown
+}
+
+export interface IndexStatusParams {
+  namespace: string
+}
+
+export type IndexStatus =
+  | { mode: 'index'; revision: number; snapshot: 'off' | 'none' | 'ok' | { error: unknown } }
+  | { mode: 'scan'; reason: IndexFallbackReason; error?: unknown }
+  | { mode: 'unopened' }
 
 export interface CreateNamespaceParams {
   name: string
@@ -382,5 +404,6 @@ export interface Rag {
   importNamespace(params: ImportNamespaceParams, options?: ImportOptions): Promise<ImportResult>
   listNamespaces(): Promise<NamespaceSummary[]>
   dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult>
+  indexStatus(params: IndexStatusParams): Promise<IndexStatus>
   scoped(scope: SearchScope): ScopedRag
 }

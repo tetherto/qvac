@@ -390,6 +390,69 @@ const CASES: Case[] = [
     ]
   },
   {
+    id: 'ingest-no-chunks',
+    about:
+      'documents with nothing to chunk are listed with chunkCount 0 and never returned by search',
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      op(
+        d,
+        'ingest',
+        {
+          store: 'main',
+          namespace: NS,
+          documents: [
+            { id: 'blank', text: '   ' },
+            { id: 'empty', chunks: [], metadata: { kind: 'binary' } }
+          ]
+        },
+        'ingested'
+      ),
+      project('$ingested', 'result.documents[0]', 'blank'),
+      named('$blank', 'fieldsMatch', {
+        fields: ['id', 'chunkCount', 'status'],
+        expected: { id: 'blank', chunkCount: 0, status: 'created' }
+      }),
+      project('$ingested', 'result.documents[1]', 'empty'),
+      named('$empty', 'fieldsMatch', {
+        fields: ['id', 'chunkCount', 'status'],
+        expected: { id: 'empty', chunkCount: 0, status: 'created' }
+      }),
+      // Listed in document ID order: blank, cats, chess, empty, tax, volcanoes.
+      op(d, 'listDocuments', { store: 'main', namespace: NS }, 'listed'),
+      project('$listed', 'result.documents', 'stored'),
+      named('$stored', 'lengthIs', { length: 6 }),
+      project('$listed', 'result.documents[3]', 'listedEmpty'),
+      named('$listedEmpty', 'fieldsMatch', {
+        fields: ['documentId', 'chunkCount'],
+        expected: { documentId: 'empty', chunkCount: 0 }
+      }),
+      op(d, 'listNamespaces', { store: 'main' }, 'namespaces'),
+      project('$namespaces', 'result.namespaces[0]', 'docs'),
+      named('$docs', 'fieldsMatch', {
+        fields: ['documentCount', 'chunkCount'],
+        expected: { documentCount: 6, chunkCount: 4 }
+      }),
+      op(d, 'search', { store: 'main', scope: { namespace: NS }, query: 'anything', k: 10 }, 'all'),
+      project('$all', 'result.hits', 'allHits'),
+      named('$allHits', 'lengthIs', { length: 4 }),
+      op(
+        d,
+        'search',
+        {
+          store: 'main',
+          scope: { namespace: NS, documentIds: ['blank', 'empty'] },
+          query: 'anything',
+          k: 10
+        },
+        'scoped'
+      ),
+      project('$scoped', 'result.hits', 'scopedHits'),
+      named('$scopedHits', 'lengthIs', { length: 0 })
+    ]
+  },
+  {
     id: 'ingest-reingest',
     about: 'ingesting an id again replaces it at the next generation',
     expectation: { validation: 'contains-all', contains: ['cats'] },
@@ -788,6 +851,47 @@ const CASES: Case[] = [
       ),
       project('$found', 'result.hits[0].documentId', 'top'),
       { assert: { on: '$top', use: 'expectation' } }
+    ]
+  },
+  {
+    id: 'index-status',
+    about:
+      'after a search, the index status is index with a snapshot on Bare and scan without the TurboVec binding on Node',
+    expectation: { validation: 'contains-all', contains: ['volcanoes'] },
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      op(d, 'indexStatus', { store: 'main', namespace: NS }, 'before'),
+      project('$before', 'result', 'unopened'),
+      named(
+        '$unopened',
+        'fieldsMatch',
+        d === 'bare'
+          ? { fields: ['mode'], expected: { mode: 'unopened' } }
+          : { fields: ['mode', 'reason'], expected: { mode: 'scan', reason: 'addon-missing' } }
+      ),
+      op(
+        d,
+        'search',
+        { store: 'main', scope: { namespace: NS }, query: 'lava eruption', k: 1 },
+        'found'
+      ),
+      project('$found', 'result.hits[0].documentId', 'top'),
+      { assert: { on: '$top', use: 'expectation' } },
+      op(d, 'indexStatus', { store: 'main', namespace: NS }, 'after'),
+      project('$after', 'result', 'status'),
+      named(
+        '$status',
+        'fieldsMatch',
+        d === 'bare'
+          ? // Four commits; a snapshot directory is configured, and nothing is written below snapshotEvery.
+            {
+              fields: ['mode', 'revision', 'snapshot'],
+              expected: { mode: 'index', revision: 4, snapshot: 'none' }
+            }
+          : { fields: ['mode', 'reason'], expected: { mode: 'scan', reason: 'addon-missing' } }
+      ),
+      ...rejects(d, 'indexStatus', { store: 'main', namespace: 'missing' }, 'NAMESPACE_NOT_FOUND')
     ]
   },
   {

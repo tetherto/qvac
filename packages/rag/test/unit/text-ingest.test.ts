@@ -310,19 +310,6 @@ test('invalid text input fails before anything is written', async (t) => {
     rag.ingest({
       namespace: 'ns',
       documents: [
-        { id: 'ok', text: 'cat' },
-        { id: 'blank', text: '   ' }
-      ]
-    }),
-    ERR_CODES.INVALID_INPUT,
-    'text with nothing to chunk',
-    /blank/
-  )
-  await rejectsWithCode(
-    t,
-    rag.ingest({
-      namespace: 'ns',
-      documents: [
         {
           id: 'mixed',
           chunks: [{ content: 'cat', embedding: [1, 0, 0], spaceId }, { content: 'dog' }] as never

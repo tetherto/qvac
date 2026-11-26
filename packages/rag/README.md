@@ -85,7 +85,7 @@ See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ## API
 
-### `createRag({ corestore, embeddings?, chunking?, index? })`
+### `createRag({ corestore, embeddings?, chunking?, index?, onIndexFallback? })`
 
 Creates a RAG instance on a caller-owned Corestore. `embeddings` is an `EmbeddingsPort`, needed only for text and pre-chunked ingest and for text query search:
 
@@ -106,6 +106,10 @@ The port must be in the namespace's space: `computeSpaceId(port.space)` has to e
 
 - `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only.
 - `snapshotEvery`: committed batches between snapshots, default 256. A snapshot is also written on `close()`.
+
+`ready()` loads `@qvac/turbovec-ggml` and `bare-fs` before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
+
+`onIndexFallback(event)` is called when a namespace's searches switch to the scan, once per namespace and reason, with `{ namespace, reason, error? }`. The reasons are the ones `indexStatus` reports. An error it throws, or a promise it returns that rejects, is ignored.
 
 The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
 
@@ -129,9 +133,11 @@ Creates a namespace pinned to one embedding space and returns `{ name, spaceId, 
 
 Each document is one of:
 
-- **Text** `{ id, text, metadata? }`: chunked with `rag-extract/chunk` using the `chunking` options, so chunk IDs are `<id>:<index>` and each chunk carries `rag-extract`'s `metadataJson`. Text that is empty or only whitespace is rejected.
+- **Text** `{ id, text, metadata? }`: chunked with `rag-extract/chunk` using the `chunking` options, so chunk IDs are `<id>:<index>` and each chunk carries `rag-extract`'s `metadataJson`. Text that is empty or only whitespace becomes a document without chunks.
 - **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }`: segmentation and chunk IDs are kept exactly. A chunk list from `rag-extract` goes in as-is; its `tokenCount` is accepted and not stored.
 - **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }`: needs no port. Each chunk takes its own `spaceId` or the document's, and it must equal the namespace's; the embedding must have the space's dimensions. A `rag-extract` artifact's chunks go in as-is with `spaceId` on the document.
+
+`chunks` may be empty. A document without chunks is stored, listed and exported with a `chunkCount` of 0, and search never returns it. Its document `spaceId`, when given, must equal the namespace's.
 
 Within one document, either every chunk has an `embedding` or none does. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected. Text and pre-chunked chunks are sent to the port in batches of 32.
 
@@ -238,6 +244,16 @@ Returns every namespace as `{ name, spaceId, space, index: { storage }, revision
 
 Deletes the namespace with all its documents, chunks, delete records and index snapshot, in one batch, and returns `{ name, documentCount, chunkCount }`. Nothing comes back on reopen. `createNamespace` with the same name starts an empty namespace with a new lineage. An export taken before the drop can still be imported to restore it. The embedding space record stays for other namespaces. A namespace that doesn't exist fails with `NAMESPACE_NOT_FOUND`.
 
+### `indexStatus({ namespace })`
+
+Reports how `namespace` is searched, without building its index:
+
+- `{ mode: 'index', revision, snapshot }`: by the index, caught up to `revision`. `snapshot` is `'off'` without `index.dir`, `'none'` before any snapshot was loaded or written, `'ok'` after one was, or `{ error }` after a snapshot read or write failed, until the next write succeeds.
+- `{ mode: 'scan', reason, error? }`: by the scan. `reason` is `'addon-missing'` (`@qvac/turbovec-ggml` is not installed, or the runtime is not Bare), `'addon-load-failed'`, `'rebuild-failed'` or `'search-failed'`; `error` is the original failure. A namespace whose index failed scans until the RAG is reopened.
+- `{ mode: 'unopened' }`: the index has not been built since `ready()`; the next search builds it.
+
+A namespace that doesn't exist fails with `NAMESPACE_NOT_FOUND`.
+
 ### `scoped(scope)`
 
 Returns `{ search, readDocument, listDocuments }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k`, `perDocument`, `minScore` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
@@ -294,7 +310,7 @@ bare scripts/bench-transfer.ts import /tmp/rag-bench
 
 ## Errors
 
-Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`. An index that can't be built or searched is never an error: that namespace's searches scan until the RAG is reopened.
+Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`. An index that can't be built or searched is never an error: that namespace's searches scan until the RAG is reopened, and `indexStatus` and `onIndexFallback` say why.
 
 ## Development
 

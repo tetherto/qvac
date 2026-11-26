@@ -170,6 +170,16 @@ export function checkChunks(
   document: ValidDocument
 ): void {
   const turbovec = storageOf(ns).startsWith('turbovec-')
+  if (
+    document.chunks.length === 0 &&
+    document.spaceId !== undefined &&
+    document.spaceId !== space.spaceId
+  ) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `document '${document.id}' is in space ${document.spaceId}, namespace '${namespace}' is in ${space.spaceId}`
+    })
+  }
   for (const chunk of document.chunks) {
     if (chunk.spaceId !== space.spaceId) {
       throw new QvacErrorRAG({

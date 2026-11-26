@@ -7,14 +7,25 @@ import { AbortController } from 'bare-abort-controller'
 import { ERR_CODES, computeSpaceId, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
 import {
-  loadNativeIndex,
   setNativeIndexLoader,
   type NativeIndex,
   type NativeIndexModule,
   type NativeSearchResult
 } from '../../src/vector-index/native.js'
-import { createSnapshotStore, type SnapshotIdentity } from '../../src/vector-index/snapshots.js'
-import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
+import {
+  createSnapshotStore,
+  type FileSystem,
+  type SnapshotIdentity
+} from '../../src/vector-index/snapshots.js'
+import {
+  SPACE,
+  countNativeCalls,
+  doc,
+  inspect,
+  realNativeIndex,
+  rejectsWithCode,
+  type Test
+} from './helpers.js'
 import type {
   EmbeddedDocumentInput,
   EmbeddingSpace,
@@ -218,24 +229,45 @@ test('a stale snapshot never brings back deleted or superseded chunks', async (t
   t.alike(contents(hits), [], 'its IDs map to nothing current')
 })
 
+// Holds the first rebuild's native add until `release()`.
+function gatedRebuild(real: NativeIndexModule) {
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let entered = () => {}
+  const reached = new Promise<void>((resolve) => (entered = resolve))
+  let creates = 0
+  const module: NativeIndexModule = {
+    create(dim, storage) {
+      const native = real.create(dim, storage)
+      if (++creates > 1) return native
+      const add = native.addWithIds.bind(native)
+      native.addWithIds = (vectors, ids) => {
+        entered()
+        return gate.then(() => add(vectors, ids))
+      }
+      return native
+    },
+    load: (path) => real.load(path)
+  }
+  return { module, release, reached, creates: () => creates }
+}
+
 test('a commit during a search never hides the document it replaces', async (t) => {
-  await countNativeCalls(t)
-  const real = await loadNativeIndex()
+  const gated = gatedRebuild(await realNativeIndex())
+  setNativeIndexLoader(() => Promise.resolve(gated.module))
+  t.teardown(() => setNativeIndexLoader(null))
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['old', [1, 0, 0]]])] })
-  await search(rag, spaceId, [1, 0, 0])
 
-  // Holding the loader keeps the search between its snapshot and the index
+  // Holding the rebuild keeps the search between its snapshot and the index
   // lookup while the replacement commits, so the open index is a revision
   // ahead of the search's reader.
-  let release = () => {}
-  const gate = new Promise<void>((resolve) => (release = resolve))
-  setNativeIndexLoader(() => gate.then(() => real))
   const pending = search(rag, spaceId, [1, 0, 0])
+  await gated.reached
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['new', [1, 0, 0]]])] })
-  release()
+  gated.release()
   t.alike(contents(await pending), ['new'], 'retried on a reader that matches the index')
 })
 
@@ -419,21 +451,15 @@ test('tied scores rank as in the scan, past the candidate cutoff', async (t) => 
 })
 
 test('an abort stops a search waiting for the index, and the rebuild still finishes', async (t) => {
-  const calls = await countNativeCalls(t)
-  const real = await loadNativeIndex()
+  const gated = gatedRebuild(await realNativeIndex())
+  setNativeIndexLoader(() => Promise.resolve(gated.module))
+  t.teardown(() => setNativeIndexLoader(null))
   const handle = await openStore(t)
   const rag = await openOn(t, handle)
   const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
 
-  let release = () => {}
-  const gate = new Promise<void>((resolve) => (release = resolve))
-  let entered = () => {}
-  const reached = new Promise<void>((resolve) => (entered = resolve))
-  setNativeIndexLoader(() => {
-    entered()
-    return gate.then(() => real)
-  })
+  const { reached, release } = gated
   const controller = new AbortController()
   const pending = rag.search({
     scope: { namespace: 'ns' },
@@ -454,7 +480,7 @@ test('an abort stops a search waiting for the index, and the rebuild still finis
 
   release()
   t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a'])
-  t.is(calls.creates, 1, 'one build: the next search reused the rebuild the abort left running')
+  t.is(gated.creates(), 1, 'one build: the next search reused the rebuild the abort left running')
 })
 
 const timers = globalThis as unknown as {
@@ -487,9 +513,7 @@ function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') 
 
 for (const broken of ['addWithIds', 'search'] as const) {
   test(`a failing native ${broken} falls back to the scan`, async (t) => {
-    await countNativeCalls(t)
-    const real = (await loadNativeIndex()) as NativeIndexModule
-    const { module, counts } = faultyLoader(real, broken)
+    const { module, counts } = faultyLoader(await realNativeIndex(), broken)
     setNativeIndexLoader(() => Promise.resolve(module))
     const handle = await openStore(t)
     const rag = await openOn(t, handle)
@@ -583,9 +607,9 @@ function controlledLoader(real: NativeIndexModule) {
 }
 
 async function useControlledIndex(t: Test) {
-  await countNativeCalls(t)
-  const loaded = controlledLoader((await loadNativeIndex()) as NativeIndexModule)
+  const loaded = controlledLoader(await realNativeIndex())
   setNativeIndexLoader(() => Promise.resolve(loaded.module))
+  t.teardown(() => setNativeIndexLoader(null))
   return loaded.controls
 }
 
@@ -917,7 +941,7 @@ test('replay compacts the rows it removes', async (t) => {
 })
 
 test('removing a dropped namespace keeps the snapshot of its re-created successor', async (t) => {
-  const store = createSnapshotStore(await tmp(t), 'core')
+  const store = createSnapshotStore(await tmp(t), 'core', fs.promises as unknown as FileSystem)
   const identity = (createdAt: number): SnapshotIdentity => ({
     namespace: 'ns',
     createdAt,

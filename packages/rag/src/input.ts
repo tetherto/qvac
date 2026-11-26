@@ -15,6 +15,8 @@ export interface ValidChunk {
 export interface ValidDocument {
   id: string
   metadata?: Record<string, unknown>
+  // The space a document without chunks was written for, when known.
+  spaceId?: string
   chunks: ValidChunk[]
 }
 
@@ -57,7 +59,7 @@ const documentSchema = z
     id: z.string().min(1),
     metadata: metadataSchema,
     spaceId: z.string().min(1).optional(),
-    chunks: z.array(chunkSchema).min(1)
+    chunks: z.array(chunkSchema)
   })
   .strict()
 
@@ -83,7 +85,7 @@ const chunkedDocumentSchema = z
   .object({
     id: z.string().min(1),
     metadata: metadataSchema,
-    chunks: z.array(textChunkSchema).min(1)
+    chunks: z.array(textChunkSchema)
   })
   .strict()
 
@@ -252,6 +254,7 @@ function parseDocument(input: unknown, path: string): ParsedDocument {
     document: {
       id: doc.id,
       metadata: toJsonMetadata(doc.id, doc.metadata),
+      spaceId: doc.spaceId,
       chunks: doc.chunks.map((chunk, ordinal) => {
         const spaceId = chunk.spaceId ?? doc.spaceId
         if (spaceId === undefined) {
@@ -480,6 +483,14 @@ export function parseImport(
     index: parsed.data.index,
     options: { signal: parsedOptions.data?.signal, onProgress: parsedOptions.data?.onProgress }
   }
+}
+
+const indexStatusSchema = z.object({ namespace: z.string().min(1) }).strict()
+
+export function parseIndexStatus(params: unknown): string {
+  const parsed = indexStatusSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data.namespace
 }
 
 export function parseDropNamespace(params: unknown): string {
