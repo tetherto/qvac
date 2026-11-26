@@ -6,12 +6,24 @@
 //   node ci/integration.mjs [--no-gpu] [--whisper-gpu] [--cuda-lib <dir>] [--vulkan-smoke] [--set NAME=value]...
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, rmSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const WIN = process.platform === 'win32'
+
+function linkSourceFabric() {
+  const fabric = fileURLToPath(new URL('../../fabric', import.meta.url))
+  const host = `${process.platform}-${process.arch}`
+  const binary = join(fabric, 'prebuilds', host, `qvac__fabric-${host}.bare`)
+  if (!existsSync(binary)) return
+  const dependency = join(PKG, 'node_modules', '@qvac', 'fabric')
+  rmSync(dependency, { recursive: true, force: true })
+  symlinkSync(fabric, dependency, WIN ? 'junction' : 'dir')
+  console.log(`Using source-built Fabric runtime: ${binary}`)
+}
 
 export function options(argv) {
   const { values } = parseArgs({
@@ -55,6 +67,7 @@ const must = (status) => {
 export function install() {
   must(run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund']))
   must(run('npm', ['run', 'link:platform']))
+  linkSourceFabric()
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
