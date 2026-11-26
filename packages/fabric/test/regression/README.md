@@ -246,6 +246,14 @@ projects use the shared setup helper. Diffusion uses the shared triplet through
 its independent setup and explicitly applies the same CRT selection and Release
 runtime staging.
 
+The Windows x64 Release CPU/Vulkan Fabric package also builds through the
+shared triplet and production CMake setup without experimental CRT hooks.
+The package audit accepts all 23 staged binaries. A Release C++ boundary
+control passes with `PATH` restricted to System32 and observes MSVC runtime
+DLLs loading from the package directory. The production platform slicer and
+`npm pack` retain all eight Release runtime DLLs in the Windows tarball. This
+packaging validation used matching MSVC 14.51 headers and libraries; it does
+not add a fresh CUDA inference result.
 
 Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
 CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
