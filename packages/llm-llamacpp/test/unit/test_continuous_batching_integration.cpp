@@ -2753,6 +2753,10 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
         test_common::getStatValue(jobStats, "ppTPS") * prefillMs / 1000.0,
         static_cast<double>(cells),
         1e-6);
+    EXPECT_NEAR(
+        test_common::getStatValue(modelStats, "ppTPS") * prefillMs / 1000.0,
+        static_cast<double>(cells),
+        1e-6);
     saveModel->saveCache(cachePath.string());
   } catch (const std::exception& e) {
     saveThrew = true;

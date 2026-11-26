@@ -1024,11 +1024,11 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   assert(
       newPos >= awaiting->currentPos &&
       "media segment must not move the sequence position backwards");
-  const auto mediaPositions =
-      static_cast<uint64_t>(newPos - awaiting->currentPos);
-  stats_.recordDecodeStep(numActiveLocked(), mediaPositions, 0, evalDuration);
-  if (slot->group && awaiting->nKvTokens > 0) {
-    slot->group->prefillTokens += static_cast<uint64_t>(awaiting->nKvTokens);
+  const auto mediaTokens =
+      static_cast<uint64_t>(std::max<llama_pos>(0, awaiting->nKvTokens));
+  stats_.recordDecodeStep(numActiveLocked(), mediaTokens, 0, evalDuration);
+  if (slot->group && mediaTokens > 0) {
+    slot->group->prefillTokens += mediaTokens;
     slot->group->prefillDuration += evalDuration;
   }
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
@@ -1194,12 +1194,14 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   batcher_.advance(
       prefillCompleteFn(),
       [this, &decodeDuration](uint32_t seqId, unsigned tokens) {
-        if (const auto& group = slots_[seqId]->group) {
-          group->prefillTokens += tokens;
+        const auto& slot = slots_[seqId];
+        if (slot && slot->group) {
+          auto& group = *slot->group;
+          group.prefillTokens += tokens;
           // Sibling slots in the same decode share one wall-clock interval.
-          if (std::exchange(group->lastPrefillDecodeStep, decodeStep_) !=
+          if (std::exchange(group.lastPrefillDecodeStep, decodeStep_) !=
               decodeStep_) {
-            group->prefillDuration += decodeDuration;
+            group.prefillDuration += decodeDuration;
           }
         }
       });

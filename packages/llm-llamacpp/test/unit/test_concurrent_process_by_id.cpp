@@ -549,6 +549,67 @@ TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
       << "full-width admission must actually decode in parallel";
 }
 
+TEST_F(ConcurrentProcessByIdTest, PrefillRateIncludesTheFullMixedStep) {
+  REQUIRE_MODEL(model_);
+  config_["batch_size"] = "32";
+  config_["n_predict"] = "4";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  const ScopedCacheFile cache("qvac-mixed-prefill-rate.bin");
+  auto longPrompt = makePrompt(repeatWord("orbit", 170));
+  longPrompt.prefill = true;
+  longPrompt.cacheKey = cache.key();
+
+  auto shortPrompt = makePrompt("Say red.");
+  shortPrompt.generationParams.grammar = R"(root ::= "red red red red")";
+  bool shortPromptIsGenerating = false;
+  shortPrompt.outputCallback = [&shortPromptIsGenerating](const std::string&) {
+    shortPromptIsGenerating = true;
+  };
+
+  // The long prefill starts in slot 0 and outlasts the short reply in slot 1.
+  // Count the generation share of the steps that carry both slots.
+  unsigned decodeTokens = 0;
+  bool generationOnlyStepRan = false;
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&](llama_context* ctx, llama_batch& step) {
+        if (shortPromptIsGenerating) {
+          int32_t shortTokens = 0;
+          for (int32_t i = 0; i < step.n_tokens; ++i) {
+            if (step.seq_id[i][0] == 1) {
+              ++shortTokens;
+            }
+          }
+          decodeTokens += static_cast<unsigned>(shortTokens);
+          generationOnlyStepRan |= shortTokens == step.n_tokens;
+        }
+        return llama_decode(ctx, step);
+      });
+  const std::vector<LlamaModel::Prompt> batch{longPrompt, shortPrompt};
+  constexpr JobId jobId = 1;
+  static_cast<void>(model->process(std::any(batch), jobId));
+
+  ASSERT_GT(decodeTokens, 0u);
+  ASSERT_FALSE(generationOnlyStepRan);
+  const auto modelStats = model->runtimeStats();
+  const auto jobStats = model->consumeJobStats(jobId);
+  using test_common::getStatValue;
+  const double modelPrefillMs = getStatValue(modelStats, "TTFT");
+  const double modelDecodeRate = getStatValue(modelStats, "TPS");
+  const double jobPrefillRate = getStatValue(jobStats, "ppTPS");
+  ASSERT_GT(modelPrefillMs, 0.0);
+  ASSERT_GT(modelDecodeRate, 0.0);
+  ASSERT_GT(jobPrefillRate, 0.0);
+  const double jobPrefillMs =
+      1000.0 * getStatValue(jobStats, "promptTokens") / jobPrefillRate;
+  EXPECT_NEAR(
+      jobPrefillMs,
+      modelPrefillMs + 1000.0 * decodeTokens / modelDecodeRate,
+      1e-6);
+}
+
 /// cancelById(id) must cancel only the targeted job: the cancelled job stops
 /// early (short output) while the other job runs to completion. The target
 /// fires cancelById on its own first token so the cut happens mid-generation.
