@@ -315,13 +315,13 @@
       },
       "configurations": {
         "linux-x64-gpu2204": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
         },
         "linux-x64-gpu": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           },
@@ -337,25 +337,25 @@
           ]
         },
         "linux-x64-vulkan": {
-          "args": "--set CUDA_VISIBLE_DEVICES=-1 --set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set CUDA_VISIBLE_DEVICES=-1 --set QVAC_RUN_SPECULATIVE_DSPARK=1 --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           }
         },
         "linux-arm64": {
-          "args": "--set NO_GPU=true",
+          "args": "--set NO_GPU=true --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "ubuntu_2204_arm"
           }
         },
         "linux-arm64-2404": {
-          "args": "--set NO_GPU=true",
+          "args": "--set NO_GPU=true --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "ubuntu_2404_arm"
           }
         },
         "darwin-arm64": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "macos_arm64_gpu"
           }
@@ -364,14 +364,14 @@
           "commands": [
             "pnpm run build:ts",
             "pnpm exec brittle -r test/integration/all.js test/integration/api-behavior.test.js",
-            "pnpm exec bare test/integration/all.js --exit"
+            "QVAC_RUN_BONSAI_27B=1 pnpm exec bare test/integration/all.js --exit"
           ],
           "ci": {
             "runner": "macos_15_large"
           }
         },
         "win32-x64": {
-          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1",
+          "args": "--set QVAC_RUN_SPECULATIVE_DSPARK=1 --set QVAC_RUN_BONSAI_27B=1",
           "ci": {
             "runner": "win_2025_x64_gpu"
           }
