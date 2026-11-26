@@ -1,0 +1,305 @@
+---
+title: RAG
+icon: ScanSearch
+description: Retrieval-augmented generation with embeddings and a vector index.
+schemaType: HowTo
+---
+
+<Callout type="warn">
+  **RAG moved to its own package.** The `rag*` functions (`ragIngest`,
+  `ragSearch`, and the rest) are removed in this version — the managed document
+  store now lives in [`@qvac/rag`](/rag). Embeddings and the vector index stay
+  in the SDK, so you can still build retrieval from
+  [`embed()`](/sdk/reference/api#embed) and
+  [`createVectorIndex()`](/sdk/reference/api#createvectorindex), as this page
+  shows. See the [migration guide](/rag/migration) to move off `rag*`.
+</Callout>
+
+## Overview
+
+RAG (retrieval-augmented generation) uses [text embeddings](/sdk/ai-capabilities/text-embeddings): you embed (vectorize) documents, persist them in a vector store, and later retrieve the most relevant chunks for a query using similarity search.
+
+Compared to generating text embeddings only, the key differences are:
+
+- You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector store.
+- At query time, you **embed the query** and run **top‑K** vector search to fetch the most relevant documents/chunks.
+- You _typically_ pass the retrieved text to [`completion()`](/sdk/reference/api#completion) as context to ground the model's answer (this retrieval step is what makes it RAG).
+
+## Functions
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel) (with `modelType: "embeddings"`)
+2. [`embed()`](/sdk/reference/api#embed) — generate vectors
+3. Optionally, index the vectors on-device:
+   - [`createVectorIndex()`](/sdk/reference/api#createvectorindex) — build a TurboVec index over your own documents
+   - [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex) — reopen a saved TurboVec index
+4. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Pipeline
+
+Create your RAG pipeline using [text embeddings](/sdk/ai-capabilities/text-embeddings), the functions above, and [completion](/sdk/ai-capabilities/text-generation).
+
+Regarding vector storage, you may use:
+
+- **External vector DB:** use [`embed()`](/sdk/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
+- **Built-in TurboVec index with your own document store:** use [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
+
+<Callout type="info">
+  **Important:** when using an external vector DB, make sure its schema matches
+  the embedding dimensionality produced by your model (e.g., GTE Large
+  embeddings used in the example are 1024‑dimensional).
+</Callout>
+
+### Managed retrieval with `@qvac/rag`
+
+Both options above leave the document store, the chunking, and the query loop to you. [`@qvac/rag`](/rag) is a separate npm package that supplies all three out of the box: it keeps documents in a Corestore, chunks and embeds them on ingest, and returns the matching chunks from a single `search()` call.
+
+It is JavaScript and TypeScript only, and it does not depend on `@qvac/sdk` — you pass embeddings in through a port, which can wrap the SDK's [`embed()`](/sdk/reference/api#embed). Choose it when you want a document store you don't have to build; stay on this page when you already have one, or when you work in Python or Kotlin. See the [RAG collection](/rag) for what it adds.
+
+## Examples
+
+### TurboVec index with your own document store
+
+The following script keeps the documents in a plain `Map`, embeds them with `embed()`, and indexes the vectors in a TurboVec index created with `createVectorIndex()`. Search returns the ids you assigned, so the documents can live in any database. The index is saved with `write()` and reopened with `loadVectorIndex()`; only the vectors are stored, never the documents.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec.js title="rag-turbovec.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec.ts title="rag-turbovec.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec.py title="rag_turbovec.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagTurbovec.kt title="RagTurbovec.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+  TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default,
+  `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no
+  greater than 16,384. `GTE_LARGE_FP16` produces 1024-dimensional vectors and
+  fits. Search uses dot products, so L2-normalise vectors when you need cosine
+  similarity. The index lives in the SDK worker; after a worker restart, reopen
+  it from the snapshot.
+</Callout>
+
+A fresh TurboVec index attempts TQ+ calibration before encoding its first successful nonempty `add()` batch when that batch has at least 1,000 vectors. A smaller first batch leaves it uncalibrated, and later adds do not calibrate it. `index.calibrated` reports the state after creation, loading, or the last successful add. Calibration improves recall when the fit succeeds and persists in snapshots.
+
+Staged search is off for every new or loaded index. Use `await index.setStagedSearch({ enabled: true })` to trade recall for faster queries, or pass `false` to score every vector. On supported hosts, staged search applies at 32,768 or more vectors and a dimension divisible by 32. Other dimensions and indexes loaded from v3 snapshots retain the setting but search every vector. `index.stagedSearch` reports the setting, which is not saved in snapshots. Generic `F32`, `Q8`, and `Q4` storage reject staged search controls.
+
+#### IVF search
+
+IVF (Inverted File Index) search groups the vectors into lists and scans only the lists closest to each query. Turn it on with `await index.setIvf({ nLists, nProbe })`, where `nLists` is the number of lists to build and `nProbe` is the number each search scans. Pass `null` to turn it off. IVF is off on every new or loaded index, and snapshots don't save the setting.
+
+IVF trades recall for speed. A higher `nProbe` finds more of the true nearest vectors but searches slower. The speedup depends on the storage. A large `F32` index can search many times faster. On `TURBOVEC_Q4` and `TURBOVEC_Q2` storage the gain varies with the index. Measure it on your data.
+
+Building the lists blocks the SDK worker until it finishes. An `add()` or `remove()` makes the lists stale and sets `index.ivf.built` to `false`. Searches then scan every vector until you call `setIvf()` again.
+
+The following script turns IVF on for a small `F32` index, compares a probed search with a full scan, overrides `nProbe` for one call, and rebuilds the lists after an `add()`.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec-ivf.js title="rag-turbovec-ivf.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec-ivf.ts title="rag-turbovec-ivf.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec_ivf.py title="rag_turbovec_ivf.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagTurbovecIvf.kt title="RagTurbovecIvf.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+External index providers may not support these controls. Their `calibrated`, `stagedSearch` and `ivf` properties are then `undefined`, and `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError`. The Python and Kotlin SDKs report a missing `ivf` as `null`, the same value as IVF turned off. In those SDKs, the only way to tell that a provider doesn't support IVF is that `setIvf()` rejects.
+
+#### Cancelling vector index calls
+
+In the JavaScript and TypeScript SDK, pass the pending operation's `requestId` to `cancel({ requestId })`. A call cancelled while it waits behind other calls on the same index skips the native operation. A `dispose()` runs even when it is cancelled, so the index is always released.
+
+With the built-in TurboVec provider, a search, `contains()` or snapshot load that is already running rejects with `InferenceCancelledError` at once, and its result is discarded. Later calls on the same index wait for that native work to finish. External providers without active cancellation support may wait for the current call to finish.
+
+An add, remove, write, `setStagedSearch()` or `setIvf()` that has already started can't be undone part-way. It runs to the end and returns its result, even after a cancel. So a cancelled call that rejects with `InferenceCancelledError` never changed the index. A change counts as started once the calls before it have returned, even if it then waits for the native work of a cancelled search.
+
+### External vector DB
+
+#### MongoDB
+
+This example needs two things the SDK does not provide: a MongoDB driver, and a deployment with Atlas Vector Search. Install the driver for the language you are using — `npm i "mongodb@^7.5.0"` for JavaScript and TypeScript, or `pip install "pymongo>=4.13"` for Python. Those are the versions these docs are tested against.
+
+One way to get a deployment is the Atlas local container:
+
+```bash
+docker run -p 27017:27017 --name atlas-local mongodb/mongodb-atlas-local
+```
+
+The script connects to `mongodb://localhost:27017/?directConnection=true`; edit that connection string if your deployment lives elsewhere.
+
+The following script stores each document in MongoDB alongside its vector, builds a vector search index over it, and retrieves matches with a `$vectorSearch` aggregation that [pre-filters](https://www.mongodb.com/docs/vector-search/query/aggregation-stages/vector-search-stage/#pre-filter-search-data) by category:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-mongodb.js title="rag-mongodb.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-mongodb.ts title="rag-mongodb.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_mongodb.py title="rag_mongodb.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagMongodb.kt title="RagMongodb.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the coroutine driver, `org.mongodb:mongodb-driver-kotlin-coroutine:5.13.0`, to this example only, so there is nothing to install.
+
+#### SQLite
+
+This example needs the vector extension for SQLite, which arrives differently per language. JavaScript and TypeScript use a SQLite WASM build that has the extension compiled in; Python uses the standard library's `sqlite3` module and loads the extension from a prebuilt binary. Install the one for the language you are using:
+
+```bash
+# JavaScript and TypeScript
+npm i "@sqliteai/sqlite-wasm@3.50.4-sync.0.8.30-vector.0.9.23"
+
+# Python
+pip install "sqliteai-vector>=1.1"
+```
+
+Those are the versions these docs are tested against. Loading an extension also needs a Python configured with `--enable-loadable-sqlite-extensions`. Most distribution and python.org builds are; `pyenv`'s default build is not, and no package you install changes that — pass `-p` to `virtualenv` (or `--python` to `uv venv`) to base the environment on an interpreter that qualifies. The example checks before it starts and tells you if yours does not. The database is in-memory, so there is nothing else to set up.
+
+The following script shows the same workflow using `embed()` plus a SQLite vector index:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-sqlite.js title="rag-sqlite.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-sqlite.ts title="rag-sqlite.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_sqlite.py title="rag_sqlite.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagSqlite.kt title="RagSqlite.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the SQLite JDBC driver, `org.xerial:sqlite-jdbc:3.53.4.0`, to this example only. The driver always supports loadable extensions, but the vector extension itself is a prebuilt binary: download the one for your platform from the [sqlite-vector releases](https://github.com/sqliteai/sqlite-vector/releases) and point `SQLITE_VECTOR_EXTENSION` at it:
+
+```bash
+SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew -p examples run -Pexample=RagSqlite
+```
+
+<Callout type="success">
+  **Tip:** all examples throughout this documentation are self-contained and
+  runnable. For instructions on how to run them, see the [JS/TS
+  quickstart](/sdk/js-ts-sdk#quickstart), the [Python
+  quickstart](/sdk/python-sdk#quickstart), or the [Kotlin
+  quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>

@@ -31,6 +31,10 @@ const SDK_OLDER = SDK.versions.find(
   (version) => version.version !== SDK_CURRENT,
 )!.version;
 const CLI_CURRENT = versionOfFolder(getCurrentLine(CLI)!.folder);
+const RAG = documentedSoftwareOfKind('collection').find(
+  (software) => software.path === '/rag',
+)!;
+const RAG_CURRENT = versionOfFolder(getCurrentLine(RAG)!.folder);
 
 describe('pageAttributes', () => {
   it('states the line of a page that carries no version in its URL', () => {
@@ -87,12 +91,18 @@ describe('allowedLines', () => {
       line: CLI_CURRENT,
       current: true,
     });
+    expect(allowed).toContainEqual({
+      collection: 'RAG',
+      line: RAG_CURRENT,
+      current: true,
+    });
   });
 
   it('takes every current line when the reader is outside them all', () => {
     expect(allowedLines('/ecosystem/addons')).toEqual([
       { collection: 'SDK', line: SDK_CURRENT, current: true },
       { collection: 'CLI', line: CLI_CURRENT, current: true },
+      { collection: 'RAG', line: RAG_CURRENT, current: true },
     ]);
   });
 

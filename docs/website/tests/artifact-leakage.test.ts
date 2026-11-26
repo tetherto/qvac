@@ -153,6 +153,7 @@ describe('the manifest the gate reads', () => {
     expect(collections.map((collection) => collection.path)).toEqual([
       '/sdk',
       '/cli',
+      '/rag',
     ]);
     for (const collection of collections) {
       expect(collection.lines.filter((line) => line.current)).toHaveLength(1);

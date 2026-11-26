@@ -6,8 +6,6 @@
     "index",
     "migration",
     "api-reference",
-    "built-in-vector-store",
-    "turbovec-index",
-    "external-vector-db"
+    "built-in-vector-store"
   ]
 }
