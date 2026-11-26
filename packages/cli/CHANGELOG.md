@@ -106,6 +106,8 @@ The exit status makes the command usable in scripts: `0` fits, `2` does not fit,
 
 A language model is judged at the SDK's default context of 1024 tokens unless `ctx_size` is set. A model made of several parts needs its engine and companion files in its config: a TTS model needs `ttsEngine`, and a translation model needs its `engine` and language pair. A companion file on its own, such as a projector, VAE or codec, cannot be judged; judge the model that loads it.
 
+When the engine fitter rejects a load (`MODEL_FIT_REJECTED`), the error is followed by a hint: a companion file such as a projector, VAE or codec is judged through the model that loads it, and a model made of several parts needs its companion files and settings, passed with `--set` or through a serve alias. `--catalog` lists these models under their own heading, with the hint printed once; the JSON is unchanged.
+
 ### Model fit results say why
 
 Each entry of `models` in the `POST /qvac/v1/models/fit` response can now carry a `reason`. It is present when the model's `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it. `qvac fit` prints the same reason next to the model.

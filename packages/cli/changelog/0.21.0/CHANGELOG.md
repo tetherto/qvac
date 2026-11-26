@@ -6,6 +6,7 @@ Release Date: 2026-11-25
 
 - Recover malformed tool calls in inference. (see PR [#5846](https://github.com/tetherto/qvac/pull/5846))
 - Remove the RAG API from the SDK and inference; `/v1/vector_stores` now runs on `@qvac/rag`. (see PR [#5874](https://github.com/tetherto/qvac/pull/5874)) - See [breaking changes](./breaking.md)
+- Hint at companion files when the engine fitter rejects a fit. (see PR [#5992](https://github.com/tetherto/qvac/pull/5992))
 
 ## 🔌 API
 
