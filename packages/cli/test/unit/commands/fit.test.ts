@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { FitSettingError, parseSettings, settingsFor } from '@/fit/settings'
-import { formatCatalog, formatFit } from '@/fit/format'
+import { FIT_REJECTION_HINT, fitRejectionHint, formatCatalog, formatFit } from '@/fit/format'
 import { assessCatalog, catalogModels } from '@/fit/catalog'
 import type { ModelFitResponse } from '@/serve/core/fit'
 
@@ -145,7 +145,9 @@ describe('formatCatalog', () => {
       ],
       withoutVerdict: [
         { model: 'VOICE', reason: 'the engine fitter could not size this load' },
-        { model: 'MMPROJ', reason: 'cannot be read', code: 'MODEL_FIT_REJECTED' }
+        { model: 'TTS', reason: 'no ttsEngine', code: 'PLUGIN_LOAD_CONFIG_VALIDATION_FAILED' },
+        { model: 'MMPROJ', reason: 'cannot be read', code: 'MODEL_FIT_REJECTED' },
+        { model: 'VAE', reason: 'cannot be read', code: 'MODEL_FIT_REJECTED' }
       ]
     })
     assert.match(
@@ -154,6 +156,35 @@ describe('formatCatalog', () => {
     )
     assert.match(text, /Models without a verdict \(2\)/)
     assert.match(text, /\? VOICE {2}the engine fitter could not size this load/)
-    assert.match(text, /\? MMPROJ {2}MODEL_FIT_REJECTED: cannot be read/)
+    assert.match(text, /\? TTS {2}PLUGIN_LOAD_CONFIG_VALIDATION_FAILED: no ttsEngine/)
+    assert.ok(
+      text.endsWith(
+        `Rejected by the engine fitter (2)\n  ${FIT_REJECTION_HINT}\n  ? MMPROJ  cannot be read\n  ? VAE  cannot be read`
+      )
+    )
+  })
+
+  it('leaves out the rejected heading when nothing was rejected', () => {
+    const text = formatCatalog({
+      object: 'model_fit_catalog',
+      withVerdict: [],
+      withoutVerdict: [{ model: 'VOICE', reason: 'the engine fitter could not size this load' }]
+    })
+    assert.doesNotMatch(text, /Rejected by the engine fitter/)
+  })
+})
+
+describe('fitRejectionHint', () => {
+  it('answers an engine fitter rejection with the hint', () => {
+    const rejection = new Error('sdcpp-generation: the engine fitter could not assess this load')
+    rejection.name = 'MODEL_FIT_REJECTED'
+    assert.equal(fitRejectionHint(rejection), FIT_REJECTION_HINT)
+  })
+
+  it('gives no hint for any other error', () => {
+    const invalid = new Error('modelConfig validation failed')
+    invalid.name = 'PLUGIN_LOAD_CONFIG_VALIDATION_FAILED'
+    assert.equal(fitRejectionHint(invalid), undefined)
+    assert.equal(fitRejectionHint('MODEL_FIT_REJECTED'), undefined)
   })
 })
