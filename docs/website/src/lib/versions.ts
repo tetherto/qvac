@@ -99,7 +99,7 @@ export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
     kind: 'collection',
     path: '/rag',
     versions: [
-      { version: 'v0.11', folder: '(v0.11)' },
+      { version: 'v0.12', folder: '(v0.12)' },
     ],
   },
 ];

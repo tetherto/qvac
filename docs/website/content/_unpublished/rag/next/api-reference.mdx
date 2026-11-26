@@ -14,13 +14,19 @@ Create a RAG instance.
 |---|---|---|
 | `corestore` | `Corestore` | The Corestore that backs this instance. One store per folder per process. |
 | `embeddings` | `EmbeddingsPort` | Optional. Provides `embedDocuments` and `embedQuery` for text-based ingest and search. Without it, supply precomputed vectors. |
-| `index` | `IndexOptions` | Optional. Configures the TurboVec index, used only when `@qvac/turbovec-ggml` is installed. |
+| `index` | `IndexOptions` | Optional. Configures the index, used only when `@qvac/turbovec-ggml` is installed or `index.provider` is given. |
 | `chunking` | `ChunkingOptions` | Optional. Controls automatic text chunking on `ingest()`. |
+| `onIndexFallback` | `(event: IndexFallbackEvent) => void` | Optional. Called once per namespace each time its searches switch to the scan. A throw or a rejected promise is ignored. |
+| `onSnapshotError` | `(event: SnapshotErrorEvent) => void` | Optional. Called when a namespace's snapshot cannot be read or written. The index stays in memory and in index mode; only reopening is slower. |
 
 `index` accepts:
 
 - `dir` — directory for index snapshots. Without it, each namespace's index is built from the database the first time it is searched after `ready()`, and kept in memory only.
 - `snapshotEvery` — committed batches between snapshots, default 256. A snapshot is also written on `close()`.
+- `provider` — an `IndexProvider` to use in place of `@qvac/turbovec-ggml`, for hosts that supply their own index.
+- `fs` — a `SnapshotFileSystem` to use in place of the runtime's own. Defaults to `bare-fs` on Bare and `fs` on Node.
+
+`IndexFallbackEvent` is `{ namespace, reason, error? }`, where `reason` is `addon-missing`, `addon-load-failed`, `rebuild-failed`, or `search-failed`. `SnapshotErrorEvent` is `{ namespace, error }`.
 
 Returns a `Rag` handle. Call `await rag.ready()` before any other method.
 
@@ -35,6 +41,7 @@ Create a namespace tied to one embedding space.
 | `name` | `string` | Namespace identifier. |
 | `space` | `EmbeddingSpace` | The embedding space: model, revision, dimensions, metric, and preprocessing. |
 | `index` | `{ storage?: IndexStorage }` | Optional. How the namespace's index stores vectors, fixed at creation. |
+| `vectorEncoding` | `VectorEncoding` | Optional. How chunk vectors are stored in the database and in exports: `f32` (default) or `f16`. Fixed at creation. |
 
 `index.storage` options:
 
@@ -45,7 +52,9 @@ Create a namespace tied to one embedding space.
 | `turbovec-q4` | divisible by 8, at most 1,024 | TurboVec 4-bit |
 | `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 2-bit |
 
-Returns `{ name, spaceId, revision, index: { storage } }`. A namespace only accepts vectors from its space. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
+`index.storage` is how the index holds vectors; `vectorEncoding` is how the database and exports hold them. `f16` halves stored vector size, and scores are then computed from the rounded values.
+
+Returns `{ name, spaceId, revision, index: { storage }, vectorEncoding }`. A namespace only accepts vectors from its space. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
 ---
 
@@ -65,6 +74,16 @@ Each document is one of:
 - **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }` — no port needed. `spaceId` can sit on the document or on each chunk.
 
 The optional second argument accepts `onProgress({ stage, done, total })` and `signal` (abort).
+
+A document may carry no chunks — `chunks: []`, or text that is empty or only whitespace. It is stored with a `chunkCount` of 0 and matches no search.
+
+Input is validated before anything is written, and fails with `INVALID_INPUT`:
+
+- a string that is not well-formed UTF-16 (a lone surrogate, such as half an emoji left by cutting a string) in a name, ID, text, chunk content, metadata, or space field;
+- a stored row over 8 MiB — a chunk with its content, metadata, and vector, or a document with its metadata;
+- a `__proto__` key in `metadata`;
+- a `signal` that is not an `AbortSignal`;
+- a generation above 2^32.
 
 Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced`, or `unchanged`.
 
@@ -159,6 +178,8 @@ The optional second argument accepts `signal` (abort).
 
 Returns an `AsyncIterable<Uint8Array>` in the `QVRAGX1` format. The stream reads one database snapshot and yields one chunk at a time, so memory stays flat.
 
+An `f16` namespace exports format 2, which `@qvac/rag` 0.11 cannot import; so does a format 1 export holding a document without chunks. Every other export imports into 0.11, and 0.11's exports import here.
+
 ---
 
 ## `rag.importNamespace(options[, control])`
@@ -179,7 +200,7 @@ Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents`
 
 ## `rag.listNamespaces()`
 
-List all namespaces. Returns an array of `{ name, spaceId, space, index: { storage }, revision, documentCount, chunkCount }`, by name.
+List all namespaces. Returns an array of `{ name, spaceId, space, index: { storage }, vectorEncoding, revision, documentCount, chunkCount }`, by name.
 
 ---
 
@@ -192,6 +213,22 @@ Delete a namespace and all its documents, chunks, and index data.
 | `name` | `string` | Namespace to drop. |
 
 Returns `{ name, documentCount, chunkCount }`.
+
+---
+
+## `rag.indexStatus(options)`
+
+Report how a namespace is currently searched.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+
+Returns one of:
+
+- `{ mode: 'index', revision, snapshot }` — searched by the TurboVec index. `snapshot` is `off` (no `index.dir`), `none` (none written yet), `ok`, or `{ error }`.
+- `{ mode: 'scan', reason, error? }` — searched by scanning every chunk. `reason` is `addon-missing`, `addon-load-failed`, `rebuild-failed`, or `search-failed`.
+- `{ mode: 'unopened' }` — the namespace has not been searched since `ready()`, so no index has been opened.
 
 ---
 

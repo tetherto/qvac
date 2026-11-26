@@ -47,7 +47,7 @@ Workspaces are not migrated, and the old API has no export, so keep your source 
 npm install @qvac/rag corestore
 ```
 
-`@qvac/rag` runs on Bare and Node; on Bare, also install `@qvac/turbovec-ggml` for indexed search. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you create and close, and gets vectors from an embeddings port you supply.
+`@qvac/rag` runs on Bare and Node; on Bare, also install `@qvac/turbovec-ggml` 0.8 or later for indexed search. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you create and close, and gets vectors from an embeddings port you supply.
 
 ```typescript
 import Corestore from 'corestore'
@@ -91,7 +91,7 @@ await corestore.close()
 - The port can wrap any embedding function: another model, a remote API or your own code.
 - Without a port, ingest precomputed vectors and search with `{ vector, spaceId }`.
 - Change `space` when the vectors change (model, revision, pooling); a namespace rejects vectors from another space.
-- On Node, `@qvac/turbovec-ggml` does not load, so every search scans all chunks and `index.dir` is ignored. That suits small stores: at 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the index on Bare. Past that, run `@qvac/rag` on Bare.
+- On Node, `@qvac/turbovec-ggml` does not load, so every search scans all chunks unless you supply your own index through `createRag({ index: { provider } })`. Call `indexStatus({ namespace })` to see which path a namespace is on. The scan suits small stores: at 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the index on Bare. Past that, run `@qvac/rag` on Bare.
 
 | SDK function | `@qvac/rag` |
 |---|---|

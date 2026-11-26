@@ -18,7 +18,8 @@ What the package adds on top of embedding and indexing vectors yourself:
 
 - **Namespace isolation** — organise documents into namespaces, each tied to one embedding space.
 - **Automatic chunking** — split text on ingest, or supply pre-chunked content.
-- **TurboVec indexing** — optional on-device approximate nearest-neighbour index for fast search on Bare, enabled by installing `@qvac/turbovec-ggml`. Pass `index.dir` to persist snapshots across restarts. On Node, every search scans all chunks.
+- **TurboVec indexing** — optional on-device approximate nearest-neighbour index for fast search on Bare, enabled by installing `@qvac/turbovec-ggml` 0.8 or later. Pass `index.dir` to persist snapshots across restarts, and call `indexStatus()` to see whether a namespace is served by the index or by a scan. On Node, every search scans all chunks unless you supply your own index provider.
+- **Compact vectors** — store chunk vectors as `f16` instead of `f32` to halve the space they take in the database and in exports.
 - **Scoped search** — restrict queries to a subset of documents within a namespace.
 - **Export / import** — move a namespace between stores.
 
@@ -41,7 +42,7 @@ Install `@qvac/rag`, a Corestore, and the SDK (for the embeddings port in this w
 npm install @qvac/rag corestore @qvac/sdk
 ```
 
-On Bare, also install `@qvac/turbovec-ggml` for indexed search.
+On Bare, also install `@qvac/turbovec-ggml` 0.8 or later for indexed search.
 
 </Step>
 
