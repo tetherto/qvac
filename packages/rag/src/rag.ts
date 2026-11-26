@@ -227,6 +227,16 @@ async function loadIndexRuntime(config: IndexConfig): Promise<IndexRuntime> {
   }
 }
 
+// A host callback never fails the call that triggered it.
+function notifyHost<T>(callback: (event: T) => void, event: T): void {
+  try {
+    const returned: unknown = callback(event)
+    if (typeof (returned as PromiseLike<unknown> | null)?.then === 'function') {
+      Promise.resolve(returned).catch(() => {})
+    }
+  } catch {}
+}
+
 function toHex(bytes: Uint8Array | null | undefined): string {
   if (!bytes) return 'unknown'
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -249,6 +259,13 @@ export function createRag(options: CreateRagOptions): Rag {
     throw new QvacErrorRAG({
       code: ERR_CODES.INVALID_INPUT,
       adds: 'onIndexFallback must be a function'
+    })
+  }
+  const onSnapshotError = options.onSnapshotError
+  if (onSnapshotError !== undefined && typeof onSnapshotError !== 'function') {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'onSnapshotError must be a function'
     })
   }
   // The last fallback reason reported per namespace, so each is reported once.
@@ -288,7 +305,11 @@ export function createRag(options: CreateRagOptions): Rag {
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
     let unclaim: () => Promise<void>
     try {
-      unclaim = acquired.indexes.claim(indexConfig, runtime)
+      unclaim = acquired.indexes.claim(
+        indexConfig,
+        runtime,
+        onSnapshotError && ((event) => notifyHost(onSnapshotError, event))
+      )
     } catch (error) {
       await acquired.release()
       throw error
@@ -699,13 +720,8 @@ export function createRag(options: CreateRagOptions): Rag {
     // A scan for one query, such as one TurboVec can't quantize, is not reported.
     if (status.mode !== 'scan' || reported.get(namespace) === status.reason) return
     reported.set(namespace, status.reason)
-    try {
-      const { mode: _mode, ...fallback } = status
-      const returned: unknown = onIndexFallback({ namespace, ...fallback })
-      if (typeof (returned as PromiseLike<unknown> | null)?.then === 'function') {
-        Promise.resolve(returned).catch(() => {})
-      }
-    } catch {}
+    const { mode: _mode, ...fallback } = status
+    notifyHost(onIndexFallback, { namespace, ...fallback })
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
