@@ -34,6 +34,7 @@ import {
   parseScopedListDocuments,
   parseScopedReadDocument,
   parseSearch,
+  checkRows,
   type ParsedDocument,
   type ValidDocument,
   type ValidSearch,
@@ -45,10 +46,10 @@ import {
   checkChunks,
   deleteDocument,
   getNamespace,
+  newCreatedAt,
   newLineageId,
   hashContent,
   readNamespace,
-  sameLineage,
   storageOf,
   withSnapshot,
   writeGeneration
@@ -65,6 +66,7 @@ import {
   type SearchOptions,
   type SearchQuery
 } from './search.js'
+import { MAX_GENERATION } from './limits.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import { loadNativeIndex } from './vector-index/native.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
@@ -376,7 +378,7 @@ export function createRag(options: CreateRagOptions): Rag {
         spaceId,
         revision: 0,
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
-        createdAt: new Date(),
+        createdAt: newCreatedAt(),
         indexStorage: storage,
         lineageId: newLineageId()
       })
@@ -393,8 +395,6 @@ export function createRag(options: CreateRagOptions): Rag {
     const { signal, onProgress } = parseIngestOptions(options)
     const instance = database()
     const indexRegistry = registry()
-    // Commits check the lineage, so a drop and re-create during embedding is caught.
-    await ensureLineage(instance, namespace)
     const { ns, space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
     const port = documents.some((entry) => entry.kind !== 'embedded')
       ? requireEmbedder(namespace, space)
@@ -403,7 +403,7 @@ export function createRag(options: CreateRagOptions): Rag {
       if (entry.kind === 'embedded') checkChunks(namespace, ns, space, entry.document)
     }
 
-    const jobs = prepareJobs(documents, chunker, space.spaceId, onProgress)
+    const jobs = prepareJobs(namespace, documents, chunker, space, onProgress)
     // The jobs hold everything still needed; committed ones are released below.
     documents.length = 0
     await withSnapshot(instance, (reader) => findUnchanged(reader, namespace, jobs))
@@ -821,9 +821,10 @@ interface Committed {
 // Chunks every text document before anything is written. Text that yields no
 // chunks is stored as a document without chunks.
 function prepareJobs(
+  namespace: string,
   documents: ParsedDocument[],
   chunker: Chunker,
-  spaceId: string,
+  { spaceId, dimensions }: SpaceRecord,
   onProgress: IngestOptions['onProgress']
 ): IngestJob[] {
   const textTotal = documents.filter((entry) => entry.kind === 'text').length
@@ -842,6 +843,7 @@ function prepareJobs(
       chunked++
       onProgress?.({ stage: 'chunk', done: chunked, total: textTotal })
     }
+    checkRows(namespace, id, metadata, chunks, dimensions)
     const vectors = chunks.map(() => undefined)
     const contentHash = hashContent(spaceId, metadata, chunks, vectors)
     return { id, metadata, chunks, vectors, missing: chunks.length, contentHash }
@@ -907,7 +909,8 @@ async function commitDocument(
 ): Promise<Committed> {
   const namespace = started.name
   const ns = await getNamespace(tx, namespace)
-  if (!sameLineage(ns.lineageId, started.lineageId)) {
+  // Not the lineage: an import into the empty namespace may have adopted another.
+  if (ns.createdAt.getTime() !== started.createdAt.getTime() || ns.revision < started.revision) {
     throw new QvacErrorRAG({
       code: ERR_CODES.NAMESPACE_NOT_FOUND,
       adds: `namespace '${namespace}' was dropped while the ingest ran`
@@ -936,6 +939,12 @@ async function commitDocument(
     }
   }
   const generation = last + 1
+  if (generation > MAX_GENERATION) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: `document '${document.id}' is at generation ${last}, the highest a document can reach`
+    })
+  }
   const { revision, removedChunks } = await writeGeneration(
     tx,
     indexes,

@@ -1,11 +1,26 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
 
-import { ERR_CODES, createRag } from '../../src/index.js'
+import tmp from 'test-tmp'
+import Corestore from 'corestore'
+
+import { ERR_CODES, QvacErrorRAG, createRag } from '../../src/index.js'
 import { NAMESPACES, type NamespaceRecord } from '../../src/db/records.js'
-import { FRAME, MAGIC, jsonFrame } from '../../src/transfer/frames.js'
-import { SPACE, doc, inspect, mutate, openRag, rejectsWithCode, type Test } from './helpers.js'
-import type { EmbeddedDocumentInput, Rag } from '../../src/types.js'
+import { MAX_GENERATION, MAX_ROW_BYTES } from '../../src/limits.js'
+import { deleteCheck, documentCheck } from '../../src/transfer/export.js'
+import { FRAME, MAGIC, chunkFrame, jsonFrame } from '../../src/transfer/frames.js'
+import { hashContent } from '../../src/writes.js'
+import {
+  SPACE,
+  doc,
+  inspect,
+  mutate,
+  openRag,
+  realNativeIndex,
+  rejectsWithCode,
+  type Test
+} from './helpers.js'
+import type { EmbeddedDocumentInput, IndexProvider, Rag } from '../../src/types.js'
 
 async function collect(stream: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
   const parts: Uint8Array[] = []
@@ -521,4 +536,376 @@ test('an export read one byte at a time imports', async (t) => {
     ['a', 1],
     ['b', 1]
   ])
+})
+
+function jsonOf(bytes: Uint8Array, span: FrameSpan): Record<string, unknown> {
+  return JSON.parse(String.fromCharCode(...bytes.subarray(span.start + 5, span.end))) as Record<
+    string,
+    unknown
+  >
+}
+
+// A stream with the header of `bytes` and the given frames after it.
+function withHeader(bytes: Uint8Array, ...rest: Uint8Array[]): Uint8Array {
+  return concat(bytes.subarray(0, frames(bytes)[0].end), ...rest)
+}
+
+function documentFrame(id: string, generation: number, contentHash: string, chunkCount: number) {
+  const check = documentCheck(id, generation, contentHash, chunkCount)
+  return jsonFrame(FRAME.DOCUMENT, { id, generation, contentHash, chunkCount, check })
+}
+
+function vectorBytes(values: number[]): Uint8Array {
+  return new Uint8Array(Float32Array.from(values).buffer)
+}
+
+async function namespaceNames(rag: Rag): Promise<string[]> {
+  return (await rag.listNamespaces()).map((ns) => ns.name)
+}
+
+test('import checks document IDs and delete records', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({
+    namespace: 'ns',
+    documents: [one('a', spaceId, 'a'), one('b', spaceId, 'b'), one('c', spaceId, 'c')]
+  })
+  await from.deleteDocuments({ namespace: 'ns', documentIds: ['c'] })
+  const bytes = await exportOf(from)
+  const spans = frames(bytes)
+  const [header, docA] = spans
+  const tombstone = spans.find((span) => span.type === FRAME.TOMBSTONE) as FrameSpan
+  const idAt = (span: FrameSpan) => span.start + 5 + '{"id":"'.length
+  const to = await openTarget(t)
+
+  const renamed = bytes.slice()
+  renamed[idAt(docA)] = 'z'.charCodeAt(0)
+  await rejectsWithCode(t, load(to, renamed, 'renamed'), ERR_CODES.IMPORT_INVALID, 'id', /check/)
+  t.absent((await namespaceNames(to)).includes('renamed'), 'nothing was written')
+
+  await load(to, bytes)
+  const wrongDelete = bytes.slice()
+  wrongDelete[idAt(tombstone)] = 'b'.charCodeAt(0)
+  await rejectsWithCode(t, load(to, wrongDelete), ERR_CODES.IMPORT_INVALID, 'delete', /check/)
+  t.alike(await ids(to), [
+    ['a', 1],
+    ['b', 1]
+  ])
+
+  // 0.11.0 exports carry no checks and still import.
+  const { checks: _checks, ...legacyHeader } = jsonOf(bytes, header)
+  const legacy = [MAGIC, jsonFrame(FRAME.HEADER, legacyHeader)]
+  for (const span of spans.slice(1)) {
+    if (span.type === FRAME.DOCUMENT || span.type === FRAME.TOMBSTONE) {
+      const { check: _check, ...fields } = jsonOf(bytes, span)
+      legacy.push(jsonFrame(span.type, fields))
+    } else {
+      legacy.push(bytes.subarray(span.start, span.end))
+    }
+  }
+  await load(to, concat(...legacy), 'legacy')
+  t.alike(await ids(to, 'legacy'), [
+    ['a', 1],
+    ['b', 1]
+  ])
+})
+
+test('import rejects generations past the cap, lone surrogates and oversized rows', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({ namespace: 'ns', documents: [one('a', spaceId, 'a')] })
+  const bytes = await exportOf(from)
+  const to = await openTarget(t)
+  const chunk = (id: string, content: string) =>
+    chunkFrame({ chunkId: `${id}:0`, ordinal: 0, content }, vectorBytes([1, 0, 0]))
+  const single = (id: string, content: string, generation = 1) => {
+    const hash = hashContent(spaceId, undefined, [{ id: `${id}:0`, content }], [])
+    return withHeader(
+      bytes,
+      documentFrame(id, generation, hash, 1),
+      chunk(id, content),
+      jsonFrame(FRAME.TRAILER, { documents: 1, chunks: 1, tombstones: 0 })
+    )
+  }
+
+  await rejectsWithCode(
+    t,
+    load(to, single('a', 'a', MAX_GENERATION + 1), 'past-cap'),
+    ERR_CODES.IMPORT_INVALID,
+    'document generation'
+  )
+  const generation = MAX_GENERATION + 1
+  const pastCapDelete = withHeader(
+    bytes,
+    jsonFrame(FRAME.TOMBSTONE, { id: 'a', generation, check: deleteCheck('a', generation) }),
+    jsonFrame(FRAME.TRAILER, { documents: 0, chunks: 0, tombstones: 1 })
+  )
+  await rejectsWithCode(
+    t,
+    load(to, pastCapDelete, 'past-cap'),
+    ERR_CODES.IMPORT_INVALID,
+    'delete generation'
+  )
+
+  await load(to, single('a', 'a', MAX_GENERATION), 'at-cap')
+  await rejectsWithCode(
+    t,
+    to.ingest({ namespace: 'at-cap', documents: [one('a', spaceId, 'changed')] }),
+    ERR_CODES.INVALID_INPUT,
+    'replacing a document at the cap',
+    /highest/
+  )
+  await load(to, await exportOf(to, 'at-cap'), 'restored')
+  t.alike(
+    await ids(to, 'restored'),
+    [['a', MAX_GENERATION]],
+    'a store at the cap exports and restores'
+  )
+
+  await rejectsWithCode(
+    t,
+    load(to, single('a\ud800', 'a'), 'lone-id'),
+    ERR_CODES.IMPORT_INVALID,
+    'lone surrogate in a document id'
+  )
+  await rejectsWithCode(
+    t,
+    load(to, single('big', 'a'.repeat(MAX_ROW_BYTES)), 'big'),
+    ERR_CODES.IMPORT_INVALID,
+    'oversized chunk',
+    /row limit/
+  )
+  t.alike(
+    (await namespaceNames(to)).sort(),
+    ['at-cap', 'restored'],
+    'failed imports created no namespace'
+  )
+})
+
+test('a failed import leaves no namespace it created', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({ namespace: 'ns', documents: [one('a', spaceId, 'a')] })
+  const bytes = await exportOf(from)
+  const spans = frames(bytes)
+  const to = await openTarget(t)
+
+  await rejectsWithCode(
+    t,
+    load(to, bytes.slice(0, spans[2].end - 1), 'cut'),
+    ERR_CODES.IMPORT_INVALID,
+    'cut inside the first document'
+  )
+  t.alike(await namespaceNames(to), [], 'no namespace')
+  await to.createNamespace({ name: 'cut', space: { ...SPACE, model: 'another' } })
+
+  const failure = new Error('disk gone')
+  async function* failing(): AsyncGenerator<Uint8Array> {
+    yield bytes.subarray(0, spans[0].end)
+    throw failure
+  }
+  try {
+    await to.importNamespace({ namespace: 'failing', source: failing() })
+    t.fail('expected the import to fail')
+  } catch (error) {
+    t.ok(error instanceof QvacErrorRAG)
+    t.is((error as QvacErrorRAG).code, ERR_CODES.IMPORT_SOURCE_FAILED, 'source error')
+    t.is((error as Error).cause, failure, 'the source error is the cause')
+  }
+  t.alike(await namespaceNames(to), ['cut'])
+})
+
+test("a namespace emptied by deletes takes the export's lineage", async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({
+    namespace: 'ns',
+    documents: [one('x', spaceId, 'x'), one('y', spaceId, 'y')]
+  })
+  const bytes = await exportOf(from)
+
+  const { rag: to } = await openRag(t)
+  await to.ingest({
+    namespace: 'ns',
+    documents: [one('x', spaceId, 'local'), one('z', spaceId, 'z')]
+  })
+  await to.deleteDocuments({ namespace: 'ns', documentIds: ['x', 'z'] })
+  const result = await load(to, bytes)
+  t.alike(
+    result.documents.map((entry) => [entry.id, entry.status]),
+    [
+      ['x', 'created'],
+      ['y', 'created']
+    ],
+    "the old lineage's delete records don't apply"
+  )
+  t.alike(await ids(to), [
+    ['x', 1],
+    ['y', 1]
+  ])
+  await load(to, bytes)
+  t.pass('a second import of the same export matches the adopted lineage')
+})
+
+test('an ingest during an import into its empty namespace commits', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({ namespace: 'ns', documents: [one('a', spaceId, 'a')] })
+  const bytes = await exportOf(from)
+
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let started = () => {}
+  const embedding = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const store = new Corestore(await tmp(t))
+  const to = createRag({
+    corestore: store,
+    embeddings: {
+      space: SPACE,
+      async embedDocuments(texts) {
+        started()
+        await gate
+        return new Float32Array(texts.length * SPACE.dimensions).fill(0.5)
+      },
+      embedQuery: () => Promise.resolve(new Float32Array(SPACE.dimensions))
+    }
+  })
+  await to.ready()
+  t.teardown(async () => {
+    await to.close()
+    await store.close()
+  })
+  await to.createNamespace({ name: 'ns', space: SPACE })
+
+  const pending = to.ingest({ namespace: 'ns', documents: [{ id: 'local', text: 'local text' }] })
+  await embedding
+  await load(to, bytes)
+  release()
+  const { documents } = await pending
+  t.is(documents[0].status, 'created')
+  t.alike(await ids(to), [
+    ['a', 1],
+    ['local', 1]
+  ])
+})
+
+test('an import whose namespace gains documents before its first write fails with the lineage', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({ namespace: 'ns', documents: [one('a', spaceId, 'a')] })
+  const bytes = await exportOf(from)
+  const spans = frames(bytes)
+  const { rag: to } = await openRag(t)
+
+  let resume = () => {}
+  const resumed = new Promise<void>((resolve) => {
+    resume = resolve
+  })
+  let reached = () => {}
+  const waiting = new Promise<void>((resolve) => {
+    reached = resolve
+  })
+  async function* paused(): AsyncGenerator<Uint8Array> {
+    yield bytes.subarray(0, spans[0].end)
+    reached()
+    await resumed
+    yield bytes.subarray(spans[0].end)
+  }
+  const importing = to.importNamespace({ namespace: 'ns', source: paused() })
+  await waiting
+  await to.ingest({ namespace: 'ns', documents: [one('local', spaceId, 'local')] })
+  resume()
+  await rejectsWithCode(t, importing, ERR_CODES.IMPORT_LINEAGE_MISMATCH, 'import')
+  t.alike(await ids(to), [['local', 1]], 'the ingest stays')
+})
+
+test('an import stopped while it waits for the write lock writes nothing', async (t) => {
+  const { rag: from } = await openRag(t, ['empty'])
+  const bytes = await exportOf(from, 'empty')
+
+  // A native add that waits on `gate` holds the write lock for its ingest.
+  const real = await realNativeIndex()
+  let hold = false
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let entered = () => {}
+  const holding = new Promise<void>((resolve) => (entered = resolve))
+  const provider: IndexProvider = {
+    create(dim, storage) {
+      const index = real.create(dim, storage)
+      const add = index.addWithIds.bind(index)
+      index.addWithIds = async (vectors, ids) => {
+        if (hold) {
+          entered()
+          await gate
+        }
+        await add(vectors, ids)
+      }
+      return index
+    }
+  }
+  const { rag, spaceId } = await openRag(t, ['ns'], { provider })
+  await rag.ingest({ namespace: 'ns', documents: [one('a', spaceId, 'a')] })
+  await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 })
+
+  hold = true
+  const ingesting = rag.ingest({ namespace: 'ns', documents: [one('b', spaceId, 'b')] })
+  await holding
+  const controller = new AbortController()
+  const importing = rag.importNamespace(
+    { namespace: 'copy', source: source(bytes) },
+    { signal: controller.signal as AbortSignal }
+  )
+  // Every frame is in memory, so the import reaches the lock within a few ticks.
+  await new Promise((resolve) => setTimeout(resolve, 50, null))
+  controller.abort(new Error('stop'))
+  release()
+  await ingesting
+  const result = await importing
+  t.is(result.cancelled, true)
+  t.absent((await namespaceNames(rag)).includes('copy'), 'no namespace was created')
+})
+
+test('import checks chunks against a namespace created while it read', async (t) => {
+  const space8 = { ...SPACE, dimensions: 8, model: 'test-8' }
+  const { rag: from } = await openRag(t, [])
+  const { spaceId } = await from.createNamespace({ name: 'ns', space: space8 })
+  const huge = [2e16, 0, 0, 0, 0, 0, 0, 0]
+  await from.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', huge]])] })
+  const bytes = await exportOf(from)
+  const headerEnd = frames(bytes)[0].end
+
+  let resume = () => {}
+  const resumed = new Promise<void>((resolve) => (resume = resolve))
+  let paused = () => {}
+  const reachedPause = new Promise<void>((resolve) => (paused = resolve))
+  async function* pausing(): AsyncGenerator<Uint8Array> {
+    yield bytes.slice(0, headerEnd)
+    paused()
+    await resumed
+    yield bytes.slice(headerEnd)
+  }
+
+  const to = await openTarget(t)
+  const importing = to.importNamespace({ namespace: 'copy', source: pausing() })
+  await reachedPause
+  await to.createNamespace({ name: 'copy', space: space8, index: { storage: 'turbovec-q4' } })
+  resume()
+  await rejectsWithCode(t, importing, ERR_CODES.IMPORT_INVALID, 'turbovec storage', /1e16/)
+  t.alike(await ids(to, 'copy'), [], 'nothing was written')
+})
+
+test('a source whose iterator cannot open fails as the source', async (t) => {
+  const to = await openTarget(t)
+  const cause = new Error('cannot open')
+  const broken = {
+    [Symbol.asyncIterator](): AsyncIterator<Uint8Array> {
+      throw cause
+    }
+  }
+  try {
+    await to.importNamespace({ namespace: 'ns', source: broken })
+    t.fail('expected IMPORT_SOURCE_FAILED')
+  } catch (error) {
+    t.is((error as QvacErrorRAG).code, ERR_CODES.IMPORT_SOURCE_FAILED)
+    t.is((error as Error).cause, cause, 'the source error is the cause')
+  }
 })

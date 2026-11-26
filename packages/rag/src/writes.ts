@@ -143,6 +143,15 @@ export async function appendMutation(
   return revision
 }
 
+let lastCreatedAt = 0
+
+// Strictly increasing in the process, so a namespace dropped and re-created
+// within one millisecond still gets a new `createdAt`, which ingest compares.
+export function newCreatedAt(): Date {
+  lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1)
+  return new Date(lastCreatedAt)
+}
+
 export function newLineageId(): Uint8Array {
   if (qvacCrypto.randomBytes) return qvacCrypto.randomBytes(16)
   if (qvacCrypto.getRandomValues) return qvacCrypto.getRandomValues(new Uint8Array(16))
