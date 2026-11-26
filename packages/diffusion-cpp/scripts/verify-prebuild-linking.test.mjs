@@ -6,6 +6,7 @@ import path from 'node:path'
 import vm from 'node:vm'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import windowsRuntimePolicy from './windows-runtime-policy.cjs'
 import {
   SLICE_DEFINITIONS,
   expectedAddonFile,
@@ -282,6 +283,7 @@ async function integrationLayout({
   arch = 'x64',
   env = {},
   cuda = null,
+  runtimeFiles = [],
   addon = ['libc.so.6'],
   vulkan = ['libvulkan.so.1']
 } = {}) {
@@ -300,16 +302,23 @@ async function integrationLayout({
     [vulkanPath, encode(vulkan)]
   ])
   if (cuda) files.set(cudaPath, encode(cuda))
+  for (const name of runtimeFiles) files.set(path.join(target, name), Buffer.alloc(0))
   const reads = []
   const comments = []
   const failures = []
   const tests = new Map()
   const modules = {
+    '../../scripts/windows-runtime-policy.cjs': windowsRuntimePolicy,
     'bare-path': path,
     'bare-os': { platform: () => platform, arch: () => arch },
     'bare-process': { env },
     'bare-fs': {
       existsSync: (file) => files.has(file),
+      readdirSync(directory) {
+        return [...files.keys()]
+          .filter((file) => path.dirname(file) === directory)
+          .map((file) => ({ name: path.basename(file), isFile: () => true }))
+      },
       readFileSync(file) {
         reads.push(file)
         assert.ok(files.has(file), `must not read a missing module: ${file}`)
@@ -418,6 +427,7 @@ function mergedFixture(
   {
     linux = ['x64', 'arm64'],
     win32 = true,
+    runtimeFiles = [],
     addonImports,
     cudaImports = ['cublas64_13.dll', 'kernel32.dll']
   } = {}
@@ -445,6 +455,9 @@ function mergedFixture(
     const moduleName = 'qvac__diffusion-cpp-win32-x64'
     const backends = path.join(directory, 'win32-x64', moduleName)
     fs.mkdirSync(backends, { recursive: true })
+    for (const name of runtimeFiles) {
+      fs.writeFileSync(path.join(directory, 'win32-x64', name), pe(['kernel32.dll']))
+    }
     fs.writeFileSync(
       path.join(directory, 'win32-x64', `${moduleName}.bare`),
       pe(addonImports ?? ['kernel32.dll'])
@@ -508,9 +521,9 @@ for (const [name, cudaImports, error] of [
   ['missing DLL', null, /CUDA DL backend module missing/],
   ['missing cuBLAS', ['cudart64_13.dll'], /does not import cublas64/],
   [
-    'dynamic CRT',
+    'unpackaged Release CRT',
     ['cudart64_13.dll', 'cublas64_13.dll', 'vcruntime140.dll'],
-    /CUDA module imports vcruntime/
+    /missing packaged runtime vcruntime140.dll/
   ]
 ]) {
   test(`Windows CUDA rejects ${name}`, (t) => {
@@ -533,7 +546,7 @@ for (const env of [{}, { CI: 'true' }, { QVAC_REQUIRE_CUDA_MODULE: 'true' }]) {
   })
 }
 
-test('Windows integration validates present CUDA and rejects dynamic CRT imports', async () => {
+test('Windows integration validates CUDA and requires packaged Release CRT imports', async () => {
   const options = {
     platform: 'win32',
     addon: ['kernel32.dll'],
@@ -544,8 +557,40 @@ test('Windows integration validates present CUDA and rejects dynamic CRT imports
   assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath, result.cudaPath])
   await assert.rejects(
     integrationLayout({ ...options, cuda: [...options.cuda, 'msvcp140.dll'] }),
-    /CUDA module must not import msvcp/
+    /CUDA module runtime DLLs are packaged Release runtimes/
   )
+  await integrationLayout({
+    ...options,
+    cuda: [...options.cuda, 'msvcp140.dll', 'api-ms-win-crt-runtime-l1-1-0.dll'],
+    runtimeFiles: ['MSVCP140.dll']
+  })
+  for (const runtime of ['msvcp140d.dll', 'ucrtbased.dll', 'msvcr120.dll']) {
+    await assert.rejects(
+      integrationLayout({
+        ...options,
+        cuda: [...options.cuda, runtime],
+        runtimeFiles: [runtime]
+      }),
+      /CUDA module runtime DLLs are packaged Release runtimes/
+    )
+  }
+})
+
+test('Windows checker accepts packaged Release CRTs and rejects packaged Debug or legacy CRTs', (t) => {
+  const cudaImports = ['cublas64_13.dll', 'msvcp140.dll', 'vcruntime140.dll', 'ucrtbase.dll']
+  const result = mergedFixture(t, {
+    cudaImports,
+    runtimeFiles: ['MSVCP140.dll', 'vcruntime140.dll']
+  })('win32')
+  assert.equal(result.status, 0, result.output)
+  for (const runtime of ['msvcp140d.dll', 'ucrtbased.dll', 'msvcr120.dll']) {
+    const invalid = mergedFixture(t, {
+      cudaImports: ['cublas64_13.dll', runtime],
+      runtimeFiles: [runtime]
+    })('win32')
+    assert.equal(invalid.status, 1, invalid.output)
+    assert.match(invalid.output, /unsupported Debug\/legacy runtime/)
+  }
 })
 
 for (const cudaImports of [
