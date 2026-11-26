@@ -231,12 +231,19 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         if (entry.listeners === claimed.listeners) tellListeners(entry)
       }
     }
+    function unlisten(list: Iterable<Entry>): void {
+      if (!own) return
+      claimed.listeners.delete(own)
+      for (const entry of list) {
+        if (entry.listeners === claimed.listeners) entry.heard.delete(own)
+      }
+    }
     let released = false
     return async () => {
       if (released) return
       released = true
       if (--claimed.refs > 0 || claims.get(dir) !== claimed) {
-        if (own) claimed.listeners.delete(own)
+        unlisten(entries.values())
         return
       }
       claims.delete(dir)
@@ -251,7 +258,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       try {
         await retireEntries(detached)
       } finally {
-        if (own) claimed.listeners.delete(own)
+        unlisten(detached)
       }
     }
   }
