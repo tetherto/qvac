@@ -37,9 +37,12 @@ export interface SnapshotStore {
     identity: SnapshotIdentity,
     start: (pathFor: (revision: number) => string) => SnapshotWrite
   ): Promise<number>
-  // Deletes the namespace's sidecar and the snapshot it names, unless they
-  // belong to a later namespace of the same name.
+  // Deletes the namespace's sidecar and snapshot files, unless they belong to
+  // a later namespace of the same name.
   remove(namespace: string, createdAt: number): Promise<void>
+  // Deletes the namespace's snapshot files its sidecar doesn't name, such as
+  // the temp file of a write the process was killed in.
+  clean(namespace: string): Promise<void>
 }
 
 export type FileSystem = SnapshotFileSystem
@@ -69,6 +72,22 @@ export function createSnapshotStore(
       throw error
     }
     return JSON.parse(text) as Sidecar
+  }
+
+  // Only `<base>.<revision>.tvec`, TurboVec's `<base>.<revision>.tvec.tmp.*`
+  // and `<base>.json.tmp` are touched: nothing else in the directory is ours.
+  async function sweep(name: string, keep: string | null): Promise<void> {
+    if (!files.readdir) return
+    let names: string[]
+    try {
+      names = await files.readdir(root)
+    } catch {
+      return
+    }
+    const own = new RegExp(`^${name}\\.(\\d+\\.tvec(\\.tmp\\..+)?|json\\.tmp)$`)
+    for (const file of names) {
+      if (file !== keep && own.test(file)) await files.unlink(`${root}/${file}`).catch(() => {})
+    }
   }
 
   return {
@@ -108,12 +127,18 @@ export function createSnapshotStore(
 
       const sidecar: Sidecar = { version: 1, ...identity, revision, file }
       const sidecarPath = `${root}/${name}.json`
-      await files.writeFile(`${sidecarPath}.tmp`, JSON.stringify(sidecar))
-      await files.rename(`${sidecarPath}.tmp`, sidecarPath)
+      try {
+        await files.writeFile(`${sidecarPath}.tmp`, JSON.stringify(sidecar))
+        await files.rename(`${sidecarPath}.tmp`, sidecarPath)
+      } catch (error) {
+        if (previous?.file !== file) await files.unlink(`${root}/${file}`).catch(() => {})
+        throw error
+      }
 
       if (previous && previous.file !== file && !previous.file.includes('/')) {
         await files.unlink(`${root}/${previous.file}`).catch(() => {})
       }
+      await sweep(name, file)
       return revision
     },
 
@@ -124,6 +149,17 @@ export function createSnapshotStore(
       if (sidecar && typeof sidecar.file === 'string' && !sidecar.file.includes('/')) {
         await files.unlink(`${root}/${sidecar.file}`).catch(() => {})
       }
+      await sweep(base(namespace), null)
+    },
+
+    async clean(namespace) {
+      let sidecar: Sidecar | null
+      try {
+        sidecar = await readSidecar(namespace)
+      } catch {
+        return
+      }
+      await sweep(base(namespace), typeof sidecar?.file === 'string' ? sidecar.file : null)
     }
   }
 }

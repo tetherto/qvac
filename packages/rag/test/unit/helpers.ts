@@ -160,6 +160,19 @@ export async function rejectsWithCode(
   }
 }
 
+// A hang fails the test instead of stalling the run.
+export async function settles<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} did not settle`)), 5000)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // The provider `openRag` and other test openers pass, for one test.
 let testProvider: IndexProvider | undefined
 

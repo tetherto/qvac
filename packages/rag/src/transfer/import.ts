@@ -22,9 +22,9 @@ import {
   getNamespace,
   hashContent,
   sameLineage,
-  withTransaction,
   writeGeneration
 } from '../writes.js'
+import { withTransaction } from '../db/transactions.js'
 import { fromHex } from './export.js'
 import {
   FORMAT_VERSION,

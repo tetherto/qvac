@@ -96,6 +96,8 @@ export interface SnapshotFileSystem {
   writeFile(path: string, data: string): Promise<unknown>
   rename(from: string, to: string): Promise<unknown>
   unlink(path: string): Promise<unknown>
+  // Without it, files the sidecar doesn't name are left behind.
+  readdir?(path: string): Promise<string[]>
 }
 
 export interface CreateRagOptions {

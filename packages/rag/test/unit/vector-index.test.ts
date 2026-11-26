@@ -24,6 +24,7 @@ import {
   currentProvider,
   realNativeIndex,
   rejectsWithCode,
+  settles,
   useProvider,
   useScan,
   type RealProvider,
@@ -957,4 +958,87 @@ test('removing a dropped namespace keeps the snapshot of its re-created successo
 
   await store.remove('ns', 2)
   t.is(await store.read(identity(2)), null, 'a removal for its own namespace deletes it')
+})
+
+test('close settles after the host closes the corestore with unsnapshotted commits', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = createRag({ corestore: handle.store, index: { dir: handle.dir } })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+
+  await handle.store.close()
+  await settles(rag.close(), 'close')
+  t.pass('close settled')
+})
+
+test('a failed sidecar write leaves no snapshot file behind', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle, { snapshotEvery: 1 })
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  const sidecar = snapshotFiles(handle.dir).find((file) => file.endsWith('.json')) as string
+  const tvecs = () => snapshotFiles(handle.dir).filter((file) => file.endsWith('.tvec'))
+  const first = tvecs()
+
+  // A directory in its place makes every sidecar write fail.
+  fs.mkdirSync(`${sidecar}.tmp`)
+  for (const id of ['b', 'c', 'd']) {
+    await rag.ingest({ namespace: 'ns', documents: [doc(id, spaceId, [[id, [0, 1, 0]]])] })
+  }
+  t.alike(tvecs(), first, 'only the snapshot the sidecar names is left')
+  fs.rmdirSync(`${sidecar}.tmp`)
+
+  await rag.ingest({ namespace: 'ns', documents: [doc('e', spaceId, [['e', [0, 0, 1]]])] })
+  t.is(tvecs().length, 1, 'a successful snapshot leaves one file')
+  t.is(sidecarRevision(handle.dir), 5, 'and the sidecar names it')
+})
+
+test('snapshot files the sidecar does not name are removed on open, snapshot and drop', async (t) => {
+  await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.close()
+
+  const sidecar = snapshotFiles(handle.dir).find((file) => file.endsWith('.json')) as string
+  const base = sidecar.slice(0, -'.json'.length)
+  const coreDir = base.split('/').slice(0, -1).join('/')
+  const leftovers = [`${base}.7.tvec.tmp.4242.3.c0ffee`, `${base}.9.tvec`, `${base}.json.tmp`]
+  const unrelated = [
+    `${coreDir}/notes.txt`,
+    `${coreDir}/${'0'.repeat(32)}.3.tvec`,
+    `${base}.tvec.bak`
+  ]
+  const named = snapshotFiles(handle.dir)
+  for (const file of [...leftovers, ...unrelated]) fs.writeFileSync(file, 'x')
+
+  const reopened = await openOn(t, handle)
+  t.alike(
+    contents(await search(reopened, spaceId, [1, 0, 0], 1)),
+    ['a'],
+    'the snapshot still loads'
+  )
+  t.alike(
+    snapshotFiles(handle.dir),
+    [...named, ...unrelated].sort(),
+    'open removes leftovers and keeps the named snapshot and other files'
+  )
+
+  fs.writeFileSync(`${base}.8.tvec`, 'x')
+  await reopened.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+  await reopened.close()
+  t.absent(fs.existsSync(`${base}.8.tvec`), 'the next snapshot removes a file it does not name')
+
+  const again = await openOn(t, handle)
+  fs.writeFileSync(`${base}.8.tvec.tmp.1.1.ab`, 'x')
+  await again.dropNamespace({ name: 'ns' })
+  t.alike(snapshotFiles(handle.dir), unrelated.sort(), 'drop removes every file of the namespace')
 })

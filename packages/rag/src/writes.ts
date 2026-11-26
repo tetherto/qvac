@@ -237,21 +237,6 @@ export async function withSnapshot<T>(
   }
 }
 
-// Unflushed writes are dropped when the transaction closes.
-export async function withTransaction<T>(
-  db: HyperDBInstance,
-  operation: (tx: HyperDBTransaction) => Promise<T>
-): Promise<T> {
-  const tx = await db.exclusiveTransaction()
-  try {
-    return await operation(tx)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await tx.close()
-  }
-}
-
 export function sameLineage(
   a: Uint8Array | null | undefined,
   b: Uint8Array | null | undefined
