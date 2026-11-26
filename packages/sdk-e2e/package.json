@@ -7,7 +7,7 @@
   "description": "SDK tests using QVAC test framework",
   "scripts": {
     "prepare:sdk": "node scripts/prepare-sdk.mjs",
-    "prepare:rag": "npm --prefix ../rag install --ignore-scripts && npm --prefix ../rag run build",
+    "prepare:rag": "cd ../rag && npm install --ignore-scripts && npm run build",
     "build": "npm run clean && tsc && npm run emit:resource-table",
     "build:catalog": "tsc -p catalog",
     "emit:catalog-json": "npm run build:catalog && node scripts/emit-catalog-json.mjs",

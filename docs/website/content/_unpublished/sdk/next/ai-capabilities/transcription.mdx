@@ -243,6 +243,10 @@ console.log(stats?.audioDuration, stats?.realTimeFactor);
 **Wire compatibility:** post-0.6 servers emit `source` on every `endOfTurn` frame. SDK parsers still accept the legacy whisper wire shape `{ silenceDurationMs }` (no `source`) and normalize it to `source: "whisper"`. Upgrade client and server together when using parakeet `source: "parakeet"` events — older servers never emit that branch.
 </Callout>
 
+<Callout type="warn">
+**Deadlines:** a runtime [`idleMs` deadline](/sdk/runtime/deadlines#boundaries) stops while a session waits for audio, so a caller that pauses does not fail it. A Whisper session takes each audio chunk as soon as it arrives, so it is waiting for audio for nearly the whole time until the caller ends its input, and `idleMs` does not detect a stall in it: bound a Whisper session with `runMs`.
+</Callout>
+
 ### Parakeet duplex streaming
 
 Pass `parakeetStreamingConfig` to `transcribeStream()` to override per-call streaming knobs (each falls back to its `modelConfig.streaming*` load-time counterpart):

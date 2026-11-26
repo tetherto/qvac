@@ -16,6 +16,7 @@ import {
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
+  DeadlineExceededError as InferenceDeadlineExceededError,
   TranslationFailedError as InferenceTranslationFailedError,
   AudioEncodeFailedError as InferenceAudioEncodeFailedError,
   InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
@@ -31,6 +32,7 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
   TranslationFailedError,
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
@@ -72,6 +74,34 @@ test('reconstructError: RequestRejectedByPolicyError round-trips via name + type
   t.is(r.reason, 'queue full')
   t.is(r.code, 52420)
   t.ok(r instanceof Error, 'reconstructed must still satisfy instanceof Error')
+})
+
+test('reconstructError: DeadlineExceededError round-trips with its boundary and limit', (t) => {
+  const envelope = createErrorResponse(
+    new InferenceDeadlineExceededError('rid-d', 'idle', 60_000, 'completion', 'model-1')
+  )
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof DeadlineExceededError)
+  const r = reconstructed as DeadlineExceededError
+  t.is(r.requestId, 'rid-d')
+  t.is(r.boundary, 'idle')
+  t.is(r.timeoutMs, 60_000)
+  t.is(r.capability, 'completion')
+  t.is(r.modelId, 'model-1')
+  t.is(r.code, 52425)
+})
+
+test('reconstructError: DeadlineExceededError without a capability or model keeps them absent', (t) => {
+  const envelope = createErrorResponse(new InferenceDeadlineExceededError('rid-l', 'load', 300_000))
+
+  const r = reconstructError(envelope) as DeadlineExceededError
+
+  t.ok(r instanceof DeadlineExceededError)
+  t.is(r.boundary, 'load')
+  t.is(r.capability, undefined)
+  t.is(r.modelId, undefined)
 })
 
 test('reconstructError: RequestIdConflictError round-trips', (t) => {

@@ -13,6 +13,8 @@ import {
 import { createAddonLoggerCallback } from '@/logging/addon'
 import { getEngineLogger } from '@/logging'
 import { formatZodError } from '@/utils/zod-error'
+import type { RuntimeCapability } from '@/schemas/capabilities'
+import { collectRuntimeCapabilities, findProvidesProblem } from '@/plugins/capabilities'
 
 const plugins = new Map<string, QvacPlugin>()
 
@@ -104,6 +106,11 @@ export function registerPlugin(plugin: QvacPlugin): void {
 
   if (plugins.has(plugin.modelType)) {
     throw new PluginAlreadyRegisteredError(plugin.modelType)
+  }
+
+  const providesProblem = findProvidesProblem(plugin, plugins.values())
+  if (providesProblem) {
+    throw new PluginDefinitionInvalidError(plugin.modelType, providesProblem)
   }
 
   const pluginProvidingTurboVecIndex = plugin.capabilities?.turbovecIndexProvider
@@ -285,6 +292,11 @@ export function unregisterPlugin(modelType: string): boolean {
 
 export function getAllPlugins(): QvacPlugin[] {
   return Array.from(plugins.values())
+}
+
+/** The capability contracts the registered plugins provide. */
+export function getProvidedCapabilities(): RuntimeCapability[] {
+  return collectRuntimeCapabilities(plugins.values())
 }
 
 export function getTurboVecIndexProvider() {

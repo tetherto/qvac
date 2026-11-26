@@ -1,4 +1,5 @@
 import { requestParent } from '@/schemas/plugin'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import LlmLlamacpp from '@qvac/llm-llamacpp'
 import {
   definePlugin,
@@ -161,6 +162,11 @@ export const llmPlugin = definePlugin({
     return { model }
   },
 
+  provides: [
+    CAPABILITY_CONTRACTS.completion,
+    CAPABILITY_CONTRACTS.fineTuning,
+    CAPABILITY_CONTRACTS.translation
+  ],
   handlers: {
     calcTokens: defineHandler({
       requestSchema: calcTokensRequestSchema,
@@ -271,6 +277,7 @@ export const llmPlugin = definePlugin({
                 }
               } else {
                 bufferedEvents.push(...events)
+                ctx.touch()
               }
             }
             result = await stream.next()
@@ -450,6 +457,7 @@ export const llmPlugin = definePlugin({
               }
             } else {
               batchedEvents.push(...events)
+              ctx.touch()
             }
             result = await stream.next()
           }
