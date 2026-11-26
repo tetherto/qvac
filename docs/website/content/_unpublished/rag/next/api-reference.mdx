@@ -173,7 +173,7 @@ Import a previously exported namespace.
 
 The optional second argument accepts `signal` (abort) and `onProgress({ documents, deletes })`.
 
-Returns `{ documents, skipped, cancelled, revision }`. Each document is `created`, `replaced`, `unchanged`, or skipped as `conflict`, `superseded`, or `deleted` (a delete record in the stream removed it).
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` has `status` `created`, `replaced`, `unchanged`, or `deleted` (a delete record in the stream removed the target's document). Each entry in `skipped` has `reason` `superseded` (the target holds a newer generation), `deleted` (the target already deleted that generation or a later one), or `conflict` (the target holds the same generation with other content).
 
 ---
 
