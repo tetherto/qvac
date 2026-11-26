@@ -64,6 +64,7 @@
         "parallel": false,
         "commands": [
           "pnpm run engine-manifest:check",
+          "pnpm run contract:check-majors",
           "pnpm run check:resource-collectors --host darwin-arm64 --host darwin-x64 --host linux-arm64 --host linux-x64 --host win32-arm64 --host win32-x64"
         ]
       },

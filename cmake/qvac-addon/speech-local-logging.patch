@@ -18,15 +18,7 @@
  const char * whisper_version(void) {
 --- a/engines/parakeet/src/parakeet_log.cpp
 +++ b/engines/parakeet/src/parakeet_log.cpp
-@@ -58,7 +58,6 @@
-     g_idle.notify_all();
- }
- 
--void forward_ggml(ggml_log_level level, const char * text, void *) { dispatch(level, text); }
- 
- }
- 
-@@ -72,7 +71,6 @@
+@@ -73,7 +73,6 @@
              g_sink->callback = cb;
              g_sink->user_data = user_data;
          }

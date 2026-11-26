@@ -51,6 +51,7 @@ export const SDK_SERVER_ERROR_CODES = {
   CONTEXT_OVERFLOW: 52421,
   INVALID_AUDIO_INPUT: 52422,
   AUDIO_ENCODE_FAILED: 52424,
+  DEADLINE_EXCEEDED: 52425,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -124,6 +125,8 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_LEASED: 53622,
   OWNER_ONLY: 53623,
   MODEL_RECONFIGURED: 53624,
+  CAPABILITY_NOT_GRANTED: 53625,
+  SESSION_GRANT_INVALID: 53626,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -359,6 +362,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'AUDIO_ENCODE_FAILED',
     message: (format: string, details?: string) =>
       `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
+  },
+  [SDK_SERVER_ERROR_CODES.DEADLINE_EXCEEDED]: {
+    name: 'DEADLINE_EXCEEDED',
+    message: (requestId: string, boundary: string, timeoutMs: string) =>
+      `Request "${requestId}" exceeded its ${boundary} deadline of ${timeoutMs}ms`
   },
 
   // Vector index (52,850-52,899)
@@ -623,6 +631,16 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'MODEL_RECONFIGURED',
     message: (modelId: string) =>
       `Model "${modelId}" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded`
+  },
+  [SDK_SERVER_ERROR_CODES.CAPABILITY_NOT_GRANTED]: {
+    name: 'CAPABILITY_NOT_GRANTED',
+    message: (operation: string, sessionId: string, required: string) =>
+      `Session "${sessionId}" may not call "${operation}": ${required}`
+  },
+  [SDK_SERVER_ERROR_CODES.SESSION_GRANT_INVALID]: {
+    name: 'SESSION_GRANT_INVALID',
+    message: (sessionId: string, details: string) =>
+      `Session "${sessionId}" was not opened: its grant is invalid: ${details}`
   },
 
   // Security (53,900-53,949)

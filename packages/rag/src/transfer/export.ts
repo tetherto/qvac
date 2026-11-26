@@ -1,3 +1,5 @@
+import qvacCrypto from '#crypto'
+
 import {
   CHUNKS,
   DOCUMENTS,
@@ -8,8 +10,17 @@ import {
   type SpaceRecord,
   type TombstoneRecord
 } from '../db/records.js'
-import { FORMAT_VERSION, FRAME, MAGIC, chunkFrame, jsonFrame } from './frames.js'
+import {
+  FORMAT_VERSION,
+  FORMAT_VERSION_ENCODED,
+  FRAME,
+  MAGIC,
+  chunkFrame,
+  jsonFrame
+} from './frames.js'
+import { encodingOf } from '../writes.js'
 import type { HyperDBReader } from '../db/db-types.js'
+import type { VectorEncoding } from '../types.js'
 
 export interface ExportHeader {
   format: number
@@ -18,6 +29,10 @@ export interface ExportHeader {
   space: Omit<SpaceRecord, 'spaceId'>
   lineageId: string
   revision: number
+  // Set when document and delete frames carry a `check`; streams from 0.11.0 have none.
+  checks?: 1
+  // Format 2 only; format 1 vectors are 'f32'.
+  vectorEncoding?: VectorEncoding
 }
 
 // Yields one frame at a time from `reader`, so memory holds a single chunk;
@@ -31,13 +46,16 @@ export async function* exportFrames(
 ): AsyncGenerator<Uint8Array> {
   const namespace = ns.name
   const { spaceId, ...fingerprint } = space
+  const vectorEncoding = encodingOf(ns)
   const header: ExportHeader = {
-    format: FORMAT_VERSION,
+    format: vectorEncoding === 'f32' ? FORMAT_VERSION : FORMAT_VERSION_ENCODED,
     namespace,
     spaceId,
     space: fingerprint,
     lineageId: toHex(ns.lineageId as Uint8Array),
-    revision: ns.revision
+    revision: ns.revision,
+    checks: 1,
+    ...(vectorEncoding === 'f32' ? {} : { vectorEncoding })
   }
   check()
   yield MAGIC.slice()
@@ -55,7 +73,13 @@ export async function* exportFrames(
         generation: document.generation,
         contentHash: document.contentHash,
         ...(document.metadata ? { metadata: document.metadata } : {}),
-        chunkCount: document.chunkCount
+        chunkCount: document.chunkCount,
+        check: documentCheck(
+          document.documentId,
+          document.generation,
+          document.contentHash,
+          document.chunkCount
+        )
       },
       `document '${document.documentId}'`
     )
@@ -83,7 +107,8 @@ export async function* exportFrames(
   for await (const tombstone of reader.find<TombstoneRecord>(TOMBSTONES, range)) {
     if (wanted && !wanted.has(tombstone.documentId)) continue
     check()
-    yield jsonFrame(FRAME.TOMBSTONE, { id: tombstone.documentId, generation: tombstone.generation })
+    const { documentId: id, generation } = tombstone
+    yield jsonFrame(FRAME.TOMBSTONE, { id, generation, check: deleteCheck(id, generation) })
     tombstones++
   }
 
@@ -104,6 +129,25 @@ async function* selectDocuments(
     const document = await reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
     if (document) yield document
   }
+}
+
+// The content hash leaves out the document ID and generation, and delete
+// records have none, so these catch a corrupt ID or generation.
+export function documentCheck(
+  id: string,
+  generation: number,
+  contentHash: string,
+  chunkCount: number
+): string {
+  return digest(['qvac-rag-document-v1', id, generation, contentHash, chunkCount])
+}
+
+export function deleteCheck(id: string, generation: number): string {
+  return digest(['qvac-rag-delete-v1', id, generation])
+}
+
+function digest(fields: unknown[]): string {
+  return qvacCrypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex') as string
 }
 
 export function toHex(bytes: Uint8Array): string {

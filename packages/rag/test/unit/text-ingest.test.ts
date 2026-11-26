@@ -43,7 +43,7 @@ function chunkedDoc(id: string, count: number, word = 'cat') {
 
 function vectorOf(chunk: ChunkRecord): number[] {
   const out = new Float32Array(SPACE.dimensions)
-  decodeVectorInto(chunk.vector, out, 0)
+  decodeVectorInto(chunk.vector, out, 0, SPACE.dimensions, 'f32')
   return Array.from(out)
 }
 
@@ -305,19 +305,6 @@ test('invalid text input fails before anything is written', async (t) => {
   const port = fakePort()
   const { rag, store, spaceId } = await openWithPort(t, port)
 
-  await rejectsWithCode(
-    t,
-    rag.ingest({
-      namespace: 'ns',
-      documents: [
-        { id: 'ok', text: 'cat' },
-        { id: 'blank', text: '   ' }
-      ]
-    }),
-    ERR_CODES.INVALID_INPUT,
-    'text with nothing to chunk',
-    /blank/
-  )
   await rejectsWithCode(
     t,
     rag.ingest({

@@ -22,6 +22,7 @@ import {
   type CreateModelParams,
   type PluginModelResult
 } from '@/schemas/index'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
 import { audiogenFitRequest } from '@/plugins/builtin/audiogen-ggml/fit'
@@ -61,6 +62,7 @@ export const audioGenPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.audioGeneration, CAPABILITY_CONTRACTS.audioUnderstanding],
   handlers: {
     audioGenStream: defineHandler({
       requestSchema: audioGenStreamRequestSchema,

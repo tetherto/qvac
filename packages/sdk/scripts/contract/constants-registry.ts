@@ -23,7 +23,8 @@ import {
   TTS_PARLER_COREML_COMPUTE_UNITS,
   TTS_LAVASR_COREML_COMPUTE_UNITS,
   TTS_SUPERTONIC_PRECISIONS,
-  VectorIndexStorage
+  VectorIndexStorage,
+  CAPABILITY_CONTRACTS
 } from '@qvac/inference/surface'
 import {
   PLUGIN_LLM,
@@ -131,5 +132,11 @@ export const constantsRegistry = {
   AudioGenTrack: enumFromVocabulary(AUDIOGEN_TRACKS),
   AudioGenOutputFormat: enumFromVocabulary(AUDIOGEN_OUTPUT_FORMATS),
   AudioGenMinimaxCoremlComputeUnits: enumFromVocabulary(AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS),
-  VectorIndexStorage: z.enum(VectorIndexStorage)
+  VectorIndexStorage: z.enum(VectorIndexStorage),
+  // The IDs of the QVAC capability contracts, taken from the table itself. The
+  // `getRuntimeCapabilities` response keeps `id` a plain string, because a
+  // third-party contract has a dotted ID that is not in this list.
+  CapabilityId: enumFromVocabulary(
+    Object.values(CAPABILITY_CONTRACTS).map((contract) => contract.id)
+  )
 } as const

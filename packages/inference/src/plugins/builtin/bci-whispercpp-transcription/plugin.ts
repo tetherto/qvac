@@ -1,3 +1,4 @@
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import BCIWhispercpp, {
   type BCIWhispercppConfig,
   assessFit as bciAssessFit
@@ -65,6 +66,7 @@ export const bciPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.bciTranscription],
   handlers: {
     bciTranscribe: defineHandler({
       requestSchema: bciTranscribeRequestSchema,
