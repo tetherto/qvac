@@ -334,6 +334,33 @@ test('a snapshot write that fails on close is reported', async (t) => {
   )
 })
 
+test('a RAG joining a directory whose snapshots already fail is told', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close(), { order: 1 })
+  const dir = await tmp(t)
+  const cause = new Error('fs sealed')
+  useImporters(t, { fs: () => Promise.reject(cause) })
+
+  const first = createRag({ corestore: store, index: { dir } })
+  await first.ready()
+  t.teardown(() => first.close())
+  const { spaceId } = await first.createNamespace({ name: 'ns', space: SPACE })
+  await first.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await searchIds(first, spaceId)
+
+  const snapshotErrors: SnapshotErrorEvent[] = []
+  const joined = createRag({
+    corestore: store,
+    index: { dir },
+    onSnapshotError: (event) => snapshotErrors.push(event)
+  })
+  await joined.ready()
+  t.teardown(() => joined.close())
+  t.alike(snapshotErrors, [{ namespace: 'ns', error: cause }], 'told on joining')
+  await searchIds(joined, spaceId)
+  t.is(snapshotErrors.length, 1, 'once per run')
+})
+
 test('onSnapshotError is validated, and its throws and rejections are ignored', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())

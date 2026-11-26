@@ -116,6 +116,8 @@ interface Entry {
   snapshotError: { error: unknown } | null
   // The `onSnapshotError` callbacks of the RAGs that claimed the directory.
   listeners: Set<SnapshotErrorListener> | null
+  // The listeners already told about the current `snapshotError`.
+  heard: Set<SnapshotErrorListener>
   // Set once a snapshot was loaded or written.
   snapshotSaved: boolean
   // The last snapshot write; writes share a sidecar temp file, so they chain.
@@ -222,7 +224,13 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     // A Set keeps one entry per function; wrap so two RAGs passing the same
     // callback each keep theirs until their own release.
     const own: SnapshotErrorListener | null = listener ? (event) => listener(event) : null
-    if (own) claimed.listeners.add(own)
+    if (own) {
+      claimed.listeners.add(own)
+      // A RAG joining indexes that are already failing hears it now.
+      for (const entry of entries.values()) {
+        if (entry.listeners === claimed.listeners) tellListeners(entry)
+      }
+    }
     let released = false
     return async () => {
       if (released) return
@@ -288,6 +296,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         failure: null,
         snapshotError: null,
         listeners: config.dir === undefined ? null : (claims.get(config.dir)?.listeners ?? null),
+        heard: new Set(),
         snapshotSaved: false,
         persisting: Promise.resolve(),
         needsPrepare: true
@@ -298,12 +307,18 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     return entry
   }
 
-  // Reported once per run of failures: a write that succeeds re-arms it.
+  // Each listener hears a run of failures once; a write that succeeds re-arms it.
   function snapshotFailed(entry: Entry, error: unknown): void {
-    const first = entry.snapshotError === null
     entry.snapshotError = { error }
-    if (!first || !entry.listeners) return
+    tellListeners(entry)
+  }
+
+  function tellListeners(entry: Entry): void {
+    if (!entry.snapshotError || !entry.listeners) return
+    const { error } = entry.snapshotError
     for (const listener of entry.listeners) {
+      if (entry.heard.has(listener)) continue
+      entry.heard.add(listener)
       try {
         listener({ namespace: entry.namespace, error })
       } catch {}
@@ -624,6 +639,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       (wrote) => {
         if (!wrote) return
         entry.snapshotError = null
+        entry.heard.clear()
         entry.snapshotSaved = true
       },
       (error: unknown) => {
