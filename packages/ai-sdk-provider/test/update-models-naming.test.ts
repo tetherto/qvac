@@ -137,6 +137,44 @@ test('diffusion naming: a tokenizer.json is named after its model', () => {
   )
 })
 
+const qvacToolCallingTags = ['generation', 'tool-calling', 'qwen3.5', 'instruct', 'qvac']
+const qvacToolCallingRepo =
+  'am17an/Qwen3.5-9B-toolcall-preview-GGUF/resolve/02fe3b87e1c2ccd5989edadbde131a33bb3ae601'
+
+test('LLM naming: the qvac tag prefixes the export name with QVAC_', () => {
+  const name = (tags: string[]): string =>
+    generateExportName({
+      path: `${qvacToolCallingRepo}/Qwen3.5-9B-9b-v5s1-imat-Q4_K_M.gguf`,
+      engine: 'llamacpp-completion',
+      name: '',
+      quantization: 'q4_k_m',
+      params: '9B',
+      tags,
+      usedNames: new Set()
+    })
+
+  assert.equal(name(qvacToolCallingTags), 'QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M')
+  assert.equal(
+    name(qvacToolCallingTags.filter((tag) => tag !== 'qvac')),
+    'QWEN3_5_9B_TOOL_CALLING_Q4_K_M'
+  )
+})
+
+test('LLM naming: a qvac-tagged projector keeps MMPROJ_ ahead of QVAC_', () => {
+  assert.equal(
+    generateExportName({
+      path: `${qvacToolCallingRepo}/mmproj-Qwen3.5-9B-F16.gguf`,
+      engine: 'llamacpp-completion',
+      name: '',
+      quantization: 'f16',
+      params: '9B',
+      tags: qvacToolCallingTags,
+      usedNames: new Set()
+    }),
+    'MMPROJ_QVAC_QWEN3_5_9B_TOOL_CALLING_F16'
+  )
+})
+
 test('generated Parakeet names match the SDK and work in managed config', () => {
   const sdkModels = Object.entries(inferenceModels)
     .filter(([, value]) => typeof (value as { src?: unknown } | null)?.src === 'string')

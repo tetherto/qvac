@@ -1,21 +1,34 @@
 import test from 'brittle'
+import crypto from 'bare-crypto'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import { AbortController } from 'bare-abort-controller'
 import { downloadSingleFileFromRegistry } from '@/handlers/load-model/registry-download-utils'
 import { handleDeleteCache } from '@/handlers/delete-cache'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
+import { getCoremlBundle, getCoremlBundleDir } from '@/handlers/load-model/coreml-bundle'
 import { stubClient } from './fixtures/registry-client-stub'
 import {
   getShardedModelCacheDir,
+  getShardPath,
   getSingleFileCachePath,
   getCompanionSetCacheDir
 } from '@/utils/cache/paths'
 import { generateShortHash } from '@/utils/index'
-import { BCI_EMBEDDER, BCI_WINDOWED, QWEN3_600M_INST_Q4, models } from '@/models/registry/index'
 import {
+  BCI_EMBEDDER,
+  BCI_WINDOWED,
+  QWEN3_600M_INST_Q4,
+  models,
+  type RegistryItem
+} from '@/models/registry/index'
+import {
+  cancelTransfer,
+  createRegistryCacheKey,
   createRegistryDownloadKey,
   startOrJoinDownload
 } from '@/handlers/load-model/download-manager'
+import { acquireDownloadLock } from '@/handlers/load-model/download-lock'
 
 type DownloadOptions = { signal?: { aborted: boolean }; clearBlocksOnCancel?: () => boolean }
 
@@ -61,6 +74,67 @@ test('downloadSingleFileFromRegistry: clearCache reaches the client as clearBloc
   t.is(seen, true, 'client reads clearCache at cancel time')
 })
 
+test('downloadModelFromRegistry: a bad cached shard is reported once', async (t) => {
+  const { getEngineLogger } = await import('@/logging/index')
+  const sharded = (models as readonly RegistryItem[]).find((model) => model.shardMetadata?.length)!
+  const firstShard = sharded.shardMetadata![0]!
+  const warnings: string[] = []
+  let capturing = true
+  getEngineLogger().addTransport((level, _namespace, message) => {
+    if (capturing && level === 'warn' && message.includes(firstShard.filename)) {
+      warnings.push(message)
+    }
+  })
+  t.teardown(() => {
+    capturing = false
+  })
+  stubClient(t, {
+    downloadBlob: async () => {
+      throw new Error('registry unreachable')
+    }
+  })
+  const shardPath = getShardPath(generateShortHash(sharded.registryPath), firstShard.filename)
+  fs.mkdirSync(path.dirname(shardPath), { recursive: true })
+  fs.writeFileSync(shardPath, 'not the shard')
+
+  await t.exception(downloadModelFromRegistry(sharded.registryPath, sharded.registrySource))
+  t.is(warnings.length, 1, 'the shard is checked once per load')
+})
+
+test('downloadModelFromRegistry: a cancelled load stops checking cached shards', async (t) => {
+  const { getEngineLogger } = await import('@/logging/index')
+  const sharded = (models as readonly RegistryItem[]).find(
+    (model) => (model.shardMetadata?.length ?? 0) >= 2
+  )!
+  const [firstShard, secondShard] = sharded.shardMetadata!
+  const downloadKey = createRegistryDownloadKey(sharded.registrySource, sharded.registryPath)
+  const checked: string[] = []
+  let capturing = true
+  getEngineLogger().addTransport((level, _namespace, message) => {
+    if (!capturing || level !== 'warn') return
+    for (const shard of [firstShard!, secondShard!]) {
+      if (message.includes(shard.filename)) checked.push(shard.filename)
+    }
+    cancelTransfer(downloadKey)
+  })
+  t.teardown(() => {
+    capturing = false
+  })
+  stubClient(t, {})
+  for (const shard of [firstShard!, secondShard!]) {
+    const shardPath = getShardPath(generateShortHash(sharded.registryPath), shard.filename)
+    fs.mkdirSync(path.dirname(shardPath), { recursive: true })
+    fs.writeFileSync(shardPath, 'not the shard')
+  }
+
+  await t.exception(downloadModelFromRegistry(sharded.registryPath, sharded.registrySource))
+  await using _settled = await acquireDownloadLock(
+    createRegistryCacheKey(sharded.registryPath),
+    new AbortController().signal
+  )
+  t.alike(checked, [firstShard!.filename], 'no shard is checked after the cancel')
+})
+
 test('deleteCache({ modelSrc }): clears the catalogued blob and deletes the cached file', async (t) => {
   const cleared: unknown[] = []
   stubClient(t, {
@@ -102,6 +176,73 @@ test('deleteCache({ modelSrc }): an uncatalogued model resolves its blob from th
 
   t.is(response.success, true)
   t.alike(cleared, [binding], 'cleared the blob the registry reported')
+})
+
+// A compiled Core ML bundle the catalog does not list, as the live registry publishes it.
+const BUNDLE_PATH = 'test/coreml/2026-11-24/unet.mlmodelc'
+const BUNDLE_COMPONENTS = ['coremldata.bin', 'model.mil', 'weights/weight.bin']
+const componentBytes = (component: string) => `bytes of ${component}`
+const bundleListing = BUNDLE_COMPONENTS.map((component, index) => ({
+  path: `${BUNDLE_PATH}/${component}`,
+  source: 's3',
+  blobBinding: {
+    ...binding,
+    blockOffset: index,
+    byteLength: componentBytes(component).length,
+    sha256: crypto.createHash('sha-256').update(componentBytes(component)).digest('hex')
+  }
+}))
+const blockOffsets = (blobs: unknown[]) =>
+  blobs.map((blob) => (blob as { blockOffset: number }).blockOffset).sort((a, b) => a - b)
+
+test('deleteCache({ modelSrc }): a downloaded Core ML bundle leaves no files, listing or blocks', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    findModels: async () => bundleListing,
+    getModel: async () => null,
+    downloadBlob: async (blob: { blockOffset: number }, opts: { outputFile: string }) => {
+      fs.writeFileSync(opts.outputFile, componentBytes(BUNDLE_COMPONENTS[blob.blockOffset]!))
+    },
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+
+  const bundleDir = await downloadModelFromRegistry(BUNDLE_PATH, 's3')
+  t.is(bundleDir, getCoremlBundleDir(getCoremlBundle('s3', BUNDLE_PATH)!))
+  t.ok(fs.existsSync(path.join(bundleDir, 'weights', 'weight.bin')), 'the bundle was staged')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+
+  t.is(response.success, true)
+  t.absent(fs.existsSync(path.dirname(bundleDir)), 'the bundle and its saved listing are gone')
+  t.alike(blockOffsets(cleared), [0, 1, 2], 'cleared every component block')
+})
+
+test('deleteCache({ modelSrc }): an unfinished Core ML bundle download clears the blocks the registry lists', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    findModels: async () => bundleListing,
+    getModel: async () => null,
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+  const bundleDir = getCoremlBundleDir(getCoremlBundle('s3', BUNDLE_PATH)!)
+  fs.mkdirSync(bundleDir, { recursive: true })
+  fs.writeFileSync(path.join(bundleDir, 'coremldata.bin'), 'partial')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+
+  t.is(response.success, true)
+  t.absent(fs.existsSync(path.dirname(bundleDir)), 'the partly staged bundle is gone')
+  t.alike(blockOffsets(cleared), [0, 1, 2], 'cleared the blocks kept for resume')
 })
 
 test('deleteCache({ modelSrc }): rejects a source that is not registry://', async (t) => {
@@ -249,6 +390,32 @@ test('deleteCache({ modelSrc }): refused while another source downloads the same
 
   finish()
   await download.promise
+})
+
+test('deleteCache({ modelSrc }): refused while a Core ML bundle downloads under its trailing-slash spelling', async (t) => {
+  stubClient(t, {})
+  let finish!: () => void
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey('s3', `${BUNDLE_PATH}/`),
+    () => new Promise<string>((resolve) => (finish = () => resolve('path')))
+  )
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${BUNDLE_PATH}`
+  })
+  t.is(response.success, false)
+  t.ok(response.error?.includes('downloading'), 'reports the active download')
+
+  const joined = startOrJoinDownload(
+    createRegistryDownloadKey('s3', BUNDLE_PATH),
+    async () => 'second'
+  )
+  t.ok(joined.joined, 'the other spelling joins the download instead of writing the same files')
+
+  finish()
+  await download.promise
+  await joined.promise
 })
 
 test('deleteCache({ modelSrc }): a model sharing a companion file cannot download during deletion', async (t) => {

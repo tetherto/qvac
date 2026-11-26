@@ -139,6 +139,7 @@ try {
   // npm install alone won't notice the manifest swap above; see reconcile-e2e-inference.mjs.
   resetInstallState()
   run('npm', ['run', 'clean:sdk-snapshot'], E2E_DIR)
+  run('npm', ['run', 'prepare:rag'], E2E_DIR)
   run(
     'npm',
     [

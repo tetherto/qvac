@@ -46,7 +46,9 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
       { name: 'indexStorage', type: 'string', required: false },
       // 16 random bytes naming this namespace's history; generations are only
       // comparable within one lineage. Set on the first write when absent.
-      { name: 'lineageId', type: 'buffer', required: false }
+      { name: 'lineageId', type: 'buffer', required: false },
+      // 'f32' or 'f16'. Absent on namespaces created before it existed; read as 'f32'.
+      { name: 'vectorEncoding', type: 'string', required: false }
     ]
   })
 

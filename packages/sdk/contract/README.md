@@ -12,7 +12,11 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
   `x-enum-varnames` so codegen preserves the original key names (plain JSON
   Schema `enum:` only carries values). Requests use the schema input shape,
   responses the output shape; runtime-only refinements and transforms stay
-  server-side. See `.cursor/rules/sdk/public-constants-contract.mdc` for
+  server-side. The output shape closes every object with
+  `additionalProperties: false`; `x-strict: true` marks the objects whose Zod
+  schema is `.strict()`, which the JS client rejects unknown fields in. A
+  client generator should reject unknown response fields only in those
+  objects, so a new field in any other response does not break it. See `.cursor/rules/sdk/public-constants-contract.mdc` for
   what must be registered to reach `schema.json` at all.
 - `manifest.json` — every RPC method with its call shape (`request-reply`,
   `server-stream`, `duplex`) and pointers into `schema.json`.

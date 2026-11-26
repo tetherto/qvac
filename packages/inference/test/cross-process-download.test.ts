@@ -21,7 +21,7 @@ import {
   downloadModelFromHyperdrive
 } from '@/handlers/load-model/hyperdrive'
 import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
-import { validateCachedFile } from '@/handlers/load-model/registry-download-utils'
+import { validateCachedFile } from '@/handlers/load-model/cached-file'
 import {
   cancelTransfer,
   createHttpDownloadKey,

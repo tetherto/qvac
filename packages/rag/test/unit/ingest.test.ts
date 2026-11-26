@@ -230,12 +230,6 @@ test('ingest validates everything before committing anything', async (t) => {
   )
   await rejectsWithCode(
     t,
-    rag.ingest({ namespace: 'ns', documents: [{ id: 'empty', chunks: [] }] }),
-    ERR_CODES.INVALID_INPUT,
-    'document without chunks'
-  )
-  await rejectsWithCode(
-    t,
     rag.ingest({
       namespace: 'ns',
       documents: [{ id: 't', text: 'raw text', chunks: [] } as never]

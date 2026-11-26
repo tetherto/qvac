@@ -1,4 +1,5 @@
 import { requestParent } from '@/schemas/plugin'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import ImageClassifier, { assessFit as classificationAssessFit } from '@qvac/classification-ggml'
 import {
   definePlugin,
@@ -62,6 +63,7 @@ export const classificationPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.classification],
   handlers: {
     classify: defineHandler({
       requestSchema: classifyRequestSchema,

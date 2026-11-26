@@ -3,6 +3,7 @@ import Buffer from 'bare-buffer'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { parakeetPlugin } from '@/plugins/builtin/parakeet-transcription/plugin'
 import { ModelType, type TranscribeResponse, type TranscribeStreamResponse } from '@/schemas/index'
+import type { ParakeetStreamingRunConfig } from '@/schemas/transcription'
 
 // What the parakeet output serializer (`transcriptToJsObject`) sends for every
 // segment. Timings are seconds; the SDK reports milliseconds.
@@ -16,9 +17,14 @@ const NATIVE_SEGMENT = {
   startsWord: true
 }
 
-function createParakeetModel(outputs: unknown[]) {
+interface ModelOptions {
+  stats?: Record<string, number>
+  onStreaming?: (options?: ParakeetStreamingRunConfig) => void
+}
+
+function createParakeetModel(outputs: unknown[], options: ModelOptions = {}) {
   const response = () => ({
-    stats: {},
+    stats: options.stats ?? {},
     async *iterate() {
       for (const output of outputs) yield output
     },
@@ -29,15 +35,21 @@ function createParakeetModel(outputs: unknown[]) {
     async run() {
       return response()
     },
-    async runStreaming() {
+    async runStreaming(_input: AsyncIterable<Buffer>, runOptions?: ParakeetStreamingRunConfig) {
+      options.onStreaming?.(runOptions)
       return response()
     }
   } as unknown as AnyModel
 }
 
-function register(t: { teardown(fn: () => void): void }, modelId: string, outputs: unknown[]) {
+function register(
+  t: { teardown(fn: () => void): void },
+  modelId: string,
+  outputs: unknown[],
+  options?: ModelOptions
+) {
   registerModel(modelId, {
-    model: createParakeetModel(outputs),
+    model: createParakeetModel(outputs, options),
     path: '',
     config: {},
     modelType: ModelType.parakeetTranscription
@@ -57,6 +69,82 @@ function emptyInput(): AsyncIterable<Buffer> {
 
 // A tiny valid raw PCM payload; the fake model ignores its content.
 const AUDIO = { type: 'base64' as const, value: Buffer.alloc(32).toString('base64') }
+
+test('parakeet handlers preserve Core ML fallback statistics', async (t) => {
+  const modelId = 'parakeet-coreml-fallback'
+  register(t, modelId, [NATIVE_SEGMENT], {
+    stats: { encoderOnCoreml: 1, encoderUsedCoreml: 0 }
+  })
+
+  const batch = await collect(
+    parakeetPlugin.handlers.transcribe.handler({
+      type: 'transcribe',
+      modelId,
+      audioChunk: AUDIO
+    }) as unknown as AsyncIterable<TranscribeResponse>
+  )
+  const streaming = await collect(
+    parakeetPlugin.handlers.transcribeStream.handler(
+      { type: 'transcribeStream', modelId },
+      emptyInput()
+    ) as unknown as AsyncIterable<TranscribeStreamResponse>
+  )
+
+  for (const frames of [batch, streaming]) {
+    t.is(frames.at(-1)?.done, true)
+    t.is(frames.at(-1)?.stats?.encoderOnCoreml, 1)
+    t.is(frames.at(-1)?.stats?.encoderUsedCoreml, 0)
+  }
+})
+
+test('parakeet duplex handler leaves the decode window to the addon unless overridden', async (t) => {
+  const modelId = 'parakeet-native-window'
+  const options: (ParakeetStreamingRunConfig | undefined)[] = []
+  register(t, modelId, [NATIVE_SEGMENT], {
+    onStreaming: (config) => {
+      options.push(config)
+    }
+  })
+
+  for (const config of [undefined, { chunkMs: 30000 }, { chunkMs: 320 }]) {
+    await collect(
+      parakeetPlugin.handlers.transcribeStream.handler(
+        { type: 'transcribeStream', modelId, parakeetStreamingConfig: config },
+        emptyInput()
+      ) as unknown as AsyncIterable<TranscribeStreamResponse>
+    )
+  }
+
+  t.alike(
+    options,
+    [undefined, { chunkMs: 30000 }, { chunkMs: 320 }],
+    'native model defaults and cache-aware model cadences are preserved'
+  )
+})
+
+test('parakeet duplex handler propagates native window rejection without a success frame', async (t) => {
+  const modelId = 'parakeet-unsupported-window'
+  const nativeError = new Error('Offline TDT push streams require at least 30000 ms')
+  register(t, modelId, [], {
+    onStreaming: (config) => {
+      t.is(config?.chunkMs, 1000, 'the native engine receives the explicit window')
+      throw nativeError
+    }
+  })
+
+  const frames: TranscribeStreamResponse[] = []
+  try {
+    const stream = parakeetPlugin.handlers.transcribeStream.handler(
+      { type: 'transcribeStream', modelId, parakeetStreamingConfig: { chunkMs: 1000 } },
+      emptyInput()
+    ) as unknown as AsyncIterable<TranscribeStreamResponse>
+    for await (const frame of stream) frames.push(frame)
+    t.fail('the stream must reject')
+  } catch (error) {
+    t.is(error, nativeError, 'the native failure survives the handler')
+  }
+  t.alike(frames, [], 'no truncated transcript or successful terminal frame is emitted')
+})
 
 test('parakeet unary handler returns segment frames for metadata: true', async (t) => {
   const modelId = 'parakeet-metadata-unary'

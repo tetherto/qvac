@@ -8,6 +8,7 @@ export {
   ensureAddonLoggerReady,
   getPlugin,
   getPluginHandler,
+  getProvidedCapabilities,
   getTurboVecIndexProvider,
   hasPlugin,
   getAllPlugins,

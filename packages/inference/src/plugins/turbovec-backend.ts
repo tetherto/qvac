@@ -1,5 +1,11 @@
-import type { TurboVecIndex, TurboVecIndexSearchResult } from '@/plugins/turbovec-index'
+import type { AbortSignal } from 'bare-abort-controller'
+import type {
+  TurboVecCallOptions,
+  TurboVecIndex,
+  TurboVecIndexSearchResult
+} from '@/plugins/turbovec-index'
 import { getTurboVecIndexProvider } from '@/plugins/registry'
+import { untilSettledOrAborted } from '@/runtime/model-work-lock'
 import {
   VECTOR_ID_RESERVED,
   VectorIndexStorage,
@@ -51,6 +57,10 @@ function toHitRows(result: TurboVecIndexSearchResult): VectorIndexHit[][] {
   return rows
 }
 
+function callOptions(signal: AbortSignal | undefined): TurboVecCallOptions {
+  return signal ? { signal } : {}
+}
+
 // The native index exposes these beyond the TurboVecIndex interface, which
 // does not declare them; a provider that predates them leaves them out.
 export type IndexWithControls = TurboVecIndex & {
@@ -61,7 +71,8 @@ export type IndexWithControls = TurboVecIndex & {
   searchIvf?: (
     queries: Float32Array,
     k: number,
-    nProbe: number
+    nProbe: number,
+    options?: TurboVecCallOptions
   ) => TurboVecIndexSearchResult | Promise<TurboVecIndexSearchResult>
 }
 
@@ -77,11 +88,11 @@ function openIndex(
   // after a change; running it eagerly keeps that cost out of the first
   // query's latency.
   let needsPrepare = true
-  async function prepareOnce() {
+  async function prepareOnce(signal: AbortSignal | undefined) {
     if (needsPrepare) {
       needsPrepare = false
       try {
-        await index.prepare()
+        await index.prepare(callOptions(signal))
       } catch (error) {
         needsPrepare = true
         throw error
@@ -113,9 +124,17 @@ function openIndex(
   // IVF flags around its native await, and an interleaved add or remove would
   // leave IVF marked built over lists the native index has dropped.
   let tail: Promise<unknown> = Promise.resolve()
-  function exclusive<T>(run: () => Promise<T>): Promise<T> {
-    const result = tail.then(run, run)
-    tail = result.catch(() => {})
+  function exclusive<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
+    const previous = tail
+    const waited = signal ? untilSettledOrAborted(previous, signal) : previous
+    const result = waited.then(() => {
+      signal?.throwIfAborted()
+      return run()
+    })
+    // An aborted call settles before the calls ahead of it, so the next call
+    // still waits for those. Resolving to undefined keeps each tail from
+    // holding the one before it.
+    tail = Promise.all([previous, result.catch(() => {})]).then(() => {})
     return result
   }
   return {
@@ -135,8 +154,8 @@ function openIndex(
     get ivf() {
       return ivfState()
     },
-    setStagedSearch: (enabled) =>
-      exclusive(async () => {
+    setStagedSearch: (enabled, signal) =>
+      exclusive(signal, async () => {
         // Without the getter the setting could not be confirmed, so a provider
         // needs both halves of the control.
         if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
@@ -145,8 +164,8 @@ function openIndex(
         await index.setStagedSearch(enabled)
         return index.stagedSearch
       }),
-    setIvf: (settings) =>
-      exclusive(async () => {
+    setIvf: (settings, signal) =>
+      exclusive(signal, async () => {
         if (!index.buildIvf || !index.searchIvf) {
           throw new Error(IVF_UNSUPPORTED_MESSAGE)
         }
@@ -168,14 +187,14 @@ function openIndex(
         ivfSettings = settings
         return { ...ivfSettings, built: ivfBuilt }
       }),
-    add: (vectors, ids) =>
-      exclusive(async () => {
+    add: (vectors, ids, signal) =>
+      exclusive(signal, async () => {
         markChanged()
         await index.addWithIds(vectors, ids)
         return state()
       }),
-    search: (queries, k, nProbe) =>
-      exclusive(async () => {
+    search: (queries, k, nProbe, signal) =>
+      exclusive(signal, async () => {
         if (nProbe !== undefined && ivfSettings === null) {
           throw new Error(
             ivfSupported
@@ -183,20 +202,22 @@ function openIndex(
               : IVF_UNSUPPORTED_MESSAGE
           )
         }
-        await prepareOnce()
+        await prepareOnce(signal)
         if (ivfSettings && ivfBuilt && index.searchIvf) {
-          return toHitRows(await index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe))
+          return toHitRows(
+            await index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe, callOptions(signal))
+          )
         }
-        return toHitRows(await index.search(queries, k))
+        return toHitRows(await index.search(queries, k, callOptions(signal)))
       }),
-    contains: (ids) =>
-      exclusive(async () => {
+    contains: (ids, signal) =>
+      exclusive(signal, async () => {
         const present: boolean[] = []
-        for (const id of ids) present.push(await index.contains(id))
+        for (const id of ids) present.push(await index.contains(id, callOptions(signal)))
         return present
       }),
-    remove: (ids, removed) =>
-      exclusive(async () => {
+    remove: (ids, removed, signal) =>
+      exclusive(signal, async () => {
         for (const id of ids) {
           const present = await index.remove(id)
           if (present) markChanged()
@@ -204,8 +225,8 @@ function openIndex(
         }
         return state()
       }),
-    write: (path) => exclusive(async () => await index.write(path)),
-    dispose: () => exclusive(async () => await index.dispose())
+    write: (path, signal) => exclusive(signal, async () => await index.write(path)),
+    dispose: () => exclusive(undefined, async () => await index.dispose())
   }
 }
 
