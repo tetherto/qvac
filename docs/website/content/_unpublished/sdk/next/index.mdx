@@ -8,12 +8,13 @@ schemaType: TechArticle
 ---
 
 <Callout type="warn">
-  **RAG moved to its own package.** The built-in RAG functions (`ragIngest`,
-  `ragSearch`, etc.) are removed in this version. Use
-  [`@qvac/rag`](/rag) for the managed document store, or build retrieval from
+  **RAG moved to its own package.** The `rag*` functions (`ragIngest`,
+  `ragSearch`, and the rest) are removed in this version — the managed document
+  store now lives in [`@qvac/rag`](/rag). Embeddings and the vector index stay
+  in the SDK, so you can still build retrieval from
   [`embed()`](/sdk/reference/api#embed) and
-  [`createVectorIndex()`](/sdk/reference/api#createvectorindex). See the
-  [migration guide](/rag/migration).
+  [`createVectorIndex()`](/sdk/reference/api#createvectorindex). See [RAG](/sdk/ai-capabilities/rag)
+  for that path, or the [migration guide](/rag/migration) to move off `rag*`.
 </Callout>
 
 ## Overview

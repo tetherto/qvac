@@ -12,8 +12,10 @@ schemaType: HowTo
 <Callout type="info">
   `@qvac/rag` is JavaScript and TypeScript only. For Python and Kotlin, use the
   [CLI vector stores](/cli/http-server#vector-stores) or build retrieval from the
-  SDK ([TurboVec index](/rag/turbovec-index), [external vector
-  DB](/rag/external-vector-db)).
+  SDK — see the [TurboVec
+  index](/sdk/ai-capabilities/rag#turbovec-index-with-your-own-document-store)
+  and [external vector DB](/sdk/ai-capabilities/rag#external-vector-db)
+  examples.
 </Callout>
 
 ## Ingest and search
@@ -54,7 +56,7 @@ const corestore = new Corestore('./rag-store')
 const rag = createRag({ corestore, embeddings: port })
 await rag.ready()
 
-const { spaceId } = await rag.createNamespace({ name: 'articles', space: port.space })
+await rag.createNamespace({ name: 'articles', space: port.space })
 
 console.log('Ingesting documents...')
 await rag.ingest({

@@ -8,13 +8,17 @@ schemaType: TechArticle
 
 ## Overview
 
-`@qvac/rag` is an npm package for retrieval-augmented generation on QVAC. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you provide, embeds and chunks them through a port you supply, and retrieves the most relevant chunks by vector similarity. It runs on Bare and Node.js, and does not depend on `@qvac/sdk` or `@qvac/inference`.
+`@qvac/rag` is an npm package for retrieval-augmented generation on QVAC. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you provide, chunks them, embeds them through a port you supply, and retrieves the most relevant chunks by vector similarity. It runs on Bare and Node.js, and does not depend on `@qvac/sdk` or `@qvac/inference`.
+
+Building retrieval from the SDK alone — [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for nearest-neighbour search — leaves the document store, the chunking, and the query loop to you. `@qvac/rag` supplies all three, so `ingest()` and `search()` replace that plumbing. See [RAG with the SDK](/sdk/ai-capabilities/rag) for the build-it-yourself path.
 
 ## Key features
 
+What the package adds on top of embedding and indexing vectors yourself:
+
 - **Namespace isolation** — organise documents into namespaces, each tied to one embedding space.
 - **Automatic chunking** — split text on ingest, or supply pre-chunked content.
-- **TurboVec indexing** — optional on-device approximate nearest-neighbour index for fast search on Bare (pass `index.dir` to `createRag()`). On Node, every search scans all chunks.
+- **TurboVec indexing** — optional on-device approximate nearest-neighbour index for fast search on Bare, enabled by installing `@qvac/turbovec-ggml`. Pass `index.dir` to persist snapshots across restarts. On Node, every search scans all chunks.
 - **Scoped search** — restrict queries to a subset of documents within a namespace.
 - **Export / import** — move a namespace between stores.
 
@@ -23,8 +27,8 @@ schemaType: TechArticle
   [CLI vector stores](/cli/http-server#vector-stores) or build retrieval from the
   SDK's [`embed()`](/sdk/reference/api#embed) and
   [`createVectorIndex()`](/sdk/reference/api#createvectorindex). See the
-  [TurboVec index](/rag/turbovec-index) and [external vector
-  DB](/rag/external-vector-db) examples.
+  [TurboVec index](/sdk/ai-capabilities/rag#turbovec-index-with-your-own-document-store)
+  and [external vector DB](/sdk/ai-capabilities/rag#external-vector-db) examples.
 </Callout>
 
 ## Usage

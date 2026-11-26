@@ -62,7 +62,7 @@ Each document is one of:
 
 - **Text** `{ id, text, metadata? }` — chunked and embedded via the port.
 - **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }` — segmented by you, embedded via the port.
-- **Precomputed** `{ id, metadata?, chunks: [{ content, embedding, spaceId }] }` — no port needed.
+- **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }` — no port needed. `spaceId` can sit on the document or on each chunk.
 
 The optional second argument accepts `onProgress({ stage, done, total })` and `signal` (abort).
 
@@ -173,7 +173,7 @@ Import a previously exported namespace.
 
 The optional second argument accepts `signal` (abort) and `onProgress({ documents, deletes })`.
 
-Returns `{ documents, skipped, cancelled, revision }`. Each document is `created`, `replaced`, `unchanged`, or skipped as `conflict`, `superseded`, or `deleted`.
+Returns `{ documents, skipped, cancelled, revision }`. Each document is `created`, `replaced`, `unchanged`, or skipped as `conflict`, `superseded`, or `deleted` (a delete record in the stream removed it).
 
 ---
 
@@ -211,6 +211,18 @@ The returned handle exposes `search`, `readDocument`, and `listDocuments`, each 
 ## `rag.close()`
 
 Close the RAG instance. Waits for calls already in progress, then closes the underlying database but leaves the Corestore open. Close the Corestore separately after.
+
+---
+
+## `computeSpaceId(space)`
+
+Return the deterministic `spaceId` hash for an `EmbeddingSpace` without touching storage.
+
+| Param | Type | Description |
+|---|---|---|
+| `space` | `EmbeddingSpace` | The space to hash. |
+
+Returns a `string` — the same id that `createNamespace` and other methods derive internally.
 
 ---
 

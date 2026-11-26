@@ -1,0 +1,126 @@
+---
+title: RAG
+sidebarTitle: Overview
+icon: ScanSearch
+description: Embedded ingestion and retrieval for QVAC applications, powered by HyperDB and TurboVec.
+schemaType: TechArticle
+---
+
+## Overview
+
+`@qvac/rag` is an npm package for retrieval-augmented generation on QVAC. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you provide, chunks them, embeds them through a port you supply, and retrieves the most relevant chunks by vector similarity. It runs on Bare and Node.js, and does not depend on `@qvac/sdk` or `@qvac/inference`.
+
+Building retrieval from the SDK alone — [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for nearest-neighbour search — leaves the document store, the chunking, and the query loop to you. `@qvac/rag` supplies all three, so `ingest()` and `search()` replace that plumbing. See [RAG with the SDK](/sdk/ai-capabilities/rag) for the build-it-yourself path.
+
+## Key features
+
+What the package adds on top of embedding and indexing vectors yourself:
+
+- **Namespace isolation** — organise documents into namespaces, each tied to one embedding space.
+- **Automatic chunking** — split text on ingest, or supply pre-chunked content.
+- **TurboVec indexing** — optional on-device approximate nearest-neighbour index for fast search on Bare, enabled by installing `@qvac/turbovec-ggml`. Pass `index.dir` to persist snapshots across restarts. On Node, every search scans all chunks.
+- **Scoped search** — restrict queries to a subset of documents within a namespace.
+- **Export / import** — move a namespace between stores.
+
+<Callout type="info">
+  `@qvac/rag` is JavaScript and TypeScript only. For Python and Kotlin, use the
+  [CLI vector stores](/cli/http-server#vector-stores) or build retrieval from the
+  SDK's [`embed()`](/sdk/reference/api#embed) and
+  [`createVectorIndex()`](/sdk/reference/api#createvectorindex). See the
+  [TurboVec index](/sdk/ai-capabilities/rag#turbovec-index-with-your-own-document-store)
+  and [external vector DB](/sdk/ai-capabilities/rag#external-vector-db) examples.
+</Callout>
+
+## Usage
+
+<Steps>
+<Step>
+Install `@qvac/rag`, a Corestore, and the SDK (for the embeddings port in this walkthrough):
+
+```bash
+npm install @qvac/rag corestore @qvac/sdk
+```
+
+On Bare, also install `@qvac/turbovec-ggml` for indexed search.
+
+</Step>
+
+<Step>
+Create a RAG instance with an embeddings port. The port wraps any embedding function — the SDK's `embed()`, a remote API, or your own code:
+
+```typescript
+import Corestore from 'corestore'
+import { createRag, type EmbeddingsPort } from '@qvac/rag'
+import { embed, embedBatch, loadModel, unloadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16 })
+
+const port: EmbeddingsPort = {
+  space: {
+    model: 'gte-large-fp16',
+    revision: '1',
+    dimensions: 1024,
+    metric: 'cosine',
+    normalized: false,
+    documentEncoding: '',
+    queryEncoding: '',
+    preprocessing: 'none'
+  },
+  async embedDocuments (texts) {
+    const { embedding } = await embedBatch({ modelId, inputs: texts })
+    return Float32Array.from(embedding.flat())
+  },
+  async embedQuery (text) {
+    const { embedding } = await embed({ modelId, text })
+    return Float32Array.from(embedding)
+  }
+}
+
+const corestore = new Corestore('./rag-store')
+const rag = createRag({ corestore, embeddings: port })
+await rag.ready()
+```
+
+</Step>
+
+<Step>
+Create a namespace, ingest documents, and search:
+
+```typescript
+await rag.createNamespace({ name: 'docs', space: port.space })
+
+await rag.ingest({
+  namespace: 'docs',
+  documents: [
+    { id: 'intro', text: 'QVAC runs AI models locally on user devices.' },
+    { id: 'rag', text: 'RAG embeds documents and retrieves relevant chunks.' }
+  ]
+})
+
+const hits = await rag.search({
+  scope: { namespace: 'docs' },
+  query: 'local AI',
+  k: 5
+})
+
+console.log(hits.map(h => h.content))
+```
+
+</Step>
+
+<Step>
+Close the store and unload the model when done:
+
+```typescript
+await rag.close()
+await corestore.close()
+await unloadModel({ modelId })
+```
+
+</Step>
+</Steps>
+
+<Callout type="success">
+  Without a port, ingest precomputed vectors and search with `{ vector, spaceId }`
+  instead of `{ query }`. See the [API reference](/rag/api-reference) for details.
+</Callout>
