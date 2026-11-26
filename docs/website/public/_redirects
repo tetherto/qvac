@@ -496,6 +496,10 @@
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
 
+# RAG migration moved from /resources/ to /rag/ collection
+/resources/rag-migration/    /rag/migration/    301
+/resources/rag-migration.md  /rag/migration.md  301
+
 # ======================================================================
 # CATCH-ALL 404 — MUST BE THE LAST RULE
 # ----------------------------------------------------------------------

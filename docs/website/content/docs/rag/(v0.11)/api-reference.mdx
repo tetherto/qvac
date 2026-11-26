@@ -226,6 +226,8 @@ interface EmbeddingsPort {
 }
 ```
 
+`embedDocuments` returns a single flat `Float32Array` of `texts.length * space.dimensions` values — one complete vector per input text, in order.
+
 `space` identifies the vectors. A namespace only accepts vectors from its space. Change `space` when the vectors change (model, revision, pooling).
 
 ---
