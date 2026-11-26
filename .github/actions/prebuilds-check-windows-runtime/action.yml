@@ -1,5 +1,5 @@
 name: Check Windows runtime
-description: Require packaged Release MSVC runtimes and reject Debug or legacy runtime imports.
+description: Fail when a Windows prebuild imports the dynamic C/C++ runtime instead of linking the static one.
 
 inputs:
   workdir:
