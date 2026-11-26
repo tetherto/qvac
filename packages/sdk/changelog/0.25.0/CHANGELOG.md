@@ -36,10 +36,8 @@ Release Date: 2026-11-25
 - Prevent Parakeet TDT word loss. (see PR [#5845](https://github.com/tetherto/qvac/pull/5845)) - See [breaking changes](./breaking.md)
 - Remove stale SDK speech preflight override. (see PR [#5856](https://github.com/tetherto/qvac/pull/5856))
 - Write the SDK e2e MQTT certificates to a private temp directory. (see PR [#5910](https://github.com/tetherto/qvac/pull/5910))
-- Keep KV cache folders when cache_share_across_keys is turned on. (see PR [#5919](https://github.com/tetherto/qvac/pull/5919))
 - Check base64 fields in one pass instead of a per-quad pattern. (see PR [#5939](https://github.com/tetherto/qvac/pull/5939))
 - Pass image-max-megapixels to llm-llamacpp's fitter. (see PR [#5940](https://github.com/tetherto/qvac/pull/5940))
-- Keep KV cache folders for loads that send verbosity. (see PR [#5950](https://github.com/tetherto/qvac/pull/5950))
 - Show why qvac serve re-downloads a cached model. (see PR [#5959](https://github.com/tetherto/qvac/pull/5959))
 - Drop a KV cache file the addon cannot load. (see PR [#5968](https://github.com/tetherto/qvac/pull/5968))
 
@@ -65,7 +63,6 @@ Release Date: 2026-11-25
 
 - Drop the Kotlin e2e runner unit tests and stop adding tests for test code. (see PR [#5749](https://github.com/tetherto/qvac/pull/5749))
 - Fix the lint and bare-major failures on main. (see PR [#5794](https://github.com/tetherto/qvac/pull/5794))
-- Move inference to bare-https 4. (see PR [#5859](https://github.com/tetherto/qvac/pull/5859))
 - Move the SDK onto the fabric 0.33 addon set. (see PR [#5942](https://github.com/tetherto/qvac/pull/5942)) - See [breaking changes](./breaking.md)
 
 ## ⚙️ Infrastructure

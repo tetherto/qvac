@@ -33,10 +33,8 @@ Release Date: 2026-11-25
 - Keep clearStorage on a local sharded model to its own files. (see PR [#5594](https://github.com/tetherto/qvac/pull/5594))
 - Keep sharded HTTP downloads inside the model cache, with e2e coverage. (see PR [#5811](https://github.com/tetherto/qvac/pull/5811))
 - Prevent Parakeet TDT word loss. (see PR [#5845](https://github.com/tetherto/qvac/pull/5845)) - See [breaking changes](./breaking.md)
-- Keep KV cache folders when cache_share_across_keys is turned on. (see PR [#5919](https://github.com/tetherto/qvac/pull/5919))
 - Check base64 fields in one pass instead of a per-quad pattern. (see PR [#5939](https://github.com/tetherto/qvac/pull/5939))
 - Pass image-max-megapixels to llm-llamacpp's fitter. (see PR [#5940](https://github.com/tetherto/qvac/pull/5940))
-- Keep KV cache folders for loads that send verbosity. (see PR [#5950](https://github.com/tetherto/qvac/pull/5950))
 - Show why qvac serve re-downloads a cached model. (see PR [#5959](https://github.com/tetherto/qvac/pull/5959))
 - Drop a KV cache file the addon cannot load. (see PR [#5968](https://github.com/tetherto/qvac/pull/5968))
 
@@ -58,7 +56,6 @@ Release Date: 2026-11-25
 
 ## 🧹 Chores
 
-- Move inference to bare-https 4. (see PR [#5859](https://github.com/tetherto/qvac/pull/5859))
 - Move the SDK onto the fabric 0.33 addon set. (see PR [#5942](https://github.com/tetherto/qvac/pull/5942)) - See [breaking changes](./breaking.md)
 
 ## ⚙️ Infrastructure

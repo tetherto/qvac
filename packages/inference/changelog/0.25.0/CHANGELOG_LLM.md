@@ -456,7 +456,6 @@ stats?.decoderUsedCoreml // 1 when every transcription decoded on the Core ML de
 
 - `unloadModel({ clearStorage: true })` on a sharded model loaded from a local path removed the whole folder. It now removes only the model's own files.
 - On Windows, a sharded HTTP model URL with `..\` segments in a shard name could be written outside the model cache. Such a name is now refused with `PathTraversalError` before any request.
-- Existing chats lost their KV cache when `cache_share_across_keys` was turned on, because the cache folder name changed. The folder name now ignores that setting and `verbosity`, so the files are found. On Android the folder name no longer includes the OpenCL cache folder, so KV cache folders move once after this upgrade and no longer move on later SDK upgrades.
 - A KV cache file the addon cannot load used to fail every completion on that key. The file is now removed so the next request starts cold, and an oversized file raises `ContextOverflowError`.
 - Large base64 fields, such as a 512x512 VLA camera image, could fail validation or throw a `RangeError`. Base64 is now checked in one pass with no size limit from the regex engine.
 - A cached registry model that fails its size or checksum check is downloaded again, and the reason is now logged as a warning that names the file.
