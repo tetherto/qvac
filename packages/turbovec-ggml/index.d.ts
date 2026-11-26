@@ -68,9 +68,10 @@ export interface IdMapIndexCallOptions {
 export interface IdMapIndexWriteOptions extends IdMapIndexCallOptions {
     /**
      * `durable` (the default) fsyncs the snapshot and its directory before
-     * resolving. `fast` skips both fsyncs: the file is still replaced
-     * atomically and survives a process crash, but a power loss soon after
-     * may lose it, and a delta log cannot start from it.
+     * resolving. `fast`, for TurboVec storage only, skips both fsyncs: the
+     * file is still replaced atomically and survives a process crash, but a
+     * power loss soon after may lose it. Other storages reject `fast` with
+     * `InvalidArgument`, since a delta log could start from the snapshot.
      */
     durability?: 'durable' | 'fast';
 }
@@ -273,8 +274,10 @@ export default class IdMapIndex {
      * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
      * at any point leaves the previous sync loadable. An index loaded from a
      * synced file keeps syncing to it incrementally. One index may sync to a
-     * path at a time: when another writer has changed the file, this rejects
-     * with `IOError` and the file must be loaded again to continue. Rejects
+     * path at a time: when another `sync()` has changed the file, this rejects
+     * with `IOError` and the file must be loaded again to continue. A snapshot
+     * that `write()` or `toBytes()` produced claims no path, so a `sync()` over
+     * one rewrites it whole, as upstream turbovec does. Rejects
      * with `InvalidArgument` for non-TurboVec storage and for an index loaded
      * from a v3 snapshot.
      */

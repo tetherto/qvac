@@ -514,6 +514,16 @@ struct IdList {
 };
 
 js_value_t* toJs(js_env_t* env, const IdList& list) {
+  if (list.ids.empty()) {
+    // TypedArray::create would memcpy from an empty vector's data(), which
+    // may be null.
+    js_value_t* buffer = nullptr;
+    void* data = nullptr;
+    JS(js_create_arraybuffer(env, 0, &data, &buffer));
+    js_value_t* array = nullptr;
+    JS(js_create_typedarray(env, js_biguint64array, 0, buffer, 0, &array));
+    return array;
+  }
   std::span<const uint64_t> ids(list.ids);
   return js::TypedArray<uint64_t>::create(env, ids);
 }
@@ -1211,21 +1221,22 @@ js_value_t* idxPrepareAsync(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
-// idxWriteAsync(handle, path, fast?, token?) -> Promise<undefined>
+// idxWriteAsync(handle, path, token?, fast?) -> Promise<undefined>. `fast`
+// comes last so calls made before it existed keep working.
 js_value_t* idxWriteAsync(js_env_t* env, js_callback_info_t* info) try {
   const Args argv = readArgs(env, info, 2, "(handle, path)");
   std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
   bool fast = false;
-  if (!isMissing(env, argv, 2)) {
-    if (!js::is<js::Boolean>(env, argv[2])) {
+  if (!isMissing(env, argv, 3)) {
+    if (!js::is<js::Boolean>(env, argv[3])) {
       fail("InvalidArgument", "fast must be a boolean");
     }
-    fast = js::Boolean(env, argv[2]).as<bool>(env);
+    fast = js::Boolean(env, argv[3]).as<bool>(env);
   }
   return startBulk(
       env,
       std::move(state),
-      readToken(env, argv, 3),
+      readToken(env, argv, 2),
       [path = readString(env, argv[1], "path"), fast](VectorIndex& idx) {
         return idx.write(path, fast);
       });

@@ -18,7 +18,8 @@
     serializing.
   - `ids()` resolves to every live ID as a `BigUint64Array`.
   - `turbovec-q3` storage (`bitWidth: 3`), TurboVec's 3-bit mode.
-  - `write(path, { durability: 'fast' })` skips the fsyncs.
+  - `write(path, { durability: 'fast' })` skips the fsyncs on TurboVec
+    storage.
   - `storage` getter, which tells TurboVec q4 from generic q4, and a `legacy`
     getter for a TurboVec index loaded from a v3 snapshot.
 

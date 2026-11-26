@@ -486,7 +486,7 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     'zero thread count': () => binding.idx_set_threads(handle, 0),
     'too many threads': () => binding.idx_set_threads(handle, 257),
     'non-string sync path': () => binding.idx_sync_async(handle, 42),
-    'non-boolean write fast flag': () => binding.idx_write_async(handle, 'x.tvim', 1),
+    'non-boolean write fast flag': () => binding.idx_write_async(handle, 'x.tvim', null, 1),
     'plain-array snapshot bytes': () => binding.idx_from_bytes_async([1, 2, 3]),
     'Int8Array snapshot bytes': () => binding.idx_from_bytes_async(new Int8Array(4)),
     'number ids handle': () => binding.idx_ids_async(5),
@@ -500,6 +500,21 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     }
   } finally {
     binding.idx_dispose(handle)
+  }
+})
+
+// The JS wrapper's write() passes the fast flag after the token, so a direct
+// call with the earlier (handle, path, token) form keeps working.
+test('IdMapIndex: native write keeps its token argument third', { skip: IS_MOBILE }, async (t) => {
+  const binding = require('../../binding')
+  const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
+  const file = tmpPath('id-map-index-native-write')
+  try {
+    await binding.idx_write_async(handle, file, binding.idx_abort_token_create())
+    t.ok(fs.existsSync(file), 'a write with a token in the third slot runs')
+  } finally {
+    binding.idx_dispose(handle)
+    if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
@@ -1243,7 +1258,7 @@ test('IdMapIndex: ids lists the live ids', async (t) => {
 })
 
 test('IdMapIndex: write with fast durability writes a loadable snapshot', async (t) => {
-  const storages = SUPPORTS_TURBOVEC ? ['q8', 'turbovec-q4'] : ['q8']
+  const storages = SUPPORTS_TURBOVEC ? ['turbovec-q4'] : []
   for (const storage of storages) {
     const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
     const file = tmpPath(`id-map-index-fast-${storage}`)
@@ -1269,7 +1284,19 @@ test('IdMapIndex: write with fast durability writes a loadable snapshot', async 
   }
 
   const idx = new IdMapIndex({ dim: DIM })
+  const file = tmpPath('id-map-index-fast-q8')
   try {
+    await idx.addWithIds(unitVec(1), new BigUint64Array([1n]))
+    // A delta log could start from a reloaded fast snapshot.
+    const error = await expectRejects(
+      t,
+      () => idx.write(file, { durability: 'fast' }),
+      'q8 rejects a fast write'
+    )
+    t.is(error && error.code, errorCode('InvalidArgument'), 'q8 fast write is InvalidArgument')
+    t.absent(fs.existsSync(file), 'a rejected fast write leaves no file')
+    await idx.write(file, { durability: 'durable' })
+    t.pass('q8 durable write still works when named')
     for (const durability of ['FAST', 1, null]) {
       const error = await expectRejects(
         t,
@@ -1280,6 +1307,7 @@ test('IdMapIndex: write with fast durability writes a loadable snapshot', async 
     }
   } finally {
     await idx.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
@@ -1483,6 +1511,14 @@ test('IdMapIndex: sync saves a TurboVec index incrementally', async (t) => {
     await idx.addWithIds(rowsOf(first + 100, first + 101), ids.subarray(first + 100, first + 101))
     let error = await expectRejects(t, () => idx.sync(file), 'a stale writer cannot sync')
     t.is(error && error.code, errorCode('IOError'), 'a stale writer rejects with IOError')
+
+    // write() leaves an unclaimed snapshot, which a later sync rewrites whole,
+    // as upstream turbovec does: a sync, write, sync sequence never gets stuck.
+    await third.write(file)
+    await reader.sync(file)
+    const rewritten = await IdMapIndex.load(file)
+    loaded.push(rewritten)
+    t.is(rewritten.length, reader.length, 'a sync over a write() snapshot rewrites it')
 
     error = await expectRejects(
       t,

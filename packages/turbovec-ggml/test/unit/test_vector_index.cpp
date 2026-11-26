@@ -793,9 +793,12 @@ TEST(VectorIndexTest, SyncSavesTurboVecChanges) {
 }
 
 TEST(VectorIndexTest, FastWriteIsLoadable) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
   const TempFile file("turbovec-ggml-unit-fast");
   {
-    VectorIndex idx(DIM, VectorStorage::Q8);
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
     const auto v = unitVec(1);
     const uint64_t id = 11;
     ASSERT_EQ(idx.add(v.data(), 1, &id), GGML_VEC_INDEX_OK);
@@ -805,6 +808,17 @@ TEST(VectorIndexTest, FastWriteIsLoadable) {
   const VectorIndex loaded = VectorIndex::load(file.path(), &status);
   ASSERT_EQ(status, GGML_VEC_INDEX_OK);
   EXPECT_TRUE(loaded.contains(11));
+}
+
+// A delta log could start from a reloaded fast snapshot of these storages.
+TEST(VectorIndexTest, FastWriteRejectsDeltaCapableStorages) {
+  const TempFile file("turbovec-ggml-unit-fast-q8");
+  for (const VectorStorage storage :
+       {VectorStorage::F32, VectorStorage::Q8, VectorStorage::Q4}) {
+    VectorIndex idx(DIM, storage);
+    EXPECT_EQ(idx.write(file.path(), true), GGML_VEC_INDEX_E_INVALID_ARG);
+    EXPECT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
+  }
 }
 
 TEST(VectorIndexTest, ThreadCountIsStoredAndBounded) {

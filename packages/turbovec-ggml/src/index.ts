@@ -146,7 +146,7 @@ interface IdMapIndexBinding {
   ): Promise<IdMapIndexSearchResult>
   idx_compact_async(handle: NativeHandle, token: Token): Promise<void>
   idx_prepare_async(handle: NativeHandle, token: Token): Promise<void>
-  idx_write_async(handle: NativeHandle, path: string, fast: boolean, token: Token): Promise<void>
+  idx_write_async(handle: NativeHandle, path: string, token: Token, fast: boolean): Promise<void>
   idx_sync_async(handle: NativeHandle, path: string, token: Token): Promise<void>
   idx_ids_async(handle: NativeHandle, token: Token): Promise<BigUint64Array>
   idx_to_bytes_async(handle: NativeHandle, token: Token): Promise<Uint8Array>
@@ -211,9 +211,10 @@ export interface IdMapIndexCallOptions {
 export interface IdMapIndexWriteOptions extends IdMapIndexCallOptions {
   /**
    * `durable` (the default) fsyncs the snapshot and its directory before
-   * resolving. `fast` skips both fsyncs: the file is still replaced
-   * atomically and survives a process crash, but a power loss soon after
-   * may lose it, and a delta log cannot start from it.
+   * resolving. `fast`, for TurboVec storage only, skips both fsyncs: the
+   * file is still replaced atomically and survives a process crash, but a
+   * power loss soon after may lose it. Other storages reject `fast` with
+   * `InvalidArgument`, since a delta log could start from the snapshot.
    */
   durability?: 'durable' | 'fast'
 }
@@ -1043,7 +1044,7 @@ export default class IdMapIndex {
     const fast = readWriteFast(options)
     return enqueue(
       this,
-      (token) => loadBinding().idx_write_async(ensureHandle(this), path, fast, token),
+      (token) => loadBinding().idx_write_async(ensureHandle(this), path, token, fast),
       signal
     )
   }
@@ -1054,8 +1055,10 @@ export default class IdMapIndex {
    * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
    * at any point leaves the previous sync loadable. An index loaded from a
    * synced file keeps syncing to it incrementally. One index may sync to a
-   * path at a time: when another writer has changed the file, this rejects
-   * with `IOError` and the file must be loaded again to continue. Rejects
+   * path at a time: when another `sync()` has changed the file, this rejects
+   * with `IOError` and the file must be loaded again to continue. A snapshot
+   * that `write()` or `toBytes()` produced claims no path, so a `sync()` over
+   * one rewrites it whole, as upstream turbovec does. Rejects
    * with `InvalidArgument` for non-TurboVec storage and for an index loaded
    * from a v3 snapshot.
    */

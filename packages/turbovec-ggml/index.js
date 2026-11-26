@@ -589,7 +589,7 @@ class IdMapIndex {
         requireNonEmptyPath(path, 'write: path');
         const signal = readSignal('write', options);
         const fast = readWriteFast(options);
-        return enqueue(this, (token) => loadBinding().idx_write_async(ensureHandle(this), path, fast, token), signal);
+        return enqueue(this, (token) => loadBinding().idx_write_async(ensureHandle(this), path, token, fast), signal);
     }
     /**
      * Save a TurboVec index to `path`, writing only what changed since its last
@@ -597,8 +597,10 @@ class IdMapIndex {
      * or `buildIvf()`, writes the whole file. Each sync is durable, and a crash
      * at any point leaves the previous sync loadable. An index loaded from a
      * synced file keeps syncing to it incrementally. One index may sync to a
-     * path at a time: when another writer has changed the file, this rejects
-     * with `IOError` and the file must be loaded again to continue. Rejects
+     * path at a time: when another `sync()` has changed the file, this rejects
+     * with `IOError` and the file must be loaded again to continue. A snapshot
+     * that `write()` or `toBytes()` produced claims no path, so a `sync()` over
+     * one rewrites it whole, as upstream turbovec does. Rejects
      * with `InvalidArgument` for non-TurboVec storage and for an index loaded
      * from a v3 snapshot.
      */

@@ -347,6 +347,15 @@ int VectorIndex::write(const std::string& path, bool fast) noexcept {
   if (!fast) {
     return ggml_vec_index_write(handle_, path.c_str());
   }
+  // A reloaded fast snapshot cannot tell it was written without fsyncs, so it
+  // could become the base of a delta log that outlives it. TurboVec storage
+  // has no delta logs.
+  const int kind = storage();
+  if (kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q2 &&
+      kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q3 &&
+      kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q4) {
+    return GGML_VEC_INDEX_E_INVALID_ARG;
+  }
   return ggml_vec_index_write_with_durability(
       handle_, path.c_str(), GGML_VEC_INDEX_DURABILITY_FAST);
 }

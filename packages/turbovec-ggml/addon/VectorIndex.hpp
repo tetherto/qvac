@@ -161,9 +161,9 @@ public:
       const float* queries, int nQ, int k, int nProbe, float* outScores,
       uint64_t* outIds) const noexcept;
 
-  // Persists to disk. Returns 0 on success. A fast write skips both fsyncs:
-  // the file is still replaced atomically, but a power loss soon after may
-  // lose it, and it cannot start a delta log.
+  // Persists to disk. Returns 0 on success. A fast write (TurboVec storage
+  // only, E_INVALID_ARG otherwise) skips both fsyncs: the file is still
+  // replaced atomically, but a power loss soon after may lose it.
   int write(const std::string& path, bool fast = false) noexcept;
 
   // Incremental save of a TurboVec 1.x index: writes only what changed since
