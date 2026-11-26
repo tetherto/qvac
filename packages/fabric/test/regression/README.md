@@ -156,26 +156,35 @@ hosts before using them as migration acceptance evidence.
 
 `npm run test:unit` in the fabric package includes the binding-parser and policy
 tests. They exercise wrong providers, XDNA collisions, diffusion leakage,
-missing observations, and runtime-provider relocation. Native and coexistence
-tests remain explicit during the baseline phase because their confirmed
-failures are the behaviors the later migration must resolve.
+missing observations, and runtime-provider relocation. The artifact-dependent
+coexistence audit runs separately using the commands above.
 
-Fabric's package-owned `cpp:build` and `cpp:tests` targets run these source-based
-tests on Linux and Windows through the standard `PR build and test` workflow.
-Apply `run-cpp-addon-tests` to run them. `ci/boundary-regressions.mjs` pins the
-source revision used for the local controls and runs both layouts even if one
-fails. Static failures stay red; the shared build is the positive control.
-The standard job uploads each build's `cpp-test-results.xml`, including failure
-output. This adds no separate workflow or Merge Guard status key. It does not
-run the artifact-dependent Bare coexistence audit or hardware backend tests.
+Fabric's package-owned `cpp:build` and `cpp:tests` targets run the installed-port
+boundary tests on Linux x64 and Windows x64 through the standard `PR build and
+test` workflow. Apply `run-cpp-addon-tests` to run them.
+`ci/boundary-regressions.mjs` installs the registry version requested by
+`test/native/vcpkg.json`, builds both Release and Debug dependencies, and links
+the probes against the installed Debug shared core and CPU backend. It does not
+select a local source checkout or run static/shared source controls.
 
-To rehearse locally with an existing clean checkout of the pinned source:
+The standard job uploads `cpp-test-results.xml`, including failure output.
+This adds no separate workflow or Merge Guard status key. It does not run the
+artifact-dependent Bare coexistence audit or hardware backend tests.
+
+To run the same installed-port workflow locally, provision the repository's
+vcpkg/Bare toolchain and Vulkan SDK, and set `VCPKG_ROOT` to the vcpkg checkout.
+From the repository root on Linux x64:
 
 ```sh
-QVAC_GGML_BOUNDARY_SOURCE=/absolute/path/to/qvac-fabric-llm.cpp \
-  pnpm exec nx run @qvac/fabric:cpp:build:linux-x64
+pnpm exec nx run @qvac/fabric:cpp:build:linux-x64
 pnpm exec nx run @qvac/fabric:cpp:tests:linux-x64
 ```
+
+On Windows x64, use the `win32-x64` configuration for both targets. Tests and
+installed dependencies are kept under `packages/fabric/build/boundary-port`.
+For direct source-checkout experiments, use the standalone CMake commands in
+[Native module boundary](#native-module-boundary); those are separate from the
+registry-port CI workflow.
 
 ## Shared-core packaging (step 2)
 
@@ -211,8 +220,7 @@ import libraries and backend DLLs stay in its companion directory. Platform
 metadata and `qvac_fabric_import_shared_core(prebuilds host)` support importing
 the same package from development consumers. No additional npm package is needed.
 
-Native CI now builds the registry port, rather than the old source-only
-static/shared controls (which remain on the parent regression PR #5871):
+To invoke the same registry-port build and tests directly:
 
 ```sh
 cd packages/fabric
