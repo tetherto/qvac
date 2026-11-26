@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
-import { FIRST_NATIVE_ID, decodeVectorInto, encodeNativeId } from '../db/encoding.js'
+import { FIRST_NATIVE_ID, decodeVectorInto, encodeNativeId, vectorBytes } from '../db/encoding.js'
 import {
   DOCUMENTS,
   NAMESPACES,
@@ -12,6 +12,15 @@ import {
   type SpaceRecord,
   type TombstoneRecord
 } from '../db/records.js'
+import {
+  MAX_GENERATION,
+  hasProtoKey,
+  metadataProblem,
+  name,
+  optionalJson,
+  rowSizeProblem,
+  text
+} from '../limits.js'
 import { computeSpaceId, parseEmbeddingSpace } from '../space.js'
 import { parseIndexStorage } from '../vector-index/options.js'
 import { DEFAULT_INDEX_STORAGE, type IndexRegistry } from '../vector-index/registry.js'
@@ -19,15 +28,19 @@ import {
   appendMutation,
   checkChunks,
   deleteDocument,
+  encodingOf,
   getNamespace,
   hashContent,
+  newCreatedAt,
   sameLineage,
-  withTransaction,
+  withSnapshot,
   writeGeneration
 } from '../writes.js'
-import { fromHex } from './export.js'
+import { withTransaction } from '../db/transactions.js'
+import { deleteCheck, documentCheck, fromHex } from './export.js'
 import {
   FORMAT_VERSION,
+  FORMAT_VERSION_ENCODED,
   FRAME,
   createFrameReader,
   invalid,
@@ -38,13 +51,14 @@ import {
   type ReadStop
 } from './frames.js'
 import type { ValidChunk, ValidDocument } from '../input.js'
-import type { HyperDBInstance, HyperDBTransaction } from '../db/db-types.js'
+import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from '../db/db-types.js'
 import type {
   EmbeddingSpace,
   ImportedDocument,
   ImportOptions,
   ImportResult,
-  ImportSkip
+  ImportSkip,
+  VectorEncoding
 } from '../types.js'
 
 export interface ImportTarget {
@@ -61,6 +75,8 @@ interface Header {
   space: EmbeddingSpace
   spaceId: string
   lineageId: Uint8Array
+  checks: boolean
+  vectorEncoding: VectorEncoding
 }
 
 interface IncomingDocument {
@@ -74,32 +90,45 @@ type Outcome =
   | { skip: ImportSkip; revision: number }
   | { revision: number }
 
-const headerSchema = z.object({
-  format: z.literal(FORMAT_VERSION),
+const headerFields = {
   spaceId: z.string().min(1),
   space: z.unknown(),
   lineageId: z.string().regex(/^[0-9a-f]{32}$/),
-  revision: z.number().int().nonnegative()
-})
+  revision: z.number().int().nonnegative(),
+  checks: z.literal(1).optional()
+}
+
+const headerSchema = z.discriminatedUnion('format', [
+  z.object({ format: z.literal(FORMAT_VERSION), ...headerFields }),
+  z.object({
+    format: z.literal(FORMAT_VERSION_ENCODED),
+    ...headerFields,
+    vectorEncoding: z.enum(['f32', 'f16'])
+  })
+])
+
+const generationSchema = z.number().int().positive().max(MAX_GENERATION)
 
 const documentSchema = z.object({
-  id: z.string().min(1),
-  generation: z.number().int().positive(),
+  id: name,
+  generation: generationSchema,
   contentHash: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  chunkCount: z.number().int().positive()
+  chunkCount: z.number().int().nonnegative(),
+  check: z.string().optional()
 })
 
 const chunkSchema = z.object({
-  chunkId: z.string().min(1),
+  chunkId: name,
   ordinal: z.number().int().nonnegative(),
-  content: z.string(),
-  metadataJson: z.string().min(1).optional()
+  content: text,
+  metadataJson: optionalJson
 })
 
 const tombstoneSchema = z.object({
-  id: z.string().min(1),
-  generation: z.number().int().positive()
+  id: name,
+  generation: generationSchema,
+  check: z.string().optional()
 })
 
 const trailerSchema = z.object({
@@ -152,16 +181,40 @@ async function run(
   const header = parseHeader(first.payload)
   const storage = parseIndexStorage(target.index, header.space.dimensions)
 
-  const prepared = await withTransaction(instance, (tx) =>
-    prepareNamespace(tx, namespace, header, storage ?? DEFAULT_INDEX_STORAGE)
+  const indexStorage = storage ?? DEFAULT_INDEX_STORAGE
+  // Nothing is written until the first document or delete record commits, so
+  // an import that fails before then leaves no namespace behind.
+  const existing = await withSnapshot(instance, (reader) =>
+    checkNamespace(reader, namespace, header)
   )
+  let owned = existing !== null && sameLineage(existing.lineageId, header.lineageId)
+  const planned = existing ?? newNamespace(namespace, header, indexStorage)
   const spaceRecord: SpaceRecord = { spaceId: header.spaceId, ...header.space }
+
+  // Runs inside each write: creates or adopts the namespace on the first one.
+  async function targetNamespace(tx: HyperDBTransaction): Promise<NamespaceRecord> {
+    if (!owned) return await prepareNamespace(tx, namespace, header, indexStorage)
+    const ns = await getNamespace(tx, namespace)
+    checkTarget(ns, header)
+    return ns
+  }
+
+  async function write(
+    operation: (tx: HyperDBTransaction, ns: NamespaceRecord) => Promise<Outcome>
+  ): Promise<Outcome | null> {
+    // Checked once the lock is held, so an abort while waiting writes nothing.
+    const outcome = await withTransaction(instance, async (tx) =>
+      stop.stopped ? null : await operation(tx, await targetNamespace(tx))
+    )
+    if (outcome) owned = true
+    return outcome
+  }
 
   const documents: ImportedDocument[] = []
   const skipped: ImportSkip[] = []
   const seen = new Set<string>()
   const counts = { documents: 0, chunks: 0, tombstones: 0 }
-  let revision = prepared.revision
+  let revision = existing?.revision ?? 0
 
   function record(outcome: Outcome): void {
     revision = outcome.revision
@@ -184,27 +237,25 @@ async function run(
       const frame = await frames.next()
       if (!frame) throw invalid('the stream ends before its trailer')
       if (frame.type === FRAME.DOCUMENT) {
-        const incoming = await readDocument(frame, frames, header, seen)
+        const incoming = await readDocument(frame, frames, namespace, header, seen)
         counts.documents++
         counts.chunks += incoming.document.chunks.length
-        try {
-          checkChunks(namespace, prepared, spaceRecord, incoming.document)
-        } catch (error) {
-          throw invalid(`document '${incoming.document.id}': ${(error as Error).message}`)
-        }
+        checkIncoming(namespace, planned, spaceRecord, incoming)
         checkContentHash(header, incoming)
-        // Checked once the lock is held, so an abort while waiting writes nothing.
-        const outcome = await withTransaction(instance, (tx) =>
-          stop.stopped ? Promise.resolve(null) : applyDocument(tx, target, header, incoming)
-        )
+        const outcome = await write(async (tx, ns) => {
+          // The namespace may have been created with other storage since the header.
+          checkIncoming(namespace, ns, spaceRecord, incoming)
+          return await applyDocument(tx, target, ns, incoming)
+        })
         if (!outcome) return { documents, skipped, cancelled: true, revision }
         record(outcome)
       } else if (frame.type === FRAME.TOMBSTONE) {
         const tombstone = parse(tombstoneSchema, parseJson(frame.payload), 'delete record')
+        if (header.checks && tombstone.check !== deleteCheck(tombstone.id, tombstone.generation)) {
+          throw invalid(`delete record '${tombstone.id}' does not match its check`)
+        }
         counts.tombstones++
-        const outcome = await withTransaction(instance, (tx) =>
-          stop.stopped ? Promise.resolve(null) : applyTombstone(tx, target, header, tombstone)
-        )
+        const outcome = await write((tx, ns) => applyTombstone(tx, target, ns, tombstone))
         if (!outcome) return { documents, skipped, cancelled: true, revision }
         record(outcome)
       } else if (frame.type === FRAME.TRAILER) {
@@ -219,6 +270,18 @@ async function run(
           )
         }
         if (await frames.next()) throw invalid('the stream continues after its trailer')
+        if (!owned) {
+          // An export with nothing in it still creates or adopts the namespace,
+          // unless the import was stopped while it waited for the lock.
+          const ns = await withTransaction(instance, async (tx) => {
+            if (stop.stopped) return null
+            const prepared = await prepareNamespace(tx, namespace, header, indexStorage)
+            await tx.flush()
+            return prepared
+          })
+          if (!ns) return { documents, skipped, cancelled: true, revision }
+          revision = ns.revision
+        }
         return { documents, skipped, cancelled: false, revision }
       } else if (frame.type === FRAME.CHUNK) {
         throw invalid('a chunk frame outside a document')
@@ -228,6 +291,19 @@ async function run(
         throw invalid(`unknown frame type ${frame.type}`)
       }
     }
+  }
+}
+
+function checkIncoming(
+  namespace: string,
+  ns: NamespaceRecord,
+  space: SpaceRecord,
+  incoming: IncomingDocument
+): void {
+  try {
+    checkChunks(namespace, ns, space, incoming.document)
+  } catch (error) {
+    throw invalid(`document '${incoming.document.id}': ${(error as Error).message}`)
   }
 }
 
@@ -242,11 +318,49 @@ function parseHeader(payload: Uint8Array): Header {
   if (computeSpaceId(space) !== fields.spaceId) {
     throw invalid(`the header space hashes to ${computeSpaceId(space)}, not ${fields.spaceId}`)
   }
-  return { space, spaceId: fields.spaceId, lineageId: fromHex(fields.lineageId) }
+  return {
+    space,
+    spaceId: fields.spaceId,
+    lineageId: fromHex(fields.lineageId),
+    checks: fields.checks === 1,
+    vectorEncoding: 'vectorEncoding' in fields ? fields.vectorEncoding : 'f32'
+  }
+}
+
+// Fails before anything is read past the header if the namespace can't take
+// the export. Returns the existing namespace, or null when there is none.
+async function checkNamespace(
+  reader: HyperDBReader,
+  namespace: string,
+  header: Header
+): Promise<NamespaceRecord | null> {
+  const ns = await reader.get<NamespaceRecord>(NAMESPACES, { name: namespace })
+  if (!ns) return null
+  checkSpace(ns, header)
+  checkEncoding(ns, header)
+  if (!sameLineage(ns.lineageId, header.lineageId) && (await hasDocuments(reader, namespace))) {
+    throw lineageMismatch(namespace)
+  }
+  return ns
+}
+
+function newNamespace(namespace: string, header: Header, storage: string): NamespaceRecord {
+  return {
+    name: namespace,
+    spaceId: header.spaceId,
+    revision: 0,
+    nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
+    createdAt: newCreatedAt(),
+    indexStorage: storage,
+    lineageId: header.lineageId,
+    vectorEncoding: header.vectorEncoding
+  }
 }
 
 // Creates the namespace with the export's space and lineage, or checks an
-// existing one. An empty namespace from another lineage takes the export's.
+// existing one. One without documents takes the export's lineage; its delete
+// records belonged to the old lineage, so they go with it. Leaves the writes
+// for the caller to flush.
 async function prepareNamespace(
   tx: HyperDBTransaction,
   namespace: string,
@@ -258,43 +372,53 @@ async function prepareNamespace(
     if (!(await tx.get<SpaceRecord>(SPACES, { spaceId: header.spaceId }))) {
       await tx.insert(SPACES, { spaceId: header.spaceId, ...header.space })
     }
-    const created: NamespaceRecord = {
-      name: namespace,
-      spaceId: header.spaceId,
-      revision: 0,
-      nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
-      createdAt: new Date(),
-      indexStorage: storage,
-      lineageId: header.lineageId
-    }
+    const created = newNamespace(namespace, header, storage)
     await tx.insert(NAMESPACES, created)
-    await tx.flush()
     return created
   }
 
   checkSpace(ns, header)
+  checkEncoding(ns, header)
   if (sameLineage(ns.lineageId, header.lineageId)) return ns
+  if (await hasDocuments(tx, namespace)) throw lineageMismatch(namespace)
   const range = { gte: { namespace }, lte: { namespace } }
-  const hasDocuments = (await tx.find(DOCUMENTS, range, { limit: 1 }).toArray()).length > 0
-  const hasTombstones = (await tx.find(TOMBSTONES, range, { limit: 1 }).toArray()).length > 0
-  if (hasDocuments || hasTombstones) throw lineageMismatch(namespace)
+  for (const tombstone of await tx.find<TombstoneRecord>(TOMBSTONES, range).toArray()) {
+    await tx.delete(TOMBSTONES, tombstone)
+  }
   const adopted = { ...ns, lineageId: header.lineageId }
   await tx.insert(NAMESPACES, adopted)
-  await tx.flush()
   return adopted
+}
+
+async function hasDocuments(reader: HyperDBReader, namespace: string): Promise<boolean> {
+  const range = { gte: { namespace }, lte: { namespace } }
+  return (await reader.find(DOCUMENTS, range, { limit: 1 }).toArray()).length > 0
 }
 
 async function readDocument(
   frame: Frame,
   frames: FrameReader,
+  namespace: string,
   header: Header,
   seen: Set<string>
 ): Promise<IncomingDocument> {
-  const fields = parse(documentSchema, parseJson(frame.payload), 'document')
+  const raw = parseJson(frame.payload) as { metadata?: unknown } | null
+  if (hasProtoKey(raw?.metadata)) throw invalid(`a document's metadata has a '__proto__' key`)
+  const fields = parse(documentSchema, raw, 'document')
+  if (
+    header.checks &&
+    fields.check !==
+      documentCheck(fields.id, fields.generation, fields.contentHash, fields.chunkCount)
+  ) {
+    throw invalid(`document '${fields.id}' does not match its check`)
+  }
   if (seen.has(fields.id)) throw invalid(`document '${fields.id}' appears twice`)
   seen.add(fields.id)
+  const metadata = fields.metadata && metadataProblem(fields.metadata)
+  if (metadata) throw invalid(`document '${fields.id}' ${metadata}`)
 
   const dims = header.space.dimensions
+  const vectorLength = dims * vectorBytes(header.vectorEncoding)
   const chunkIds = new Set<string>()
   const chunks: ValidChunk[] = []
   for (let ordinal = 0; ordinal < fields.chunkCount; ordinal++) {
@@ -312,13 +436,13 @@ async function readDocument(
       throw invalid(`document '${fields.id}' repeats chunk id '${chunk.chunkId}'`)
     }
     chunkIds.add(chunk.chunkId)
-    if (vector.byteLength !== dims * 4) {
+    if (vector.byteLength !== vectorLength) {
       throw invalid(
-        `document '${fields.id}' chunk ${ordinal} has ${vector.byteLength} vector bytes, expected ${dims * 4}`
+        `document '${fields.id}' chunk ${ordinal} has ${vector.byteLength} vector bytes, expected ${vectorLength}`
       )
     }
     const embedding = new Float32Array(dims)
-    decodeVectorInto(vector, embedding, 0)
+    decodeVectorInto(vector, embedding, 0, dims, header.vectorEncoding)
     if (!embedding.every(Number.isFinite)) {
       throw invalid(`document '${fields.id}' chunk ${ordinal} has a non-finite component`)
     }
@@ -330,8 +454,10 @@ async function readDocument(
       spaceId: header.spaceId
     })
   }
+  const size = rowSizeProblem(namespace, fields.id, fields.metadata, chunks, dims)
+  if (size) throw invalid(size)
   return {
-    document: { id: fields.id, metadata: fields.metadata, chunks },
+    document: { id: fields.id, metadata: fields.metadata, spaceId: header.spaceId, chunks },
     generation: fields.generation,
     contentHash: fields.contentHash
   }
@@ -355,23 +481,23 @@ function checkContentHash(header: Header, { document, contentHash }: IncomingDoc
 async function applyDocument(
   tx: HyperDBTransaction,
   target: ImportTarget,
-  header: Header,
+  ns: NamespaceRecord,
   { document, generation, contentHash }: IncomingDocument
 ): Promise<Outcome> {
   const { namespace } = target
-  const ns = await getNamespace(tx, namespace)
-  checkTarget(ns, header)
   const key = { namespace, documentId: document.id }
   const current = await tx.get<DocumentRecord>(DOCUMENTS, key)
-  const skip = (reason: ImportSkip['reason']): Outcome => ({
-    skip: { id: document.id, generation, reason },
-    revision: ns.revision
-  })
+  // Flushes what creating or adopting the namespace wrote, if anything.
+  async function skip(reason: ImportSkip['reason']): Promise<Outcome> {
+    await tx.flush()
+    return { skip: { id: document.id, generation, reason }, revision: ns.revision }
+  }
 
   if (current) {
-    if (current.generation > generation) return skip('superseded')
+    if (current.generation > generation) return await skip('superseded')
     if (current.generation === generation) {
-      if (current.contentHash !== contentHash) return skip('conflict')
+      if (current.contentHash !== contentHash) return await skip('conflict')
+      await tx.flush()
       return {
         document: { id: document.id, generation, status: 'unchanged' },
         revision: ns.revision
@@ -379,7 +505,7 @@ async function applyDocument(
     }
   } else {
     const tombstone = await tx.get<TombstoneRecord>(TOMBSTONES, key)
-    if (tombstone && tombstone.generation >= generation) return skip('deleted')
+    if (tombstone && tombstone.generation >= generation) return await skip('deleted')
     if (tombstone) await tx.delete(TOMBSTONES, key)
   }
 
@@ -403,16 +529,15 @@ async function applyDocument(
 async function applyTombstone(
   tx: HyperDBTransaction,
   target: ImportTarget,
-  header: Header,
+  ns: NamespaceRecord,
   { id, generation }: { id: string; generation: number }
 ): Promise<Outcome> {
   const { namespace, indexes } = target
-  const ns = await getNamespace(tx, namespace)
-  checkTarget(ns, header)
   const key = { namespace, documentId: id }
   const current = await tx.get<DocumentRecord>(DOCUMENTS, key)
   if (current) {
     if (current.generation > generation) {
+      await tx.flush()
       return { skip: { id, generation, reason: 'superseded' }, revision: ns.revision }
     }
     const removed = await deleteDocument(tx, current, generation)
@@ -425,14 +550,15 @@ async function applyTombstone(
   const known = await tx.get<TombstoneRecord>(TOMBSTONES, key)
   if (!known || known.generation < generation) {
     await tx.insert(TOMBSTONES, { namespace, documentId: id, generation, deletedAt: new Date() })
-    await tx.flush()
   }
+  await tx.flush()
   return { revision: ns.revision }
 }
 
 // The namespace may have been dropped and re-created since the import began.
 function checkTarget(ns: NamespaceRecord, header: Header): void {
   checkSpace(ns, header)
+  checkEncoding(ns, header)
   if (!sameLineage(ns.lineageId, header.lineageId)) throw lineageMismatch(ns.name)
 }
 
@@ -441,6 +567,18 @@ function checkSpace(ns: NamespaceRecord, header: Header): void {
     throw new QvacErrorRAG({
       code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
       adds: `the export is in space ${header.spaceId}, namespace '${ns.name}' is in ${ns.spaceId}`
+    })
+  }
+}
+
+// Converting would store vectors that no longer match their content hashes,
+// so the encodings must agree.
+function checkEncoding(ns: NamespaceRecord, header: Header): void {
+  const encoding = encodingOf(ns)
+  if (encoding !== header.vectorEncoding) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.NAMESPACE_EXISTS,
+      adds: `the export holds '${header.vectorEncoding}' vectors, namespace '${ns.name}' stores '${encoding}'`
     })
   }
 }

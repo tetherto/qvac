@@ -11,7 +11,7 @@ import {
   type NamespaceRecord,
   type SpaceRecord
 } from './db/records.js'
-import { getNamespace, storageOf } from './writes.js'
+import { encodingOf, getNamespace, storageOf } from './writes.js'
 import type { HyperDBReader, HyperDBTransaction } from './db/db-types.js'
 import type { DropNamespaceResult, EmbeddingMetric, NamespaceSummary } from './types.js'
 
@@ -41,6 +41,7 @@ export async function listNamespaceSummaries(reader: HyperDBReader): Promise<Nam
       spaceId,
       space: { ...fingerprint, metric: fingerprint.metric as EmbeddingMetric },
       index: { storage: storageOf(ns) },
+      vectorEncoding: encodingOf(ns),
       revision: ns.revision,
       documentCount,
       chunkCount

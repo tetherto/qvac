@@ -1,5 +1,15 @@
 import type { ModelFitResponse } from '@/serve/core/fit'
-import type { CatalogReport } from '@/fit/catalog'
+import type { CatalogMiss, CatalogReport } from '@/fit/catalog'
+
+const FIT_REJECTED = 'MODEL_FIT_REJECTED'
+
+export const FIT_REJECTION_HINT =
+  'A companion file (projector, VAE, codec) is judged through the model that loads it. A model made of several parts needs its companion files and settings, passed with --set or through a serve alias.'
+
+/** The hint for an error the engine fitter rejected the load with, if it is one. */
+export function fitRejectionHint(error: unknown): string | undefined {
+  return error instanceof Error && error.name === FIT_REJECTED ? FIT_REJECTION_HINT : undefined
+}
 
 type Verdict = ModelFitResponse['verdict']
 type Model = ModelFitResponse['models'][number]
@@ -50,10 +60,17 @@ export function formatCatalog(report: CatalogReport): string {
       `  ${MARK[entry.verdict]} ${entry.model}  ${entry.verdict}  ${gib(used)}${judgedAt(entry)}`
     )
   }
-  lines.push('', `Models without a verdict (${report.withoutVerdict.length})`)
-  for (const entry of report.withoutVerdict) {
-    const code = entry.code === undefined ? '' : `${entry.code}: `
-    lines.push(`  ? ${entry.model}  ${code}${entry.reason}`)
+  const rejected = report.withoutVerdict.filter((entry) => entry.code === FIT_REJECTED)
+  const others = report.withoutVerdict.filter((entry) => entry.code !== FIT_REJECTED)
+  lines.push('', `Models without a verdict (${others.length})`, ...others.map(missLine))
+  if (rejected.length > 0) {
+    lines.push('', `Rejected by the engine fitter (${rejected.length})`, `  ${FIT_REJECTION_HINT}`)
+    lines.push(...rejected.map(missLine))
   }
   return lines.join('\n')
+}
+
+function missLine(entry: CatalogMiss): string {
+  const code = entry.code === undefined || entry.code === FIT_REJECTED ? '' : `${entry.code}: `
+  return `  ? ${entry.model}  ${code}${entry.reason}`
 }

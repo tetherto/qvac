@@ -2,20 +2,21 @@ import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
+import { name } from './limits.js'
 import type { SearchScope } from './types.js'
 
-const documentIdsSchema = z.array(z.string().min(1))
+const documentIdsSchema = z.array(name)
 
 const scopeSchema = z
   .object({
-    namespace: z.string().min(1),
+    namespace: name,
     documentIds: documentIdsSchema.optional()
   })
   .strict()
 
 const narrowingSchema = z
   .object({
-    namespace: z.string().min(1).optional(),
+    namespace: name.optional(),
     documentIds: documentIdsSchema.optional()
   })
   .strict()

@@ -61,7 +61,7 @@ test/e2e/
   default/            /qvac/v1/* route tests, in-process & modelless
     chat-batch.test.ts, kv-cache.test.ts, system-model-fit.test.ts, translate.test.ts, ocr.test.ts,
     classifications.test.ts, music.test.ts, upscale.test.ts,
-    registry.test.ts, world.test.ts, vla.test.ts
+    registry.test.ts, world.test.ts, vla.test.ts, bci.test.ts
   openai/             /v1/* route tests, in-process & modelless
     *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
@@ -78,6 +78,7 @@ test/e2e/
     registry.test.ts              in-process: live model registry browse and lookup
     upscale.test.ts               in-process: ESRGAN image upscale
     vla.test.ts                   in-process: SmolVLA action prediction and hparams
+    bci.test.ts                   in-process: BCI neural-signal transcription and stream
 ```
 
 ## Concurrency

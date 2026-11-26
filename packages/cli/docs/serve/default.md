@@ -9,32 +9,33 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method          | Path                                     | Notes                                   |
-| --------------- | ---------------------------------------- | --------------------------------------- |
-| `POST`          | `/qvac/v1/chat/batch`                    | Batch chat completion (LLM)             |
-| `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache              |
-| `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity       |
-| `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them |
-| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                 |
-| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                           |
-| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)          |
-| `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)            |
-| `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image            |
-| `POST`          | `/qvac/v1/classifications`               | Image classification                    |
-| `GET`           | `/qvac/v1/registry/models`               | Browse and search the model registry    |
-| `GET`           | `/qvac/v1/registry/models/lookup`        | One registry entry by source and path   |
-| `POST`          | `/qvac/v1/images/upscale`                | Image upscaling (ESRGAN model)          |
-| `POST`          | `/qvac/v1/audio/generations`             | Music generation job (audiogen model)   |
-| `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)               |
-| `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs       |
-| `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)         |
-| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)     |
-| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live    |
-| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)   |
-| `GET`           | `/qvac/v1/vla/models/{model}`            | VLA hyperparameters (experimental)      |
-| `POST`          | `/qvac/v1/vla/actions`                   | Predict robot actions (experimental)    |
-| `POST`          | `/qvac/v1/vla/models/{model}/embodiment` | Switch GR00T embodiment (experimental)  |
-| `POST`          | `/qvac/v1/plugins/:name/invoke`          | Call a custom plugin (admin-only)       |
+| Method          | Path                                     | Notes                                           |
+| --------------- | ---------------------------------------- | ----------------------------------------------- |
+| `POST`          | `/qvac/v1/chat/batch`                    | Batch chat completion (LLM)                     |
+| `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache                      |
+| `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity               |
+| `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them         |
+| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                         |
+| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                                   |
+| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)                  |
+| `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)                    |
+| `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image                    |
+| `POST`          | `/qvac/v1/classifications`               | Image classification                            |
+| `GET`           | `/qvac/v1/registry/models`               | Browse and search the model registry            |
+| `GET`           | `/qvac/v1/registry/models/lookup`        | One registry entry by source and path           |
+| `POST`          | `/qvac/v1/images/upscale`                | Image upscaling (ESRGAN model)                  |
+| `POST`          | `/qvac/v1/audio/generations`             | Music generation job (audiogen model)           |
+| `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)                       |
+| `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs               |
+| `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)                 |
+| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)             |
+| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live            |
+| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)           |
+| `GET`           | `/qvac/v1/vla/models/{model}`            | VLA hyperparameters (experimental)              |
+| `POST`          | `/qvac/v1/vla/actions`                   | Predict robot actions (experimental)            |
+| `POST`          | `/qvac/v1/vla/models/{model}/embodiment` | Switch GR00T embodiment (experimental)          |
+| `POST`          | `/qvac/v1/bci/transcriptions`            | Neural transcription (experimental, admin-only) |
+| `POST`          | `/qvac/v1/plugins/:name/invoke`          | Call a custom plugin (admin-only)               |
 
 ## Binary inputs
 
@@ -1250,6 +1251,103 @@ request runs on the model.
     "models": {
       "smolvla": { "model": "SMOLVLA_LIBERO_VISION_Q8", "config": { "backend": ["metal"] } },
       "groot": { "model": "GROOT_MULTI_Q5_VF16", "config": { "embodiment": "libero_sim" } }
+    }
+  }
+}
+```
+
+## BCI: `POST /qvac/v1/bci/transcriptions` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Admin-only: the route answers `403 admin_disabled` unless the server was started with
+`--enable-admin` (or `"enableAdmin": true` under `serve`). The model's native reader does
+not yet check a recording's channel count against the model, so a mismatched recording can
+crash the worker.
+
+Transcribe a neural-signal recording with a BCI model, backed by the SDK's `bciTranscribe()`,
+or `bciTranscribeStream()` with `stream: true`. `model` names a `serve.models` alias whose
+endpoint category is `bci`. The request and response follow `/v1/audio/transcriptions`.
+
+Send JSON or `multipart/form-data`; `file` takes any of the [binary input](#binary-inputs)
+forms.
+
+| Field              | Type         | Required | Meaning                                                                    |
+| ------------------ | ------------ | -------- | -------------------------------------------------------------------------- |
+| `model`            | `string`     | Yes      | A `serve.models` alias with endpoint category `bci`                        |
+| `file`             | binary input | Yes      | The neural recording (layout below)                                        |
+| `response_format`  | `string`     | No       | `json` (default), `text`, `verbose_json`, `srt` or `vtt`                   |
+| `stream`           | `boolean`    | No       | Decode in sliding windows and send text as server-sent events              |
+| `window_timesteps` | `integer`    | No       | Stream only: decode window in 20 ms timesteps (default 1500, at most 2900) |
+| `hop_timesteps`    | `integer`    | No       | Stream only: window advance, below the window (default 500)                |
+
+The recording is a little-endian `[timesteps u32, channels u32]` header followed by
+`timesteps * channels` float32 samples, one timestep per 20 ms. A file with no samples or
+whose length does not match its header is rejected before the model loads. Without `stream`,
+the recording must fit one decode (at most 3000 timesteps); send a longer one with
+`stream: true`.
+
+`json` answers `{ "text": "not too controversial" }`. `verbose_json` adds `duration` and
+`segments` (`id`, `start`, `end`, `text`, in seconds); `srt` and `vtt` are subtitle files.
+`duration` is the recording's length from its header, and no segment ends after it.
+
+With `stream: true` the response is server-sent events, one `transcript.text.delta` event per
+window that found new text, then `transcript.text.done` with the deltas joined by spaces, then `[DONE]`.
+A stream takes `response_format` `json` or `text` only. A failure after the first event ends
+the stream with an `error` event and no `[DONE]`. A client disconnect cancels the
+transcription.
+
+```text
+data: {"type":"transcript.text.delta","delta":"not too"}
+
+data: {"type":"transcript.text.delta","delta":"controversial"}
+
+data: {"type":"transcript.text.done","text":"not too controversial"}
+
+data: [DONE]
+```
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F file=@recording.bin
+curl -sSN http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F stream=true -F file=@recording.bin
+```
+
+### Errors
+
+| HTTP | `error.code`                 | When                                                                                                                                          |
+| ---- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                                                                        |
+| 400  | `missing_model`              | `model` is missing                                                                                                                            |
+| 400  | `missing_file`               | `file` is missing                                                                                                                             |
+| 400  | `invalid_neural_data`        | Short header, zero channels or samples, a length the header does not match, or model refusal                                                  |
+| 400  | `neural_data_too_large`      | `file` is over the model's input buffer, or a recording over 3000 timesteps without `stream`                                                  |
+| 400  | `invalid_response_format`    | Unknown format, or a timed format with `stream`                                                                                               |
+| 400  | `invalid_window`             | `window_timesteps` or `hop_timesteps` without `stream`, a window over 2900, or a hop not below the window (an omitted side takes its default) |
+| 400  | `invalid_request`            | The body carries an unknown field                                                                                                             |
+| 400  | `invalid_model_type`         | Alias is not a `bci` model                                                                                                                    |
+| 403  | `admin_disabled`             | The server was started without `--enable-admin`                                                                                               |
+| 403  | `origin_not_allowed`         | A browser request from an origin outside the CORS allowlist                                                                                   |
+| 404  | `model_not_found`            | Unknown alias                                                                                                                                 |
+| 429  | `request_rejected_by_policy` | More than 64 BCI requests are already waiting for the model                                                                                   |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                                                                                 |
+
+`file` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring a BCI model
+
+```json
+{
+  "serve": {
+    "models": {
+      "bci": {
+        "model": "BCI_WINDOWED",
+        "config": {
+          "whisperConfig": { "language": "en", "temperature": 0.0 },
+          "bciConfig": { "day_idx": 1 }
+        }
+      }
     }
   }
 }

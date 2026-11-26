@@ -26,6 +26,8 @@ export interface DefaultState {
   vlaOverride?: typeof sdk.vla
   vlaHparamsOverride?: typeof sdk.vlaHparams
   vlaSetEmbodimentOverride?: typeof sdk.vlaSetEmbodiment
+  bciTranscribeOverride?: typeof sdk.bciTranscribe
+  bciTranscribeStreamOverride?: typeof sdk.bciTranscribeStream
 }
 
 declare module '@/serve/core/context' {
