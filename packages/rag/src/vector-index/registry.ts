@@ -135,8 +135,9 @@ export interface IndexRegistry {
   // left behind never loads: a re-created namespace has another identity.
   drop(namespace: string, createdAt: number): Promise<void>
   // Reserves the snapshot directory for this provider and file system until
-  // the returned release runs; another pair on the same core is refused.
-  claim(config: IndexConfig, runtime: IndexRuntime): () => void
+  // the returned release runs; another pair on the same core is refused. The
+  // last release snapshots and forgets the directory's indexes.
+  claim(config: IndexConfig, runtime: IndexRuntime): () => Promise<void>
   close(): Promise<void>
 }
 
@@ -173,10 +174,10 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     { provider: NativeIndexModule; files: FileSystem | null; refs: number }
   >()
 
-  function claim(config: IndexConfig, runtime: IndexRuntime): () => void {
+  function claim(config: IndexConfig, runtime: IndexRuntime): () => Promise<void> {
     const { dir } = config
     const provider = runtime.native.module
-    if (dir === undefined || !provider?.load) return () => {}
+    if (dir === undefined || !provider?.load) return () => Promise.resolve()
     let held = claims.get(dir)
     if (held && (held.provider !== provider || held.files !== runtime.files)) {
       throw new QvacErrorRAG({
@@ -191,10 +192,20 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     const claimed = held
     claimed.refs++
     let released = false
-    return () => {
+    return async () => {
       if (released) return
       released = true
-      if (--claimed.refs === 0 && claims.get(dir) === claimed) claims.delete(dir)
+      if (--claimed.refs > 0 || claims.get(dir) !== claimed) return
+      claims.delete(dir)
+      // Entries leave the map before any await, so the next claim of the
+      // directory, with any fs, starts from fresh ones.
+      const detached: Entry[] = []
+      for (const [key, entry] of entries) {
+        if (entry.dir !== dir || !entry.store) continue
+        entries.delete(key)
+        detached.push(entry)
+      }
+      await retireEntries(detached)
     }
   }
 
@@ -643,13 +654,19 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
 
   async function close(): Promise<void> {
     closed = true
-    for (const entry of entries.values()) {
+    const all = Array.from(entries.values())
+    entries.clear()
+    await retireEntries(all)
+    await Promise.all(retiring)
+  }
+
+  // Snapshots each entry's index, then disposes it.
+  async function retireEntries(list: Entry[]): Promise<void> {
+    for (const entry of list) {
       while (entry.syncing) await entry.syncing.catch(() => {})
       if (entry.store && entry.native) await persistAndPrune(entry)
       discard(entry)
     }
-    entries.clear()
-    await Promise.all(retiring)
   }
 
   function retire(native: NativeIndex): void {

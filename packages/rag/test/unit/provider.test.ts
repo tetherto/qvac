@@ -326,3 +326,54 @@ test('dropNamespace deletes snapshots through the fs that wrote them', async (t)
   const left = fs.readdirSync(dir).flatMap((core) => fs.readdirSync(`${dir}/${core}`))
   t.alike(left, [], 'nothing left behind')
 })
+
+test('a directory reclaimed with another fs while the core stays open writes through the new fs', async (t) => {
+  const store = await openStore(t)
+  const dir = await tmp(t)
+  const { provider } = memoryProvider({ snapshots: true })
+  function counting(): { files: SnapshotFileSystem; writes: string[] } {
+    const real = fs.promises as unknown as SnapshotFileSystem
+    const writes: string[] = []
+    const files: SnapshotFileSystem = {
+      mkdir: (path, options) => real.mkdir(path, options),
+      readFile: (path, encoding) => real.readFile(path, encoding),
+      rename: (from, to) => real.rename(from, to),
+      unlink: (path) => real.unlink(path),
+      writeFile: (path, data) => {
+        writes.push(path)
+        return real.writeFile(path, data)
+      }
+    }
+    return { files, writes }
+  }
+  const first = counting()
+  const second = counting()
+
+  // Holds the core's shared index registry open across both RAGs below.
+  const keeper = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
+  await keeper.ready()
+  t.teardown(() => keeper.close())
+
+  const a = createRag({
+    corestore: store,
+    index: { provider, dir, fs: first.files, snapshotEvery: 1 }
+  })
+  await a.ready()
+  const { spaceId } = await a.createNamespace({ name: 'ns', space: SPACE })
+  await a.ingest({ namespace: 'ns', documents: ranked(spaceId, 2) })
+  await a.search({ scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 1 })
+  t.ok(first.writes.length > 0, 'the first fs wrote a snapshot')
+  await a.close()
+  first.writes.length = 0
+
+  const b = createRag({
+    corestore: store,
+    index: { provider, dir, fs: second.files, snapshotEvery: 1 }
+  })
+  await b.ready()
+  t.teardown(() => b.close())
+  await b.search({ scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 1 })
+  await b.ingest({ namespace: 'ns', documents: [doc('d02', spaceId, [['d02', [2, 1, 0]]])] })
+  t.ok(second.writes.length > 0, 'the new fs writes the snapshots')
+  t.alike(first.writes, [], 'the released fs is not used again')
+})

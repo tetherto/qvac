@@ -286,7 +286,7 @@ export function createRag(options: CreateRagOptions): Rag {
     runtime ??= await loadIndexRuntime(indexConfig)
     await corestore.ready()
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
-    let unclaim: () => void
+    let unclaim: () => Promise<void>
     try {
       unclaim = acquired.indexes.claim(indexConfig, runtime)
     } catch (error) {
@@ -296,7 +296,7 @@ export function createRag(options: CreateRagOptions): Rag {
     db = acquired.db
     indexes = acquired.indexes
     release = async () => {
-      unclaim()
+      await unclaim()
       await acquired.release()
     }
   }
