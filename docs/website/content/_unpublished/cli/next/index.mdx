@@ -338,7 +338,7 @@ What to pass:
 
 - A language model is judged at the SDK's default context of 1024 tokens unless `ctx_size` is set. `ctx_size=0` reports the longest context that fits.
 - A model made of several parts needs its companion files and engine in its config: a TTS model needs `ttsEngine`, a translation model its `engine` and a language pair (`from`, `to`). A translation model is judged once downloaded.
-- A companion file on its own, such as a projector, VAE or codec, cannot be judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it.
+- A companion file on its own, such as a projector, VAE or codec, cannot be judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it. The error is followed by a hint, and catalog mode lists these models under their own heading.
 
 #### Exit codes
 

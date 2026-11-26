@@ -14,6 +14,17 @@ describe('qvac runtime: without --enable-admin', () => {
     assert.deepEqual(res.json(), { object: 'list', data: [] })
   })
 
+  it('lists the capability contracts of the default worker', async () => {
+    const res = await server().inject({ method: 'GET', url: '/qvac/v1/runtime/capabilities' })
+    assert.equal(res.statusCode, 200, res.payload)
+    const body = res.json() as { object: string; data: Array<{ id: string; version: number }> }
+    assert.equal(body.object, 'list')
+    assert.ok(
+      body.data.some((capability) => capability.id === 'transcription' && capability.version === 1),
+      'the default plugin set declares transcription@1'
+    )
+  })
+
   it('refuses suspend and resume with 403 admin_disabled', async () => {
     for (const url of ['/qvac/v1/runtime/suspend', '/qvac/v1/runtime/resume']) {
       const res = await server().inject({ method: 'POST', url })

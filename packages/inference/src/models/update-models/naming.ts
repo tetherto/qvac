@@ -65,6 +65,14 @@ export function generateExportName({
 
   exportName = exportName.replace(/^_+|_+$/g, '').replace(/_+/g, '_')
 
+  // Models QVAC trained carry the shared `qvac` tag. Prefix their names so they
+  // stay apart from the upstream builds they were tuned from.
+  if (tags.includes('qvac')) {
+    exportName = exportName.startsWith('MMPROJ_')
+      ? `MMPROJ_QVAC_${exportName.slice('MMPROJ_'.length)}`
+      : `QVAC_${exportName}`
+  }
+
   // Add suffix for metadata files (tensors.txt are shard metadata, not actual models)
   if (lowerFilename.endsWith('.tensors.txt')) {
     exportName = `${exportName}_TENSORS`
@@ -257,6 +265,9 @@ function generateVadName({ filename, tagType, tagName }: BaseNameInput): string 
 function generateNmtName(input: BaseNameInput): string {
   const { lowerPath, lowerFilename } = input
 
+  const translatePsyNano = generateNmtTranslatePsyNanoName(input)
+  if (translatePsyNano) return translatePsyNano
+
   if (lowerPath.includes('salamandra') || lowerFilename.includes('salamandra')) {
     return generateNmtSalamandraName(input)
   }
@@ -269,6 +280,36 @@ function generateNmtName(input: BaseNameInput): string {
 
   const nameParts = [input.modelName, input.quantization].filter((p) => p && p !== '')
   return `NMT_${nameParts.map(cleanPart).join('_')}`
+}
+
+// TranslatePsy-AfriNano / -EuroNano publish one multilingual Bergamot pack per
+// direction and size, all with the same pair-less filenames
+// (`<repo>/resolve/<sha>/<en-xx|xx-en>/<Base|BaseMemory|Tiny>/intgemm/model.intgemm.alphas.bin`
+// beside `vocab.spm` and `lex.50.50.<enxx|xxen>.s2t.bin`), so the name comes from
+// the path: TRANSLATEPSY_AFRINANO_EN_XX_BASE, its _VOCAB / _LEX companions, etc.
+const TRANSLATEPSY_NANO_PATH_RE =
+  /(?:^|\/)translatepsy-(afrinano|euronano)\/(?:.+\/)?(en-xx|xx-en)\/(base|basememory|tiny)\/intgemm\/[^/]+$/
+const TRANSLATEPSY_NANO_SIZES: Record<string, string> = {
+  base: 'BASE',
+  basememory: 'BASE_MEMORY',
+  tiny: 'TINY'
+}
+
+function generateNmtTranslatePsyNanoName({ lowerPath, lowerFilename }: BaseNameInput): string {
+  const match = lowerPath.match(TRANSLATEPSY_NANO_PATH_RE)
+  if (!match?.[1] || !match[2] || !match[3]) return ''
+
+  let suffix = ''
+  if (lowerFilename === 'vocab.spm') {
+    suffix = '_VOCAB'
+  } else if (lowerFilename.startsWith('lex.')) {
+    suffix = '_LEX'
+  } else if (lowerFilename !== 'model.intgemm.alphas.bin') {
+    suffix = `_${cleanPart(lowerFilename.replace(/\.\w+$/, ''))}`
+  }
+
+  const direction = match[2] === 'en-xx' ? 'EN_XX' : 'XX_EN'
+  return `TRANSLATEPSY_${match[1].toUpperCase()}_${direction}_${TRANSLATEPSY_NANO_SIZES[match[3]]}${suffix}`
 }
 
 function generateNmtSalamandraName({ filename }: BaseNameInput): string {
@@ -480,6 +521,14 @@ function isIndicConformer(filename: string, lowerPath: string) {
 
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
+  const coremlComponent = lowerPath.match(
+    /(?:^|\/)(transcribepsy-250m-eu-(?:decoder|encoder-shared))\.mlmodelc\/(.+)$/
+  )
+  if (coremlComponent) {
+    const [, bundle, component] = coremlComponent
+    return `PARAKEET_${cleanPart(bundle!)}_${cleanPart(component!)}`
+  }
+
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
   if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {

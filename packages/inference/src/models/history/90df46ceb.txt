@@ -1,0 +1,10 @@
+commit=90df46ceb907e068fed26343eb6045e8bcfa95b3
+timestamp=2026-11-24T16:02:25.601Z
+previous_count=875
+new_count=878
+
+[added]
+QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M
+TAESDXL_VAE
+TAESD_VAE
+

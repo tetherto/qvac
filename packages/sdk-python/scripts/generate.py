@@ -299,15 +299,73 @@ def progress_response_title(method: dict) -> str | None:
     return f"{pascal_case(wire_type)}Response" if wire_type else None
 
 
+def relax_response_objects(schema: dict) -> dict:
+    """The schema with response objects open to unknown fields.
+
+    The contract describes responses in their output shape, where every object
+    has `additionalProperties: false`, and the generator turns that into
+    `extra="forbid"`. A client built against an older contract would then fail
+    on any field a newer worker adds. The JS client drops unknown fields unless
+    the Zod object is strict, which the contract marks `x-strict: true`; this
+    keeps `additionalProperties: false` on exactly those objects, so the Python
+    client accepts and rejects the same responses. Requests are described in
+    their input shape and are left as they are.
+    """
+
+    def relax(node: object) -> None:
+        if isinstance(node, list):
+            for item in node:
+                relax(item)
+        elif isinstance(node, dict):
+            if (
+                node.get("additionalProperties") is False
+                and node.get("x-strict") is not True
+            ):
+                del node["additionalProperties"]
+            for value in node.values():
+                relax(value)
+
+    def strip_marker(node: object) -> None:
+        if isinstance(node, list):
+            for item in node:
+                strip_marker(item)
+        elif isinstance(node, dict):
+            node.pop("x-strict", None)
+            for value in node.values():
+                strip_marker(value)
+
+    relaxed = json.loads(json.dumps(schema))
+    for name, definition in relaxed.get("$defs", {}).items():
+        if name.endswith(".response"):
+            relax(definition)
+    strip_marker(relaxed)
+    return relaxed
+
+
 def run_datamodel_codegen(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        codegen_schema = Path(tmp) / "schema.json"
+        codegen_schema.write_text(
+            json.dumps(
+                relax_response_objects(
+                    json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+                )
+            ),
+            encoding="utf-8",
+        )
+        run_codegen_on(codegen_schema, output_dir)
+    preserve_forbidden_fields(output_dir)
+
+
+def run_codegen_on(schema_path: Path, output_dir: Path) -> None:
     subprocess.run(
         [
             sys.executable,
             "-m",
             "datamodel_code_generator",
             "--input",
-            str(SCHEMA_PATH),
+            str(schema_path),
             "--input-file-type",
             "jsonschema",
             "--output",
@@ -341,7 +399,6 @@ def run_datamodel_codegen(output_dir: Path) -> None:
         ],
         check=True,
     )
-    preserve_forbidden_fields(output_dir)
 
 
 def preserve_forbidden_fields(output_dir: Path) -> None:

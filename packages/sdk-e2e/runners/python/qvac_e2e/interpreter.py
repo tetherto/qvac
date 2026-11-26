@@ -767,7 +767,8 @@ async def _completion_stream(
         return {
             "text": await streamed if streamed else await run.text(),
             "toolCalls": [
-                {"name": call.name, "arguments": call.arguments} for call in calls
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in calls
             ],
             "stats": _jsonable(final.stats),
             "stopReason": final.stop_reason,

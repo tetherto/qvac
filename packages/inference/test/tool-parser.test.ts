@@ -561,12 +561,26 @@ test('parseHarmonyFormat: hyphenated function names parse', (t) => {
 // Complete frame whose payload fails JSON.parse: matched=true (the parser
 // recognised its format) but the call surfaces as a PARSE_ERROR rather than
 // a silently dropped frame.
-test('parseHarmonyFormat: complete frame with malformed JSON surfaces PARSE_ERROR', (t) => {
+test('parseHarmonyFormat: complete frame with repairable JSON is repaired', (t) => {
   const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo",}<|call|>`
+  const result = parseHarmonyFormat(text, pythonicTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseHarmonyFormat: complete frame with unrepairable JSON surfaces PARSE_ERROR', (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{city Tokyo<|call|>`
   const result = parseHarmonyFormat(text, pythonicTools)
   t.is(result.matched, true)
   t.is(result.toolCalls.length, 0)
   t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseHarmonyFormat: an unclosed frame is not repaired into a call', (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tok`
+  const result = parseHarmonyFormat(text, pythonicTools)
+  t.is(result.toolCalls.length, 0)
   t.is(result.errors[0]?.code, 'PARSE_ERROR')
 })
 
@@ -862,6 +876,19 @@ test("parseQwen35Format: integer param '1.5' (non-integer) surfaces PARSE_ERROR"
   t.is(result.errors[0]?.code, 'PARSE_ERROR')
 })
 
+test('parseQwen35Format: array param missing its closer is repaired', (t) => {
+  const typedTool: Tool = {
+    type: 'function',
+    name: 'typed',
+    description: 'typed',
+    parameters: { type: 'object', properties: { tags: { type: 'array' } } }
+  }
+  const text = `<tool_call><function=typed><parameter=tags>[1,2</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [typedTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { tags: [1, 2] })
+})
+
 test('parseQwen35Format: malformed array param surfaces PARSE_ERROR (no raw-string fallback)', (t) => {
   const typedTool: Tool = {
     type: 'function',
@@ -873,7 +900,7 @@ test('parseQwen35Format: malformed array param surfaces PARSE_ERROR (no raw-stri
       required: ['count']
     }
   }
-  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=tags>[1,2</parameter></function></tool_call>`
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=tags>not a list</parameter></function></tool_call>`
   const result = parseQwen35Format(text, [typedTool])
   t.is(result.matched, true)
   t.is(result.toolCalls.length, 0)

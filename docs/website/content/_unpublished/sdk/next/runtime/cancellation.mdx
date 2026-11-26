@@ -151,9 +151,9 @@ AudioGen is different: targeted or broad cancellation is **hard**. The plugin ca
 
 ## Soft-cancel caveat for `loadModel`
 
-The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal today — a cancel that lands during the load phase still rejects the client's promise with `InferenceCancelledError`, but the addon finishes loading the model into memory in the background.
+The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal. A cancel that lands during the load phase takes effect when the addon has finished loading the model: the runtime then unloads the model instead of registering it, and the client's promise rejects with `InferenceCancelledError`. The call stays pending until then.
 
-The result is an **orphan model**: registered as loaded server-side, but the client believes the call failed. If you re-trigger `loadModel()` shortly after a cancel, prefer calling `unloadModel({ modelId })` first (using the model id you can derive deterministically from `modelSrc`) to avoid leaking RAM. A per-load cancel surface on the addon would close this gap; tracked as a follow-up.
+A `loadModel()` that fails on its [`loadMs` deadline](/sdk/runtime/deadlines#what-happens-on-expiry) rejects at the deadline, without waiting for the load, and the runtime unloads the model the same way once its load finishes. In both cases a `loadModel()` of the same configuration issued in the meantime waits for that unload and then loads the model again.
 
 ## `cancelFinetune` timing change
 
@@ -193,6 +193,8 @@ const run = completion({ modelId, history, stream: true, rpcOptions: { timeout: 
 ```
 
 A timeout also cancels the request on the worker, so the inference job stops.
+
+`timeout` is enforced by the client that sets it. To bound a request on the runtime itself, for every client and for the requests queued behind it, see [Deadlines](/sdk/runtime/deadlines).
 
 <Callout type="info">
 **Python:** `completion()` takes no per-call `timeout`, so this applies to the JS/TS SDK only.

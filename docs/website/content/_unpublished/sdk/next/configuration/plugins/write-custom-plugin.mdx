@@ -119,6 +119,7 @@ Implement the worker-side plugin in the `./plugin` entrypoint. Guidelines:
 - Set a human-readable `displayName`.
 - Set `addonPackage` if your plugin uses an addon (use `"none"` for pure JS plugins).
 - Implement `createModel(params)` using `params.modelPath` when your plugin requires model files.
+- Optionally declare the capability contracts your plugin serves in `provides`, so apps can find them with [`getRuntimeCapabilities()`](/sdk/reference/api#getruntimecapabilities). For a QVAC contract, pass its `CAPABILITY_CONTRACTS` entry, for example `provides: [CAPABILITY_CONTRACTS.transcription]`, imported from `@qvac/sdk/plugin-utils`. A contract QVAC does not define needs a dotted ID such as `acme.diarization` and lists its `operations`; its handlers must be reply or stream handlers, because apps call them through `invokePlugin()` and `invokePluginStream()`, which send no input stream. Registration fails when a required operation has no handler of the same name, or when a handler is a reply, stream or duplex handler where the SDK calls the operation another way. See [Runtime capabilities](/sdk/runtime/capabilities).
 
 Example:
 

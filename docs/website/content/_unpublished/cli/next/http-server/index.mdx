@@ -50,7 +50,7 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 The QVAC surface supports:
 * [Batch chat completion](#post-qvacv1chatbatch) — via `/qvac/v1/chat/batch`, several prompts decoded together on one LLM.
 * [System resources](#get-qvacv1system) — via `/qvac/v1/system`: the host's CPU, memory and GPUs.
-* [Runtime](#runtime-qvacv1runtime) — via `/qvac/v1/runtime/*`: lifecycle state and loaded models; suspend and resume behind `--enable-admin`.
+* [Runtime](#runtime-qvacv1runtime) — via `/qvac/v1/runtime/*`: lifecycle state, loaded models and capability contracts; suspend and resume behind `--enable-admin`.
 * [Model fit](#post-qvacv1modelsfit) — via `/qvac/v1/models/fit`: whether models fit together, before loading them.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 * [OCR](#post-qvacv1ocr) — via `/qvac/v1/ocr`, text recognition in an image.
@@ -59,6 +59,8 @@ The QVAC surface supports:
 * [Image upscaling](#post-qvacv1imagesupscale) — via `/qvac/v1/images/upscale`, backed by an ESRGAN model.
 * [Music](#music-qvacv1audio) — via `/qvac/v1/audio/generations`, `/qvac/v1/audio/edits` and `/qvac/v1/audio/understandings`, backed by an `audiogen` model.
 * [World](#world-qvacv1worldscenes-experimental) (experimental) — via `/qvac/v1/world/scenes`, an interactive walk on an ABot-World model.
+* [VLA](#vla-qvacv1vla-experimental) (experimental) — via `/qvac/v1/vla/*`, robot action chunks from a SmolVLA, π₀.₅ or GR00T model.
+* [BCI](#bci-post-qvacv1bcitranscriptions-experimental) (experimental) — via `/qvac/v1/bci/transcriptions`, text from a neural-signal recording.
 
 ## Running the server
 
@@ -477,7 +479,8 @@ Admin routes also refuse a request whose `Origin` header is outside `--cors-orig
 Clients that send no `Origin`, such as `curl` or an SDK, are unaffected.
 
 While the runtime is `suspending`, `suspended` or `resuming`, every route except
-`GET /qvac/v1/runtime/state`, `suspend` and `resume` answers `503 runtime_suspended`.
+`GET /qvac/v1/runtime/state`, `GET /qvac/v1/runtime/capabilities`, `suspend` and `resume` answers
+`503 runtime_suspended`.
 `/openapi.json`, `/docs` and `/qvac/identity` stay available.
 
 #### `GET /qvac/v1/runtime/state`
@@ -515,9 +518,35 @@ on-disk path is not returned.
 }
 ```
 
+#### `GET /qvac/v1/runtime/capabilities`
+
+The capability contracts the runtime's registered plugins declare, with the major version of each,
+from the SDK's `getRuntimeCapabilities()`. It reads plugin registration only, so it loads no model
+and answers while the runtime is suspended. An entry means a registered plugin declares the
+contract; a call still uses the plugin of the model it names, so an operation in
+`partialOperations` can fail for a given model.
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/runtime/capabilities
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "transcription",
+      "version": 1,
+      "operations": ["transcribe"],
+      "partialOperations": ["transcribeStream"]
+    }
+  ]
+}
+```
+
 #### `POST /qvac/v1/runtime/suspend` and `POST /qvac/v1/runtime/resume`
 
-Admin-only. Suspend pauses P2P resources and gates every route except state, suspend and resume
+Admin-only. Suspend pauses P2P resources and gates every route except state, capabilities, suspend and resume
 until resume. A request whose SDK call is already running finishes; one still waiting, on a model
 load say, gets `503 runtime_suspended`. Both are idempotent and return the state they leave the
 runtime in.
@@ -1323,6 +1352,222 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
           "t5XxlModelSrc": "UMT5_XXL_ENC_Q8_0",
           "vaeModelSrc": "ABOT_WORLD_0_5B_LF_WAN_VAE",
           "world": { "kvCache": true, "frameJpegQuality": 85 }
+        }
+      }
+    }
+  }
+}
+```
+
+### VLA: `/qvac/v1/vla/*` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Predict robot actions with a vision-language-action model (SmolVLA, π₀.₅ or GR00T), backed by
+the SDK's `vla()`, `vlaHparams()` and `vlaSetEmbodiment()`. `model` names a `serve.models`
+alias whose endpoint category is `vla`.
+
+The server does not tokenize: send the instruction already tokenized with the model's own
+tokenizer (SmolVLM2 for SmolVLA, PaliGemma for π₀.₅, Qwen3-VL for GR00T). It does
+preprocess camera frames and pad the buffers, so read the model's sizes first.
+
+#### `GET /qvac/v1/vla/models/{model}`
+
+The model's hyperparameters, verbatim from `vlaHparams()`, and its ggml backend. Loads the
+model if it is not loaded yet.
+
+```json
+{
+  "object": "vla.model",
+  "model": "smolvla",
+  "backend_name": "MTL0",
+  "hparams": {
+    "chunkSize": 50,
+    "actionDim": 7,
+    "maxActionDim": 32,
+    "maxStateDim": 32,
+    "tokenizerMaxLength": 48,
+    "visionImageSize": 512,
+    "numCameras": 2,
+    "stateInputMode": "continuous",
+    "imageInputMode": "pixels"
+  }
+}
+```
+
+#### `POST /qvac/v1/vla/actions`
+
+Predict one action chunk. JSON only.
+
+| Field           | Type       | Required | Meaning                                                                       |
+| --------------- | ---------- | -------- | ----------------------------------------------------------------------------- |
+| `model`         | `string`   | Yes      | A `serve.models` alias with endpoint category `vla`                           |
+| `images`        | `object[]` | Yes      | One frame per camera, `hparams.numCameras` in all (π₀.₅: 1 to that)           |
+| `tokens`        | `int[]`    | Yes      | Tokenized instruction, IDs from 0; zero-padded to `hparams.tokenizerMaxLength`, unpadded when that is 0 (GR00T) |
+| `attentionMask` | `(0\|1)[]` | No       | One entry per token, default 1 each; π₀.₅ takes 1s then 0s                           |
+| `state`         | `number[]` | No       | Robot state, zero-padded to `hparams.maxStateDim`; ignored by π₀.₅            |
+| `noise`         | `number[]` | No       | `chunkSize * maxActionDim` values; required for GR00T and π₀.₅, sampled for SmolVLA |
+
+Each `images` entry is one of:
+
+- `{ "pixels", "width", "height", "layout"? }` — base64 RGB bytes, 8 bits per channel,
+  `width * height * 3` long, `hwc` (default) or `chw`. The server letterboxes and normalises
+  them to `visionImageSize`, like the SDK's `vlaPreprocessImage()`.
+- `{ "tensor" }` — base64 little-endian float32 values, passed to the model unchanged: a
+  `3 * size * size` CHW plane in [-1, 1], or the `imagePatchElems` patch buffer that GR00T
+  takes. GR00T accepts `tensor` only.
+
+```json
+{
+  "object": "vla.actions",
+  "model": "smolvla",
+  "chunk_size": 50,
+  "action_dim": 7,
+  "actions": [[0.01, -0.12, 0.33, 0.0, 0.05, -0.02, 1.0], "..."],
+  "stats": { "vision_ms": 41.2, "prefill_total_ms": 63.0, "ode_ms": 120.5, "total_ms": 230.1 }
+}
+```
+
+`actions` holds `chunk_size` rows of `action_dim` values, in execution order. A model runs
+one action request at a time; another one sent meanwhile gets 429. A client disconnect
+cancels the run.
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/vla/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"smolvla","images":[{"pixels":"...","width":640,"height":480},{"pixels":"...","width":640,"height":480}],"tokens":[1,4521,302,2],"state":[0.1,0.2,0.0,0.0,0.0,0.0,0.0,0.04]}'
+```
+
+#### `POST /qvac/v1/vla/models/{model}/embodiment`
+
+Switch a multi-embodiment GR00T model to another embodiment in the same GGUF, without a
+reload. `embodiment` is a tag such as `"libero_sim"`, a `cat_id` from 0 to 31, or
+`{ "tag" | "catId", "numCameras"? }`. It answers with the new `hparams` (no `backend_name`);
+re-read `numCameras` before the next action request. The switch is refused while an action
+request runs on the model.
+
+#### Errors
+
+| HTTP | `error.code`                 | When                                                                                      |
+| ---- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                    |
+| 400  | `missing_model`              | `model` is missing                                                                        |
+| 400  | `invalid_images`             | Missing, wrong camera count, or a frame of the wrong size or form for the model           |
+| 400  | `invalid_tokens`             | `tokens` is missing, has a negative ID, or is longer than `tokenizerMaxLength` |
+| 400  | `invalid_attention_mask`     | No entry per token, or a 0 before a 1 for π₀.₅                                            |
+| 400  | `invalid_state`              | `state` is longer than `maxStateDim`                                                      |
+| 400  | `invalid_noise`              | `noise` is missing for GR00T or π₀.₅, or is not `chunkSize * maxActionDim` values         |
+| 400  | `invalid_vla_request`        | The model refused the inputs                                                              |
+| 400  | `invalid_embodiment`         | Malformed, not in the GGUF, or the model is not a multi-embodiment GR00T                  |
+| 400  | `invalid_request`            | The body carries an unknown field                                                         |
+| 400  | `invalid_model_type`         | Alias is not a `vla` model                                                                |
+| 404  | `model_not_found`            | Unknown alias                                                                             |
+| 429  | `request_rejected_by_policy` | Another action request or an embodiment switch is running on the model |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                             |
+
+#### Configuring a VLA model
+
+```json
+{
+  "serve": {
+    "models": {
+      "smolvla": { "model": "SMOLVLA_LIBERO_VISION_Q8", "config": { "backend": ["metal"] } },
+      "groot": { "model": "GROOT_MULTI_Q5_VF16", "config": { "embodiment": "libero_sim" } }
+    }
+  }
+}
+```
+
+### BCI: `POST /qvac/v1/bci/transcriptions` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Admin-only: the route answers `403 admin_disabled` unless the server was started with
+`--enable-admin` (or `"enableAdmin": true` under `serve`). The model's native reader does
+not yet check a recording's channel count against the model, so a mismatched recording can
+crash the worker.
+
+Transcribe a neural-signal recording with a BCI model, backed by the SDK's `bciTranscribe()`,
+or `bciTranscribeStream()` with `stream: true`. `model` names a `serve.models` alias whose
+endpoint category is `bci`. The request and response follow `/v1/audio/transcriptions`.
+
+Send JSON or `multipart/form-data`; `file` takes any of the [binary input](#binary-inputs)
+forms.
+
+| Field              | Type         | Required | Meaning                                                        |
+| ------------------ | ------------ | -------- | -------------------------------------------------------------- |
+| `model`            | `string`     | Yes      | A `serve.models` alias with endpoint category `bci`            |
+| `file`             | binary input | Yes      | The neural recording (layout below)                            |
+| `response_format`  | `string`     | No       | `json` (default), `text`, `verbose_json`, `srt` or `vtt`       |
+| `stream`           | `boolean`    | No       | Decode in sliding windows and send text as server-sent events  |
+| `window_timesteps` | `integer`    | No       | Stream only: decode window in 20 ms timesteps (default 1500, at most 2900) |
+| `hop_timesteps`    | `integer`    | No       | Stream only: window advance, below the window (default 500)    |
+
+The recording is a little-endian `[timesteps u32, channels u32]` header followed by
+`timesteps * channels` float32 samples, one timestep per 20 ms. A file with no samples or
+whose length does not match its header is rejected before the model loads. Without `stream`,
+the recording must fit one decode (at most 3000 timesteps); send a longer one with
+`stream: true`.
+
+`json` answers `{ "text": "not too controversial" }`. `verbose_json` adds `duration` and
+`segments` (`id`, `start`, `end`, `text`, in seconds); `srt` and `vtt` are subtitle files.
+`duration` is the recording's length from its header, and no segment ends after it.
+
+With `stream: true` the response is server-sent events, one `transcript.text.delta` event per
+window that found new text, then `transcript.text.done` with the deltas joined by spaces, then `[DONE]`.
+A stream takes `response_format` `json` or `text` only. A failure after the first event ends
+the stream with an `error` event and no `[DONE]`. A client disconnect cancels the
+transcription.
+
+```text
+data: {"type":"transcript.text.delta","delta":"not too"}
+
+data: {"type":"transcript.text.delta","delta":"controversial"}
+
+data: {"type":"transcript.text.done","text":"not too controversial"}
+
+data: [DONE]
+```
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F file=@recording.bin
+curl -sSN http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F stream=true -F file=@recording.bin
+```
+
+#### Errors
+
+| HTTP | `error.code`                 | When                                                                                 |
+| ---- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| 400  | `invalid_json`               | Body is not valid JSON                                                               |
+| 400  | `missing_model`              | `model` is missing                                                                   |
+| 400  | `missing_file`               | `file` is missing                                                                    |
+| 400  | `invalid_neural_data`        | Short header, zero channels or samples, a length the header does not match, or model refusal |
+| 400  | `neural_data_too_large`      | `file` is over the model's input buffer, or a recording over 3000 timesteps without `stream` |
+| 400  | `invalid_response_format`    | Unknown format, or a timed format with `stream`                                      |
+| 400  | `invalid_window`             | `window_timesteps` or `hop_timesteps` without `stream`, a window over 2900, or a hop not below the window (an omitted side takes its default) |
+| 400  | `invalid_request`            | The body carries an unknown field                                                    |
+| 400  | `invalid_model_type`         | Alias is not a `bci` model                                                           |
+| 403  | `admin_disabled`             | The server was started without `--enable-admin` |
+| 403  | `origin_not_allowed`         | A browser request from an origin outside the CORS allowlist |
+| 404  | `model_not_found`            | Unknown alias                                                                        |
+| 429  | `request_rejected_by_policy` | More than 64 BCI requests are already waiting for the model |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                        |
+
+`file` can also fail with the [binary input](#binary-inputs) codes.
+
+#### Configuring a BCI model
+
+```json
+{
+  "serve": {
+    "models": {
+      "bci": {
+        "model": "BCI_WINDOWED",
+        "config": {
+          "whisperConfig": { "language": "en", "temperature": 0.0 },
+          "bciConfig": { "day_idx": 1 }
         }
       }
     }

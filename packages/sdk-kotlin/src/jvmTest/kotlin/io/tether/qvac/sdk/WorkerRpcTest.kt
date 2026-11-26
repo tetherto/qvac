@@ -1,5 +1,8 @@
 package io.tether.qvac.sdk
 
+import io.tether.qvac.sdk.generated.QvacKnownException
+import io.tether.qvac.sdk.generated.schema.PluginInvokeStreamRequest
+import io.tether.qvac.sdk.generated.schema.RequestDeadline
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,9 +22,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import to.holepunch.bare.rpc.ConnectionClosedException
 import to.holepunch.bare.rpc.Message
@@ -87,6 +93,46 @@ class WorkerRpcTest {
 
             assertEquals("tick", first["type"]?.jsonPrimitive?.content)
             withTimeout(5_000) { workerJob.await() }
+        }
+    }
+
+    @Test
+    fun aDeadlineTravelsOnTheRequestAndItsExpiryFailsTheStreamWithATypedError() = runBlocking {
+        withWorkerSocket { transport, worker ->
+            val sent = CompletableDeferred<JsonObject>()
+            val workerJob = async(Dispatchers.IO) {
+                val request = assertIs<Message.Request>(worker.readMessage())
+                sent.complete(Json.parseToJsonElement(requireNotNull(request.data).decodeToString()).jsonObject)
+                worker.readMessage()
+                worker.write(Message.Response(request.id, STREAM_OPEN, null, null))
+                worker.write(Message.Stream(request.id, STREAM_RESPONSE or STREAM_DATA, STALLED_CHUNK.encodeToByteArray(), null))
+                worker.write(Message.Stream(request.id, STREAM_RESPONSE or STREAM_DATA, IDLE_DEADLINE_ERROR.encodeToByteArray(), null))
+                worker.write(Message.Stream(request.id, STREAM_RESPONSE or STREAM_END, null, null))
+            }
+
+            val chunks = mutableListOf<String>()
+            val error = withTimeout(5_000) {
+                assertFailsWith<QvacKnownException.ServerDeadlineExceeded> {
+                    QvacClient(transport).pluginInvokeStream(
+                        PluginInvokeStreamRequest(
+                            modelId = "stall-model",
+                            handler = "stall",
+                            params = buildJsonObject {},
+                            requestId = "stalled",
+                            deadline = RequestDeadline(idleMs = 300),
+                        ),
+                    ).collect { chunks += it.result.toString() }
+                }
+            }
+
+            assertEquals(300, sent.await()["deadline"]?.jsonObject?.get("idleMs")?.jsonPrimitive?.long)
+            assertEquals(listOf("{\"n\":1}"), chunks)
+            assertEquals(52425, error.code)
+            val fields = requireNotNull(error.payload["typedFields"]).jsonObject
+            assertEquals("idle", fields["boundary"]?.jsonPrimitive?.content)
+            assertEquals(300, fields["timeoutMs"]?.jsonPrimitive?.long)
+            assertEquals("stalled", fields["requestId"]?.jsonPrimitive?.content)
+            workerJob.await()
         }
     }
 
@@ -282,6 +328,14 @@ class WorkerRpcTest {
         }
     }
 }
+
+private const val STALLED_CHUNK = "{\"type\":\"pluginInvokeStream\",\"result\":{\"n\":1},\"done\":false}\n"
+
+/** The envelope the worker writes when a stream's idle deadline passes. */
+private const val IDLE_DEADLINE_ERROR =
+    "{\"type\":\"error\",\"name\":\"DEADLINE_EXCEEDED\",\"code\":52425," +
+        "\"message\":\"Request \\\"stalled\\\" exceeded its idle deadline of 300ms\"," +
+        "\"typedFields\":{\"requestId\":\"stalled\",\"boundary\":\"idle\",\"timeoutMs\":300,\"modelId\":\"stall-model\"}}\n"
 
 private const val STREAM_OPEN = 0x1uL
 private const val STREAM_PAUSE = 0x4uL

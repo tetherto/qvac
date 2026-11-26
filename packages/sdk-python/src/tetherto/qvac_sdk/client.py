@@ -35,6 +35,7 @@ import json
 import os
 import subprocess
 import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -299,11 +300,14 @@ class Client:
             self._connected = True
         return self
 
-    async def open_session(self, name: str | None = None) -> Session:
+    async def open_session(
+        self, name: str | None = None, *, grant: Sequence[str] | None = None
+    ) -> Session:
         """Opens a caller session on this runtime. Pass `session.transport` to
-        any wrapper or stub; its calls carry the session id."""
+        any wrapper or stub; its calls carry the session id. `grant` limits
+        the session to the listed permissions; see `caller_session.open_session`."""
         session = await open_session(
-            self.transport, name, on_closed=self._sessions.remove
+            self.transport, name, grant=grant, on_closed=self._sessions.remove
         )
         self._sessions.append(session)
         return session

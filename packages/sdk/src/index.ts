@@ -31,6 +31,7 @@ export {
   stopRpcServer,
   discoverRpcServers,
   getSystemResources,
+  getRuntimeCapabilities,
   assessModelFit,
   loggingStream,
   subscribeServerLogs,
@@ -220,6 +221,14 @@ export {
   type GPUResourceSample,
   type SystemResourceSample,
   type SystemResources,
+  CAPABILITY_CONTRACTS,
+  type CapabilityContract,
+  type CapabilityDeclaration,
+  type RuntimeCapability,
+  capabilityPermissions,
+  RUNTIME_PERMISSION_OPERATIONS,
+  type RuntimePermissionOperation,
+  type SessionGrant,
   type AssessModelFitInput,
   type TranscriptionFitWorkload,
   type TtsFitWorkload,
@@ -407,6 +416,8 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
+  type DeadlineBoundary,
   TranslationFailedError,
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
@@ -416,7 +427,9 @@ export {
   SessionNotOpenError,
   ModelLeasedError,
   ModelReconfiguredError,
-  OwnerOnlyError
+  OwnerOnlyError,
+  CapabilityNotGrantedError,
+  SessionGrantInvalidError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
