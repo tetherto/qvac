@@ -2,7 +2,12 @@ import HyperDB from 'hyperdb'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
-import { FIRST_NATIVE_ID, encodeNativeId } from './db/encoding.js'
+import {
+  DEFAULT_VECTOR_ENCODING,
+  FIRST_NATIVE_ID,
+  encodeNativeId,
+  roundToEncoding
+} from './db/encoding.js'
 import {
   DOCUMENTS,
   NAMESPACES,
@@ -35,6 +40,7 @@ import {
   parseScopedReadDocument,
   parseSearch,
   checkRows,
+  parseVectorEncoding,
   type ParsedDocument,
   type ValidDocument,
   type ValidSearch,
@@ -45,6 +51,7 @@ import {
   appendMutation,
   checkChunks,
   deleteDocument,
+  encodingOf,
   getNamespace,
   newCreatedAt,
   newLineageId,
@@ -350,6 +357,7 @@ export function createRag(options: CreateRagOptions): Rag {
     const space = parseEmbeddingSpace(params?.space)
     const spaceId = computeSpaceId(space)
     const requested = parseIndexStorage(params?.index, space.dimensions)
+    const requestedEncoding = parseVectorEncoding(params?.vectorEncoding)
 
     return await withTransaction(database(), async (tx) => {
       const existing = await tx.get<NamespaceRecord>(NAMESPACES, { name })
@@ -367,9 +375,17 @@ export function createRag(options: CreateRagOptions): Rag {
             adds: `'${name}' uses index storage '${storage}'`
           })
         }
-        return { name, spaceId, revision: existing.revision, index: { storage } }
+        const vectorEncoding = encodingOf(existing)
+        if (requestedEncoding !== undefined && requestedEncoding !== vectorEncoding) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.NAMESPACE_EXISTS,
+            adds: `'${name}' stores '${vectorEncoding}' vectors`
+          })
+        }
+        return { name, spaceId, revision: existing.revision, index: { storage }, vectorEncoding }
       }
       const storage = requested ?? DEFAULT_INDEX_STORAGE
+      const vectorEncoding = requestedEncoding ?? DEFAULT_VECTOR_ENCODING
       if (!(await tx.get<SpaceRecord>(SPACES, { spaceId }))) {
         await tx.insert(SPACES, { spaceId, ...space })
       }
@@ -380,10 +396,11 @@ export function createRag(options: CreateRagOptions): Rag {
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
         createdAt: newCreatedAt(),
         indexStorage: storage,
-        lineageId: newLineageId()
+        lineageId: newLineageId(),
+        vectorEncoding
       })
       await tx.flush()
-      return { name, spaceId, revision: 0, index: { storage } }
+      return { name, spaceId, revision: 0, index: { storage }, vectorEncoding }
     })
   }
 
@@ -399,8 +416,13 @@ export function createRag(options: CreateRagOptions): Rag {
     const port = documents.some((entry) => entry.kind !== 'embedded')
       ? requireEmbedder(namespace, space)
       : null
+    // Vectors are hashed and indexed as they will be stored, so an export of
+    // the namespace matches its own content hashes.
+    const encoding = encodingOf(ns)
     for (const entry of documents) {
-      if (entry.kind === 'embedded') checkChunks(namespace, ns, space, entry.document)
+      if (entry.kind !== 'embedded') continue
+      checkChunks(namespace, ns, space, entry.document)
+      for (const chunk of entry.document.chunks) roundToEncoding(chunk.embedding, encoding)
     }
 
     const jobs = prepareJobs(namespace, documents, chunker, space, onProgress)
@@ -448,6 +470,8 @@ export function createRag(options: CreateRagOptions): Rag {
         } else {
           const document = toValidDocument(job, space.spaceId)
           checkChunks(namespace, ns, space, document)
+          // Port vectors are checked against the encoding's range before rounding.
+          for (const chunk of document.chunks) roundToEncoding(chunk.embedding, encoding)
           committed = await withTransaction(instance, (tx) =>
             signal?.aborted
               ? Promise.resolve(null)
@@ -765,9 +789,20 @@ export function createRag(options: CreateRagOptions): Rag {
         const { ns, space } = await readNamespace(reader, scope.namespace)
         // A bad query fails before it can trigger an index rebuild.
         checkQuery(space, scope, query)
-        const scan = () => scanSearch(reader, space, scope, query, k, options)
+        const encoding = encodingOf(ns)
+        const scan = () => scanSearch(reader, space, encoding, scope, query, k, options)
         if (attempt === SEARCH_INDEX_ATTEMPTS) return await scan()
-        const hits = await indexSearch(reader, ns.revision, space, scope, query, k, open, options)
+        const hits = await indexSearch(
+          reader,
+          ns.revision,
+          space,
+          encoding,
+          scope,
+          query,
+          k,
+          open,
+          options
+        )
         if (hits === 'unavailable') {
           reportFallback(handles, scope.namespace)
           return await scan()

@@ -1,5 +1,11 @@
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
-import { decodeNativeId, decodeVectorInto, unpackNativeIds } from '../db/encoding.js'
+import {
+  DEFAULT_VECTOR_ENCODING,
+  decodeNativeId,
+  decodeVectorInto,
+  encodingOf,
+  unpackNativeIds
+} from '../db/encoding.js'
 import {
   CHUNKS,
   MUTATIONS,
@@ -29,7 +35,7 @@ import {
   type SnapshotStore
 } from './snapshots.js'
 import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from '../db/db-types.js'
-import type { IndexStatus, IndexStorage } from '../types.js'
+import type { IndexStatus, IndexStorage, VectorEncoding } from '../types.js'
 
 // Rows decoded per native add while rebuilding; memory stays bounded by this.
 export const REBUILD_BATCH_SIZE = 1024
@@ -85,6 +91,8 @@ interface Entry {
   native: NativeIndex | null
   identity: SnapshotIdentity | null
   normalize: boolean
+  // How the namespace stores its vectors.
+  encoding: VectorEncoding
   revision: number
   rows: number
   // False once a mutation failed and left the index half-applied.
@@ -219,6 +227,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         native: null,
         identity: null,
         normalize: false,
+        encoding: DEFAULT_VECTOR_ENCODING,
         revision: 0,
         rows: 0,
         settled: SETTLED,
@@ -373,6 +382,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         dimensions: space.dimensions
       }
       entry.normalize = space.metric === 'cosine'
+      entry.encoding = encodingOf(ns)
 
       if (entry.native && !sameIdentity(entry.identity, identity)) discard(entry)
       entry.identity = identity
@@ -453,7 +463,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       for (let i = 0; i < added.length; i++) {
         if (present[i]) continue
         // Absent rows were removed by a later mutation in this range.
-        const vector = await readVector(reader, namespace, added[i])
+        const vector = await readVector(reader, namespace, added[i], native.dim, entry.encoding)
         if (vector) {
           ids.push(added[i])
           vectors.push(vector)
@@ -490,8 +500,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       const namespace = entry.namespace
       const stream = reader.find<ChunkRecord>(CHUNKS, { gte: { namespace }, lte: { namespace } })
       for await (const chunk of stream) {
-        checkStoredVector(chunk, dims)
-        decodeVectorInto(chunk.vector, vectors, rows * dims)
+        checkStoredVector(chunk, dims, entry.encoding)
+        decodeVectorInto(chunk.vector, vectors, rows * dims, dims, entry.encoding)
         ids[rows++] = decodeNativeId(chunk.nativeId)
         if (rows === REBUILD_BATCH_SIZE) await flush()
       }
@@ -760,7 +770,9 @@ async function writeSettled(
 async function readVector(
   reader: HyperDBReader,
   namespace: string,
-  id: bigint
+  id: bigint,
+  dims: number,
+  encoding: VectorEncoding
 ): Promise<Float32Array | null> {
   const nativeId = new Uint8Array(8)
   new DataView(nativeId.buffer).setBigUint64(0, id, false)
@@ -773,8 +785,9 @@ async function readVector(
     ordinal: row.ordinal
   })
   if (!chunk) return null
-  const vector = new Float32Array(chunk.vector.byteLength / 4)
-  decodeVectorInto(chunk.vector, vector, 0)
+  checkStoredVector(chunk, dims, encoding)
+  const vector = new Float32Array(dims)
+  decodeVectorInto(chunk.vector, vector, 0, dims, encoding)
   return vector
 }
 

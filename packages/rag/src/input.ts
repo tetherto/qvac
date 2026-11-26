@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
 import { hasProtoKey, metadataProblem, name, optionalJson, rowSizeProblem, text } from './limits.js'
-import type { DeleteDocumentsParams, ImportOptions, IngestOptions } from './types.js'
+import type {
+  DeleteDocumentsParams,
+  ImportOptions,
+  IngestOptions,
+  VectorEncoding
+} from './types.js'
 
 export interface ValidChunk {
   id: string
@@ -541,5 +546,11 @@ export function parseDropNamespace(params: unknown): string {
 export function parseNamespaceName(value: unknown): string {
   const parsed = name.safeParse(value)
   if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data
+}
+
+export function parseVectorEncoding(value: unknown): VectorEncoding | undefined {
+  const parsed = z.enum(['f32', 'f16']).optional().safeParse(value)
+  if (!parsed.success) throw fromZodError(ERR_CODES.INVALID_INPUT, parsed.error, 'vectorEncoding')
   return parsed.data
 }

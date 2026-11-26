@@ -1,9 +1,13 @@
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 
 // `QVRAGX1` stream: this magic, then frames of [u32 LE payload length][u8 type]
-// [payload]. Text fields are JSON; a chunk frame's vector is raw float32 LE.
+// [payload]. Text fields are JSON; a chunk frame's vector is raw float32 LE, or
+// float16 LE when the header says `vectorEncoding: 'f16'`.
 export const MAGIC = new Uint8Array([0x51, 0x56, 0x52, 0x41, 0x47, 0x58, 0x31, 0x0a]) // "QVRAGX1\n"
+// Format 2 adds the header's `vectorEncoding`. 'f32' namespaces still export
+// format 1, so earlier versions can import them.
 export const FORMAT_VERSION = 1
+export const FORMAT_VERSION_ENCODED = 2
 
 export const FRAME = Object.freeze({
   HEADER: 1,

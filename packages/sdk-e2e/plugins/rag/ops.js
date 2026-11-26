@@ -175,12 +175,13 @@ export function createRagOps(host) {
       }
     },
 
-    async createNamespace({ store, name, dimensions, storage }) {
+    async createNamespace({ store, name, dimensions, storage, vectorEncoding }) {
       const space = dimensions ? { ...SPACE, dimensions } : SPACE
       const info = await storeOf(store).rag.createNamespace({
         name,
         space,
-        ...(storage && { index: { storage } })
+        ...(storage && { index: { storage } }),
+        ...(vectorEncoding && { vectorEncoding })
       })
       return info
     },
@@ -283,6 +284,38 @@ export function createRagOps(host) {
       )
     },
 
+    // An export as hex, so it can travel through a step to the other runtime.
+    async exportHex({ store, namespace }) {
+      let hex = ''
+      for await (const chunk of storeOf(store).rag.exportNamespace({ namespace })) {
+        for (const byte of chunk) hex += byte.toString(16).padStart(2, '0')
+      }
+      return { hex, bytes: hex.length / 2 }
+    },
+
+    async importHex({ store, namespace, hex }) {
+      const bytes = new Uint8Array(hex.length / 2)
+      for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+      async function* source() {
+        yield bytes
+      }
+      return await storeOf(store).rag.importNamespace({ namespace, source: source() })
+    },
+
+    // Searches and compares the hits with `against`, hits from another search: whether the
+    // same chunks come back in the same order, and the largest score difference between them.
+    async searchDelta({ store, against, ...params }) {
+      const hits = await storeOf(store).rag.search(params)
+      const key = (hit) => `${hit.documentId}:${hit.ordinal}`
+      const sameOrder =
+        hits.length === against.length && hits.every((hit, i) => key(hit) === key(against[i]))
+      let maxScoreDelta = 0
+      for (let i = 0; i < Math.min(hits.length, against.length); i++) {
+        maxScoreDelta = Math.max(maxScoreDelta, Math.abs(hits[i].score - against[i].score))
+      }
+      return { sameOrder, maxScoreDelta, hits: hits.length }
+    },
+
     async importBytes({ store, namespace, text }) {
       async function* source() {
         yield encode(text)
@@ -332,5 +365,8 @@ export const RAG_OPS = [
   'dropNamespace',
   'indexStatus',
   'transfer',
+  'exportHex',
+  'importHex',
+  'searchDelta',
   'importBytes'
 ]

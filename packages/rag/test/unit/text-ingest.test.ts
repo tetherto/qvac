@@ -43,7 +43,7 @@ function chunkedDoc(id: string, count: number, word = 'cat') {
 
 function vectorOf(chunk: ChunkRecord): number[] {
   const out = new Float32Array(SPACE.dimensions)
-  decodeVectorInto(chunk.vector, out, 0)
+  decodeVectorInto(chunk.vector, out, 0, SPACE.dimensions, 'f32')
   return Array.from(out)
 }
 

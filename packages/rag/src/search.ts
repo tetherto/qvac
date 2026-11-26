@@ -1,5 +1,5 @@
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
-import { decodeVectorInto } from './db/encoding.js'
+import { decodeVectorInto, vectorBytes } from './db/encoding.js'
 import {
   CHUNKS,
   DOCUMENTS,
@@ -9,7 +9,7 @@ import {
 } from './db/records.js'
 import type { HyperDBReader } from './db/db-types.js'
 import { selectDiverse } from './diversify.js'
-import type { SearchCitation, SearchHit, SearchScope } from './types.js'
+import type { SearchCitation, SearchHit, SearchScope, VectorEncoding } from './types.js'
 
 // Rows decoded and scored per step. Memory stays bounded by this and by k (with
 // `perDocument`, k documents of at most `perDocument` hits each).
@@ -43,6 +43,7 @@ interface Ranked {
 export async function scanSearch(
   reader: HyperDBReader,
   space: SpaceRecord,
+  encoding: VectorEncoding,
   scope: SearchScope,
   { vector: query, spaceId }: SearchQuery,
   k: number,
@@ -103,8 +104,8 @@ export async function scanSearch(
 
   for (const range of ranges) {
     for await (const chunk of reader.find<ChunkRecord>(CHUNKS, range)) {
-      checkStoredVector(chunk, dims)
-      decodeVectorInto(chunk.vector, vectors, batch.length * dims)
+      checkStoredVector(chunk, dims, encoding)
+      decodeVectorInto(chunk.vector, vectors, batch.length * dims, dims, encoding)
       batch.push(chunk)
       if (batch.length === SCAN_BATCH_SIZE) {
         scoreBatch()
@@ -168,8 +169,13 @@ export function checkQuery(
   }
 }
 
-export function checkStoredVector(chunk: ChunkRecord, dims: number): void {
-  if (chunk.vector.byteLength !== dims * 4) {
+// A namespace stores 4 bytes per dimension, or 2 for 'f16'.
+export function checkStoredVector(
+  chunk: ChunkRecord,
+  dims: number,
+  encoding: VectorEncoding
+): void {
+  if (chunk.vector.byteLength !== dims * vectorBytes(encoding)) {
     throw new QvacErrorRAG({
       code: ERR_CODES.DB_OPERATION_FAILED,
       adds: `stored vector for '${chunk.documentId}' chunk ${chunk.ordinal} has the wrong size`

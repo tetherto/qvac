@@ -33,6 +33,10 @@ export interface ChunkingOptions {
 // dimension; the TurboVec modes need dimensions divisible by 8 and at most 1,024.
 export type IndexStorage = 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
 
+// How chunk vectors are stored in the database and in exports. 'f16' halves
+// their size; scores are computed from the rounded values.
+export type VectorEncoding = 'f32' | 'f16'
+
 export interface IndexOptions {
   // Directory for index snapshots. Without it, indexes stay in memory and
   // are rebuilt from the database the first time each namespace is searched.
@@ -138,6 +142,8 @@ export interface CreateNamespaceParams {
   space: EmbeddingSpace
   // Fixed at creation. Defaults to `{ storage: 'q8' }`.
   index?: { storage?: IndexStorage }
+  // Fixed at creation. Defaults to 'f32'.
+  vectorEncoding?: VectorEncoding
 }
 
 export interface NamespaceInfo {
@@ -145,6 +151,7 @@ export interface NamespaceInfo {
   spaceId: string
   revision: number
   index: { storage: IndexStorage }
+  vectorEncoding: VectorEncoding
 }
 
 export interface EmbeddedChunkInput {
@@ -429,6 +436,7 @@ export interface NamespaceSummary {
   spaceId: string
   space: EmbeddingSpace
   index: { storage: IndexStorage }
+  vectorEncoding: VectorEncoding
   revision: number
   documentCount: number
   chunkCount: number
