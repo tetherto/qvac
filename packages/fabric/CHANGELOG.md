@@ -54,9 +54,9 @@
   narrow matmuls on RDNA3 and RDNA4. On RADV RDNA3, an f16-B coopmat matmul
   for dense K-quant prefill (`GGML_VK_DENSE_F16COOPMAT=0`), not bit-exact
   ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
-- `llama-server` samples greedy requests on the backend by default
-  (`--no-backend-sampling-auto` turns it off); `backend_sampling_auto` is off
-  for every other caller
+- `backend_sampling_auto` samples greedy requests on the backend. Only the
+  `llama-server` defaults, which these packages do not ship, turn it on;
+  other callers keep CPU sampling
   ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
 - Greedy `common_sampler` sampling takes the arg-max of the raw logits and
   falls back to the sampler chain on a tie, a NaN logit or a winner with a
