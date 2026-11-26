@@ -15,7 +15,6 @@ import {
   mutate,
   openRag,
   rejectsWithCode,
-  useScan,
   type Test
 } from './helpers.js'
 import type { Rag } from '../../src/types.js'
@@ -287,8 +286,7 @@ test('f16 search scores the rounded vectors through the index, the scan and a re
   await reopened.ready()
   t.alike(await scores(reopened, 'ns', spaceId), expected, 'index rebuilt from the store')
 
-  useScan(t)
-  const scanned = createRag({ corestore: store })
+  const scanned = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
   t.teardown(() => scanned.close())
   await scanned.ready()
   t.alike(await scores(scanned, 'ns', spaceId), expected, 'scan')
