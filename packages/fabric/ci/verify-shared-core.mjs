@@ -14,13 +14,17 @@ writeFileSync(
 include("${checks}/qvac-check-cxx-runtime.cmake")
 include("${checks}/qvac-check-shared-core.cmake")
 file(GLOB modules "${directory}/libqvac-ggml-*.so")
-${host === 'linux-x64' ? `
+${
+  host === 'linux-x64'
+    ? `
 file(GLOB cuda_modules "${directory}-cuda/libqvac-ggml-cuda*.so")
 if(NOT cuda_modules)
   message(FATAL_ERROR "Missing split CUDA backend in ${directory}-cuda")
 endif()
 list(APPEND modules \${cuda_modules})
-` : ''}
+`
+    : ''
+}
 qvac_check_shared_core(PROVIDER "${directory}/libqvac-ggml-base-1.so" ${process.argv.includes('--xdna') ? 'WITH_XDNA' : ''} \${modules})
 find_program(READELF NAMES llvm-readelf readelf REQUIRED)
 set(MODULE "${resolve(`prebuilds/${host}/qvac__fabric-${host}.bare`).replaceAll('\\', '/')}")
