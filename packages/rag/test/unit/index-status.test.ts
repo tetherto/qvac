@@ -22,6 +22,7 @@ import type {
   IndexOptions,
   IndexProvider,
   Rag,
+  SnapshotErrorEvent,
   SnapshotFileSystem
 } from '../../src/types.js'
 
@@ -30,16 +31,19 @@ interface Opened {
   spaceId: string
   dir: string
   events: IndexFallbackEvent[]
+  snapshotErrors: SnapshotErrorEvent[]
 }
 
 async function open(t: Test, index: IndexOptions = {}): Promise<Opened> {
   const store = new Corestore(await tmp(t))
   const dir = await tmp(t)
   const events: IndexFallbackEvent[] = []
+  const snapshotErrors: SnapshotErrorEvent[] = []
   const rag = createRag({
     corestore: store,
     index: { dir, ...index },
-    onIndexFallback: (event) => events.push(event)
+    onIndexFallback: (event) => events.push(event),
+    onSnapshotError: (event) => snapshotErrors.push(event)
   })
   await rag.ready()
   t.teardown(async () => {
@@ -51,7 +55,7 @@ async function open(t: Test, index: IndexOptions = {}): Promise<Opened> {
     namespace: 'ns',
     documents: [doc('a', spaceId, [['a', [1, 0, 0]]]), doc('b', spaceId, [['b', [0, 1, 0]]])]
   })
-  return { rag, spaceId, dir, events }
+  return { rag, spaceId, dir, events, snapshotErrors }
 }
 
 function forgetLoadedModules(): void {
@@ -102,7 +106,7 @@ function failing(real: RealProvider, method: 'addWithIds' | 'search'): IndexProv
 
 test('a host that seals module loading after ready() keeps the index and its snapshots', async (t) => {
   let sealed = false
-  const loads = { turbovec: 0, bareFs: 0 }
+  const loads = { turbovec: 0, fs: 0 }
   const original = { ...importers }
   function sealable(name: keyof typeof importers) {
     return () => {
@@ -111,7 +115,7 @@ test('a host that seals module loading after ready() keeps the index and its sna
       return original[name]()
     }
   }
-  useImporters(t, { turbovec: sealable('turbovec'), bareFs: sealable('bareFs') })
+  useImporters(t, { turbovec: sealable('turbovec'), fs: sealable('fs') })
 
   const { rag, spaceId, dir } = await open(t, { snapshotEvery: 1 })
   sealed = true
@@ -125,7 +129,7 @@ test('a host that seals module loading after ready() keeps the index and its sna
     snapshot: 'ok'
   })
   t.is(snapshotCount(dir), 1, 'a snapshot was written after the seal')
-  t.alike(loads, { turbovec: 1, bareFs: 1 }, 'both imported once, during ready()')
+  t.alike(loads, { turbovec: 1, fs: 1 }, 'both imported once, during ready()')
 })
 
 test('without the addon, status and the callback report addon-missing once', async (t) => {
@@ -180,8 +184,8 @@ for (const [method, reason] of [
 
 test('a file system that fails to load keeps the index in memory', async (t) => {
   const cause = new Error('fs sealed')
-  useImporters(t, { bareFs: () => Promise.reject(cause) })
-  const { rag, spaceId, dir, events } = await open(t, { snapshotEvery: 1 })
+  useImporters(t, { fs: () => Promise.reject(cause) })
+  const { rag, spaceId, dir, events, snapshotErrors } = await open(t, { snapshotEvery: 1 })
   t.alike(await searchIds(rag, spaceId), ['a', 'b'])
   t.alike(await rag.indexStatus({ namespace: 'ns' }), {
     mode: 'index',
@@ -197,6 +201,7 @@ test('a file system that fails to load keeps the index in memory', async (t) => 
     'a commit past snapshotEvery keeps the error'
   )
   t.alike(events, [], 'not a fallback')
+  t.alike(snapshotErrors, [{ namespace: 'ns', error: cause }], 'reported once')
 })
 
 test('an unreadable snapshot is reported until a snapshot is written', async (t) => {
@@ -269,7 +274,7 @@ test('a snapshot write failure through a supplied fs keeps the index and is repo
     writeFile: (path, data) =>
       failWrites ? Promise.reject(new Error('disk full')) : real.writeFile(path, data)
   }
-  const { rag, spaceId, events } = await open(t, { snapshotEvery: 1, fs: files })
+  const { rag, spaceId, events, snapshotErrors } = await open(t, { snapshotEvery: 1, fs: files })
   t.alike(await searchIds(rag, spaceId), ['a', 'b'])
   const status = await rag.indexStatus({ namespace: 'ns' })
   t.is(status.mode, 'index', 'still searched by the index')
@@ -288,6 +293,104 @@ test('a snapshot write failure through a supplied fs keeps the index and is repo
     snapshot: 'ok'
   })
   t.alike(events, [])
+  t.alike(
+    snapshotErrors.map((event) => [event.namespace, (event.error as Error).message]),
+    [['ns', 'disk full']],
+    'reported once while writes fail'
+  )
+
+  failWrites = true
+  await rag.ingest({ namespace: 'ns', documents: [doc('d', spaceId, [['d', [1, 1, 0]]])] })
+  t.is(snapshotErrors.length, 2, 'a failure after a written snapshot is reported again')
+})
+
+test('a snapshot write that fails on close is reported', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close(), { order: 1 })
+  const dir = await tmp(t)
+  const real = bareFs()
+  const files: SnapshotFileSystem = {
+    mkdir: (path, options) => real.mkdir(path, options),
+    readFile: (path, encoding) => real.readFile(path, encoding),
+    rename: () => Promise.reject(new Error('read-only')),
+    unlink: (path) => real.unlink(path),
+    writeFile: (path, data) => real.writeFile(path, data)
+  }
+  const snapshotErrors: SnapshotErrorEvent[] = []
+  const rag = createRag({
+    corestore: store,
+    index: { dir, fs: files },
+    onSnapshotError: (event) => snapshotErrors.push(event)
+  })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  t.alike(await searchIds(rag, spaceId), ['a'])
+  t.alike(snapshotErrors, [], 'no write before close')
+  await rag.close()
+  t.alike(
+    snapshotErrors.map((event) => [event.namespace, (event.error as Error).message]),
+    [['ns', 'read-only']]
+  )
+})
+
+test('a RAG joining a directory whose snapshots already fail is told', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close(), { order: 1 })
+  const dir = await tmp(t)
+  const cause = new Error('fs sealed')
+  useImporters(t, { fs: () => Promise.reject(cause) })
+
+  const first = createRag({ corestore: store, index: { dir } })
+  await first.ready()
+  t.teardown(() => first.close())
+  const { spaceId } = await first.createNamespace({ name: 'ns', space: SPACE })
+  await first.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await searchIds(first, spaceId)
+
+  const snapshotErrors: SnapshotErrorEvent[] = []
+  const joined = createRag({
+    corestore: store,
+    index: { dir },
+    onSnapshotError: (event) => snapshotErrors.push(event)
+  })
+  await joined.ready()
+  t.teardown(() => joined.close())
+  t.alike(snapshotErrors, [{ namespace: 'ns', error: cause }], 'told on joining')
+  await searchIds(joined, spaceId)
+  t.is(snapshotErrors.length, 1, 'once per run')
+})
+
+test('onSnapshotError is validated, and its throws and rejections are ignored', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  t.exception(
+    () => createRag({ corestore: store, onSnapshotError: 'nope' as never }),
+    /onSnapshotError must be a function/
+  )
+
+  const unhandled: unknown[] = []
+  const onUnhandled = (error: unknown) => unhandled.push(error)
+  Bare.on('unhandledRejection', onUnhandled)
+  t.teardown(() => {
+    Bare.off('unhandledRejection', onUnhandled)
+  })
+  useImporters(t, { fs: () => Promise.reject(new Error('fs sealed')) })
+  for (const onSnapshotError of [
+    () => {
+      throw new Error('sync callback fault')
+    },
+    () => Promise.reject(new Error('async callback fault'))
+  ]) {
+    const rag = createRag({ corestore: store, index: { dir: await tmp(t) }, onSnapshotError })
+    await rag.ready()
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+    t.alike(await searchIds(rag, spaceId), ['a'])
+    await rag.close()
+  }
+  await delay(10)
+  t.alike(unhandled, [], 'no unhandled rejection')
 })
 
 test('indexStatus validates its namespace and a throwing callback never fails a search', async (t) => {
@@ -399,7 +502,7 @@ test('a directory reopened with a working fs after one failed to load takes snap
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close(), { order: 1 })
   const dir = await tmp(t)
-  useImporters(t, { bareFs: () => Promise.reject(new Error('fs sealed')) })
+  useImporters(t, { fs: () => Promise.reject(new Error('fs sealed')) })
   // Holds the core's shared index registry open across both RAGs below.
   const keeper = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
   await keeper.ready()

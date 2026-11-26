@@ -45,7 +45,7 @@ export interface IndexOptions {
   snapshotEvery?: number
   // Replaces `@qvac/turbovec-ggml`.
   provider?: IndexProvider
-  // Replaces `bare-fs` for snapshot sidecars.
+  // Replaces the runtime file system (`bare-fs` or Node `fs`) for snapshots.
   fs?: SnapshotFileSystem
 }
 
@@ -116,6 +116,8 @@ export interface CreateRagOptions {
   // Called once per namespace each time its searches switch to the scan.
   // A throw or a rejected promise from it is ignored.
   onIndexFallback?: (event: IndexFallbackEvent) => void
+  // Called when a namespace's snapshot can't be read or written.
+  onSnapshotError?: (event: SnapshotErrorEvent) => void
 }
 
 // Why a namespace is searched by scan instead of its index.
@@ -126,6 +128,12 @@ export interface IndexFallbackEvent {
   namespace: string
   reason: IndexFallbackReason
   error?: unknown
+}
+
+// The index stays in memory and in index mode; only reopening is slower.
+export interface SnapshotErrorEvent {
+  namespace: string
+  error: unknown
 }
 
 export interface IndexStatusParams {

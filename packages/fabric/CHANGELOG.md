@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.34.0] - 2026-11-26
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `12032.0.1` -> `12032.2.0`.
+- RPC protocol 118 -> 119. `GGML_OP_TOP_K_ROWS` goes in after
+  `GGML_OP_TOP_K_MASK`, so every later op id moves. A 118 RPC peer and a 119
+  one cannot connect: `@qvac/ggml-rpc-server` and its clients move to this
+  release together
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)).
+- `common.h`: `common_params_sampling` gains `backend_sampling_auto`, and
+  `common_init_result` gains `sampler_argmax()`. Native consumers must rebuild
+  against these headers, and every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- `ggml_view_2d`, `ggml_view_3d` and `ggml_view_4d` assert that the source is
+  contiguous along dim 0 (`nb[0]` is the type size), so such a view of a
+  permuted tensor aborts; permute and reshape it instead. Parakeet's
+  channels-first convolution on mobile GPUs hit this
+  ([qvac-fabric-llm.cpp#568](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/568),
+  fixed in
+  [qvac-fabric-speech.cpp#469](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/469)).
+
+### Added
+
+- Inkling 2 and Inkling 2 Mini, text and vision
+  ([qvac-fabric-llm.cpp#568](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/568)),
+  with the DSpark
+  ([qvac-fabric-llm.cpp#570](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/570))
+  and DFlash2
+  ([qvac-fabric-llm.cpp#599](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/599))
+  speculative drafters.
+- ggml API: `ggml_top_k_rows` and `ggml_lightning_indexer_rows`
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)),
+  `ggml_flash_attn_ext_has_indexed_bias` and
+  `ggml_flash_attn_ext_add_indexed_bias`
+  ([qvac-fabric-llm.cpp#602](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/602)).
+- llama API: `llama_set_sampler_active`; common: `common_sampler_is_argmax`,
+  `common_sampler_params_is_argmax` and `common_sampler_init_argmax_backend`
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+
+### Changed
+
+- qwen4exp sparse attention reads per-token K/V row lists, also with a
+  one-sequence cache, and its indexer reads the pooled keys in place on CPU and
+  CUDA. CUDA and Metal top-k break ties deterministically. RPC does not offer
+  the new ops, so RPC devices keep the mask attention
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)).
+- Vulkan: non-contiguous `SCALE`, a one-pass SITU activation
+  (`GGML_VK_FUSE_SITU=0` turns it off) and gated delta net states written
+  straight into the recurrent cache (`GGML_VK_FUSE_GDN_CACHE=0`). Split-K for
+  narrow matmuls on RDNA3 and RDNA4. On RADV RDNA3, an f16-B coopmat matmul
+  for dense K-quant prefill (`GGML_VK_DENSE_F16COOPMAT=0`), not bit-exact
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- `backend_sampling_auto` samples greedy requests on the backend. Only the
+  `llama-server` defaults, which these packages do not ship, turn it on;
+  other callers keep CPU sampling
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- Greedy `common_sampler` sampling takes the arg-max of the raw logits and
+  falls back to the sampler chain on a tie, a NaN logit or a winner with a
+  negative logit bias.
+  Recurrent graphs that do not read the moved states are reused after a
+  partial rollback. Inkling 2 adds its relative-position bias inside flash
+  attention
+  ([qvac-fabric-llm.cpp#602](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/602)).
+- No change to these packages from the speech engines imported under
+  `engines/speech`, built only with `FABRIC_BUILD_SPEECH`
+  ([qvac-fabric-llm.cpp#590](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/590)),
+  the NVRTC fusion pass building with MSVC, which the Windows CUDA module does
+  not enable
+  ([qvac-fabric-llm.cpp#597](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/597)),
+  or the shared ggml core and its revert
+  ([qvac-fabric-llm.cpp#595](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/595),
+  [qvac-fabric-llm.cpp#604](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/604)).
+
 ## [0.33.1] - 2026-11-25
 
 ### Changed

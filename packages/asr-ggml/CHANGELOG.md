@@ -12,6 +12,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Fix Parakeet GPU transcription aborting on Android OpenCL and iOS Metal with
+  fabric `12032.2.0` by updating the native speech source to include the
+  channels-first depthwise convolution layout fix.
+
 ## [0.14.0] - 2026-11-23
 
 ### Changed
