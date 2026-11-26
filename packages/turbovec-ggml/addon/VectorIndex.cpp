@@ -384,6 +384,10 @@ int VectorIndex::toBytes(SnapshotBytes& out) const noexcept {
   return rc;
 }
 
+size_t VectorIndex::serializedSize() const noexcept {
+  return ggml_vec_index_serialized_size(handle_);
+}
+
 int VectorIndex::setThreads(int nThreads) noexcept {
   return ggml_vec_index_set_threads(handle_, nThreads);
 }

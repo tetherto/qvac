@@ -40,6 +40,7 @@ async function checkAsyncTypes(index, query, ids) {
     const threads = index.threads;
     const storage = index.storage;
     const legacy = index.legacy;
+    const serializedSize = index.serializedSize;
     const writeOptions = { durability: 'fast' };
     const written = await index.write('index.tvim', writeOptions);
     const q3 = new idMapIndex_1.default({ dim: 128, storage: 'turbovec-q3', threads: 2 });
@@ -63,6 +64,7 @@ async function checkAsyncTypes(index, query, ids) {
         threads,
         storage,
         legacy,
+        serializedSize,
         written,
         q3,
         q3ByWidth,

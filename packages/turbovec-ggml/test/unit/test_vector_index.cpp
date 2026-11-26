@@ -734,6 +734,7 @@ TEST(VectorIndexTest, ToBytesMatchesTheSnapshotFileAndLoadsBack) {
   SnapshotBytes bytes;
   ASSERT_EQ(idx.toBytes(bytes), GGML_VEC_INDEX_OK);
   ASSERT_NE(bytes.data, nullptr);
+  EXPECT_EQ(idx.serializedSize(), bytes.size);
   ASSERT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
   std::ifstream in(file.path(), std::ios::binary);
   const std::vector<uint8_t> written(
@@ -758,6 +759,7 @@ TEST(VectorIndexTest, ToBytesAndSyncRejectOtherStorages) {
   SnapshotBytes bytes;
   EXPECT_EQ(idx.toBytes(bytes), GGML_VEC_INDEX_E_INVALID_ARG);
   EXPECT_EQ(bytes.data, nullptr);
+  EXPECT_EQ(idx.serializedSize(), 0U);
   EXPECT_EQ(idx.sync(file.path()), GGML_VEC_INDEX_E_INVALID_ARG);
 
   int status = GGML_VEC_INDEX_OK;

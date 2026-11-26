@@ -490,7 +490,8 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     'plain-array snapshot bytes': () => binding.idx_from_bytes_async([1, 2, 3]),
     'Int8Array snapshot bytes': () => binding.idx_from_bytes_async(new Int8Array(4)),
     'number ids handle': () => binding.idx_ids_async(5),
-    'number toBytes handle': () => binding.idx_to_bytes_async(5)
+    'number toBytes handle': () => binding.idx_to_bytes_async(5),
+    'number serializedSize handle': () => binding.idx_serialized_size(5)
   }
   try {
     for (const [name, fn] of Object.entries(cases)) {
@@ -1361,10 +1362,14 @@ test('IdMapIndex: toBytes and fromBytes round-trip a TurboVec index', async (t) 
   const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
   const loaded = []
   try {
+    const emptySize = idx.serializedSize
+    t.ok(emptySize > 0, 'an empty TurboVec index has a serialized size')
     await idx.addWithIds(vectors, ids)
+    t.ok(idx.serializedSize > emptySize, 'serializedSize grows with the rows')
     await idx.setStagedSearch(true)
     const bytes = await idx.toBytes()
     t.ok(bytes instanceof Uint8Array, 'toBytes resolves to a Uint8Array')
+    t.is(bytes.length, idx.serializedSize, 'serializedSize is the length toBytes returns')
     await idx.write(file)
     t.ok(sameBytes(bytes, fs.readFileSync(file)), 'toBytes matches the snapshot file byte for byte')
 
@@ -1396,6 +1401,7 @@ test('IdMapIndex: toBytes and fromBytes round-trip a TurboVec index', async (t) 
     t.is(fromFile.length, ids.length, 'fromBytes reads a snapshot file read into memory')
 
     await plain.addWithIds(vectors.subarray(0, TURBOVEC_DIM), ids.subarray(0, 1))
+    t.is(plain.serializedSize, 0, 'serializedSize is 0 for a storage toBytes rejects')
     let error = await expectRejects(
       t,
       () => plain.toBytes(),

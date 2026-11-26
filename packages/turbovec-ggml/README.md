@@ -57,14 +57,14 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
 - `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
 - `ids()` resolves to every live ID as a `BigUint64Array`, in an order that stays the same until the index changes (on TurboVec storage, also until `buildIvf()`).
 - `write()` and the static `load()` persist all storage modes. `write(path, { durability: 'fast' })` skips the fsyncs: the file is still replaced atomically and survives a process crash, but a power loss soon after may lose it, and a delta log cannot start from it. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`. An index written to a snapshot takes either logged or plain mutations, not both.
-- TurboVec storage additionally supports `sync()`, `toBytes()` and the static `fromBytes()`. The first `sync()` to a path, and the first after a calibration or `buildIvf()`, writes the whole file; later ones write only the changed blocks. Each sync is durable, and a crash at any point leaves the previous sync loadable. An index loaded from a synced file keeps syncing to it. One index may sync to a path at a time: when another has changed the file, `sync()` rejects with `IOError` and the file must be loaded again.
+- TurboVec storage additionally supports `sync()`, `toBytes()` and the static `fromBytes()`. The `serializedSize` getter gives the byte length `toBytes()` would return, without serializing (0 for indexes `toBytes()` rejects). The first `sync()` to a path, and the first after a calibration or `buildIvf()`, writes the whole file; later ones write only the changed blocks. Each sync is durable, and a crash at any point leaves the previous sync loadable. An index loaded from a synced file keeps syncing to it. One index may sync to a path at a time: when another has changed the file, `sync()` rejects with `IOError` and the file must be loaded again.
 - Mutations invalidate prepared filters and IVF state. `buildIvf()` also disposes prepared filters: on TurboVec storage it regroups the stored rows by IVF list.
 - Each of these returns a promise. Bad arguments reject too; only the
   constructor throws.
 - The `length`, `dim`, `bitWidth`, `storage`, `calibrated`, `stagedSearch`,
-  `threads` and `legacy` getters are synchronous and never wait. `length`,
-  `calibrated`, `stagedSearch` and `threads` report the state after the last
-  call that finished.
+  `threads`, `legacy` and `serializedSize` getters are synchronous and never
+  wait. `length`, `calibrated`, `stagedSearch`, `threads` and `serializedSize`
+  report the state after the last call that finished.
 - Call `dispose()` on indexes and prepared filters when finished. Disposal is
   idempotent. Both return a promise that resolves once the native index or
   filter has been freed, and rejects if freeing it fails.

@@ -843,6 +843,15 @@ js_value_t* idxLegacy(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
+// idxSerializedSize(handle) -> number. Computed from the row count, without
+// serializing, so it runs on the JS thread at its turn.
+js_value_t* idxSerializedSize(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 1, "handle");
+  const size_t size = liveIndex(env, argv[0])->idx->serializedSize();
+  return js::Number::create(env, static_cast<uint64_t>(size));
+}
+TURBOVEC_CATCH
+
 // idxAbortTokenCreate() -> token. One per call that has an AbortSignal.
 js_value_t*
 idxAbortTokenCreate(js_env_t* env, js_callback_info_t* /*info*/) try {
@@ -1324,6 +1333,7 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_set_threads", idxSetThreads);
   V("idx_storage", idxStorage);
   V("idx_legacy", idxLegacy);
+  V("idx_serialized_size", idxSerializedSize);
   V("idx_abort_token_create", idxAbortTokenCreate);
   V("idx_abort_token_abort", idxAbortTokenAbort);
   V("idx_load_async", idxLoadAsync);

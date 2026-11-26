@@ -14,7 +14,8 @@
     changed since its last sync to that path.
   - `toBytes()` and the static `IdMapIndex.fromBytes()` keep a TurboVec
     snapshot in memory instead of a file. The bytes are those `write()` puts
-    in the file.
+    in the file. The `serializedSize` getter gives their length without
+    serializing.
   - `ids()` resolves to every live ID as a `BigUint64Array`.
   - `turbovec-q3` storage (`bitWidth: 3`), TurboVec's 3-bit mode.
   - `write(path, { durability: 'fast' })` skips the fsyncs.

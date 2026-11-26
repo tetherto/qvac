@@ -178,6 +178,10 @@ public:
   // for other indexes.
   int toBytes(SnapshotBytes& out) const noexcept;
 
+  // The byte size toBytes() would return, without serializing; 0 for
+  // indexes toBytes() rejects.
+  [[nodiscard]] size_t serializedSize() const noexcept;
+
   // Worker threads search, add and calibration may use, the calling thread
   // included. Results do not depend on it. E_INVALID_ARG outside
   // 1..MAX_THREADS.

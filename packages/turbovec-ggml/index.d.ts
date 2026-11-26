@@ -15,6 +15,7 @@ declare const STAGED: unique symbol;
 declare const THREADS: unique symbol;
 declare const STORAGE: unique symbol;
 declare const LEGACY: unique symbol;
+declare const SERIALIZED_SIZE: unique symbol;
 declare const BIT_WIDTH_BY_STORAGE: {
     readonly f32: 32;
     readonly q8: 8;
@@ -147,6 +148,7 @@ export default class IdMapIndex {
     [THREADS]: number;
     [STORAGE]: IdMapIndexStorage;
     [LEGACY]: boolean;
+    [SERIALIZED_SIZE]: number;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
@@ -332,6 +334,12 @@ export default class IdMapIndex {
      * `sync()` nor `toBytes()`.
      */
     get legacy(): boolean;
+    /**
+     * Byte length of the snapshot `toBytes()` would return, as of the last call
+     * that finished, computed without serializing. 0 for indexes `toBytes()`
+     * rejects: non-TurboVec storages and legacy TurboVec indexes.
+     */
+    get serializedSize(): number;
     /**
      * Whether a TurboVec index holds a TQ+ calibration, as of the last call
      * that finished. A fresh TurboVec index calibrates from its first

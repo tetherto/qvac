@@ -18,6 +18,7 @@ const STAGED = Symbol('IdMapIndex.staged');
 const THREADS = Symbol('IdMapIndex.threads');
 const STORAGE = Symbol('IdMapIndex.storage');
 const LEGACY = Symbol('IdMapIndex.legacy');
+const SERIALIZED_SIZE = Symbol('IdMapIndex.serializedSize');
 const INT32_MAX = 0x7fffffff;
 // Fabric's limit for ggml_vec_index_set_threads.
 const MAX_THREADS = 256;
@@ -341,6 +342,7 @@ class IdMapIndex {
     [THREADS] = 1;
     [STORAGE] = 'q8';
     [LEGACY] = false;
+    [SERIALIZED_SIZE] = 0;
     constructor(options) {
         const { dim, threads } = options ?? {};
         if (!isPositiveInt32(dim)) {
@@ -709,6 +711,15 @@ class IdMapIndex {
         return this[LEGACY];
     }
     /**
+     * Byte length of the snapshot `toBytes()` would return, as of the last call
+     * that finished, computed without serializing. 0 for indexes `toBytes()`
+     * rejects: non-TurboVec storages and legacy TurboVec indexes.
+     */
+    get serializedSize() {
+        ensureHandle(this);
+        return this[SERIALIZED_SIZE];
+    }
+    /**
      * Whether a TurboVec index holds a TQ+ calibration, as of the last call
      * that finished. A fresh TurboVec index calibrates from its first
      * `addWithIds()` batch when that batch has at least 1,000 rows; other
@@ -779,6 +790,7 @@ class IdMapIndex {
         this[THREADS] = native.idx_threads(handle);
         this[STORAGE] = native.idx_storage(handle);
         this[LEGACY] = native.idx_legacy(handle);
+        this[SERIALIZED_SIZE] = native.idx_serialized_size(handle);
     }
     // After a mutation: prepared filters no longer match the index, and the
     // cached state may have changed.

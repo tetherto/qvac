@@ -46,6 +46,7 @@ export async function checkAsyncTypes(index: IdMapIndex, query: Float32Array, id
   const threads: number = index.threads
   const storage: IdMapIndexStorage = index.storage
   const legacy: boolean = index.legacy
+  const serializedSize: number = index.serializedSize
   const writeOptions: IdMapIndexWriteOptions = { durability: 'fast' }
   const written: void = await index.write('index.tvim', writeOptions)
   const q3 = new IdMapIndex({ dim: 128, storage: 'turbovec-q3', threads: 2 })
@@ -69,6 +70,7 @@ export async function checkAsyncTypes(index: IdMapIndex, query: Float32Array, id
     threads,
     storage,
     legacy,
+    serializedSize,
     written,
     q3,
     q3ByWidth,

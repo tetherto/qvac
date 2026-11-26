@@ -15,6 +15,7 @@ const STAGED = Symbol('IdMapIndex.staged')
 const THREADS = Symbol('IdMapIndex.threads')
 const STORAGE = Symbol('IdMapIndex.storage')
 const LEGACY = Symbol('IdMapIndex.legacy')
+const SERIALIZED_SIZE = Symbol('IdMapIndex.serializedSize')
 const INT32_MAX = 0x7fffffff
 // Fabric's limit for ggml_vec_index_set_threads.
 const MAX_THREADS = 256
@@ -66,6 +67,7 @@ interface IdMapIndexBinding {
   idx_set_threads(handle: NativeHandle, nThreads: number): void
   idx_storage(handle: NativeHandle): IdMapIndexStorage
   idx_legacy(handle: NativeHandle): boolean
+  idx_serialized_size(handle: NativeHandle): number
   idx_abort_token_create(): AbortToken
   idx_abort_token_abort(token: AbortToken): void
   idx_load_async(path: string, token: Token): Promise<NativeHandle>
@@ -587,7 +589,8 @@ export default class IdMapIndex {
   [STAGED] = false;
   [THREADS] = 1;
   [STORAGE]: IdMapIndexStorage = 'q8';
-  [LEGACY] = false
+  [LEGACY] = false;
+  [SERIALIZED_SIZE] = 0
 
   constructor(options: IdMapIndexOptions) {
     const { dim, threads } = options ?? ({} as IdMapIndexOptions)
@@ -1204,6 +1207,16 @@ export default class IdMapIndex {
   }
 
   /**
+   * Byte length of the snapshot `toBytes()` would return, as of the last call
+   * that finished, computed without serializing. 0 for indexes `toBytes()`
+   * rejects: non-TurboVec storages and legacy TurboVec indexes.
+   */
+  get serializedSize() {
+    ensureHandle(this)
+    return this[SERIALIZED_SIZE]
+  }
+
+  /**
    * Whether a TurboVec index holds a TQ+ calibration, as of the last call
    * that finished. A fresh TurboVec index calibrates from its first
    * `addWithIds()` batch when that batch has at least 1,000 rows; other
@@ -1278,6 +1291,7 @@ export default class IdMapIndex {
     this[THREADS] = native.idx_threads(handle)
     this[STORAGE] = native.idx_storage(handle)
     this[LEGACY] = native.idx_legacy(handle)
+    this[SERIALIZED_SIZE] = native.idx_serialized_size(handle)
   }
 
   // After a mutation: prepared filters no longer match the index, and the
