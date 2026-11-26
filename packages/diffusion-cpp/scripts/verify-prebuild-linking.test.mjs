@@ -561,10 +561,25 @@ test('Windows integration validates CUDA and requires packaged Release CRT impor
   )
   await integrationLayout({
     ...options,
-    cuda: [...options.cuda, 'msvcp140.dll', 'api-ms-win-crt-runtime-l1-1-0.dll'],
-    runtimeFiles: ['MSVCP140.dll']
+    cuda: [
+      ...options.cuda,
+      'msvcp140.dll',
+      'msvcp140_atomic_wait.dll',
+      'msvcp140_codecvt_ids.dll',
+      'api-ms-win-crt-runtime-l1-1-0.dll'
+    ],
+    runtimeFiles: ['MSVCP140.dll', 'msvcp140_atomic_wait.dll', 'msvcp140_codecvt_ids.dll']
   })
-  for (const runtime of ['msvcp140d.dll', 'ucrtbased.dll', 'msvcr120.dll']) {
+  for (const runtime of [
+    'msvcp140d.dll',
+    'msvcp140d_atomic_wait.dll',
+    'msvcp140d_codecvt_ids.dll',
+    'vcruntime140_1d.dll',
+    'ucrtbased.dll',
+    'msvcr120.dll',
+    'msvcp120.dll',
+    'concrt120.dll'
+  ]) {
     await assert.rejects(
       integrationLayout({
         ...options,
@@ -583,7 +598,16 @@ test('Windows checker accepts packaged Release CRTs and rejects packaged Debug o
     runtimeFiles: ['MSVCP140.dll', 'vcruntime140.dll']
   })('win32')
   assert.equal(result.status, 0, result.output)
-  for (const runtime of ['msvcp140d.dll', 'ucrtbased.dll', 'msvcr120.dll']) {
+  for (const runtime of [
+    'msvcp140d.dll',
+    'msvcp140d_atomic_wait.dll',
+    'msvcp140d_codecvt_ids.dll',
+    'vcruntime140_1d.dll',
+    'ucrtbased.dll',
+    'msvcr120.dll',
+    'msvcp120.dll',
+    'concrt120.dll'
+  ]) {
     const invalid = mergedFixture(t, {
       cudaImports: ['cublas64_13.dll', runtime],
       runtimeFiles: [runtime]
