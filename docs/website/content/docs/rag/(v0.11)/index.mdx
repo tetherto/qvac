@@ -8,9 +8,9 @@ schemaType: TechArticle
 
 ## Overview
 
-`@qvac/rag` is a standalone package for retrieval-augmented generation on QVAC. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you provide, embeds and chunks them through a port you supply, and retrieves the most relevant chunks by vector similarity. It runs on Bare and Node.
+`@qvac/rag` is an npm package for retrieval-augmented generation on QVAC. It stores documents in a [Corestore](https://github.com/holepunchto/corestore) you provide, embeds and chunks them through a port you supply, and retrieves the most relevant chunks by vector similarity. It runs on Bare and Node.js, and does not depend on `@qvac/sdk` or `@qvac/inference`.
 
-Key capabilities:
+## Key features
 
 - **Namespace isolation** — organise documents into namespaces, each tied to one embedding space.
 - **Automatic chunking** — split text on ingest, or supply pre-chunked content.

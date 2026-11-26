@@ -14,8 +14,13 @@ Create a RAG instance.
 |---|---|---|
 | `corestore` | `Corestore` | The Corestore that backs this instance. One store per folder per process. |
 | `embeddings` | `EmbeddingsPort` | Optional. Provides `embedDocuments` and `embedQuery` for text-based ingest and search. Without it, supply precomputed vectors. |
-| `index` | `{ dir: string }` | Optional. Directory for a TurboVec index. On Bare, enables approximate nearest-neighbour search; on Node, ignored (every search scans all chunks). |
+| `index` | `IndexOptions` | Optional. Configures the TurboVec index, used only when `@qvac/turbovec-ggml` is installed. |
 | `chunking` | `ChunkingOptions` | Optional. Controls automatic text chunking on `ingest()`. |
+
+`index` accepts:
+
+- `dir` — directory for index snapshots. Without it, each namespace's index is built from the database the first time it is searched after `ready()`, and kept in memory only.
+- `snapshotEvery` — committed batches between snapshots, default 256. A snapshot is also written on `close()`.
 
 Returns a `Rag` handle. Call `await rag.ready()` before any other method.
 
@@ -29,8 +34,18 @@ Create a namespace tied to one embedding space.
 |---|---|---|
 | `name` | `string` | Namespace identifier. |
 | `space` | `EmbeddingSpace` | The embedding space: model, revision, dimensions, metric, and preprocessing. |
+| `index` | `{ storage?: IndexStorage }` | Optional. How the namespace's index stores vectors, fixed at creation. |
 
-Returns `{ spaceId }`. A namespace only accepts vectors from its space.
+`index.storage` options:
+
+| Storage | Dimensions | Notes |
+|---|---|---|
+| `q8` (default) | any | 8-bit quantized |
+| `f32` | any | Full precision |
+| `turbovec-q4` | divisible by 8, at most 1,024 | TurboVec 4-bit |
+| `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 2-bit |
+
+Returns `{ name, spaceId, revision, index: { storage } }`. A namespace only accepts vectors from its space. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
 ---
 
@@ -41,9 +56,17 @@ Ingest documents into a namespace.
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Target namespace. |
-| `documents` | `IngestDocument[]` | Documents to ingest. Each has an `id` and either `text` (chunked and embedded via the port) or `chunks` (precomputed `{ content, embedding, spaceId }`). |
+| `documents` | `IngestDocument[]` | Documents to ingest (see below). |
 
-The optional second argument accepts `onProgress` and `signal` (abort).
+Each document is one of:
+
+- **Text** `{ id, text, metadata? }` — chunked and embedded via the port.
+- **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }` — segmented by you, embedded via the port.
+- **Precomputed** `{ id, metadata?, chunks: [{ content, embedding, spaceId }] }` — no port needed.
+
+The optional second argument accepts `onProgress({ stage, done, total })` and `signal` (abort).
+
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced`, or `unchanged`.
 
 ---
 
@@ -58,96 +81,136 @@ Search for the most relevant chunks.
 | `vector` | `number[] \| Float32Array` | Pre-embedded query vector (use instead of `query`). |
 | `spaceId` | `string` | Required with `vector`. |
 | `k` | `number` | Maximum results. |
+| `perDocument` | `number` | Optional. Spread hits across documents: each document's best hit is taken first, then further hits round-robin up to `perDocument` each. |
+| `minScore` | `number` | Optional. Drop hits scoring below this before `perDocument` and `k` apply. |
+| `signal` | `AbortSignal` | Optional. |
 
-Returns an array of hits, each with `content`, `score`, `documentId`, `chunkIndex`, and `spaceId`.
+Returns an array of hits, each with:
+
+| Field | Type | Description |
+|---|---|---|
+| `namespace` | `string` | |
+| `documentId` | `string` | |
+| `chunkId` | `string` | |
+| `ordinal` | `number` | Chunk position within the document. |
+| `generation` | `number` | The document version the chunk belongs to. |
+| `chunkCount` | `number` | Chunks in that generation. |
+| `content` | `string` | |
+| `metadataJson` | `string?` | The chunk's metadata from ingest. |
+| `documentMetadata` | `object?` | The document's `metadata` from ingest. |
+| `citation` | `SearchCitation` | Holds `title`, `sourceUrl`, `sourcePath`, `mimeType` from document or chunk metadata, and `page` from chunk metadata. |
+| `score` | `number` | Dot product, or cosine similarity for `cosine` spaces. |
 
 ---
 
 ## `rag.deleteDocuments(options)`
 
-Remove documents from a namespace.
+Remove documents and their chunks from a namespace.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Target namespace. |
-| `documentIds` | `string[]` | Documents to delete. |
+| `documentIds` | `string[]` | Documents to delete. Unknown IDs are ignored. |
+
+Returns `{ deleted, revision }`.
 
 ---
 
 ## `rag.readDocument(options)`
 
-Read a single document's chunks.
+Read a document's chunks in ordinal order, one page at a time.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Target namespace. |
 | `documentId` | `string` | The document to read. |
+| `generation` | `number` | Optional. Pin to a generation; fails with `DOCUMENT_CHANGED` if the document was re-ingested or deleted since. |
+| `fromOrdinal` | `number` | Optional. Start reading from this ordinal (default 0). |
+| `limit` | `number` | Optional. Chunks per page (default 64, max 1,024). |
+
+Returns `{ namespace, documentId, generation, chunkCount, metadata?, chunks, nextOrdinal }`. Each chunk is `{ chunkId, ordinal, content, metadataJson? }`. `nextOrdinal` is the next page's `fromOrdinal`, or `null` after the last chunk.
 
 ---
 
 ## `rag.listDocuments(options)`
 
-List all document ids in a namespace.
+List a namespace's documents in document ID order.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Target namespace. |
+| `after` | `string` | Optional. Cursor from a previous page's `next`. |
+| `limit` | `number` | Optional. Documents per page (default 100, max 1,024). |
+
+Returns `{ documents, next }`. Each entry is `{ documentId, generation, chunkCount, revision, metadata? }`. Pass `next` as `after` for the following page; it is `null` on the last one.
 
 ---
 
-## `rag.exportNamespace(options)`
+## `rag.exportNamespace(options[, control])`
 
 Export a namespace for transfer to another store.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Namespace to export. |
+| `documentIds` | `string[]` | Optional. Export only these documents. |
+
+The optional second argument accepts `signal` (abort).
+
+Returns an `AsyncIterable<Uint8Array>` in the `QVRAGX1` format. The stream reads one database snapshot and yields one chunk at a time, so memory stays flat.
 
 ---
 
-## `rag.importNamespace(options)`
+## `rag.importNamespace(options[, control])`
 
 Import a previously exported namespace.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Name for the imported namespace. |
-| `data` | `Buffer` | The exported data. |
+| `source` | `AsyncIterable<Uint8Array>` | The exported stream. |
+| `index` | `{ storage?: IndexStorage }` | Optional. Sets the namespace's index storage when the import creates it. |
+
+The optional second argument accepts `signal` (abort) and `onProgress({ documents, deletes })`.
+
+Returns `{ documents, skipped, cancelled, revision }`. Each document is `created`, `replaced`, `unchanged`, or skipped as `conflict`, `superseded`, or `deleted`.
 
 ---
 
 ## `rag.listNamespaces()`
 
-List all namespaces in this instance. Returns an array of namespace names.
+List all namespaces. Returns an array of `{ name, spaceId, space, index: { storage }, revision, documentCount, chunkCount }`, by name.
 
 ---
 
 ## `rag.dropNamespace(options)`
 
-Delete a namespace and all its documents.
+Delete a namespace and all its documents, chunks, and index data.
 
 | Option | Type | Description |
 |---|---|---|
-| `namespace` | `string` | Namespace to drop. |
+| `name` | `string` | Namespace to drop. |
+
+Returns `{ name, documentCount, chunkCount }`.
 
 ---
 
-## `rag.scoped(options)`
+## `rag.scoped(scope)`
 
-Create a scoped handle that restricts every operation to a subset of documents.
+Create a scoped handle that restricts operations to a subset of documents.
 
 | Option | Type | Description |
 |---|---|---|
 | `namespace` | `string` | Target namespace. |
-| `documentIds` | `string[]` | Documents in scope. |
+| `documentIds` | `string[]` | Optional. Documents in scope. |
 
-The returned handle exposes `search`, `readDocument`, `listDocuments`, and `deleteDocuments`, each pre-scoped.
+The returned handle exposes `search`, `readDocument`, and `listDocuments`, each pre-scoped. A handle whose documents have been deleted returns no hits instead of an error.
 
 ---
 
 ## `rag.close()`
 
-Close the RAG instance. Close the Corestore separately after.
+Close the RAG instance. Waits for calls already in progress, then closes the underlying database but leaves the Corestore open. Close the Corestore separately after.
 
 ---
 
@@ -158,8 +221,8 @@ The embeddings port you pass to `createRag()`.
 ```typescript
 interface EmbeddingsPort {
   space: EmbeddingSpace
-  embedDocuments(texts: string[]): Promise<Float32Array>
-  embedQuery(text: string): Promise<Float32Array>
+  embedDocuments(texts: string[], options?: { signal?: AbortSignal }): Promise<Float32Array>
+  embedQuery(text: string, options?: { signal?: AbortSignal }): Promise<Float32Array>
 }
 ```
 
@@ -176,7 +239,7 @@ interface EmbeddingSpace {
   model: string
   revision: string
   dimensions: number
-  metric: 'cosine' | 'dot' | 'euclidean'
+  metric: 'cosine' | 'dot'
   normalized: boolean
   documentEncoding: string
   queryEncoding: string
@@ -190,16 +253,20 @@ interface EmbeddingSpace {
 
 On Node, `@qvac/rag` scans all chunks on every search. At 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the TurboVec index on Bare. Past that threshold, run on Bare.
 
-| Chunks | Dimensions | Node (scan) | Bare + TurboVec |
-|---|---|---|---|
-| 10,000 | 768 | ~130 ms | ~2 ms |
-| 100,000 | 768 | ~1.3 s | ~21 ms |
-| 1,000,000 | 768 | ~13 s | ~210 ms |
+Benchmarks for one namespace of 100,000 chunks at 768 dimensions with `q8` storage, measured on an M-series Mac:
+
+| Path | Search p50 | Search p95 |
+|---|---|---|
+| Bare + TurboVec (cold open from snapshot) | ~21 ms | 26–29 ms |
+| Bare + TurboVec (rebuild from DB, no snapshot) | 21–23 ms | 24–31 ms |
+| Node (scan, no `@qvac/turbovec-ggml`) | ~1.3 s | 1.4–1.5 s |
+
+Pass `index.dir` so later opens load the snapshot instead of rebuilding.
 
 ## Error handling
 
-Import errors from `@qvac/rag/errors`:
+Every error is a `QvacErrorRAG` with a code from `ERR_CODES`. Import them from `@qvac/rag` or `@qvac/rag/errors`:
 
 ```typescript
-import { RagError, NamespaceNotFoundError } from '@qvac/rag/errors'
+import { QvacErrorRAG, ERR_CODES } from '@qvac/rag/errors'
 ```
