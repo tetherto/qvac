@@ -183,7 +183,6 @@ for (const filtered of [false, true]) {
     )
     t.is(calls.creates, 1)
     if (filtered) t.ok(calls.filtered > 0, 'scoped searches used searchFiltered')
-    else t.ok(calls.searches > searches.length, 'a scoped search over-fetched more than once')
   })
 }
 
@@ -400,4 +399,36 @@ test('dropNamespace deletes the snapshots of a directory whose RAG already close
 
   await keeper.dropNamespace({ name: 'ns' })
   t.alike(files(), [], 'the drop deleted it')
+})
+
+test('without searchFiltered, a small scope scans and a large one over-fetches', async (t) => {
+  const { provider, calls } = memoryProvider()
+  const scan = await openOn(t, await openStore(t), { provider: SCAN_ONLY })
+  const indexed = await openOn(t, await openStore(t), { provider })
+  for (const { rag, spaceId } of [scan, indexed]) {
+    await rag.ingest({ namespace: 'ns', documents: ranked(spaceId, 400) })
+  }
+  const highest = ranked('', 400)
+    .slice(100)
+    .map((document) => document.id)
+
+  async function compare(documentIds: string[]): Promise<number> {
+    const params = { k: 2, scope: { namespace: 'ns', documentIds } }
+    const expected = await scan.rag.search({ ...params, vector: QUERY, spaceId: scan.spaceId })
+    const before = calls.searches
+    const actual = await indexed.rag.search({ ...params, vector: QUERY, spaceId: indexed.spaceId })
+    t.alike(ids(actual), ids(expected), `${documentIds.length} documents in scope`)
+    return calls.searches - before
+  }
+
+  // Builds the index, so later searches count provider calls only.
+  await indexed.rag.search({
+    scope: { namespace: 'ns' },
+    vector: QUERY,
+    spaceId: indexed.spaceId,
+    k: 1
+  })
+  t.is(await compare(['d00', 'd01']), 0, 'two documents in 400: the scan answers')
+  t.ok((await compare(highest)) > 0, 'three quarters of the index: over-fetched')
+  t.is((await indexed.rag.indexStatus({ namespace: 'ns' })).mode, 'index', 'not a fallback')
 })

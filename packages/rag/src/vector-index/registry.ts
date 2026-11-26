@@ -44,6 +44,10 @@ export const DEFAULT_INDEX_STORAGE: IndexStorage = 'q8'
 // TurboVec's remove() only tombstones a row; compact once removed rows reach
 // this share of the live ones, so replacing documents doesn't grow memory.
 export const COMPACT_SHARE = 0.25
+// Without `searchFiltered`, a scoped search fetches unfiltered rows; once a
+// fetch would pass this share of the index, the exact scan of the scope
+// answers instead.
+export const OVERFETCH_SHARE = 1 / 8
 
 export interface IndexConfig {
   // Where snapshots go. Without it the index lives in memory and is rebuilt
@@ -321,7 +325,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (entry.native !== native || entry.revision !== revision) return 'stale'
     const settled = entry.settled
     const options = signal ? { signal } : undefined
-    let result: NativeSearchResult | 'stale'
+    let result: NativeSearchResult | 'stale' | 'unavailable'
     try {
       if (!allowlist) result = await native.search(query, k, options)
       else if (native.searchFiltered) {
@@ -337,13 +341,15 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       discard(entry)
       return 'unavailable'
     }
+    if (result === 'unavailable') return result
     if (result === 'stale' || !(await settled)) return 'stale'
     return result
   }
 
   // For a provider without `searchFiltered`: over-fetches by the share of rows
   // the allowlist covers, doubling until `k` allowed hits come back or the
-  // index runs out of rows. The first call is issued synchronously.
+  // index runs out of rows. Returns 'unavailable', for the scan, before a fetch
+  // past OVERFETCH_SHARE of the index. The first call is issued synchronously.
   async function searchAllowed(
     entry: Entry,
     native: NativeIndex,
@@ -352,7 +358,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     k: number,
     allowlist: BigUint64Array,
     options: { signal?: AbortSignal } | undefined
-  ): Promise<NativeSearchResult | 'stale'> {
+  ): Promise<NativeSearchResult | 'stale' | 'unavailable'> {
     const allowed = new Set(allowlist)
     const rows = entry.rows
     let want = Math.min(rows, Math.max(k, Math.ceil((k * rows) / allowlist.length)))
@@ -362,6 +368,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       const ids = new BigUint64Array(k).fill(PADDING_ID)
       const scores = new Float32Array(k)
       if (want === 0) return { scores, ids, k }
+      if (want > rows * OVERFETCH_SHARE) return 'unavailable'
       const result = await native.search(query, want, options)
       let found = 0
       let returned = 0

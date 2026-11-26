@@ -328,7 +328,7 @@ interface IndexSearchResult {
 - Calls on one handle must take effect in the order they are made.
 - Vectors are float32, row-major. Cosine namespaces pass unit vectors, so the dot product is the cosine. Every hit is rescored exactly from HyperDB, so the index only has to rank candidates well.
 - `storage` is the namespace's `index.storage`; a provider may ignore it.
-- Without `searchFiltered`, a search scoped to `documentIds` asks `search` for more rows and keeps the allowed ones, doubling until it has enough.
+- Without `searchFiltered`, a search scoped to `documentIds` asks `search` for more rows and keeps the allowed ones, doubling until it has enough. Each fetch costs `search` results for rows outside the scope, which matters for a provider behind a process boundary; once a fetch would pass an eighth of the index, the exact scan of the scope answers instead, so a small scope in a large index is always scanned.
 - Without `compact`, removed rows stay in the provider's memory until the index is rebuilt.
 - Snapshots need both `load` and `handle.write`. Without `load`, `dir` is ignored and the index is rebuilt from HyperDB on each open.
 - A snapshot directory serves one provider and `fs` per core: `ready()` fails with `INVALID_INPUT` when another open RAG on the core uses the same `dir` with a different one. Once the last RAG on the core using a `dir` closes, its indexes are snapshotted and released, so a later RAG can use the directory with another provider or `fs`. Snapshot files carry no provider name, so across processes give each provider its own `dir`.
