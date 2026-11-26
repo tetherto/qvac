@@ -3,18 +3,19 @@ import { z } from 'zod'
 
 import { ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
+import { name, text } from './limits.js'
 import type { EmbeddingSpace } from './types.js'
 
 const embeddingSpaceSchema = z
   .object({
-    model: z.string().min(1),
-    revision: z.string(),
+    model: name,
+    revision: text,
     dimensions: z.number().int().positive(),
     metric: z.enum(['dot', 'cosine']),
     normalized: z.boolean(),
-    documentEncoding: z.string(),
-    queryEncoding: z.string(),
-    preprocessing: z.string()
+    documentEncoding: text,
+    queryEncoding: text,
+    preprocessing: text
   })
   .strict()
 

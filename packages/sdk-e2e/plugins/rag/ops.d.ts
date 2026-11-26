@@ -4,6 +4,8 @@ export interface RagOpsHost {
   removeDir(dir: string): Promise<void>
   listDir(dir: string): Promise<string[]>
   embed(modelId: string, text: string): Promise<number[]>
+  indexProvider?: unknown
+  fs?: unknown
 }
 
 export declare const SPACE: Record<string, unknown>

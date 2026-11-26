@@ -19,17 +19,28 @@ import { z } from 'zod'
 import { formatZodError } from '@/utils/zod-error'
 import os from 'bare-os'
 import Buffer from 'bare-buffer'
-import { PassThrough, type Readable } from 'bare-stream'
+import { PassThrough } from 'bare-stream'
 import { registry } from '@/registry'
 import type { HandlerEntry, StreamHandler, StreamHandlerContext } from '@/handlers/types'
 import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
-import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
+import {
+  resolveModelConfig,
+  setConfig,
+  setRuntimeContext,
+  isConfigSet,
+  getConfig
+} from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
 import { assertOwnerOperation, assertWireSessionOpen } from '@/runtime/session-registry'
 import { assertSessionGrant } from '@/runtime/session-grants'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import {
+  DeadlineClock,
+  resolveDeadline,
+  warnUnprovidedDeadlineCapabilities
+} from '@/runtime/deadlines'
 import { getAllPlugins } from '@/plugins/index'
 import { hasRpcServerProvider } from '@/rpc/provider'
 import { resolveConfig } from '@/config/resolve-config'
@@ -96,6 +107,7 @@ async function initializeConfig(): Promise<void> {
 async function performReady(gen: number): Promise<void> {
   initialize()
   await initializeConfig()
+  warnUnprovidedDeadlineCapabilities(getConfig(), getAllPlugins(), logger)
   // Mark ready only while this generation is current — a `close()` during the
   // await bumps it past this now-superseded init.
   if (gen === generation) ready = true
@@ -234,6 +246,127 @@ function bindTransportSignal(request: Request, signal: AbortSignalLike | undefin
   return getRequestRegistry().bindTransportSignal(tracked.requestId, tracked.sessionId, signal)
 }
 
+interface OpenDeadline {
+  clock: DeadlineClock
+  close: () => void
+}
+
+/**
+ * Starts the deadlines the runtime configuration and the call set for this
+ * request, and binds them to the request the handler is about to register.
+ * `streaming` says the caller receives responses as they are produced, which
+ * starts the idle deadline at admission. Returns `undefined` when nothing
+ * bounds the request. Close the result once the request has finished.
+ */
+function openDeadline(request: Request, streaming: boolean): OpenDeadline | undefined {
+  const resolved = resolveDeadline(request, getConfig())
+  if (!resolved) return undefined
+  const tracked = request as {
+    requestId?: string
+    sessionId?: string
+    modelId?: string
+  }
+  tracked.requestId ??= generateRandomRequestId()
+  const clock = new DeadlineClock(
+    resolved.limits,
+    { requestId: tracked.requestId, capability: resolved.capability, modelId: tracked.modelId },
+    { idleFromAdmission: streaming }
+  )
+  const unbind = getRequestRegistry().bindDeadline(tracked.requestId, tracked.sessionId, clock)
+  clock.start()
+  return {
+    clock,
+    close: () => {
+      unbind()
+      clock.close()
+    }
+  }
+}
+
+/**
+ * The handler's result, or the deadline's error at the moment the deadline
+ * passes. The handler is not waited for after that: it was aborted and its
+ * result, if one arrives, is dropped.
+ */
+async function replyWithinDeadline<T>(
+  work: Promise<T>,
+  clock: DeadlineClock | undefined
+): Promise<T> {
+  if (!clock) return work
+  try {
+    return await clock.within(work)
+  } catch (error) {
+    throw clock.error ?? error
+  }
+}
+
+/**
+ * The handler's responses, ending with the deadline's error at the moment a
+ * deadline passes. Each response restarts the idle deadline.
+ */
+async function* streamWithinDeadline<T>(
+  source: AsyncGenerator<T>,
+  clock: DeadlineClock | undefined
+): AsyncGenerator<T> {
+  if (!clock) {
+    yield* source
+    return
+  }
+  let expired = false
+  try {
+    while (true) {
+      const result = await clock.within(source.next())
+      if (result.done) return
+      clock.touch()
+      yield result.value
+    }
+  } catch (error) {
+    if (clock.error === undefined) throw error
+    expired = true
+    throw clock.error
+  } finally {
+    const closing = source.return(undefined)
+    if (expired) {
+      // return() queues behind the pending next(); waiting would hold the error back.
+      void closing.catch(() => {})
+    } else {
+      await closing
+    }
+  }
+}
+
+/**
+ * The caller's input, with the idle deadline stopped for as long as the handler
+ * waits for the next chunk. A caller that pauses between chunks is not a stall.
+ *
+ * A handler that asks for its next chunk before it has finished the one
+ * before, as whisper streaming and sentence-accumulating text-to-speech do, is
+ * waiting for nearly the whole time its input is open. The idle deadline
+ * detects no stall in such a handler until the input ends; its run deadline
+ * does.
+ */
+async function* inputWithinDeadline(
+  input: AsyncIterable<Buffer>,
+  clock: DeadlineClock
+): AsyncGenerator<Buffer> {
+  const chunks = input[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      clock.awaitInput()
+      let next: IteratorResult<Buffer>
+      try {
+        next = await chunks.next()
+      } finally {
+        clock.inputArrived()
+      }
+      if (next.done) return
+      yield next.value
+    }
+  } finally {
+    await chunks.return?.()
+  }
+}
+
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {
   const directHandler = handler as Handler
   return directHandler(request)
@@ -311,19 +444,21 @@ export async function send<T extends Request>(
   const handler = selectHandler(entry)
 
   const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
+  const deadline = openDeadline(processed, false)
   try {
     // Plugin capabilities profile themselves inside plugin dispatch. Everything
     // else is timed here so the `profiler` covers every operation. Profiling is
     // a no-op unless enabled.
-    if (entry.pluginOp) {
-      return (await invokeHandler(processed, handler)) as Response
-    }
-    return await profileReplyHandler(
-      { op: processed.type, request: processed },
-      () => invokeHandler(processed, handler) as Promise<Response>
-    )
+    const work = entry.pluginOp
+      ? Promise.resolve(invokeHandler(processed, handler) as Promise<Response> | Response)
+      : profileReplyHandler(
+          { op: processed.type, request: processed },
+          () => invokeHandler(processed, handler) as Promise<Response>
+        )
+    return await replyWithinDeadline(work, deadline?.clock)
   } finally {
     unbindTransportSignal()
+    deadline?.close()
   }
 }
 
@@ -346,6 +481,7 @@ export async function* stream<T extends Request>(
   if (signal?.aborted) return
   const context: StreamHandlerContext = signal ? { signal } : {}
   const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
+  const deadline = openDeadline(processed, true)
 
   async function* run(): AsyncGenerator<Response> {
     if (handlerSupportsProgress(entry, processed)) {
@@ -362,13 +498,13 @@ export async function* stream<T extends Request>(
 
   try {
     // See `send`: plugin capabilities are timed elsewhere.
-    if (entry.pluginOp) {
-      yield* run()
-    } else {
-      yield* profileStreamHandler({ op: processed.type, request: processed }, run)
-    }
+    const responses = entry.pluginOp
+      ? run()
+      : profileStreamHandler({ op: processed.type, request: processed }, run)
+    yield* streamWithinDeadline(responses, deadline?.clock)
   } finally {
     unbindTransportSignal()
+    deadline?.close()
   }
 }
 
@@ -406,13 +542,23 @@ export async function duplex<T extends Request>(
 
   const duplexHandler = entry.handler as (
     req: Request,
-    stream: Readable
+    input: AsyncIterable<Buffer>
   ) => AsyncGenerator<Response>
 
   const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
+  const deadline = openDeadline(processed, true)
+  // `completionOrchestrate` reads tool results ahead of its model turns and
+  // registers each wait for one on its own, so only a plugin's input is wrapped.
+  const callerInput = inputStream as unknown as AsyncIterable<Buffer>
+  const handlerInput =
+    deadline && entry.pluginOp ? inputWithinDeadline(callerInput, deadline.clock) : callerInput
   void (async () => {
     try {
-      for await (const response of duplexHandler(processed, inputStream)) {
+      const responses = streamWithinDeadline(
+        duplexHandler(processed, handlerInput),
+        deadline?.clock
+      )
+      for await (const response of responses) {
         outputStream.write(JSON.stringify(response) + '\n', 'utf-8')
       }
     } catch (error) {
@@ -420,6 +566,7 @@ export async function duplex<T extends Request>(
       outputStream.write(JSON.stringify(createErrorResponse(error)) + '\n', 'utf-8')
     } finally {
       unbindTransportSignal()
+      deadline?.close()
       outputStream.end()
     }
   })()

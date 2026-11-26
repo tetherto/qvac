@@ -27,7 +27,7 @@ import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 import { PADDING_ID, TURBOVEC_MAX_COMPONENT, type NativeSearchResult } from './native.js'
 import { normalizeRows, type OpenIndex } from './registry.js'
 import type { HyperDBReader } from '../db/db-types.js'
-import type { SearchHit, SearchScope } from '../types.js'
+import type { SearchHit, SearchScope, VectorEncoding } from '../types.js'
 
 // Extra candidates fetched past k. They are rescored exactly from the stored
 // vectors, which absorbs quantization error and IDs the reader doesn't know.
@@ -57,6 +57,7 @@ export async function indexSearch(
   reader: HyperDBReader,
   revision: number,
   space: SpaceRecord,
+  encoding: VectorEncoding,
   scope: SearchScope,
   query: SearchQuery,
   k: number,
@@ -112,8 +113,8 @@ export async function indexSearch(
       if (id === PADDING_ID) break
       const chunk = await readChunk(reader, namespace, id)
       if (!chunk || (allowed && !allowed.has(chunk.documentId))) continue
-      checkStoredVector(chunk, dims)
-      decodeVectorInto(chunk.vector, stored, 0)
+      checkStoredVector(chunk, dims, encoding)
+      decodeVectorInto(chunk.vector, stored, 0, dims, encoding)
       let score = dot(query.vector, stored, 0)
       if (cosine) {
         const denominator = queryNorm * norm(stored, 0, dims)
@@ -148,7 +149,7 @@ export async function indexSearch(
     if (await selectionComplete(reader, namespace, listed, window, k, perDocument)) break
     const next = Math.min(MAX_POOL, pool * POOL_GROWTH)
     if (next === pool || next * SCAN_SHARE >= found.available) {
-      return await scanSearch(reader, space, scope, query, k, options)
+      return await scanSearch(reader, space, encoding, scope, query, k, options)
     }
     pool = next
   }
