@@ -5,7 +5,7 @@ import type {
   IndexSearchResult,
   IndexStorage
 } from '../types.js'
-import { forgetSnapshotFileSystem } from './snapshots.js'
+import { importers } from './imports.js'
 
 // `@qvac/turbovec-ggml` is the default provider. The addon is an optional
 // peer, so its own types are not part of ours.
@@ -35,13 +35,6 @@ export type NativeIndexLoad =
   | { module: NativeIndexModule }
   | { module: null; reason: Extract<IndexFallbackReason, `addon-${string}`>; error?: unknown }
 
-// The dynamic imports `ready()` runs. Tests replace them to simulate a host
-// that refuses module loading after startup.
-export const importers = {
-  turbovec: (): Promise<unknown> => import('@qvac/turbovec-ggml'),
-  bareFs: (): Promise<unknown> => import('bare-fs')
-}
-
 let loading: Promise<NativeIndexLoad> | null = null
 
 // Resolves without a module when the addon is not installed or cannot load on
@@ -52,10 +45,9 @@ export function loadNativeIndex(): Promise<NativeIndexLoad> {
   return loading
 }
 
-// Forgets cached imports, so the next `ready()` runs `importers` again.
-export function forgetLoadedModules(): void {
+// Forgets the cached import, so the next `ready()` runs `importers.turbovec` again.
+export function forgetNativeIndex(): void {
   loading = null
-  forgetSnapshotFileSystem()
 }
 
 function settleNativeIndex(importing: Promise<IndexProvider | null>): Promise<NativeIndexLoad> {

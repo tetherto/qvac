@@ -4,7 +4,9 @@ import Corestore from 'corestore'
 import fs from 'bare-fs'
 
 import { ERR_CODES, createRag } from '../../src/index.js'
-import { forgetLoadedModules, importers, type NativeIndex } from '../../src/vector-index/native.js'
+import { importers } from '../../src/vector-index/imports.js'
+import { forgetNativeIndex, type NativeIndex } from '../../src/vector-index/native.js'
+import { forgetSnapshotFileSystem } from '../../src/vector-index/snapshots.js'
 import {
   SCAN_ONLY,
   SPACE,
@@ -50,6 +52,11 @@ async function open(t: Test, index: IndexOptions = {}): Promise<Opened> {
     documents: [doc('a', spaceId, [['a', [1, 0, 0]]]), doc('b', spaceId, [['b', [0, 1, 0]]])]
   })
   return { rag, spaceId, dir, events }
+}
+
+function forgetLoadedModules(): void {
+  forgetNativeIndex()
+  forgetSnapshotFileSystem()
 }
 
 // Replaces the default imports for one test, as a host's module loader would.

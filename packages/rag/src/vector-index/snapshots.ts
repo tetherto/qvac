@@ -1,6 +1,6 @@
 import qvacCrypto from '#crypto'
 
-import { importers } from './native.js'
+import { importers } from './imports.js'
 import type { IndexStorage, SnapshotFileSystem } from '../types.js'
 
 // What a snapshot was taken of. A snapshot is used only when every field
