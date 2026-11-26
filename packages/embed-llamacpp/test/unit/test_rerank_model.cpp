@@ -351,4 +351,12 @@ TEST_F(RerankModelTest, RuntimeStatsDescribeTheLastRequest) {
   EXPECT_GT(stats["total_tokens"], 0);
   EXPECT_GT(stats["batch_size"], 0);
   EXPECT_GT(stats["context_size"], 0);
+  const std::string backendName =
+      test_common::getStatString(model->runtimeStats(), "backendName");
+  const std::string expectedBackendName = test_common::getTestBackendName();
+  if (expectedBackendName.empty()) {
+    EXPECT_FALSE(backendName.empty());
+  } else {
+    EXPECT_EQ(backendName, expectedBackendName);
+  }
 }

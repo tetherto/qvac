@@ -18,9 +18,14 @@ test('stats payload maps backendDevice 0 to "cpu"', function (t) {
 })
 
 test('stats payload maps backendDevice 1 to "gpu"', function (t) {
-  const result = mapAddonEvent('Stats', { batch_size: 32, backendDevice: 1 }, null)
+  const result = mapAddonEvent(
+    'Stats',
+    { batch_size: 32, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null
+  )
   t.is(result.type, 'JobEnded')
   t.is(result.data.backendDevice, 'gpu')
+  t.is(result.data.backendName, 'cuda,vulkan', 'backendName passes through unchanged')
 })
 
 test('stats payload leaves unknown backendDevice values as-is', function (t) {

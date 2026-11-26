@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/BackendSelection.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 
 using namespace backend_selection;
 
@@ -1402,4 +1403,16 @@ TEST_F(
   EXPECT_EQ(
       splitDevicesFor(mockBackend, "vulkan0"),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+TEST_F(BackendSelectionTest, RuntimeBackendNameUsesRegistryFamily) {
+  mockBackend.addDevice(
+      {"Apple GPU", "Metal", GGML_BACKEND_DEVICE_TYPE_GPU, "MTL"});
+  const auto bckI = mockBackend.toBackendInterface();
+  using qvac_lib_inference_addon_embed::backend_reporting::
+      runtimeDeviceBackendName;
+
+  EXPECT_EQ(
+      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(0), bckI), "metal");
+  EXPECT_TRUE(runtimeDeviceBackendName(nullptr, bckI).empty());
 }

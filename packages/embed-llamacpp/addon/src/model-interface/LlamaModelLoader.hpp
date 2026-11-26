@@ -107,6 +107,10 @@ public:
   [[nodiscard]] int64_t runtimeBackendDevice() const {
     return runtimeBackendDevice_;
   }
+  /// Lowercase backend family of the loaded model, or empty when unknown.
+  [[nodiscard]] std::string runtimeBackendName() const {
+    return runtimeBackendName_;
+  }
 
 private:
   void init(
@@ -124,5 +128,6 @@ private:
   InitLoader initLoader_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
   int64_t runtimeBackendDevice_ = 0;
+  std::string runtimeBackendName_;
   ModelMetaData metadata_;
 };

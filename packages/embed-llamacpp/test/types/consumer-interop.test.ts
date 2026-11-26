@@ -6,8 +6,14 @@ import {
   type GGMLConfig,
   type LayaResult,
   type QvacResponse,
-  type RerankScores
+  type RerankScores,
+  type RuntimeStats
 } from '@qvac/embed-llamacpp'
+
+export function backendStatsTypes(stats: RuntimeStats) {
+  const named: RuntimeStats = { ...stats, backendName: 'cuda,vulkan' }
+  return named
+}
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
