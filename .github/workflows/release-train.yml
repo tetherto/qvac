@@ -189,7 +189,13 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: dist-${{ needs.train.outputs.name }}
-          path: ${{ needs.train.outputs.dist_paths }}
+          # upload-artifact roots the artifact at the common parent of its
+          # paths, and the jobs below unpack it at the repository root. The
+          # root package.json keeps that parent the root for a train whose
+          # packages all sit under packages/.
+          path: |
+            ${{ needs.train.outputs.dist_paths }}
+            package.json
           if-no-files-found: error
           retention-days: 30
 
@@ -431,6 +437,14 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
+      # publish packs each package again and refuses to go on unless it gets
+      # the bytes the checks ran on.
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
       # pnpm 11 reads PNPM_CONFIG_* and ignores NPM_CONFIG_*. Lifecycle scripts
       # stay off so inference's `prepare` does not rebuild over the downloaded
       # dist.
@@ -440,7 +454,7 @@ jobs:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED"
+        run: node .github/scripts/release-train.mjs publish "$MOVED" "$RUNNER_TEMP/train-tarballs"
 
   # The same publish with --dry-run, as a release PR check or a dispatch with
   # dry_run. No environment and no id-token: it never needs to authenticate.
@@ -478,11 +492,19 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
+      # publish packs each package again and refuses to go on unless it gets
+      # the bytes the checks ran on.
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
       - name: Publish the train (dry run)
         env:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --dry-run
+        run: node .github/scripts/release-train.mjs publish "$MOVED" "$RUNNER_TEMP/train-tarballs" --dry-run
 
   # From here on, each job also runs when publish-npm published nothing because
   # npm already had every version from this commit: a re-run after a later job
