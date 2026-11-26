@@ -9,6 +9,8 @@ import { join, dirname, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const REDISTRIBUTABLE = /^(?:vcruntime|msvcp|concrt)\d[\w]*\.dll$/i
+// VS 2015 and later use the VC14 runtime family, including suffixed Release DLLs.
+const SUPPORTED_REDISTRIBUTABLE = /^(?:vcruntime|msvcp|concrt)140(?:_\w+)?\.dll$/i
 const FORBIDDEN = [
   /^(?:vcruntime|msvcp|concrt)\d[\w]*d\.dll$/i,
   /^ucrtbased\.dll$/i,
@@ -18,7 +20,10 @@ const FORBIDDEN = [
 export function violations(binary, dependents, available = new Set()) {
   const imports = dependents.split(/\r?\n/).map((line) => line.trim())
   return imports.flatMap((name) => {
-    if (FORBIDDEN.some((pattern) => pattern.test(name)))
+    if (
+      FORBIDDEN.some((pattern) => pattern.test(name)) ||
+      (REDISTRIBUTABLE.test(name) && !SUPPORTED_REDISTRIBUTABLE.test(name))
+    )
       return [`${binary} -> unsupported Debug/legacy runtime ${name}`]
     if (REDISTRIBUTABLE.test(name) && !available.has(name.toLowerCase()))
       return [`${binary} -> missing packaged runtime ${name}`]
