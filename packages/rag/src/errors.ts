@@ -20,7 +20,8 @@ export const ERR_CODES = Object.freeze({
   EMBEDDING_FAILED: 14027,
   DOCUMENT_CHANGED: 14028,
   IMPORT_INVALID: 14029,
-  IMPORT_LINEAGE_MISMATCH: 14030
+  IMPORT_LINEAGE_MISMATCH: 14030,
+  IMPORT_SOURCE_FAILED: 14031
 } as const)
 
 // Codes 0.9 raised and 0.10 does not. They stay registered: @qvac/error keeps
@@ -157,6 +158,10 @@ const definitions: ErrorCodesMap = {
   [ERR_CODES.IMPORT_LINEAGE_MISMATCH]: {
     name: 'IMPORT_LINEAGE_MISMATCH',
     message: (message) => `Import lineage mismatch: ${message}`
+  },
+  [ERR_CODES.IMPORT_SOURCE_FAILED]: {
+    name: 'IMPORT_SOURCE_FAILED',
+    message: (message) => `Import source failed: ${message}`
   }
 }
 
