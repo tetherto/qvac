@@ -685,8 +685,11 @@ TEST(VectorIndexTest, LoadFailureReportsStatusWithoutHandle) {
 }
 
 TEST(VectorIndexTest, StorageNamesRoundTripThroughTheParser) {
-  for (const char* name :
-       {"f32", "q8", "q4", "turbovec-q2", "turbovec-q3", "turbovec-q4"}) {
+  std::vector<const char*> names{"f32", "q8", "q4"};
+  if constexpr (TURBOVEC_TARGET) {
+    names.insert(names.end(), {"turbovec-q2", "turbovec-q3", "turbovec-q4"});
+  }
+  for (const char* name : names) {
     const auto storage = parseVectorStorage(name);
     ASSERT_TRUE(storage.has_value()) << name;
     const VectorIndex idx(128, *storage);

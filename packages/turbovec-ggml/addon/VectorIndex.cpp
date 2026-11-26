@@ -126,6 +126,13 @@ SnapshotBytes::SnapshotBytes(SnapshotBytes&& other) noexcept
   other.size = 0;
 }
 
+uint8_t* SnapshotBytes::release() noexcept {
+  uint8_t* bytes = data;
+  data = nullptr;
+  size = 0;
+  return bytes;
+}
+
 SnapshotBytes& SnapshotBytes::operator=(SnapshotBytes&& other) noexcept {
   if (this != &other) {
     if (data != nullptr) {

@@ -1190,12 +1190,6 @@ function sameBytes(a, b) {
   return true
 }
 
-function removeFile(file) {
-  for (const artifact of [file, `${file}.lock`]) {
-    if (fs.existsSync(artifact)) fs.unlinkSync(artifact)
-  }
-}
-
 test('IdMapIndex: storage tells TurboVec q4 from generic q4, also after a load', async (t) => {
   const storages = SUPPORTS_TURBOVEC
     ? ['f32', 'q8', 'q4', 'turbovec-q2', 'turbovec-q3', 'turbovec-q4']
@@ -1495,6 +1489,6 @@ test('IdMapIndex: sync saves a TurboVec index incrementally', async (t) => {
     for (const index of loaded) await index.dispose()
     await idx.dispose()
     await plain.dispose()
-    removeFile(file)
+    if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })

@@ -42,6 +42,10 @@ struct SnapshotBytes {
   SnapshotBytes(SnapshotBytes&& other) noexcept;
   SnapshotBytes& operator=(SnapshotBytes&& other) noexcept;
 
+  // Gives up ownership: the caller frees the buffer with
+  // ggml_vec_index_bytes_free.
+  uint8_t* release() noexcept;
+
   uint8_t* data = nullptr;
   size_t size = 0;
 };

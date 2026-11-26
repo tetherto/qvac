@@ -1072,7 +1072,7 @@ export default class IdMapIndex {
    * `IdMapIndex.fromBytes()`. Rejects with `InvalidArgument` for non-TurboVec
    * storage and for an index loaded from a v3 snapshot.
    */
-  async toBytes(options?: IdMapIndexCallOptions) {
+  async toBytes(options?: IdMapIndexCallOptions): Promise<Uint8Array> {
     const signal = readSignal('toBytes', options)
     return enqueue(
       this,
@@ -1085,7 +1085,7 @@ export default class IdMapIndex {
    * All live IDs. The order is stable until the index changes, and on
    * TurboVec storage until `buildIvf()`.
    */
-  async ids(options?: IdMapIndexCallOptions) {
+  async ids(options?: IdMapIndexCallOptions): Promise<BigUint64Array> {
     const signal = readSignal('ids', options)
     return enqueue(
       this,

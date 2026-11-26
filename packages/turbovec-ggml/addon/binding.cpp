@@ -518,10 +518,36 @@ js_value_t* toJs(js_env_t* env, const IdList& list) {
   return js::TypedArray<uint64_t>::create(env, ids);
 }
 
-// Copied once into a new Uint8Array; the fabric buffer is freed with the job.
-js_value_t* toJs(js_env_t* env, const turbovec_ggml::SnapshotBytes& bytes) {
-  std::span<const uint8_t> data(bytes.data, bytes.size);
-  return js::TypedArray<uint8_t>::create(env, data);
+// The result of toBytes(). Marshalling gets the result as const; `mutable`
+// lets it take the buffer over instead of copying it.
+struct Snapshot {
+  mutable turbovec_ggml::SnapshotBytes bytes;
+};
+
+void freeSnapshotBytes(js_env_t* /*env*/, void* data, void* /*hint*/) {
+  ggml_vec_index_bytes_free(static_cast<uint8_t*>(data));
+}
+
+// Hands fabric's buffer to JS without a copy, so a large snapshot is never
+// held twice. An engine that refuses external memory gets a copy instead.
+js_value_t* toJs(js_env_t* env, const Snapshot& snapshot) {
+  turbovec_ggml::SnapshotBytes bytes = std::move(snapshot.bytes);
+  js_value_t* buffer = nullptr;
+  if (js_create_external_arraybuffer(
+          env, bytes.data, bytes.size, freeSnapshotBytes, nullptr, &buffer) !=
+      0) {
+    // Clear the pending exception so the copy below can still succeed.
+    js_value_t* ignored = nullptr;
+    (void)js_get_and_clear_last_exception(env, &ignored);
+    std::span<const uint8_t> data(bytes.data, bytes.size);
+    return js::TypedArray<uint8_t>::create(env, data);
+  }
+  const size_t size = bytes.size;
+  // The ArrayBuffer's finalizer frees the buffer from now on.
+  (void)bytes.release();
+  js_value_t* array = nullptr;
+  JS(js_create_typedarray(env, js_uint8array, size, buffer, 0, &array));
+  return array;
 }
 
 js_value_t* toJs(js_env_t* env, const std::shared_ptr<VectorIndex>& index) {
@@ -1244,9 +1270,9 @@ js_value_t* idxToBytesAsync(js_env_t* env, js_callback_info_t* info) try {
       nullptr,
       readToken(env, argv, 1),
       [idx = std::move(idx)]() {
-        turbovec_ggml::SnapshotBytes bytes;
-        checkStatus(idx->toBytes(bytes));
-        return bytes;
+        Snapshot snapshot;
+        checkStatus(idx->toBytes(snapshot.bytes));
+        return snapshot;
       });
 }
 TURBOVEC_CATCH

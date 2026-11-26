@@ -283,12 +283,12 @@ export default class IdMapIndex {
      * `IdMapIndex.fromBytes()`. Rejects with `InvalidArgument` for non-TurboVec
      * storage and for an index loaded from a v3 snapshot.
      */
-    toBytes(options?: IdMapIndexCallOptions): Promise<Uint8Array<ArrayBufferLike>>;
+    toBytes(options?: IdMapIndexCallOptions): Promise<Uint8Array>;
     /**
      * All live IDs. The order is stable until the index changes, and on
      * TurboVec storage until `buildIvf()`.
      */
-    ids(options?: IdMapIndexCallOptions): Promise<BigUint64Array<ArrayBufferLike>>;
+    ids(options?: IdMapIndexCallOptions): Promise<BigUint64Array>;
     /**
      * Set how many threads the calls queued after this one may use, from 1
      * (the default) to 256, the addon's worker thread included. Searches,
