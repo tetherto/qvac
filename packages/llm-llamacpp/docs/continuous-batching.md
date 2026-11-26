@@ -538,12 +538,12 @@ whether a per-job stats source exists for that id:
   contributes to the same aggregate, which is why a job's own figures can
   differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
-  snapshot starts from that same aggregate, then `TTFT`, `TPS`,
+  snapshot starts from that same aggregate, then `TTFT`, `TPS`, `ppTPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
   observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
   the model decodes speculatively (`spec-type`; see the README's
-  speculative decoding section). All other keys (`ppTPS`, `CacheTokens`,
-  `avgConcurrentSeq`, `backendDevice`) stay
+  speculative decoding section). The keys `CacheTokens`,
+  `avgConcurrentSeq` and `backendDevice` stay
   model-level.
 
 Four variants:
@@ -646,6 +646,13 @@ the group collapses its OWN prompts into one figure set:
   average answers "what did one of my prompts typically experience".
 - `generatedTokens`, `promptTokens` — summed over the group (tokens are
   additive).
+- `ppTPS` — newly evaluated prompt tokens divided by the elapsed time of
+  steps that processed them. A shared decode step contributes its full time
+  once per participating job, even if several of its slots fed prompt tokens.
+  Media uses evaluated tokens and includes media encoding time. Queue wait
+  and generation-only steps are outside the measurement. A job with no
+  measured prefill reports zero. The SDK exposes this as
+  `promptTokensPerSecond`.
 - `stopReason` — kept only if every prompt of the group stopped for the same
   reason; otherwise the key is absent rather than guessed. The sample below
   shows the mixed case (A hit EOS, B hit its prediction limit).

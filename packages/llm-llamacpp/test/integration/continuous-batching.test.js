@@ -941,6 +941,7 @@ test(
       t.ok(generated > 0, `${cases[idx].id} reports its own generatedTokens`)
       t.ok(toNumber(stats.TTFT) > 0, `${cases[idx].id} reports its own time to first token`)
       t.ok(toNumber(stats.promptTokens) > 0, `${cases[idx].id} reports its own promptTokens`)
+      t.ok(toNumber(stats.ppTPS) > 0, `${cases[idx].id} reports a prompt processing rate`)
       t.ok(toNumber(stats.TPS) >= 0, `${cases[idx].id} reports an observed TPS`)
     }
   }
