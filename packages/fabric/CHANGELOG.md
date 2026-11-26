@@ -19,6 +19,8 @@
 - Windows port dependencies and addon builds use the shared MSVC CRT (`/MD`,
   `/MDd` for Debug). Fabric packages the Release runtime DLLs beside its entry
   point; consumers must rebuild with matching CRT settings when adopting it.
+- Windows platform packages declare sibling DLLs as Bare bundle assets, keeping
+  the shared ggml core and MSVC runtime beside the addon in relocated bundles.
 - Update `qvac-fabric` from `12032.0.1` to `12032.1.0`, using the merged registry
   release without a temporary port overlay or registry baseline changes.
 - Backend logging uses the shared core's callback directly, removing per-module

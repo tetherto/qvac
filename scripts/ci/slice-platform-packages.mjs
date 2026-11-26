@@ -143,6 +143,11 @@ export function buildSliceManifest (metaManifest, definition) {
   if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
+  if (definition.os?.includes('win32')) {
+    // Bare collects an addon's companion directory automatically, but eager
+    // DLL dependencies beside the .bare must be declared as bundle assets.
+    manifest.assets = definition.hosts.map((host) => './prebuilds/' + host + '/*.dll')
+  }
   if (isFabricLinux(metaManifest, definition)) {
     manifest.dependencies = Object.fromEntries(FABRIC_BACKEND_DEFINITIONS.map((backend) => [
       slicePackageName(metaManifest.name, backend), metaManifest.version
