@@ -20,10 +20,14 @@
 //   - QVAC_RUN_SPECULATIVE_MTP_HEADS=1: external MTP heads on other models, a
 //     Gemma 4 assistant on Gemma 4 E2B and unsloth's MTP quant on its
 //     Qwen3.5-2B (about 6 GB of models).
+//   - QVAC_RUN_BONSAI_27B=1: MTP on the draft head built into PrismML's
+//     Ternary Bonsai 2.5 27B Q2_0 (about 8 GB), with PrismML's CUDA preset
+//     for drafting. bonsai-2-5.test.js checks the model's answers.
 //
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
-// verification flips near-ties. Off by default: CI requires identical output.
+// verification flips near-ties. Off by default: CI requires identical output,
+// except in the stop-string test of variants that set `stopStringDivergence`.
 // Always on for Android: with quantized weights, a single token decodes through
 // the GPU's integer-dot matrix-vector path and a verify batch through the
 // matrix-matrix path, and their logits differ by more than a near-tie's margin.
@@ -37,6 +41,7 @@
 // prestage-ignore: gemma-4-E2B-it-assistant-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-MTP-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
+// prestage-ignore: Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf — opt-in via QVAC_RUN_BONSAI_27B=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -52,8 +57,6 @@ const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
-const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const useCpu = isDarwinX64 || isLinuxArm64
 
 function safeTest(name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
@@ -64,6 +67,9 @@ function readEnv(key) {
   if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
   return ''
 }
+
+// CI's CPU-only legs set NO_GPU=true; a GPU arm64 host (DGX Spark) runs CUDA.
+const useCpu = isDarwinX64 || readEnv('NO_GPU') === 'true'
 
 function optIn(key, what) {
   if (isMobile) return `${what} is desktop-only`
@@ -78,6 +84,7 @@ const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
+const skipBonsai = optIn('QVAC_RUN_BONSAI_27B', 'MTP on Ternary Bonsai 2.5 27B')
 const skipDspark = isMobile ? false : optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
 const DSPARK_DRAFT = 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf'
 const tolerateDivergence =
@@ -134,6 +141,25 @@ const VARIANTS = [
     type: 'draft-mtp',
     draft: 'Qwen3.5-2B-MTP-Q4_0.gguf',
     skip: skipMtpHeads
+  },
+  {
+    // The head is built into the -mtp file. PrismML's CUDA preset drafts up
+    // to 3 tokens and drops guesses below 0.1. On CUDA the verify batch rounds
+    // a near-tie in the thinking text differently from single-token decoding
+    // (PrismML: output matches "up to the rounding noise"), so the stop-string
+    // test tolerates divergence before the stop. Repeated greedy runs must
+    // still match exactly.
+    label: 'MTP on Ternary Bonsai 2.5 27B',
+    target: 'Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf',
+    type: 'draft-mtp',
+    extra: {
+      'spec-draft-n-min': '0',
+      'spec-draft-n-max': '3',
+      'spec-draft-p-min': '0.1'
+    },
+    stopStringDivergence: true,
+    skip: skipBonsai,
+    timeout: 7_200_000
   },
   {
     // The drafter's block is 9 tokens; the default n-max of 3 would use a
@@ -281,7 +307,7 @@ for (const variant of VARIANTS) {
       const plain = await run(baseConfig({ 'spec-type': 'none', reverse_prompt: stopWord }))
       const speculative = await run(await variantConfig(variant, { reverse_prompt: stopWord }))
       t.is(plain.stats.stopReason, 'antiprompt', 'plain decoding stopped on the stop word')
-      if (tolerateDivergence) {
+      if (tolerateDivergence || variant.stopStringDivergence) {
         // Outputs may diverge before the stop, and the speculative text may then
         // never contain the stop word. Each output that does must stop at its own
         // first match, and where one contains the other they must be equal.
