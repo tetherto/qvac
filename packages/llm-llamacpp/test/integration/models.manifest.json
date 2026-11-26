@@ -92,6 +92,14 @@
       "bytes": 7912178944,
       "warm": false
     },
+    "Ternary-Bonsai-2.5-27B-mmproj-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-mmproj-Q8_0.gguf"
+      ],
+      "sha256": "6807ede61d570bb86ba34b756a0fa109edc33668604de867c6ea6d8f1d631903",
+      "bytes": 629246976,
+      "warm": false
+    },
     "gemma-4-E2B-it-assistant-Q8_0.gguf": {
       "urls": [
         "https://huggingface.co/AtomicChat/gemma-4-E2B-it-assistant-GGUF/resolve/5ba029771ba4efc3488835c4a137b30bd1f80b03/gemma-4-E2B-it-assistant.Q8_0.gguf"

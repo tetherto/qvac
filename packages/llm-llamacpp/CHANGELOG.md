@@ -6,9 +6,10 @@
 
 - Integration tests for PrismML's
   [Ternary Bonsai 2.5 27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF)
-  in Q2_0, opt-in behind `QVAC_RUN_BONSAI_27B=1` (about 16 GB of models,
+  in Q2_0, opt-in behind `QVAC_RUN_BONSAI_27B=1` (about 17 GB of models,
   desktop-only). They check the model's answers with and without its MTP draft
-  head, record decode speed with drafting off and on, and run the MTP head
+  head, after thinking, from a tool call's result, and about an image through
+  its mmproj, record decode speed with drafting off and on, and run the MTP head
   through the speculative-decoding suite, whose stop-string test lets the
   head's output differ from plain decoding before the stop (CUDA's verify
   batch flips a near-tie). No addon change: the fabric release
