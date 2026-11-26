@@ -25,12 +25,14 @@ function platformFamily(key) {
 // test/integration/finetuning-moe.test.js), and the XDNA NPU exists only on
 // Linux x64 (see test/integration/xdna.test.js), so none belongs in this file.
 // The KV-cache extended suite is opt-in and the Qwen3.5 cache stress is Linux x64
-// by default, so on a device every test in them skips.
+// by default, so on a device every test in them skips. Ternary Bonsai 2.5 27B is
+// desktop opt-in only (see test/integration/bonsai-2-5.test.js).
 const DESKTOP_ONLY = new Set([
   'runFinetuningMoeTest',
   'runXdnaTest',
   'runKvCacheExtendedTest',
-  'runQwen35MultimodalCacheStressTest'
+  'runQwen35MultimodalCacheStressTest',
+  'runBonsai25Test'
 ])
 
 function isOverrideOnly(name) {

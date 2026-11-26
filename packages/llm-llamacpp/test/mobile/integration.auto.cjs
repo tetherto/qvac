@@ -391,6 +391,11 @@ async function runBitnetTest (options = {}) { // eslint-disable-line no-unused-v
   return runIntegrationModule('../integration/bitnet.test.js', options)
 }
 
+async function runBonsai25Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBonsai25Test')) return __FILTERED
+  return runIntegrationModule('../integration/bonsai-2-5.test.js', options)
+}
+
 async function runCacheStateMachineTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCacheStateMachineTest')) return __FILTERED
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)

@@ -76,6 +76,22 @@
       "bytes": 2056414816,
       "warm": false
     },
+    "Ternary-Bonsai-2.5-27B-Q2_0.gguf": {
+      "urls": [
+        "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-Q2_0.gguf"
+      ],
+      "sha256": "84496171ca79d4d33fb45612a2afd8303ec494baf916281023b7dc9cb3b3b9fa",
+      "bytes": 7673194848,
+      "warm": false
+    },
+    "Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf": {
+      "urls": [
+        "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf"
+      ],
+      "sha256": "b0f83de8481c3200c529aef5fb495dbfedf2a4a3f017f7a3ea0a69c67be1d306",
+      "bytes": 7912178944,
+      "warm": false
+    },
     "gemma-4-E2B-it-assistant-Q8_0.gguf": {
       "urls": [
         "https://huggingface.co/AtomicChat/gemma-4-E2B-it-assistant-GGUF/resolve/5ba029771ba4efc3488835c4a137b30bd1f80b03/gemma-4-E2B-it-assistant.Q8_0.gguf"
