@@ -179,12 +179,12 @@ pnpm exec nx run @qvac/fabric:cpp:tests:linux-x64
 
 ## Shared-core packaging (step 2)
 
-Dynamic-backend builds now use shared ggml core libraries by default. The
-checked-in `vcpkg-overlays/ports/qvac-fabric` is an exact copy of registry
-PR #504 at `a2afce1877deea9c547f3862c6d8c276b4b11616`. It uses the signed
-upstream `v12032.1.0` tag at merge commit
+Dynamic-backend builds now use shared ggml core libraries by default. Both the
+Fabric and native regression manifests request registry `qvac-fabric` version
+`12032.1.0`. This uses the signed upstream `v12032.1.0` tag at merge commit
 `d067e8bd0f7fea2a0ec60ceb20dae42b8ba48f1c`, with no source patches or
-shared-core feature. Remove the overlay after adopting the merged registry release.
+shared-core feature. No temporary qvac-fabric overlay is needed, and registry
+baselines remain unchanged so unrelated packages retain their resolved versions.
 
 Top-level `BUILD_SHARED_LIBS` remains off: enabling it also changes llama and
 mtmd into shared libraries. The source instead sets it within ggml when
@@ -211,7 +211,7 @@ import libraries and backend DLLs stay in its companion directory. Platform
 metadata and `qvac_fabric_import_shared_core(prebuilds host)` support importing
 the same package from development consumers. No additional npm package is needed.
 
-Native CI now builds the real overlay port, rather than the old source-only
+Native CI now builds the registry port, rather than the old source-only
 static/shared controls (which remain on the parent regression PR #5871):
 
 ```sh
@@ -228,7 +228,7 @@ core and a real CPU module. Windows uses the static Debug CRT (`/MTd`) and
 rejects missing Debug core metadata. Logger/abort probes link that same core.
 Linux also verifies typed exceptions, `exception_ptr`, stream RTTI and
 allocation/destruction across a shared C++ boundary, with versioned imports.
-Full fabric prebuild CI uses the same overlay and checks staged ELF imports.
+Full fabric prebuild CI uses the same registry release and checks staged ELF imports.
 
 Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
 CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
