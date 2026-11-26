@@ -228,6 +228,21 @@ TEST(NeuralProcessor, ApplyDayProjectionRejectsMismatchedChannels) {
       processor.applyDayProjection(features, 3, 4, 0), qvac_errors::StatusError);
 }
 
+TEST(NeuralProcessor, ApplyDayProjectionReportsAWrongSampleCount) {
+  NeuralProcessor processor;
+  ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
+  // The channel count matches the embedder, but 1 x 8 needs 8 samples.
+  const std::vector<float> features(7, 0.5F);
+  try {
+    processor.applyDayProjection(features, 1, 8, 0);
+    FAIL() << "expected a sample-count error";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string message = e.what();
+    EXPECT_NE(message.find("7 samples"), std::string::npos) << message;
+    EXPECT_NE(message.find("need 8"), std::string::npos) << message;
+  }
+}
+
 TEST(NeuralProcessor, DayProjectionAcceptsTheEmbedderChannelCount) {
   NeuralProcessor processor;
   ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
