@@ -7,7 +7,7 @@ on:
         description: Historical ABot-World job to replay
         type: choice
         required: true
-        options: [parity, incident]
+        options: [parity, parity-full, incident]
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   replay-abot:
-    if: github.repository == 'tetherto/qvac' && github.ref == 'refs/heads/codex/qvac-28085-gpu-replay'
+    if: github.repository == 'tetherto/qvac' && github.ref == 'refs/heads/codex/qvac-28085-gpu-replay' && inputs.scenario != 'parity-full'
     name: ABot-World replay (${{ inputs.scenario }})
     runs-on: ${{ inputs.scenario == 'parity' && 'qvac-ubuntu2204-x64-gpu' || 'qvac-ubuntu2404-x64-gpu' }}
     timeout-minutes: 100
@@ -77,6 +77,91 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: qvac-28085-abot-${{ inputs.scenario }}-${{ github.run_id }}
+          path: ${{ env.RESULTS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  replay-full-suite:
+    if: github.repository == 'tetherto/qvac' && github.ref == 'refs/heads/codex/qvac-28085-gpu-replay' && inputs.scenario == 'parity-full'
+    name: linux-x64-integration-tests-diffusion-cpp (Ubuntu 22.04 historical replay)
+    runs-on: qvac-ubuntu2204-x64-gpu
+    timeout-minutes: 120
+    env:
+      SOURCE_SHA: 79b92451443daaa27f1ba29e3b3d7caec56ccf08
+      RESULTS_DIR: q28085-results-${{ github.run_id }}-${{ github.run_attempt }}
+      LTX_DOWNLOAD: 'false'
+      LTX_LLM_FILE: gemma-3-12b-it-UD-Q2_K_XL.gguf
+      QVAC_PERF_RUNS: '3'
+      QVAC_PERF_WARMUP_RUNS: '0'
+    steps:
+      - name: Checkout historical source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Checkout replay tools
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          path: q28085-tools
+          sparse-checkout: .github/scripts/qvac-28085
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Use the historical Node version
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '26.13.0'
+
+      - name: Resolve npm packages at the original job date
+        working-directory: packages/diffusion-cpp
+        shell: bash
+        run: |
+          npm install --ignore-scripts --before=2026-11-06T07:49:48Z
+          npm install --prefix "$RUNNER_TEMP/$RESULTS_DIR" --no-audit --no-fund bare-runtime-linux-x64@1.36.0
+
+      - name: Download the original run prebuild
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: prebuilds-diffusion-cpp
+          run-id: '42182330190'
+          github-token: ${{ github.token }}
+          path: packages/diffusion-cpp/prebuilds
+
+      - name: Check the original binaries and link the platform package
+        shell: bash
+        run: |
+          python3 q28085-tools/.github/scripts/qvac-28085/full_suite.py verify packages/diffusion-cpp
+          npm --prefix packages/diffusion-cpp run link:platform
+
+      - name: Cache and warm the base models
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: base
+          cache-key-suffix: base
+          cache-version: v2
+
+      - name: Cache and warm the Ideogram models
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ideogram
+          cache-key-suffix: ideogram
+          cache-version: v2
+
+      - name: Run the unchanged diffusion integration suite
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/$RESULTS_DIR/node_modules/bare-runtime-linux-x64/bin:$PATH"
+          python3 -m unittest discover -s q28085-tools/.github/scripts/qvac-28085 -p 'test_*.py'
+          python3 q28085-tools/.github/scripts/qvac-28085/full_suite.py run packages/diffusion-cpp "$RESULTS_DIR"
+
+      - name: Retain the suite verdict and GPU samples
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qvac-28085-abot-parity-full-${{ github.run_id }}
           path: ${{ env.RESULTS_DIR }}
           if-no-files-found: warn
           retention-days: 14
