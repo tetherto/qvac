@@ -179,6 +179,65 @@ TEST(NeuralProcessor, PaddedFramesAreZero) {
   EXPECT_FLOAT_EQ(lastFrameSum, 0.0F);
 }
 
+namespace {
+
+// Loads a synthetic embedder with nf features into processor.
+bool loadSyntheticEmbedder(NeuralProcessor& processor, uint32_t nf, uint32_t r) {
+  std::vector<float> dayA(static_cast<size_t>(nf) * r);
+  std::vector<float> dayB(static_cast<size_t>(r) * nf);
+  std::vector<float> dayBias(nf);
+  std::vector<float> monthW(static_cast<size_t>(nf) * nf);
+  std::vector<float> monthBias(nf);
+  fillDeterministic(dayA, 11U);
+  fillDeterministic(dayB, 12U);
+  fillDeterministic(dayBias, 13U);
+  fillDeterministic(monthW, 14U);
+  fillDeterministic(monthBias, 15U);
+  return processor.loadEmbedderWeights(
+      writeSyntheticEmbedder(nf, r, dayA, dayB, dayBias, monthW, monthBias));
+}
+
+} // namespace
+
+// A recording narrower than the embedder used to be projected anyway:
+// projectTimestepRow read numFeatures floats from each numChannels-long row,
+// past the end of the buffer. Over `qvac serve` that let any caller crash the
+// shared worker.
+TEST(NeuralProcessor, DayProjectionRejectsFewerChannelsThanTheEmbedder) {
+  NeuralProcessor processor;
+  ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
+
+  // The reported repro: a 12-byte recording of 1 timestep and 1 channel.
+  const auto signal = createTestSignal(1, 1);
+  ASSERT_EQ(signal.size(), 12U);
+  EXPECT_THROW(processor.processToMel(signal), qvac_errors::StatusError);
+}
+
+TEST(NeuralProcessor, DayProjectionRejectsMoreChannelsThanTheEmbedder) {
+  NeuralProcessor processor;
+  ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
+  EXPECT_THROW(
+      processor.processToMel(createTestSignal(4, 12)), qvac_errors::StatusError);
+}
+
+TEST(NeuralProcessor, ApplyDayProjectionRejectsMismatchedChannels) {
+  NeuralProcessor processor;
+  ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
+  const std::vector<float> features(static_cast<size_t>(3) * 4, 0.5F);
+  EXPECT_THROW(
+      processor.applyDayProjection(features, 3, 4, 0), qvac_errors::StatusError);
+}
+
+TEST(NeuralProcessor, DayProjectionAcceptsTheEmbedderChannelCount) {
+  NeuralProcessor processor;
+  ASSERT_TRUE(loadSyntheticEmbedder(processor, 8, 2));
+  const auto mel = processor.processToMel(createTestSignal(16, 8));
+  EXPECT_EQ(
+      mel.size(),
+      static_cast<size_t>(NeuralProcessor::K_WHISPER_MEL_FRAMES) *
+          NeuralProcessor::K_WHISPER_N_MEL);
+}
+
 TEST(BCIConfig, DefaultWhisperFullParamsAreValid) {
   BCIConfig config;
   config.whisperMainCfg["language"] = std::string("en");

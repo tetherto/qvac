@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Transcribing with day-projection weights no longer reads past the neural
+  signal buffer when the recording has fewer channels than the embedder's
+  `numFeatures`. `projectTimestepRow` read `numFeatures` values from each
+  `numChannels`-long timestep row; a recording whose channel count differs
+  from the embedder's now fails with `InvalidNeuralSignal` instead, which also
+  stops wider recordings from silently dropping channels.
+
 ## [0.17.0] - 2026-11-23
 
 ### Changed

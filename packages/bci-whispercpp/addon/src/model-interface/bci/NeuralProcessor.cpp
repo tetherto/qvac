@@ -441,6 +441,18 @@ std::vector<float> NeuralProcessor::applyDayProjection(
 
   const uint32_t nf = weights_.numFeatures;
   const uint32_t r = weights_.r;
+
+  // Each projected timestep reads nf features from a row that is numChannels
+  // long, so the recording has to carry exactly the embedder's channel count:
+  // fewer would read past the buffer, more would silently drop channels.
+  if (numChannels != nf ||
+      features.size() != static_cast<size_t>(numTimesteps) * numChannels) {
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        "Neural signal channel count (" + std::to_string(numChannels) +
+            ") does not match the embedder's numFeatures (" +
+            std::to_string(nf) + ")");
+  }
   const int di = std::clamp(dayIdx, 0, static_cast<int>(weights_.numDays) - 1);
 
   // Rebuild the dense projection only when the resolved day index changes;
