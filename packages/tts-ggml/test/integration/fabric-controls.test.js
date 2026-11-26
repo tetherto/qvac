@@ -23,7 +23,7 @@ async function collect(response) {
 
 test(
   'CosyVoice returns owned speech tokens and replays them through native streaming',
-  { skip: NO_GPU },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const download = await ensureCosyvoiceModel({
       targetDir: path.join(getBaseDir(), 'models', 'cosyvoice3')
@@ -65,7 +65,7 @@ test(
   }
 )
 
-test('Supertonic accepts precision controls and remains usable after warmUp', async (t) => {
+test('Supertonic accepts precision controls and remains usable after warmUp', { timeout: 600000 }, async (t) => {
   const download = await ensureSupertonicModel({ targetDir: path.join(getBaseDir(), 'models') })
   t.ok(download.success, 'Supertonic model is available')
   if (!download.success) return
