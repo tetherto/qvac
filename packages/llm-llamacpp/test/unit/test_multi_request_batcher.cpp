@@ -797,7 +797,7 @@ TEST_F(MultiRequestBatcherTest, AdmitsEmptyPlanOnlyWhenAllowed) {
   const auto finished = batcher.extractFinished();
   ASSERT_EQ(finished.size(), 1u);
   EXPECT_EQ(finished[0].currentPos, 3);
-  EXPECT_EQ(finished[0].prefillTokenCount, 0u);
+  EXPECT_EQ(finished[0].prefillKvCells, 0u);
   EXPECT_TRUE(finished[0].generatedTokens.empty());
 }
 
@@ -1422,7 +1422,7 @@ TEST(MediaBarrierRequestTest, BarrierGatesFeedingAndCountsKvCells) {
            .nKvTokens = kMediaCells}}};
   Request req(0, std::move(plan), kMaxTokens);
 
-  EXPECT_EQ(req.prefillTokenCount, 3u + static_cast<size_t>(kMediaCells));
+  EXPECT_EQ(req.prefillKvCells, 3u + static_cast<size_t>(kMediaCells));
   EXPECT_FALSE(req.isAwaitingMedia());
   EXPECT_TRUE(req.hasTokensToFeed());
   EXPECT_EQ(req.remainingToFeed(), 1u);
@@ -1570,6 +1570,7 @@ TEST(MediaBarrierFlowTest, BarrierBlocksThenResumesAtNewPosition) {
   EXPECT_EQ(awaiting->seqId, 0u);
   EXPECT_EQ(awaiting->mediaIndex, 7u);
   EXPECT_EQ(awaiting->currentPos, 1);
+  EXPECT_EQ(awaiting->nKvTokens, kMediaCells);
 
   // While awaiting media the slot must not feed.
   result = batcher.fillBatch(batch);

@@ -883,23 +883,22 @@ ContinuousBatchScheduler::prefillCompleteFn() {
   // `failGroupLocked` -> `cancelSlotLocked(Skip)`. The last known-good cache
   // remains untouched.
   // path.
-  return
-      [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
-        auto& slot = slots_[seqId];
-        if (!slot.has_value() || !slot->driver) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_errors::general_error::toString(
-                  qvac_errors::general_error::InternalError),
-              "ContinuousBatchScheduler::step: missing sequence driver for "
-              "prefill-complete seqId " +
-                  std::to_string(seqId));
-        }
-        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
-        if (slot->prefillOnly) {
-          batcher_.markFinished(seqId);
-        }
-      };
+  return [this](uint32_t seqId, llama_pos currentPos, size_t prefillKvCells) {
+    auto& slot = slots_[seqId];
+    if (!slot.has_value() || !slot->driver) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "ContinuousBatchScheduler::step: missing sequence driver for "
+          "prefill-complete seqId " +
+              std::to_string(seqId));
+    }
+    slot->driver->onPrefillComplete(currentPos, prefillKvCells);
+    if (slot->prefillOnly) {
+      batcher_.markFinished(seqId);
+    }
+  };
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
@@ -1017,11 +1016,9 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   assert(
       newPos >= awaiting->currentPos &&
       "media segment must not move the sequence position backwards");
-  const auto mediaPositions =
-      static_cast<uint64_t>(newPos - awaiting->currentPos);
   stats_.recordDecodeStep(
       numActiveLocked(),
-      mediaPositions,
+      static_cast<uint64_t>(awaiting->nKvTokens),
       0,
       std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
@@ -1458,12 +1455,12 @@ void RuntimeStatsSnapshot::accumulateSlot(
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
   // once prefill completes, prefillFedCount is reset to 0, so the full prompt
-  // is read from prefillTokenCount; a request cancelled mid/pre-prefill instead
+  // is read from prefillKvCells; a request cancelled mid/pre-prefill instead
   // reports the partial prefillFedCount (0 if no step ever ran). This keeps the
   // `cacheTokens ~= promptTokens + generatedTokens` invariant honest on the
   // cancel path.
   promptTokens += req.isPrefillComplete()
-                      ? static_cast<int64_t>(req.prefillTokenCount)
+                      ? static_cast<int64_t>(req.prefillKvCells)
                       : static_cast<int64_t>(req.prefillFedCount);
 }
 
@@ -2480,7 +2477,7 @@ ObservedRequestStats computeObservedStats(
   // Mirror accumulateSlot: full prompt once prefill completed, the partial
   // fed count for a request cancelled mid/pre-prefill.
   observed.promptTokens = req.isPrefillComplete()
-                              ? static_cast<int64_t>(req.prefillTokenCount)
+                              ? static_cast<int64_t>(req.prefillKvCells)
                               : static_cast<int64_t>(req.prefillFedCount);
   if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist

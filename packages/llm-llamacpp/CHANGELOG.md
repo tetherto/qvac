@@ -10,10 +10,10 @@
   overlapped another one counted both, and it read positions where media on
   M-RoPE models takes more cells than positions
   ([#5986](https://github.com/tetherto/qvac/pull/5986)).
-- On a load with `parallel >= 2`, `promptTokens` and the whole-model
-  `CacheTokens` count an image by the KV cells it fills, as the single-prompt
-  path does. They counted its positions, so a cold image prompt reported fewer
-  prompt tokens than its cache held
+- On a load with `parallel >= 2`, `promptTokens`, the whole-model
+  `CacheTokens` and the prompt tokens behind `ppTPS` count an image by the KV
+  cells it fills, as the single-prompt path does. They counted its positions,
+  so a cold image prompt reported fewer prompt tokens than its cache held
   ([#5986](https://github.com/tetherto/qvac/pull/5986)).
 
 ## [0.73.0] - 2026-11-23

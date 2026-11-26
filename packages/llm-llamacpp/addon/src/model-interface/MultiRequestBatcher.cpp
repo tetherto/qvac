@@ -13,9 +13,9 @@ Request::Request(
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
       pendingCheckpointAt(plan.checkpointAtTextTokens), currentPos(initialPos),
       maxTokensPerSequence(maxTokens) {
-  prefillTokenCount = pendingPrefillTokens.size();
+  prefillKvCells = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
-    prefillTokenCount += static_cast<size_t>(barrier.nKvTokens);
+    prefillKvCells += static_cast<size_t>(barrier.nKvTokens);
   }
 }
 
@@ -403,7 +403,7 @@ void finishPrefillIfComplete(
     return;
   }
   if (onPrefillComplete) {
-    onPrefillComplete(req.seqId, req.currentPos, req.prefillTokenCount);
+    onPrefillComplete(req.seqId, req.currentPos, req.prefillKvCells);
   }
   req.pendingPrefillTokens.clear();
   req.pendingPrefillTokens.shrink_to_fit();
@@ -454,7 +454,8 @@ MultiRequestBatcher::nextAwaitingMedia() const {
     return AwaitingMedia{
         .seqId = slot->seqId,
         .mediaIndex = slot->pendingMediaBarriers.front().mediaIndex,
-        .currentPos = slot->currentPos};
+        .currentPos = slot->currentPos,
+        .nKvTokens = slot->pendingMediaBarriers.front().nKvTokens};
   }
   return std::nullopt;
 }

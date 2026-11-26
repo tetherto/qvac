@@ -1878,9 +1878,8 @@ public:
   void captureHistoryCheckpoint(llama_pos pos) override {
     inner_->captureHistoryCheckpoint(pos);
   }
-  void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override {
-    inner_->onPrefillComplete(currentPos, prefillTokenCount);
+  void onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) override {
+    inner_->onPrefillComplete(currentPos, prefillKvCells);
   }
   void syncPosition(llama_pos currentPos) override {
     inner_->syncPosition(currentPos);

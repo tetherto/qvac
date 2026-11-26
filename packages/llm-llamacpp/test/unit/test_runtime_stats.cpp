@@ -198,7 +198,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   Request req(/*rid=*/0, std::move(prompt), maxTokens);
   // Admission fixed the planned prompt size, but no prefill step has fed any
   // token yet, so the request is not prefill-complete.
-  ASSERT_EQ(req.prefillTokenCount, 42U);
+  ASSERT_EQ(req.prefillKvCells, 42U);
   ASSERT_EQ(req.prefillFedCount, 0U);
   ASSERT_FALSE(req.isPrefillComplete());
 
@@ -214,7 +214,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
 // A request that completed prefill (normal completion, or a cancel after the
 // first generated token) must still report the full planned prompt: prefill
 // resets prefillFedCount to 0 once complete, so the honest count comes from
-// prefillTokenCount in that case.
+// prefillKvCells in that case.
 TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   constexpr unsigned maxTokens = 256;
   std::vector<llama_token> prompt(42, 1);
