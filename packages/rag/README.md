@@ -87,7 +87,7 @@ See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ## API
 
-### `createRag({ corestore, embeddings?, chunking?, index?, onIndexFallback? })`
+### `createRag({ corestore, embeddings?, chunking?, index?, onIndexFallback?, onSnapshotError? })`
 
 Creates a RAG instance on a caller-owned Corestore. `embeddings` is an `EmbeddingsPort`, needed only for text and pre-chunked ingest and for text query search:
 
@@ -109,11 +109,13 @@ The port must be in the namespace's space: `computeSpaceId(port.space)` has to e
 - `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only. Snapshots go under `<dir>/<core key>/`; files there that follow the snapshot naming but aren't the namespace's current snapshot, such as the temp file of a killed write, are deleted when the namespace's index opens, after each snapshot, and by `dropNamespace`. Other files are left alone.
 - `snapshotEvery`: committed batches between snapshots, default 256. A snapshot is also written on `close()`.
 - `provider`: an index implementation to use instead of `@qvac/turbovec-ggml`; see [Index providers](#index-providers).
-- `fs`: the file system snapshot sidecars go through instead of `bare-fs`, such as Node's `fs.promises`. It needs `mkdir`, `readFile`, `writeFile`, `rename` and `unlink`; without `readdir`, stale snapshot files are not cleaned up.
+- `fs`: the file system snapshots go through. Defaults to `bare-fs` on Bare and `fs` on Node. It needs `mkdir`, `readFile`, `writeFile`, `rename` and `unlink`; without `readdir`, stale snapshot files are not cleaned up.
 
-`ready()` loads `@qvac/turbovec-ggml` and `bare-fs`, unless `provider` and `fs` replace them, before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
+`ready()` loads `@qvac/turbovec-ggml` and the file system, unless `provider` and `fs` replace them, before it resolves, so a host that blocks module loading after startup keeps its index and snapshots. A snapshot that can't be read or written leaves the index in memory, and the next snapshot tries again.
 
 `onIndexFallback(event)` is called when a namespace's searches switch to the scan, once per namespace and reason, with `{ namespace, reason, error? }`. The reasons are the ones `indexStatus` reports. An error it throws, or a promise it returns that rejects, is ignored.
+
+`onSnapshotError(event)` is called with `{ namespace, error }` when a namespace's snapshot can't be read or written, including the write on `close()`. Searches still use the index, so this is not a fallback, but each reopen rebuilds it from HyperDB until a snapshot is written. It is called once per run of failures; a snapshot written successfully re-arms it. `indexStatus` reports the same error as `snapshot: { error }`. Errors it throws or rejects with are ignored, as for `onIndexFallback`.
 
 The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. If the host closes the Corestore first, writes fail with `DB_OPERATION_FAILED` and `close()` still resolves, skipping the mutation pruning it can no longer write. Call `ready()` before any other method.
 
