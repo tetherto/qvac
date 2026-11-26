@@ -105,9 +105,5 @@ if(BUILD_TESTING)
   add_test(NAME ModelFitLlamaLoadConfigUnit COMMAND model-fit-llama-load-config-test)
 endif()
 
-# NOTE: do not link msvcrt.lib here. It is the *dynamic* CRT import library, and
-# the monorepo ships Windows addons against the static runtime (QVAC-21100) so a
-# prebuild carries no vcruntime140/ucrtbase dependency. The CRT comes from the
-# vcpkg triplet (vcpkg-overlays/triplets/x64-windows.cmake, VCPKG_CRT_LINKAGE
-# static) and the bare-make toolchain; naming it explicitly here overrode both.
-# The win32 build's Windows runtime check fails if those imports reappear.
+# Let CMake select the CRT through MSVC_RUNTIME_LIBRARY. The shared addon
+# setup and vcpkg triplet both select /MD; do not add CRT libraries explicitly.

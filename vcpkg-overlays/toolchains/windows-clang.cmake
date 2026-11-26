@@ -17,7 +17,15 @@ else()
     "qvac windows-clang: no bare-make toolchain for VCPKG_TARGET_ARCHITECTURE='${VCPKG_TARGET_ARCHITECTURE}'")
 endif()
 
+# bare-make defaults to x64-windows/arm64-windows. Preserve the actual port
+# triplet (including the Debug boundary-test triplet) for dependency lookup.
+set(_qvac_target_triplet "${VCPKG_TARGET_TRIPLET}")
 include("${CMAKE_CURRENT_LIST_DIR}/include-bare-make-toolchain.cmake")
+if(_qvac_target_triplet)
+  set(VCPKG_TARGET_TRIPLET "${_qvac_target_triplet}" CACHE STRING "vcpkg target triplet" FORCE)
+  set(VCPKG_TARGET_TRIPLET "${_qvac_target_triplet}")
+endif()
+unset(_qvac_target_triplet)
 
 # vcpkg configures ports with its own CMake, which links MSVC-style targets
 # through CMAKE_LINKER and ignores the LLD linker type bare-make selects. With
@@ -27,6 +35,11 @@ if(CMAKE_LINKER_LLD)
 endif()
 
 include("${_qvac_vcpkg_scripts}/toolchains/windows.cmake")
+# bare-make sets a normal /MT variable. windows.cmake only sets a cache
+# default, which cannot override it: explicitly honor this port's CRT triplet.
+set(CMAKE_MSVC_RUNTIME_LIBRARY
+  "MultiThreaded$<$<CONFIG:Debug>:Debug>$<$<STREQUAL:${VCPKG_CRT_LINKAGE},dynamic>:DLL>")
+
 unset(_qvac_vcpkg_scripts)
 
 # windows.cmake sets CMAKE_RC_FLAGS to "/c65001 /DWIN32". cmake -E cmake_llvm_rc

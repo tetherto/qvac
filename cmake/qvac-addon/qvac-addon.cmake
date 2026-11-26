@@ -57,6 +57,7 @@ include_guard(GLOBAL)
 
 set(QVAC_ADDON_CMAKE_VERSION "0.4.0")
 set(QVAC_ADDON_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+include("${QVAC_ADDON_CMAKE_DIR}/windows-runtime.cmake")
 
 # ---------------------------------------------------------------------------
 # qvac_addon_fuzz_manifest()
@@ -205,6 +206,7 @@ endmacro()
 # helpers make.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_project_setup)
+  qvac_use_windows_shared_crt()
   cmake_parse_arguments(_QAPS "VALGRIND_SUPP;PRE_COMMIT_HOOK" "" "" ${ARGN})
 
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

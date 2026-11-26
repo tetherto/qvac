@@ -232,17 +232,26 @@ Use the usual provisioned vcpkg/Bare toolchain and Vulkan SDK. The small test
 manifest requests GPU backends and vector-index, so it exercises the normal
 DL port configuration, all CPU variants, Vulkan and RPC. It builds both
 Release and Debug dependencies, then links the tests to the installed Debug
-core and a real CPU module. Windows uses the static Debug CRT (`/MTd`) and
+core and a real CPU module. Windows uses the shared Debug CRT (`/MDd`) and
 rejects missing Debug core metadata. Logger/abort probes link that same core.
-Linux also verifies typed exceptions, `exception_ptr`, stream RTTI and
-allocation/destruction across a shared C++ boundary, with versioned imports.
+Linux and Windows also verify typed exceptions, `exception_ptr`, stream RTTI and
+allocation/destruction across a shared C++ boundary. Linux additionally checks
+versioned imports.
 Full fabric prebuild CI uses the same registry release and checks staged ELF imports.
+
+The registry `12032.1.0` installed-port Windows x64 validation passes all four
+Debug tests with the shared triplet: backend allocation, module logger, module
+abort and shared C++ runtime ownership. All 13 direct Fabric consumer CMake
+projects use the shared setup helper. Diffusion uses the shared triplet through
+its independent setup and explicitly applies the same CRT selection and Release
+runtime staging.
+
 
 Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
 CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
 llama/common/mtmd against the shared core also links and loads successfully.
 
-The additional C++ stream/vector probe remains **failing** under
+The historical static-CRT C++ stream/vector probe fails under
 `/MTd`: a caller-owned vector is passed into `Uint8BufferStreamBuf`, and the
 core reports `__acrt_first_block == header` during DLL teardown. The no-stream
 control passes. This is separate from the fixed linker/export collision.
@@ -250,9 +259,12 @@ The current LLM addon loads from disk and rejects weight streaming. Its old
 `initFromMemory` helper has no production callers in this checkout, so this
 probe does not establish a failure in the active model-loading path. The
 exported `llama_model_load_from_buffer` API still calls this constructor across
-the new fabric/core DLL boundary and would have the same ownership problem.
-The probe is source-only and instruments the core with a test CRT report hook;
-it is not the installed-port test and is not run by the current CI target.
+the fabric/core DLL boundary and has the same ownership problem if those
+binaries use separate static CRTs.
+This static-CRT reproduction is source-only and instruments the core with a
+test CRT report hook. The installed-port CI now uses `/MDd` and exercises the
+same vector transfer in `shared-cxx-runtime`, along with exception and RTTI
+ownership.
 Run it in a VS developer shell, with native CMake/Ninja/clang-cl executables:
 
 ```powershell
@@ -269,12 +281,13 @@ including assertions after `main` returns; checking a counter in `main` would
 miss this failure. The hook does not change allocation behavior and is never
 compiled into shipped core libraries.
 
-### Windows shared CRT experiment
+### Windows shared CRT control
 
-`windows-shared-crt` evaluates a common Windows runtime using `/MDd` in Debug
-and `/MD` in Release. It does not change production triplets, addon flags,
-registry pins, or the existing `/MTd` baseline. Both builds use the actual
-shared-core source checkout and a real CPU backend. A separate DLL
+`windows-shared-crt` is the standalone control that established shared CRT
+ownership using `/MDd` in Debug and `/MD` in Release. Production builds now
+use those settings through the shared Windows triplets and post-project
+CMake helper; the historical `/MTd` source reproduction remains separate.
+Both control builds use the actual shared-core source checkout and a real CPU backend. A separate DLL
 whole-archives llama/common/mtmd, matching fabric's archive layout, while a
 client executable checks typed exceptions, `exception_ptr`, stream RTTI and
 allocation/destruction across DLL boundaries. This DLL is a link/ownership
@@ -309,8 +322,8 @@ that directory, so a globally installed redistributable cannot mask failure.
 The OS-provided UCRT remains a system dependency on supported modern Windows.
 Debug runtime DLLs are used only on the development machine and are never
 included in the distributable bundle. This is a manual experiment, outside the
-current installed-port CI target. Production adoption still needs consistent
-consumer/dependency flags, runtime staging, Bare DLL lookup and CI policy work.
+installed-port CI target. The production build now applies the CRT flags and
+runtime staging directly; no experiment hook is needed.
 
 Validated with MSVC 14.44 and LLVM 23.1.4 against source `f89291d9c`:
 all six Debug tests pass, including the stream/vector probe that fails under
@@ -358,8 +371,10 @@ INSTALL_RPATH, so the source explicitly emits `$ORIGIN` for core and backend
 libraries, and Fabric emits the companion directory on its `.bare` module.
 `ci/verify-android-shared-core.mjs` checks the emitted binaries and rejects
 the original missing-RUNPATH package. Android supports DT_RUNPATH from API 24;
-these builds target API 29. Windows still uses isolated `/MD` overrides;
-production CRT flags and consumer migration remain separate work.
+these builds target API 29. Those Windows inference runs used isolated `/MD`
+overrides. The shared Windows triplets, common addon setup and Fabric packaging
+now select that runtime directly; consumers still need to adopt the released
+Fabric package in the follow-up migration.
 
 Linux binding audits found the same Bare interception of the allocation-operator
 family in released Fabric and the shared-core build. No other C++ runtime symbols
@@ -367,6 +382,6 @@ from the audited QVAC libraries resolved to Bare. This is preexisting behavior
 and is resolved as a migration blocker; allocation-failure/new-handler behavior
 has not been exercised. Bare-sidecar inference passed outside the sandbox.
 
-Windows stream/vector ownership, Android APK loading and remaining GPU/NPU
-execution coverage remain cutover acceptance work. These draft PRs do not
-migrate all consumer addons or remove their compatibility paths.
+The shared-CRT ownership path must stay green in the installed-port tests.
+Android APK loading and remaining GPU/NPU execution coverage remain unverified.
+This PR does not update all consumer npm ranges or remove their compatibility paths.

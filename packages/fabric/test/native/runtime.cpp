@@ -12,7 +12,14 @@ extern "C" std::basic_streambuf<char>* qvac_runtime_stream();
 bool qvac_test_app_local_crt();
 #endif
 
+#ifdef QVAC_TEST_DEBUG_CRT_REPORT
+extern "C" void qvac_test_core_crt_failures();
+#endif
+
 int main() {
+#ifdef QVAC_TEST_DEBUG_CRT_REPORT
+  qvac_test_core_crt_failures();
+#endif
 #ifdef QVAC_TEST_APPLOCAL_CRT
   if (!qvac_test_app_local_crt())
     return 6;

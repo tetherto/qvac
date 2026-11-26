@@ -378,6 +378,24 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 
 ---
 
+## Windows CRT ownership
+
+Fabric and its shared ggml core use `/MD` in Release and `/MDd` in Debug.
+Consumer addons and their static dependencies must use the same CRT selection
+when passing C++ objects or allocation ownership across DLL boundaries. The
+shared Windows vcpkg triplets select dynamic CRT linkage; call
+`qvac_addon_project_setup()` after `project()` to apply the matching addon
+setting, overriding bare-make's static CRT default. Builds outside that helper
+can call `qvac_use_windows_shared_crt()` after including
+`cmake/qvac-addon/windows-runtime.cmake`.
+
+Fabric stages redistributable Release runtime DLLs beside its Windows `.bare`
+entry point. Load Fabric before the consumer addon as described above. Windows
+provides the UCRT; Debug runtimes are development-only and are not packaged.
+When adopting this layout, update to the corresponding published Fabric version
+and rebuild the consumer. Do not mix old `/MT` Fabric packages with new `/MD`
+consumers for cross-DLL C++ ownership.
+
 ## Fabric-stack PRs (parallel `qvac-fabric` development)
 
 When developing `qvac-fabric` on a test branch in `qvac-fabric-llm.cpp`, open a qvac PR

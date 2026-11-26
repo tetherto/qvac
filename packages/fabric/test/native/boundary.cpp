@@ -7,7 +7,7 @@
 
 #ifdef _WIN32
 #ifndef _DEBUG
-#error Windows allocation ownership coverage requires a Debug build with /MTd
+#error Windows allocation ownership coverage requires a Debug build
 #endif
 #include <windows.h>
 #ifdef _DEBUG

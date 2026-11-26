@@ -7,11 +7,14 @@
 - Dynamic-backend builds on Linux, Windows and Android share ggml core libraries
   between Fabric and its backends. Native addons must rebuild against the new
   layout and ship with the matching Fabric version. Linux libc++ is provided by
-  the shared ggml core instead of the Fabric addon; CUDA and XDNA retain their
-  existing C++ runtimes. macOS and iOS retain static ggml linkage.
+  the shared ggml core instead of the Fabric addon; Linux CUDA and XDNA retain
+  their existing C++ runtimes. macOS and iOS retain static ggml linkage.
 
 ### Changed
 
+- Windows port dependencies and addon builds use the shared MSVC CRT (`/MD`,
+  `/MDd` for Debug). Fabric packages the Release runtime DLLs beside its entry
+  point; consumers must rebuild with matching CRT settings when adopting it.
 - Update `qvac-fabric` from `12032.0.1` to `12032.1.0`, using the merged registry
   release without a temporary port overlay or registry baseline changes.
 - Backend logging uses the shared core's callback directly, removing per-module

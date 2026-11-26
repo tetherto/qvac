@@ -1,4 +1,4 @@
-// Build and exercise the registry port, including /MTd on Windows.
+// Build and exercise the registry port, including /MDd on Windows.
 import { spawnSync } from 'node:child_process'
 import { accessSync, chmodSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, join, delimiter, dirname } from 'node:path'

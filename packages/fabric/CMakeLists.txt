@@ -24,6 +24,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
 string(JSON _pkg_version GET "${_pkg_json}" "version")
 
 project(qvac-fabric VERSION ${_pkg_version} LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/windows-runtime.cmake")
+qvac_use_windows_shared_crt()
 
 # Test-only AddressSanitizer build, enabled with QVAC_FABRIC_ASAN=1 (set by
 # link-local-qvac-fabric with asan:true, which also exports VCPKG_* sanitizer
@@ -131,6 +133,7 @@ endif()
 # directly into the runtime module, so there is nothing to stage.
 set(BACKEND_DL_LIBS "")
 bare_target(_fabric_host)
+qvac_install_windows_runtime("${_fabric_host}")
 set(_fabric_split_backends OFF)
 if(_fabric_host STREQUAL "linux-x64")
   set(_fabric_split_backends ON)

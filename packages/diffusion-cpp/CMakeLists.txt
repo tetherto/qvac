@@ -37,6 +37,7 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/tri
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(inference-addon-sd C CXX)
+qvac_use_windows_shared_crt()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -80,6 +81,7 @@ endif()
 # sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
 # scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
+qvac_install_windows_runtime("${bare_target_value}")
 if(bare_target_value MATCHES "^ios-")
   set(module_name "qvac__diffusion-cpp-ios")
 else()

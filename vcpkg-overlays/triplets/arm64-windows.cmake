@@ -1,9 +1,7 @@
-# Static CRT + static library linkage so addons do not acquire a runtime
-# dependency on the dynamic Visual C++ runtime (vcruntime140.dll / msvcp140.dll).
-# This matches the bare-make win32 toolchain, which compiles the addon itself
-# with the static MSVC runtime (CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded...").
+# Static port libraries use the shared MSVC CRT, matching addon compilation
+# in cmake/qvac-addon/windows-runtime.cmake. Fabric ships the Release CRT DLLs.
 set(VCPKG_TARGET_ARCHITECTURE arm64)
-set(VCPKG_CRT_LINKAGE static)
+set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../toolchains/windows-clang.cmake")
 set(VCPKG_ENV_PASSTHROUGH_UNTRACKED QVAC_BARE_MAKE_TOOLCHAIN_FILE CMAKE_PROGRAM_PATH)
