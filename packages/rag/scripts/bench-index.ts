@@ -13,7 +13,6 @@ import os from 'bare-os'
 import Corestore from 'corestore'
 
 import { createRag } from '../dist/index.js'
-import { setNativeIndexLoader } from '../dist/vector-index/native.js'
 
 const CHUNKS_PER_DOCUMENT = 100
 const DOCUMENTS_PER_INGEST = 10
@@ -98,9 +97,17 @@ function ms(start: number): string {
   return `${(Date.now() - start).toFixed(0)} ms`
 }
 
+// Every index build fails, so the scan phase measures the scan alone.
+const SCAN_ONLY = {
+  create(): never {
+    throw new Error('scan only')
+  }
+}
+
 async function open() {
   const corestore = new Corestore(`${dir}/store`)
-  const rag = createRag({ corestore, index: { dir: `${dir}/index` } })
+  const provider = phase === 'scan' ? SCAN_ONLY : undefined
+  const rag = createRag({ corestore, index: { dir: `${dir}/index`, provider } })
   await rag.ready()
   return { corestore, rag }
 }
@@ -169,7 +176,6 @@ if (phase === 'ingest') {
   await corestore.close()
 } else {
   if (phase === 'rebuild') fs.rmSync(`${dir}/index`, { recursive: true, force: true })
-  if (phase === 'scan') setNativeIndexLoader(() => Promise.resolve(null))
   const start = Date.now()
   const { corestore, rag } = await open()
   const { spaceId } = await rag.createNamespace({ name: 'bench', space })

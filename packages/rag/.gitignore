@@ -11,3 +11,4 @@ test-external-hyperdb-store
 models
 .test
 .quickstart-store
+!test/fixtures/*/store

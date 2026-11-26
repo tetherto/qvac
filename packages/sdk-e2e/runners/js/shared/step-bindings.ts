@@ -56,6 +56,7 @@ import { StepIncompleteError, type CollectMode, type StepBindings } from '@qvac/
 import type { ResourceManager } from './resource-manager.js'
 import { unitVectors, cosineAtLeast, moreSimilarThan } from './vector-checks.js'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
+import { sdkIndexProvider } from './rag-index-provider.js'
 
 /** How the shared step interpreter reaches this SDK. */
 
@@ -66,6 +67,9 @@ let localRag: Promise<(op: string, params?: Record<string, unknown>) => Promise<
 async function createLocalRag() {
   const { createRagOps } = await import('rag-e2e-plugin/ops')
   return createRagOps({
+    // TurboVec's binding only loads under Bare, so rag here searches the SDK's index.
+    indexProvider: sdkIndexProvider(),
+    fs: fs.promises,
     root: os.tmpdir(),
     join: (...parts) => path.join(...parts),
     async removeDir(dir) {

@@ -18,9 +18,12 @@ function makeLogger(): Logger & { debugs: string[] } {
   } as unknown as Logger & { debugs: string[] }
 }
 
-function makeRes(initial: { writableEnded?: boolean } = {}): ServerResponse {
+function makeRes(initial: { writableEnded?: boolean; destroyed?: boolean } = {}): ServerResponse {
   const res = new EventEmitter() as unknown as ServerResponse
-  Object.assign(res, { writableEnded: initial.writableEnded ?? false })
+  Object.assign(res, {
+    writableEnded: initial.writableEnded ?? false,
+    destroyed: initial.destroyed ?? false
+  })
   return res
 }
 
@@ -113,6 +116,21 @@ describe('bindClientDisconnectCancel', () => {
     await Promise.resolve()
 
     assert.deepEqual(cancelled, ['rid-early', 'rid-late'])
+  })
+
+  it('cancels the first id when the client left before it was bound', async () => {
+    const res = makeRes({ destroyed: true })
+    const cancels: string[] = []
+    const logger = makeLogger()
+    // lunte-disable-next-line require-await
+    const cancelFn = async (opts: { requestId: string }) => {
+      cancels.push(opts.requestId)
+    }
+    bindClientDisconnectCancel(res, 'rid-early', logger, cancelFn)
+    bindClientDisconnectCancel(res, 'rid-later', logger, cancelFn)
+    await Promise.resolve()
+
+    assert.deepEqual(cancels, ['rid-early', 'rid-later'])
   })
 
   it('binds via res.once so a second close event does not fire cancel twice', async () => {
