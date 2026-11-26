@@ -56,3 +56,13 @@ if(ENABLE_COVERAGE)
 endif()
 
 add_test(NAME asr_ggml_tests COMMAND asr_ggml_tests)
+
+if(APPLE)
+  add_executable(asr_metal_operator_probe metal_operator_probe.cpp)
+  target_link_libraries(asr_metal_operator_probe PRIVATE
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
+  )
+  qvac_addon_stage_fabric_for_test(asr_metal_operator_probe ${qvac_fabric_target})
+  add_test(NAME asr_metal_operator_probe COMMAND asr_metal_operator_probe)
+endif()

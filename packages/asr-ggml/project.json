@@ -307,6 +307,25 @@
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_large"
+          },
+          "commands": [
+            {
+              "command": "node --input-type=module -e \"import { install } from './ci/integration.mjs'; install()\"",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF -D ENABLE_COVERAGE=OFF",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make build --target asr_metal_operator_probe",
+              "forwardAllArgs": false
+            }
+          ]
         }
       },
       "dependsOn": [
@@ -343,6 +362,14 @@
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_large"
+          },
+          "commands": [
+            "./build/addon/tests/asr_metal_operator_probe"
+          ]
         }
       },
       "metadata": {
