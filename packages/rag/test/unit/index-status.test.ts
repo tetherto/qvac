@@ -387,3 +387,33 @@ test('an async onIndexFallback that rejects is ignored', async (t) => {
   await delay(20)
   t.alike(unhandled, [], 'no unhandled rejection')
 })
+
+test('a directory reopened with a working fs after one failed to load takes snapshots', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close(), { order: 1 })
+  const dir = await tmp(t)
+  useImporters(t, { bareFs: () => Promise.reject(new Error('fs sealed')) })
+  // Holds the core's shared index registry open across both RAGs below.
+  const keeper = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
+  await keeper.ready()
+  t.teardown(() => keeper.close())
+
+  const failed = createRag({ corestore: store, index: { dir } })
+  await failed.ready()
+  const { spaceId } = await failed.createNamespace({ name: 'ns', space: SPACE })
+  await failed.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await searchIds(failed, spaceId)
+  const before = await failed.indexStatus({ namespace: 'ns' })
+  t.ok(before.mode === 'index' && typeof before.snapshot === 'object', 'snapshots failed')
+  await failed.close()
+
+  const reopened = createRag({ corestore: store, index: { dir, fs: bareFs() } })
+  await reopened.ready()
+  t.teardown(() => reopened.close())
+  await searchIds(reopened, spaceId)
+  t.alike(
+    await reopened.indexStatus({ namespace: 'ns' }),
+    { mode: 'index', revision: 1, snapshot: 'none' },
+    'a fresh index with a working store'
+  )
+})

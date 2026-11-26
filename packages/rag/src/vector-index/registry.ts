@@ -173,6 +173,9 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     string,
     { provider: NativeIndexModule; files: FileSystem | null; refs: number }
   >()
+  // Every snapshot directory claimed on this core, with the fs it was last
+  // claimed with, so a drop still finds snapshots after their RAG closed.
+  const snapshotDirs = new Map<string, FileSystem>()
 
   function claim(config: IndexConfig, runtime: IndexRuntime): () => Promise<void> {
     const { dir } = config
@@ -189,6 +192,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       held = { provider, files: runtime.files, refs: 0 }
       claims.set(dir, held)
     }
+    if (runtime.files) snapshotDirs.set(dir, runtime.files)
     const claimed = held
     claimed.refs++
     let released = false
@@ -201,7 +205,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       // directory, with any fs, starts from fresh ones.
       const detached: Entry[] = []
       for (const [key, entry] of entries) {
-        if (entry.dir !== dir || !entry.store) continue
+        if (entry.dir !== dir) continue
         entries.delete(key)
         detached.push(entry)
       }
@@ -637,15 +641,13 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       discard(entry)
     }
     // Every directory an index of this namespace used or a RAG on the core
-    // claims, each through the file system that writes it.
+    // claimed, each through the file system that writes it.
     const stores = new Map<string, SnapshotStore>()
     for (const entry of detached) {
       if (entry.dir !== undefined && entry.store) stores.set(entry.dir, entry.store)
     }
-    for (const [dir, held] of claims) {
-      if (!stores.has(dir) && held.files) {
-        stores.set(dir, createSnapshotStore(dir, coreKey, held.files))
-      }
+    for (const [dir, files] of snapshotDirs) {
+      if (!stores.has(dir)) stores.set(dir, createSnapshotStore(dir, coreKey, files))
     }
     for (const store of stores.values()) {
       await onDisk(namespace, () => store.remove(namespace, createdAt))

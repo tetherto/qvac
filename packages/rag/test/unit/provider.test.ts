@@ -377,3 +377,27 @@ test('a directory reclaimed with another fs while the core stays open writes thr
   t.ok(second.writes.length > 0, 'the new fs writes the snapshots')
   t.alike(first.writes, [], 'the released fs is not used again')
 })
+
+test('dropNamespace deletes the snapshots of a directory whose RAG already closed', async (t) => {
+  const store = await openStore(t)
+  const dir = await tmp(t)
+  const keeper = createRag({ corestore: store, index: { provider: SCAN_ONLY } })
+  await keeper.ready()
+  t.teardown(() => keeper.close())
+
+  const { provider } = memoryProvider({ snapshots: true })
+  const writer = createRag({
+    corestore: store,
+    index: { provider, dir, fs: fs.promises as unknown as SnapshotFileSystem, snapshotEvery: 1 }
+  })
+  await writer.ready()
+  const { spaceId } = await writer.createNamespace({ name: 'ns', space: SPACE })
+  await writer.ingest({ namespace: 'ns', documents: ranked(spaceId, 2) })
+  await writer.search({ scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 1 })
+  await writer.close()
+  const files = () => fs.readdirSync(dir).flatMap((core) => fs.readdirSync(`${dir}/${core}`))
+  t.ok(files().length > 0, 'the closed RAG left a snapshot')
+
+  await keeper.dropNamespace({ name: 'ns' })
+  t.alike(files(), [], 'the drop deleted it')
+})
