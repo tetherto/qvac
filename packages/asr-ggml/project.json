@@ -401,7 +401,7 @@
           }
         },
         "darwin-x64": {
-          "args": "--no-gpu --whisper-gpu",
+          "args": "--no-gpu --whisper-gpu --set QVAC_WHISPER_GPU_RELAX=1",
           "ci": {
             "runner": "macos_15_large"
           }
