@@ -11,7 +11,9 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <future>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -276,23 +278,72 @@ TEST_F(ConcurrentProcessByIdTest, ConcurrentJobsReportTheirOwnCacheTokens) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  std::atomic<bool> firstDecodeHeld = false;
+  std::atomic<bool> releaseFirstDecode = false;
+  std::atomic<size_t> mostSequencesInOneStep = 0;
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&](llama_context* ctx, llama_batch& batch) -> int {
+        if (!firstDecodeHeld.exchange(true)) {
+          while (!releaseFirstDecode.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          }
+        }
+        std::set<llama_seq_id> sequences;
+        for (int32_t i = 0; i < batch.n_tokens; ++i) {
+          sequences.insert(batch.seq_id[i][0]);
+        }
+        size_t seen = mostSequencesInOneStep.load();
+        while (sequences.size() > seen &&
+               !mostSequencesInOneStep.compare_exchange_weak(
+                   seen, sequences.size())) {
+        }
+        return llama_decode(ctx, batch);
+      });
+  std::future<std::string> futureA;
+  std::future<std::string> futureB;
+  struct ReleaseOnExit {
+    std::atomic<bool>& flag;
+    ~ReleaseOnExit() { flag.store(true); }
+  } releaseOnExit{releaseFirstDecode};
 
   auto runJob = [&model](const LlamaModel::Prompt& prompt, JobId id) {
     std::any out = model->process(std::any(prompt), id);
     return std::any_cast<std::string>(out);
   };
+  const auto waitFor = [](const std::function<bool()>& ready) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (!ready()) {
+      if (std::chrono::steady_clock::now() > deadline) {
+        return false;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+  };
   auto promptA = makePrompt("What is the capital of France? One word.");
   auto promptB = makePrompt(
       "List the planets of the solar system in order from the sun, one per "
       "line, with one sentence about each.");
-  auto futureA = std::async(std::launch::async, runJob, promptA, JobId{1});
-  auto futureB = std::async(std::launch::async, runJob, promptB, JobId{2});
+  futureA = std::async(std::launch::async, runJob, promptA, JobId{1});
+  ASSERT_TRUE(waitFor([&] { return firstDecodeHeld.load(); }));
+  futureB = std::async(std::launch::async, runJob, promptB, JobId{2});
+  ASSERT_TRUE(waitFor([&] {
+    return ContinuousBatchSchedulerTestPeer::queuedRequests(*scheduler) > 0;
+  }));
+  releaseFirstDecode.store(true);
+
   ASSERT_EQ(
       futureA.wait_for(std::chrono::seconds(120)), std::future_status::ready);
   ASSERT_EQ(
       futureB.wait_for(std::chrono::seconds(120)), std::future_status::ready);
   EXPECT_FALSE(futureA.get().empty());
   EXPECT_FALSE(futureB.get().empty());
+  ASSERT_GE(mostSequencesInOneStep.load(), 2u)
+      << "the jobs never shared a decode step";
 
   double perJobCacheTokens = 0.0;
   for (const JobId id : {JobId{1}, JobId{2}}) {

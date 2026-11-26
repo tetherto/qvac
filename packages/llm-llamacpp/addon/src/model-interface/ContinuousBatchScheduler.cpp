@@ -1452,8 +1452,8 @@ void RuntimeStatsSnapshot::recordSpeculativeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t toolsDropped, const Request& req) {
-  cacheTokens += nPast;
+    int64_t kvCells, int64_t toolsDropped, const Request& req) {
+  cacheTokens += kvCells;
   toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
@@ -2554,7 +2554,6 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
-  int64_t nPast = 0;
   int64_t kvCells = 0;
   int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
@@ -2566,13 +2565,12 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // during prefill or failed is rolled back to the admission cursor, so
     // `CacheTokens` matches the live driver cursor either way. Work performed
     // is still reported via `promptTokens` / `generatedTokens`.
-    nPast = static_cast<int64_t>(slot.driver->getNPast());
     kvCells = static_cast<int64_t>(slot.driver->getKvCellsUsed());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, toolsDropped, req);
+  stats_.accumulateSlot(kvCells, toolsDropped, req);
   if (slot.driver) {
     stats_.speculative.add(slot.driver->speculativeStats());
   }

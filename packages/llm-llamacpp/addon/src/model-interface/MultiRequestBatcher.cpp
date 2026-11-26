@@ -15,7 +15,7 @@ Request::Request(
       maxTokensPerSequence(maxTokens) {
   prefillTokenCount = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
-    prefillTokenCount += static_cast<size_t>(barrier.nPos);
+    prefillTokenCount += static_cast<size_t>(barrier.nKvTokens);
   }
 }
 
