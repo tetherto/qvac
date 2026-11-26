@@ -46,6 +46,12 @@ int parseAdrenoModel(const std::string& description);
 bool backendNameMatchesFamily(
     const std::string& lowercasedBackendName, std::string_view family);
 
+/// @brief Backend family reported as `backendName` in run stats: the ggml
+/// backend name lowercased with the device index dropped, "CUDA0" -> "cuda",
+/// "MTL0" -> "metal", "GPUOpenCL" -> "opencl". Returns "" for a name that
+/// names no backend (empty, or the "none" / "unknown" sentinels).
+std::string backendFamilyName(std::string_view backendName);
+
 // Discover and register ggml backend plugins (Vulkan / Metal / OpenCL / …).
 // Thread-safe (std::call_once); safe to call from multiple model constructors.
 // `backendsDir` optionally names a directory holding the backend modules;
