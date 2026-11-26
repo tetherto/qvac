@@ -59,6 +59,7 @@ The QVAC surface supports:
 * [Image upscaling](#post-qvacv1imagesupscale) — via `/qvac/v1/images/upscale`, backed by an ESRGAN model.
 * [Music](#music-qvacv1audio) — via `/qvac/v1/audio/generations`, `/qvac/v1/audio/edits` and `/qvac/v1/audio/understandings`, backed by an `audiogen` model.
 * [World](#world-qvacv1worldscenes-experimental) (experimental) — via `/qvac/v1/world/scenes`, an interactive walk on an ABot-World model.
+* [VLA](#vla-qvacv1vla-experimental) (experimental) — via `/qvac/v1/vla/*`, robot action chunks from a SmolVLA, π₀.₅ or GR00T model.
 * [BCI](#bci-post-qvacv1bcitranscriptions-experimental) (experimental) — via `/qvac/v1/bci/transcriptions`, text from a neural-signal recording.
 
 ## Running the server
@@ -1353,6 +1354,125 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
           "world": { "kvCache": true, "frameJpegQuality": 85 }
         }
       }
+    }
+  }
+}
+```
+
+### VLA: `/qvac/v1/vla/*` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Predict robot actions with a vision-language-action model (SmolVLA, π₀.₅ or GR00T), backed by
+the SDK's `vla()`, `vlaHparams()` and `vlaSetEmbodiment()`. `model` names a `serve.models`
+alias whose endpoint category is `vla`.
+
+The server does not tokenize: send the instruction already tokenized with the model's own
+tokenizer (SmolVLM2 for SmolVLA, PaliGemma for π₀.₅, Qwen3-VL for GR00T). It does
+preprocess camera frames and pad the buffers, so read the model's sizes first.
+
+#### `GET /qvac/v1/vla/models/{model}`
+
+The model's hyperparameters, verbatim from `vlaHparams()`, and its ggml backend. Loads the
+model if it is not loaded yet.
+
+```json
+{
+  "object": "vla.model",
+  "model": "smolvla",
+  "backend_name": "MTL0",
+  "hparams": {
+    "chunkSize": 50,
+    "actionDim": 7,
+    "maxActionDim": 32,
+    "maxStateDim": 32,
+    "tokenizerMaxLength": 48,
+    "visionImageSize": 512,
+    "numCameras": 2,
+    "stateInputMode": "continuous",
+    "imageInputMode": "pixels"
+  }
+}
+```
+
+#### `POST /qvac/v1/vla/actions`
+
+Predict one action chunk. JSON only.
+
+| Field           | Type       | Required | Meaning                                                                       |
+| --------------- | ---------- | -------- | ----------------------------------------------------------------------------- |
+| `model`         | `string`   | Yes      | A `serve.models` alias with endpoint category `vla`                           |
+| `images`        | `object[]` | Yes      | One frame per camera, `hparams.numCameras` in all (π₀.₅: 1 to that)           |
+| `tokens`        | `int[]`    | Yes      | Tokenized instruction, IDs from 0; zero-padded to `hparams.tokenizerMaxLength`, unpadded when that is 0 (GR00T) |
+| `attentionMask` | `(0\|1)[]` | No       | One entry per token, default 1 each; π₀.₅ takes 1s then 0s                           |
+| `state`         | `number[]` | No       | Robot state, zero-padded to `hparams.maxStateDim`; ignored by π₀.₅            |
+| `noise`         | `number[]` | No       | `chunkSize * maxActionDim` values; required for GR00T and π₀.₅, sampled for SmolVLA |
+
+Each `images` entry is one of:
+
+- `{ "pixels", "width", "height", "layout"? }` — base64 RGB bytes, 8 bits per channel,
+  `width * height * 3` long, `hwc` (default) or `chw`. The server letterboxes and normalises
+  them to `visionImageSize`, like the SDK's `vlaPreprocessImage()`.
+- `{ "tensor" }` — base64 little-endian float32 values, passed to the model unchanged: a
+  `3 * size * size` CHW plane in [-1, 1], or the `imagePatchElems` patch buffer that GR00T
+  takes. GR00T accepts `tensor` only.
+
+```json
+{
+  "object": "vla.actions",
+  "model": "smolvla",
+  "chunk_size": 50,
+  "action_dim": 7,
+  "actions": [[0.01, -0.12, 0.33, 0.0, 0.05, -0.02, 1.0], "..."],
+  "stats": { "vision_ms": 41.2, "prefill_total_ms": 63.0, "ode_ms": 120.5, "total_ms": 230.1 }
+}
+```
+
+`actions` holds `chunk_size` rows of `action_dim` values, in execution order. A model runs
+one action request at a time; another one sent meanwhile gets 429. A client disconnect
+cancels the run.
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/vla/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"smolvla","images":[{"pixels":"...","width":640,"height":480},{"pixels":"...","width":640,"height":480}],"tokens":[1,4521,302,2],"state":[0.1,0.2,0.0,0.0,0.0,0.0,0.0,0.04]}'
+```
+
+#### `POST /qvac/v1/vla/models/{model}/embodiment`
+
+Switch a multi-embodiment GR00T model to another embodiment in the same GGUF, without a
+reload. `embodiment` is a tag such as `"libero_sim"`, a `cat_id` from 0 to 31, or
+`{ "tag" | "catId", "numCameras"? }`. It answers with the new `hparams` (no `backend_name`);
+re-read `numCameras` before the next action request. The switch is refused while an action
+request runs on the model.
+
+#### Errors
+
+| HTTP | `error.code`                 | When                                                                                      |
+| ---- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                    |
+| 400  | `missing_model`              | `model` is missing                                                                        |
+| 400  | `invalid_images`             | Missing, wrong camera count, or a frame of the wrong size or form for the model           |
+| 400  | `invalid_tokens`             | `tokens` is missing, has a negative ID, or is longer than `tokenizerMaxLength` |
+| 400  | `invalid_attention_mask`     | No entry per token, or a 0 before a 1 for π₀.₅                                            |
+| 400  | `invalid_state`              | `state` is longer than `maxStateDim`                                                      |
+| 400  | `invalid_noise`              | `noise` is missing for GR00T or π₀.₅, or is not `chunkSize * maxActionDim` values         |
+| 400  | `invalid_vla_request`        | The model refused the inputs                                                              |
+| 400  | `invalid_embodiment`         | Malformed, not in the GGUF, or the model is not a multi-embodiment GR00T                  |
+| 400  | `invalid_request`            | The body carries an unknown field                                                         |
+| 400  | `invalid_model_type`         | Alias is not a `vla` model                                                                |
+| 404  | `model_not_found`            | Unknown alias                                                                             |
+| 429  | `request_rejected_by_policy` | Another action request or an embodiment switch is running on the model |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                             |
+
+#### Configuring a VLA model
+
+```json
+{
+  "serve": {
+    "models": {
+      "smolvla": { "model": "SMOLVLA_LIBERO_VISION_Q8", "config": { "backend": ["metal"] } },
+      "groot": { "model": "GROOT_MULTI_Q5_VF16", "config": { "embodiment": "libero_sim" } }
     }
   }
 }
