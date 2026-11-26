@@ -11503,7 +11503,7 @@
     "params": "26B-A3B",
     "licenseId": "Apache-2.0",
     "tags": ["generation", "multimodal", "inkling2-mini", "instruct"],
-    "notes": "Looped MoE (26.2B total, 3.4B active per pass, 3 passes); pair with the F16 mmproj entry for image input.",
+    "notes": "Looped MoE: 26.4B total, 3.4B active; the middle layers run three times, about 5.4B effective active per token. Pair with the F16 mmproj entry for image input.",
     "link": "https://huggingface.co/unsloth/Inkling-2-Mini-GGUF"
   },
   {
