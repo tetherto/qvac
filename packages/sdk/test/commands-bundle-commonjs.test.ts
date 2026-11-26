@@ -131,9 +131,10 @@ export default async function start(ipc, ready) {
   const entry = pathToFileURL(path.join(dir, 'app', 'entry.mjs')).href
   t.is(await startWorker(await stowWorker(entry, path.join(dir, 'esm'))), 0, 'the ES modules run')
 
+  // Uncompressed, so the modules hold what the conversion wrote.
   const outDir = path.join(dir, 'commonjs')
   const bundle = Bundle.from(
-    fs.readFileSync(await stowWorker(entry, outDir, commonJSStowOptions()))
+    fs.readFileSync(await stowWorker(entry, outDir, { ...commonJSStowOptions(), compress: false }))
   )
   const scripts = Object.keys(bundle.files).filter((file) => /\.[cm]?js$/.test(file))
   t.ok(scripts.length > 0)

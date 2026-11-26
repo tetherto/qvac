@@ -171,7 +171,9 @@ minimumReleaseAgeExclude:
   - bare-assert
   - bare-buffer
   - bare-bundle
+  - bare-bundle-compress
   - bare-bundle-id
+  - bare-bundle-lower
   - bare-channel
   - bare-console
   - bare-cov

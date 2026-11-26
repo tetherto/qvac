@@ -272,7 +272,7 @@
     "bare-path": "^3.0.1",
     "bare-rpc": "^2.0.0",
     "bare-sidecar": "^0.5.15",
-    "bare-stow": "^0.3.9",
+    "bare-stow": "^0.3.10",
     "bare-stow-host": "^0.2.0",
     "bare-stow-runtime": "^0.1.2",
     "bare-stow-target-react-native": "^0.3.0",
