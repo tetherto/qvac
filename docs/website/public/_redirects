@@ -205,6 +205,16 @@
 # <<< END generated
 
 # ======================================================================
+# RENAMED PAGES
+# ----------------------------------------------------------------------
+# A page that changed its name between two documentation lines. The old
+# URL sends readers to the page that replaced it; the line that still
+# holds the old page keeps it at its versioned path.
+# ======================================================================
+/sdk/system-requirements/                       /sdk/platform-support/                              301
+/sdk/system-requirements.md                     /sdk/platform-support.md                            301
+
+# ======================================================================
 # RETIRED PATCH-SERIES ARCHIVES
 # ----------------------------------------------------------------------
 # The API summary and the release notes used to keep one page per minor
