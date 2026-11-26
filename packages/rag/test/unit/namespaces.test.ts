@@ -73,6 +73,7 @@ test('listNamespaces reports space, index, revision and counts', async (t) => {
       spaceId,
       space: SPACE,
       index: { storage: 'f32' },
+      vectorEncoding: 'f32',
       revision: 3,
       documentCount: 1,
       chunkCount: 2
@@ -82,6 +83,7 @@ test('listNamespaces reports space, index, revision and counts', async (t) => {
       spaceId,
       space: SPACE,
       index: { storage: 'q8' },
+      vectorEncoding: 'f32',
       revision: 0,
       documentCount: 0,
       chunkCount: 0
