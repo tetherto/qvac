@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'node:net'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -320,6 +321,12 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
     })
   })
 
+  function listenOnce(): Promise<string> {
+    const http = server().server
+    if (!http.listening) return server().listen({ host: '127.0.0.1', port: 0 })
+    return Promise.resolve(`http://127.0.0.1:${(http.address() as AddressInfo).port}`)
+  }
+
   it('a client disconnect cancels the run without destroying the session', async () => {
     let destroyed = 0
     const cancelled: string[] = []
@@ -350,7 +357,7 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
         }
       })) as never
 
-    const address = await server().listen({ host: '127.0.0.1', port: 0 })
+    const address = await listenOnce()
     const controller = new AbortController()
     const res = await fetch(`${address}${URL}`, {
       method: 'POST',
@@ -366,6 +373,57 @@ describe('qvac bci: transcription against a stubbed SDK', () => {
     assert.deepEqual(cancelled, ['bci-stream'])
     assert.equal(destroyed, 0)
     assert.ok(drained)
+  })
+
+  it('cancels a stream whose client left while the session was opening', async () => {
+    const cancelled: string[] = []
+    let onCancel = () => undefined as void
+    const runEnded = new Promise<void>((resolve) => {
+      onCancel = resolve
+    })
+    state().cancelOverride = (opts) => {
+      cancelled.push('requestId' in opts ? String(opts.requestId) : '')
+      onCancel()
+      return Promise.resolve()
+    }
+    let requested = () => undefined as void
+    const opening = new Promise<void>((resolve) => {
+      requested = resolve
+    })
+    let open = () => undefined as void
+    const opened = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    state().bciTranscribeStreamOverride = (async () => {
+      requested()
+      await opened
+      return {
+        requestId: 'bci-early',
+        write: () => undefined,
+        end: () => undefined,
+        destroy: () => undefined,
+        [Symbol.asyncIterator]: async function* () {
+          await runEnded
+          yield* []
+        }
+      }
+    }) as never
+
+    const address = await listenOnce()
+    const controller = new AbortController()
+    const res = fetch(`${address}${URL}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...BODY, stream: true }),
+      signal: controller.signal
+    }).catch(() => undefined)
+    await opening
+    controller.abort()
+    await res
+    await new Promise((r) => setTimeout(r, 20))
+    open()
+    await runEnded
+    assert.deepEqual(cancelled, ['bci-early'])
   })
 
   it('maps a worker error that fails the first window by its streamed code', async () => {
