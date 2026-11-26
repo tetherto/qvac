@@ -145,6 +145,11 @@ export function setConfig(config: QvacConfig) {
     logger.info(`✅ Device defaults configured: ${config.deviceDefaults.length} pattern(s)`)
   }
 
+  if (config.deadlines !== undefined && config.deadlines !== null) {
+    configRegistry.deadlines = config.deadlines
+    logger.info('✅ Request deadlines configured')
+  }
+
   // Mark config as set - now it's immutable
   configIsSet = true
 }

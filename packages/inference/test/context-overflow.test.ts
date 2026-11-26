@@ -252,6 +252,46 @@ test('parseContextOverflowMessage: sums the reservation on the n_predict refusal
   )
 })
 
+// The addon's refusals of a cache file longer than the slot limit, as each
+// loader formats them.
+const CACHE_LIMIT_REFUSALS = [
+  "TextLlmContext::loadCache: cache '/cache/a b/1.bin' exceeds the context limit of 8192 tokens",
+  "MtmdLlmContext::loadCache: cache '/cache/a b/1.bin' exceeds the context limit of 8192 tokens",
+  "loadCache: cache file '/cache/a b/1.bin' exceeds the context limit of 8192 tokens\n",
+  "acceptLoadedState: cache file '/cache/a b/1.bin' contains 9000 tokens, which exceeds the context limit of 8192 tokens\n"
+]
+
+test('isAddonContextOverflowError: detects a cache file over the slot limit', (t) => {
+  for (const message of CACHE_LIMIT_REFUSALS) {
+    t.is(isAddonContextOverflowError(new Error(message)), true, message)
+  }
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(new Error('x'), { code: '[ LLM :: ContextLengthExeeded ]' })
+    ),
+    true,
+    'the structured code'
+  )
+  t.is(
+    isAddonContextOverflowError(
+      new Error("TextLlmContext::loadCache: failed to load cache '/cache/1.bin'")
+    ),
+    false,
+    'a file that fails to restore is not an overflow'
+  )
+})
+
+test('cache-file overflows parse only the counts after the quoted path', (t) => {
+  for (const refusal of CACHE_LIMIT_REFUSALS) {
+    const message = refusal.replace('a b', "room's (12 tokens, max 30)\narchive")
+    t.ok(isAddonContextOverflowError(new Error(message)))
+    t.alike(parseContextOverflowMessage(message), {
+      ctxSize: 8192,
+      ...(refusal.startsWith('acceptLoadedState:') && { cachedTokens: 9000, requiredTokens: 9000 })
+    })
+  }
+})
+
 test('parseContextOverflowMessage: empty result when numbers are absent', (t) => {
   // The retired `processPromptImpl` form carries no numbers — every size
   // field stays undefined so `ContextOverflowError` can fall through to

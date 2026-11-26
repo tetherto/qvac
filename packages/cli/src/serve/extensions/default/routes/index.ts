@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import bci from '@/serve/extensions/default/routes/bci'
 import chatBatch from '@/serve/extensions/default/routes/chat-batch'
 import classifications from '@/serve/extensions/default/routes/classifications'
 import kvCache from '@/serve/extensions/default/routes/kv-cache'
@@ -11,6 +12,7 @@ import runtime from '@/serve/extensions/default/routes/runtime'
 import system from '@/serve/extensions/default/routes/system'
 import translate from '@/serve/extensions/default/routes/translate'
 import upscale from '@/serve/extensions/default/routes/upscale'
+import vla from '@/serve/extensions/default/routes/vla'
 import world from '@/serve/extensions/default/routes/world'
 
 // Mount order determines the order of paths in the OpenAPI document.
@@ -27,5 +29,7 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   upscale,
   music,
   world,
+  vla,
+  bci,
   plugins
 ]

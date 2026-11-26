@@ -315,6 +315,22 @@ export function shasumMismatches (moved, published, servedShasum, builtShasum) {
     .map((project) => `${project.name}@${project.version} on npm has sha1 ${servedShasum(project)}; the built tarball has ${builtShasum(project)}`)
 }
 
+// What a publish job is about to publish against what the checks ran on.
+// `packedShasum` packs the package where the job stands and throws when it
+// cannot, which is reported the same way: either means the job must not publish.
+export function repackMismatches (projects, packedShasum, builtShasum) {
+  return projects.flatMap((project) => {
+    let packed
+    try {
+      packed = packedShasum(project)
+    } catch (error) {
+      return [`${project.name}@${project.version}: ${error.message}`]
+    }
+    const built = builtShasum(project)
+    return packed === built ? [] : [`${project.name}@${project.version} packs to sha1 ${packed} in this job; the built tarball has ${built}`]
+  })
+}
+
 // A consumer install that resolves every train package from its tarball, as it
 // will from npm once published. npm rejects an override that differs from a
 // direct dependency, so direct dependencies point at the same tarball.

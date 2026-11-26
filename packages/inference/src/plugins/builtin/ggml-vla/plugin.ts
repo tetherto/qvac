@@ -1,4 +1,5 @@
 import { VlaModel, type VlaEmbodimentSelector as AddonVlaEmbodimentSelector } from '@qvac/vla-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -73,6 +74,7 @@ export const vlaPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.visionLanguageAction],
   handlers: {
     vlaRun: defineHandler({
       requestSchema: vlaRunRequestSchema,

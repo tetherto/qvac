@@ -11,6 +11,12 @@ const errorBody = z.object({
 /** `error.code` to when a route returns it. */
 export type ErrorCodes = Record<string, string>
 
+// The 403s an admin-only route (`config: { admin: true }`) can answer.
+export const ADMIN_REFUSED: ErrorCodes = {
+  admin_disabled: 'The server was started without `--enable-admin`',
+  origin_not_allowed: 'A browser request from an origin outside the CORS allowlist'
+}
+
 /**
  * Response schemas for a route's error statuses, each described by the codes it
  * carries so the OpenAPI document lists them.

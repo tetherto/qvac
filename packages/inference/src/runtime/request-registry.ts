@@ -6,6 +6,8 @@ import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/errors/i
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { OWNER_SESSION_ID, requestRegistryKey } from '@/runtime/session-id'
+import type { DeadlineClock } from '@/runtime/deadlines'
+import type { DeadlineExceededError } from '@/errors/index'
 
 /**
  * Outcome the caller declares when terminating a request through
@@ -44,6 +46,12 @@ export interface BeginOpts {
    * value below 1 is floored to 1.
    */
   maxConcurrentPerModel?: number
+  /**
+   * The request waits for input from its caller, such as the result of a tool
+   * the caller runs. Its run and idle deadlines stop while this context is
+   * open: the wait is the caller's time, not the model's.
+   */
+  waitsOnCaller?: boolean
 }
 
 export interface CancelByRequestId {
@@ -179,6 +187,8 @@ export interface RequestRegistry {
    *    registered for `opts.kind` and the new request can't be admitted:
    *    `onOverflow: "reject"` at capacity, the queue depth cap is
    *    exceeded, or the waiter's `queueTimeoutMs` elapsed.
+   *  - `DeadlineExceededError` if the request's queue deadline passed
+   *    while it waited for a slot (see `bindDeadline`).
    */
   begin(opts: BeginOpts): Promise<ManagedRequestContext>
 
@@ -205,6 +215,13 @@ export interface RequestRegistry {
    * a fresh array; mutations on it are not observed by the registry.
    */
   list(): RequestContext[]
+
+  /**
+   * The requests whose deadline has passed and whose teardown has not
+   * finished. Each still holds its admission slot, so requests queued behind
+   * it stay queued. A request leaves the list when its scope has unwound.
+   */
+  overdue(): RequestContext[]
 
   /**
    * Cancel matching requests. Returns the number of contexts whose abort
@@ -266,6 +283,22 @@ export interface RequestRegistry {
     sessionId: string | undefined,
     signal: AbortSignalLike & { readonly reason?: unknown }
   ): () => void
+
+  /**
+   * Put the request the caller is about to begin under `(sessionId,
+   * requestId)` under `deadline`. Dispatch binds it before running the
+   * handler. The registry starts and stops the clock's timers as the request
+   * queues, is admitted and reports progress, and a request begun as a child
+   * of that request shares the clock. When a deadline passes, the request is
+   * aborted and marked overdue; it keeps its slot until its teardown has
+   * finished. A call whose id is already in use binds nothing. Returns a
+   * function that removes the binding; call it once the call has finished.
+   */
+  bindDeadline(
+    requestId: string,
+    sessionId: string | undefined,
+    deadline: DeadlineClock
+  ): () => void
 }
 
 interface RegistryEntry {
@@ -304,6 +337,8 @@ interface RegistryEntry {
   disposed: Promise<void>
   /** Resolver for `disposed`; called in `disposeEntry`'s finally. */
   resolveDisposed: () => void
+  /** The deadlines the request runs under, its own or its parent request's. */
+  deadline: DeadlineClock | undefined
 }
 
 /**
@@ -468,6 +503,12 @@ export function createRequestRegistry(options?: {
   // The transport signal of each call the host is dispatching, by the key its
   // request begins under: see `bindTransportSignal`.
   const transportSignals = new Map<string, AbortSignalLike & { readonly reason?: unknown }>()
+  // The deadline of each call dispatch is running, by the key its request
+  // begins under: see `bindDeadline`.
+  const deadlines = new Map<string, DeadlineClock>()
+  // A request begun with another request's signal as its parent runs under
+  // that request's deadline.
+  const deadlineBySignal = new WeakMap<object, DeadlineClock>()
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
@@ -483,7 +524,7 @@ export function createRequestRegistry(options?: {
   const disposingIds = new Set<string>()
 
   function logLifecycle(
-    event: 'begin' | 'cancel' | 'end',
+    event: 'begin' | 'cancel' | 'end' | 'deadline',
     ctx: RequestContext,
     durationMs?: number
   ): void {
@@ -607,7 +648,8 @@ export function createRequestRegistry(options?: {
   async function acquireSlot(
     opts: BeginOpts,
     sessionId: string,
-    registryKey: string
+    registryKey: string,
+    deadline: DeadlineClock | undefined
   ): Promise<{ slotKey: string | undefined; exclusive: boolean }> {
     if (opts.modelId === undefined) return { slotKey: undefined, exclusive: false }
     const policy = policies.get(opts.kind)
@@ -718,8 +760,13 @@ export function createRequestRegistry(options?: {
         }
         queue.waiters.push(waiter)
         waitersById.set(registryKey, { key, waiter })
+        deadline?.startQueue((error) => {
+          removeWaiter(key, waiter)
+          reject(error)
+        })
       })
     } finally {
+      deadline?.endQueue()
       parent?.removeEventListener('abort', onParentAbortWhileQueued)
     }
 
@@ -806,6 +853,7 @@ export function createRequestRegistry(options?: {
       disposingEntries.delete(entry)
       // The id is free for reuse only now that native teardown is complete.
       disposingIds.delete(entry.ctx.registryKey)
+      entry.ctx.overdue = false
       // Signal any `cancelAndDrain` waiting on this request that its native
       // teardown is complete.
       entry.resolveDisposed()
@@ -834,6 +882,40 @@ export function createRequestRegistry(options?: {
     }
   }
 
+  function bindDeadline(
+    requestId: string,
+    sessionId: string | undefined,
+    deadline: DeadlineClock
+  ): () => void {
+    const registryKey = requestRegistryKey(sessionId ?? OWNER_SESSION_ID, requestId)
+    if (deadlines.has(registryKey) || idInUse(registryKey)) return () => {}
+    deadlines.set(registryKey, deadline)
+    const stopListening = deadline.onExpire((error) => abortOverdue(deadline, error))
+    return () => {
+      stopListening()
+      if (deadlines.get(registryKey) === deadline) deadlines.delete(registryKey)
+    }
+  }
+
+  // The caller has its error already. The request is only aborted here: its
+  // slot is released by `disposeEntry` once native teardown has finished, so
+  // the next request never starts on a native context that is still running.
+  function abortOverdue(deadline: DeadlineClock, error: DeadlineExceededError): void {
+    for (const entry of entries.values()) {
+      if (entry.deadline !== deadline) continue
+      entry.ctx.overdue = true
+      logLifecycle('deadline', entry.ctx, Date.now() - entry.startedAt)
+      cancelEntry(entry, `deadline:${error.boundary}`)
+    }
+    // A request already in teardown still holds its slot. It is not aborted
+    // again: its teardown is running.
+    for (const entry of disposingEntries) {
+      if (entry.deadline !== deadline || entry.ctx.overdue) continue
+      entry.ctx.overdue = true
+      logLifecycle('deadline', entry.ctx, Date.now() - entry.startedAt)
+    }
+  }
+
   async function begin(beginOpts: BeginOpts): Promise<ManagedRequestContext> {
     const sessionId = beginOpts.sessionId ?? OWNER_SESSION_ID
     if (sessionId !== OWNER_SESSION_ID) options?.assertSessionOpen?.(sessionId)
@@ -843,6 +925,9 @@ export function createRequestRegistry(options?: {
       beginOpts.parentSignal || !transportSignal
         ? beginOpts
         : { ...beginOpts, parentSignal: transportSignal }
+    const deadline =
+      deadlines.get(registryKey) ??
+      (beginOpts.parentSignal ? deadlineBySignal.get(beginOpts.parentSignal) : undefined)
     // A request id is reserved for its whole lifecycle: the time it spends
     // *queued* for an admission slot, while it is active, and while it is
     // tearing down. `waitersById` holds the still-queued begins (not yet in
@@ -882,7 +967,7 @@ export function createRequestRegistry(options?: {
       // and observers still see the request registered on the same tick.
       let acquired: { slotKey: string | undefined; exclusive: boolean }
       try {
-        acquired = await acquireSlot(opts, sessionId, registryKey)
+        acquired = await acquireSlot(opts, sessionId, registryKey, deadline)
       } catch (err) {
         settlePending()
         throw err
@@ -944,7 +1029,10 @@ export function createRequestRegistry(options?: {
       // already aborted at begin time. Both branches abort the
       // controller above, so without this guard observers would see a
       // momentarily-`running` context with an already-aborted signal.
-      state: preCancel || drainReason || opts.parentSignal?.aborted ? 'cancelling' : 'running'
+      state: preCancel || drainReason || opts.parentSignal?.aborted ? 'cancelling' : 'running',
+      overdue: false,
+      touch: () => deadline?.touch(),
+      startLoadDeadline: () => deadline?.startLoad()
     }
 
     let resolveDisposed: () => void = () => {}
@@ -961,11 +1049,19 @@ export function createRequestRegistry(options?: {
       exclusive,
       disposing: false,
       disposed,
-      resolveDisposed
+      resolveDisposed,
+      deadline
     }
     entries.set(registryKey, entry)
     settlePending()
     logLifecycle('begin', ctx)
+    if (deadline) {
+      deadlineBySignal.set(controller.signal, deadline)
+      // A deadline that passed between the grant and this point found no entry.
+      if (deadline.error) abortOverdue(deadline, deadline.error)
+      else if (opts.waitsOnCaller) deadline.pause()
+      else deadline.admitted()
+    }
 
     return {
       get requestId() {
@@ -995,6 +1091,11 @@ export function createRequestRegistry(options?: {
       set state(next: RequestState) {
         ctx.state = next
       },
+      get overdue() {
+        return ctx.overdue
+      },
+      touch: ctx.touch,
+      startLoadDeadline: ctx.startLoadDeadline,
       [Symbol.asyncDispose]: async () => {
         await disposeEntry(entry, derivedTerminalState(ctx))
       }
@@ -1007,6 +1108,11 @@ export function createRequestRegistry(options?: {
 
   function list(): RequestContext[] {
     return Array.from(entries.values(), (e) => e.ctx)
+  }
+
+  function overdue(): RequestContext[] {
+    const all = [...entries.values(), ...disposingEntries]
+    return all.filter((entry) => entry.ctx.overdue).map((entry) => entry.ctx)
   }
 
   /**
@@ -1190,6 +1296,7 @@ export function createRequestRegistry(options?: {
     begin,
     get,
     list,
+    overdue,
     cancel,
     cancelAll,
     withModelDraining,
@@ -1197,6 +1304,7 @@ export function createRequestRegistry(options?: {
     end,
     policy,
     bindTransportSignal,
+    bindDeadline,
     // Test-only: lets the registry race tests assert the bound
     // invariants on the internal "cancelled-before-begin" set without
     // exposing it as a public surface. Kept off the `RequestRegistry`

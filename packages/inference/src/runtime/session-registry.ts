@@ -9,6 +9,8 @@ export interface SessionEntry {
   id: string
   name: string | undefined
   openedAt: Date
+  /** The permissions the session may use; `undefined` when it is unrestricted. */
+  grant: ReadonlySet<string> | undefined
 }
 
 /**
@@ -28,14 +30,29 @@ const closingSessions = new Set<string>()
 // as a log subscription.
 const closeListeners = new Map<string, Set<() => void>>()
 
-export function openSession(id: string, name?: string): SessionEntry {
+export function openSession(id: string, name?: string, grant?: readonly string[]): SessionEntry {
   if (id === OWNER_SESSION_ID || sessions.has(id) || closingSessions.has(id)) {
     throw new SessionIdConflictError(id)
   }
-  const entry: SessionEntry = { id, name, openedAt: new Date() }
+  const entry: SessionEntry = {
+    id,
+    name,
+    openedAt: new Date(),
+    grant: grant ? new Set(grant) : undefined
+  }
   sessions.set(id, entry)
-  logger.info(`Session opened: ${id}${name ? ` (${name})` : ''}`)
+  logger.info(
+    `Session opened: ${id}${name ? ` (${name})` : ''}${grant ? ` with ${grant.length} permission(s)` : ''}`
+  )
   return entry
+}
+
+/**
+ * The permissions of an open session, or `undefined` for the owner, an
+ * unrestricted session or a session that is not open.
+ */
+export function getSessionGrant(id: string): ReadonlySet<string> | undefined {
+  return sessions.get(id)?.grant
 }
 
 /**

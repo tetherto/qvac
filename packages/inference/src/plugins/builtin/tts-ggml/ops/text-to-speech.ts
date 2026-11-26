@@ -161,6 +161,7 @@ export async function* textToSpeech(
       try {
         for await (const data of response.iterate()) {
           if (await cancelIfAborted(model, ctx.signal)) continue
+          ctx.touch()
           // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (data.outputArray != null) {
             sampleRate ??= data.sampleRate
@@ -238,6 +239,7 @@ export async function* textToSpeech(
     try {
       for await (const data of response.iterate()) {
         if (await cancelIfAborted(model, ctx.signal)) continue
+        ctx.touch()
         sampleRate ??= data.sampleRate
         if (data.text !== undefined) replyText = data.text
         if (data.speechTokenIds !== undefined) {

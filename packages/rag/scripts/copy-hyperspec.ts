@@ -1,13 +1,10 @@
-// The HyperDB spec under src/db/hyperspec is generated JS+JSON (see
-// build-hyperdb-spec.ts) and is excluded from the TypeScript build. Copy it
-// verbatim next to the compiled sources so they can import it at runtime. The
-// destination root (relative to the package) is the last CLI arg: `dist` for
-// the package build, `test/dist/src` for the test build.
-import fs from 'bare-fs'
-import path from 'bare-path'
-import url from 'bare-url'
+// Copies the generated src/db/hyperspec, which tsc skips, into the build
+// output named by the last CLI arg (`dist` or `test/dist/src`).
+import fs from 'node:fs'
+import path from 'node:path'
+import url from 'node:url'
 
-const destRoot = Bare.argv[Bare.argv.length - 1]
+const destRoot = process.argv[process.argv.length - 1]
 
 const scriptDir = path.dirname(url.fileURLToPath(import.meta.url))
 const packageRoot = path.join(scriptDir, '..')

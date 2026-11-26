@@ -1,6 +1,7 @@
 import qvacCrypto from '#crypto'
 
-import type { IndexStorage } from '../types.js'
+import { importers } from './imports.js'
+import type { IndexStorage, SnapshotFileSystem } from '../types.js'
 
 // What a snapshot was taken of. A snapshot is used only when every field
 // matches the namespace, so a namespace re-created under the same name, or a
@@ -36,42 +37,56 @@ export interface SnapshotStore {
     identity: SnapshotIdentity,
     start: (pathFor: (revision: number) => string) => SnapshotWrite
   ): Promise<number>
-  // Deletes the namespace's sidecar and the snapshot it names, unless they
-  // belong to a later namespace of the same name.
+  // Deletes the namespace's sidecar and snapshot files, unless they belong to
+  // a later namespace of the same name.
   remove(namespace: string, createdAt: number): Promise<void>
+  // Deletes the namespace's snapshot files its sidecar doesn't name, such as
+  // the temp file of a write the process was killed in.
+  clean(namespace: string): Promise<void>
 }
 
-interface FileSystem {
-  mkdir(path: string, options: { recursive: boolean }): Promise<unknown>
-  readFile(path: string, encoding: 'utf8'): Promise<string>
-  writeFile(path: string, data: string): Promise<void>
-  rename(from: string, to: string): Promise<void>
-  unlink(path: string): Promise<void>
-}
+export type FileSystem = SnapshotFileSystem
 
 // Files live under `<dir>/<core key>/`, one sidecar per namespace naming the
 // snapshot it describes. A snapshot gets a new file per revision and the
 // sidecar is renamed into place after it, so a crash at any point leaves a
 // sidecar that matches the file it names.
-export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore {
+export function createSnapshotStore(
+  dir: string,
+  coreKey: string,
+  files: FileSystem
+): SnapshotStore {
   const root = `${dir}/${coreKey}`
-  let fs: Promise<FileSystem> | null = null
-
-  function fileSystem(): Promise<FileSystem> {
-    if (!fs) fs = import('bare-fs').then((module) => module.promises as unknown as FileSystem)
-    return fs
-  }
 
   function base(namespace: string): string {
     return qvacCrypto.createHash('sha256').update(namespace).digest('hex').slice(0, 32) as string
   }
 
+  // Null when there is no sidecar; any other read or parse failure throws.
   async function readSidecar(namespace: string): Promise<Sidecar | null> {
-    const files = await fileSystem()
+    let text: string
     try {
-      return JSON.parse(await files.readFile(`${root}/${base(namespace)}.json`, 'utf8')) as Sidecar
+      text = await files.readFile(`${root}/${base(namespace)}.json`, 'utf8')
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'ENOENT') return null
+      throw error
+    }
+    return JSON.parse(text) as Sidecar
+  }
+
+  // Only `<base>.<revision>.tvec`, TurboVec's `<base>.<revision>.tvec.tmp.*`
+  // and `<base>.json.tmp` are touched: nothing else in the directory is ours.
+  async function sweep(name: string, keep: string | null): Promise<void> {
+    if (!files.readdir) return
+    let names: string[]
+    try {
+      names = await files.readdir(root)
     } catch {
-      return null
+      return
+    }
+    const own = new RegExp(`^${name}\\.(\\d+\\.tvec(\\.tmp\\..+)?|json\\.tmp)$`)
+    for (const file of names) {
+      if (file !== keep && own.test(file)) await files.unlink(`${root}/${file}`).catch(() => {})
     }
   }
 
@@ -95,10 +110,10 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
     },
 
     async write(identity, start) {
-      const files = await fileSystem()
       await files.mkdir(root, { recursive: true })
       const name = base(identity.namespace)
-      const previous = await readSidecar(identity.namespace)
+      // An unreadable sidecar is replaced below.
+      const previous = await readSidecar(identity.namespace).catch(() => null)
       const fileFor = (revision: number) => `${name}.${revision}.tvec`
       const { revision, written } = start((revision) => `${root}/${fileFor(revision)}`)
       const file = fileFor(revision)
@@ -112,23 +127,57 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
 
       const sidecar: Sidecar = { version: 1, ...identity, revision, file }
       const sidecarPath = `${root}/${name}.json`
-      await files.writeFile(`${sidecarPath}.tmp`, JSON.stringify(sidecar))
-      await files.rename(`${sidecarPath}.tmp`, sidecarPath)
+      try {
+        await files.writeFile(`${sidecarPath}.tmp`, JSON.stringify(sidecar))
+        await files.rename(`${sidecarPath}.tmp`, sidecarPath)
+      } catch (error) {
+        if (previous?.file !== file) await files.unlink(`${root}/${file}`).catch(() => {})
+        throw error
+      }
 
       if (previous && previous.file !== file && !previous.file.includes('/')) {
         await files.unlink(`${root}/${previous.file}`).catch(() => {})
       }
+      await sweep(name, file)
       return revision
     },
 
     async remove(namespace, createdAt) {
-      const files = await fileSystem()
-      const sidecar = await readSidecar(namespace)
+      const sidecar = await readSidecar(namespace).catch(() => null)
       if (sidecar && sidecar.createdAt !== createdAt) return
       await files.unlink(`${root}/${base(namespace)}.json`).catch(() => {})
       if (sidecar && typeof sidecar.file === 'string' && !sidecar.file.includes('/')) {
         await files.unlink(`${root}/${sidecar.file}`).catch(() => {})
       }
+      await sweep(base(namespace), null)
+    },
+
+    async clean(namespace) {
+      let sidecar: Sidecar | null
+      try {
+        sidecar = await readSidecar(namespace)
+      } catch {
+        return
+      }
+      await sweep(base(namespace), typeof sidecar?.file === 'string' ? sidecar.file : null)
     }
   }
+}
+
+let loadingFs: Promise<FileSystem> | null = null
+
+// Cached like the index module, and loaded by `ready()` for the same reason.
+export function loadSnapshotFileSystem(): Promise<FileSystem> {
+  if (!loadingFs) loadingFs = importFs()
+  return loadingFs
+}
+
+export function forgetSnapshotFileSystem(): void {
+  loadingFs = null
+}
+
+// `#fs` is `bare-fs` on Bare and `fs` on Node.
+async function importFs(): Promise<FileSystem> {
+  const module = (await importers.fs()) as { promises: FileSystem }
+  return module.promises
 }
