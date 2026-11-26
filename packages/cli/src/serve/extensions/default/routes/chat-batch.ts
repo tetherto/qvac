@@ -1,9 +1,9 @@
-import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyRequest } from 'fastify'
 import type { z } from 'zod'
 import { batchCompletion, SDK_SERVER_ERROR_CODES, type CompletionFinal, type Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import { errorResponses } from '@/serve/lib/error-responses'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { resolveModelAlias } from '@/serve/core/config/models'
@@ -241,7 +241,7 @@ async function runBatch(
       ...(stats !== undefined ? { stats } : {})
     }
   } finally {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
   }
 }
 

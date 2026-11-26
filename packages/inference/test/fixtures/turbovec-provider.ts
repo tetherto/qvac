@@ -4,6 +4,7 @@
 import fs from 'bare-fs'
 import { z } from 'zod'
 import type {
+  TurboVecCallOptions,
   TurboVecIndexProvider,
   TurboVecIndexSearchResult as SearchResult
 } from '@/plugins/turbovec-index'
@@ -19,8 +20,8 @@ type FakeIndex = IndexWithControls & {
 /**
  * With `ivf: true`, `searchIvf` throws on stale lists as the native index
  * does, so tests catch an adapter that probes them. Index methods return
- * promises as `@qvac/turbovec-ggml` 0.7 does; `sync: true` returns values
- * directly, as 0.5 does.
+ * promises as `@qvac/turbovec-ggml` does; `sync: true` returns values
+ * directly, as another provider may.
  */
 export function observableIndexProvider({
   ivf = false,
@@ -63,15 +64,22 @@ export function observableIndexProvider({
   const failRemoveId: { id: bigint | null } = { id: null }
 
   // Promises a call waits on before it returns, so a test can act while the
-  // native call is in flight. `search` only gates the async index.
+  // native call is in flight. Methods on an open index only wait on gates
+  // when the index is async.
   const gates: {
-    create: Promise<void> | null
-    load: Promise<void> | null
-    search: Promise<void> | null
+    create: (() => Promise<void>) | null
+    load: (() => Promise<void>) | null
+    search: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    prepare: ((options?: TurboVecCallOptions) => Promise<void>) | null
+    remove: ((id: bigint) => Promise<void>) | null
+    buildIvf: (() => Promise<void>) | null
   } = {
     create: null,
     load: null,
-    search: null
+    search: null,
+    prepare: null,
+    remove: null,
+    buildIvf: null
   }
 
   function fail(call: string): never {
@@ -166,9 +174,26 @@ export function observableIndexProvider({
     if (sync) return index
     const asyncIndex = asAsync(index)
     const search = asyncIndex.search
-    asyncIndex.search = async (queries, k) => {
-      if (gates.search) await gates.search
+    asyncIndex.search = async (queries, k, options) => {
+      if (gates.search) await gates.search(options)
       return search(queries, k)
+    }
+    const prepare = asyncIndex.prepare
+    asyncIndex.prepare = async (options) => {
+      if (gates.prepare) await gates.prepare(options)
+      return prepare()
+    }
+    const remove = asyncIndex.remove
+    asyncIndex.remove = async (id) => {
+      if (gates.remove) await gates.remove(id)
+      return remove(id)
+    }
+    const buildIvf = asyncIndex.buildIvf
+    if (buildIvf) {
+      asyncIndex.buildIvf = async (nLists, nIter) => {
+        if (gates.buildIvf) await gates.buildIvf()
+        return buildIvf(nLists, nIter)
+      }
     }
     return asyncIndex
   }
@@ -177,13 +202,13 @@ export function observableIndexProvider({
     async create(options) {
       calls.create++
       if (failures.create) fail('create')
-      if (gates.create) await gates.create
+      if (gates.create) await gates.create()
       return createIndex(options.dim)
     },
     async load() {
       calls.load++
       if (failures.load) fail('load')
-      if (gates.load) await gates.load
+      if (gates.load) await gates.load()
       return createIndex(8, 8)
     }
   }

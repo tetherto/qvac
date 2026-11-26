@@ -123,7 +123,7 @@ export function buildSdk(env, afterSdkBuild = () => {}, execute = run) {
 
 export function prepare(env, afterSdkBuild = () => {}) {
   if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is empty; the @tetherto registry needs it')
-  for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite']) {
+  for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite', 'rag']) {
     rmSync(join(ROOT, 'packages', dir, 'node_modules'), { recursive: true, force: true })
   }
   const npmrc = [
@@ -161,6 +161,8 @@ export function prepare(env, afterSdkBuild = () => {}) {
     })
   }
   buildSdk(env, afterSdkBuild)
+  // sdk-e2e installs @qvac/rag from packages/rag, whose exports point at dist.
+  run('npm', ['run', 'prepare:rag'], { cwd: E2E, env })
   writeFileSync(join(E2E, '.npmrc'), npmrc)
   run('npm', ['install', '--install-links'], { cwd: E2E, env })
   run('npm', ['run', 'build'], { cwd: E2E, env })

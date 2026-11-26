@@ -7,7 +7,9 @@ import { clearPlugins } from '@/plugins'
 import { close } from '@/dispatch'
 import { createVectorIndex, loadVectorIndex } from '@/api/vector-index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
-import { VectorIndexFailedError } from '@/errors/index'
+import { InferenceCancelledError, VectorIndexFailedError } from '@/errors/index'
+import { handleVectorIndex } from '@/handlers/vector-index'
+import { getRequestRegistry } from '@/runtime/index'
 import { registerProviderPlugin } from './fixtures/turbovec-provider'
 
 // Keep the storage-root lock out of the real home, as dispatch.test.ts does.
@@ -166,6 +168,111 @@ test('vector index: native IVF builds with fewer entries than lists', async (t) 
       )
       await index.dispose()
     }
+  } finally {
+    await disposeAllVectorIndexes()
+    await close()
+    clearPlugins()
+  }
+})
+
+test('vector index: a native search cancelled while it runs rejects at once', async (t) => {
+  const { IdMapIndex } = await import('@qvac/turbovec-ggml')
+  clearPlugins()
+  registerProviderPlugin('test-native-vector-index-cancel-search', {
+    create: (options) => new IdMapIndex(options),
+    load: (snapshotPath) => IdMapIndex.load(snapshotPath)
+  })
+  let seed = 13
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296 - 0.5
+  }
+  // Large enough that the search is still running when the cancel lands.
+  const vectors = Array.from({ length: 8192 }, () => Array.from({ length: 32 }, random))
+  const ids = vectors.map((_row, i) => String(i))
+  const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
+  try {
+    const index = await createVectorIndex({ dim: 32, storage: 'f32' })
+    await index.add({ ids, vectors })
+    // Run the warm-up now, so the cancel below lands on the search itself.
+    await index.search({ query: vectors[0]!, k: 1 })
+    const requestId = 'vi-native-cancel-search'
+    const order: string[] = []
+    const searching = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'search',
+      indexId: index.indexId,
+      queries: vectors.slice(0, 2048),
+      k: 10,
+      requestId
+    }).then(
+      () => order.push('search'),
+      (error: unknown) => {
+        order.push('cancel')
+        return error
+      }
+    )
+    // Once registered, one more turn lets the search reach the addon. A search
+    // that already finished fails the cancel check below.
+    while (getRequestRegistry().get(requestId) === null && order.length === 0) await nextTurn()
+    await nextTurn()
+    t.is(getRequestRegistry().cancel({ requestId }), 1, 'the search is running and cancellable')
+    const next = index.search({ query: vectors[3]!, k: 1 }).then((rows) => {
+      order.push('next')
+      return rows
+    })
+    t.ok((await searching) instanceof InferenceCancelledError, 'the search reports the cancel')
+    const [nearest] = await next
+    t.alike(order, ['cancel', 'next'], 'the cancel settles before the native search ends')
+    t.is(nearest?.id, '3', 'the next search still answers')
+  } finally {
+    await disposeAllVectorIndexes()
+    await close()
+    clearPlugins()
+  }
+})
+
+test('vector index: a native IVF build cancelled while it runs finishes', async (t) => {
+  const { IdMapIndex } = await import('@qvac/turbovec-ggml')
+  clearPlugins()
+  registerProviderPlugin('test-native-vector-index-cancel-build', {
+    create: (options) => new IdMapIndex(options),
+    load: (snapshotPath) => IdMapIndex.load(snapshotPath)
+  })
+  let seed = 17
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296 - 0.5
+  }
+  // Large enough that the build is still running when the cancel lands.
+  const vectors = Array.from({ length: 8192 }, () => Array.from({ length: 32 }, random))
+  const ids = vectors.map((_row, i) => String(i))
+  const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
+  try {
+    const index = await createVectorIndex({ dim: 32, storage: 'f32' })
+    await index.add({ ids, vectors })
+    const requestId = 'vi-native-cancel-build'
+    let settled = false
+    const building = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'setIvf',
+      indexId: index.indexId,
+      ivf: { nLists: 64, nProbe: 64, nIter: 20 },
+      requestId
+    }).finally(() => {
+      settled = true
+    })
+    while (getRequestRegistry().get(requestId) === null && !settled) await nextTurn()
+    await nextTurn()
+    t.is(getRequestRegistry().cancel({ requestId }), 1, 'the build is running and cancellable')
+    const response = await building
+    t.alike(
+      response.operation === 'setIvf' && response.ivf,
+      { nLists: 64, nProbe: 64, nIter: 20, built: true },
+      'the build reports the lists it built'
+    )
+    const [probed] = await index.search({ query: vectors[3]!, k: 1, nProbe: 64 })
+    t.is(probed?.id, '3', 'search probes the lists the cancelled call built')
   } finally {
     await disposeAllVectorIndexes()
     await close()

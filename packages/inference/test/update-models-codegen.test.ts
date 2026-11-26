@@ -52,6 +52,54 @@ test('codegen emits registry strings as data', (t) => {
   t.is(entry.engine, 'llamacpp-completion')
 })
 
+test('codegen keeps all TranscribePsy EU Core ML components distinct and private', (t) => {
+  const root = 'qvac_models_compiled/ggml/transcribe-psy/2026-11-25/'
+  const bundles = [
+    ['decoder', 'DECODER'],
+    ['encoder-shared', 'ENCODER_SHARED']
+  ] as const
+  const components = [
+    ['analytics/coremldata.bin', 'ANALYTICS_COREMLDATA_BIN'],
+    ['coremldata.bin', 'COREMLDATA_BIN'],
+    ['model.mil', 'MODEL_MIL'],
+    ['weights/weight.bin', 'WEIGHTS_WEIGHT_BIN']
+  ] as const
+  const paths = bundles.flatMap(([bundle]) =>
+    components.map(([file]) => `${root}transcribepsy-250m-eu-${bundle}.mlmodelc/${file}`)
+  )
+  const primary = model({
+    registryPath: 'qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf',
+    registrySource: 's3',
+    modelId: 'transcribepsy-250m-eu.gguf',
+    addon: 'parakeet',
+    engine: 'parakeet-transcription',
+    quantization: 'q8_0',
+    params: '250M'
+  })
+  const grouped = groupCompanionSets([
+    primary,
+    ...paths.map((registryPath) => model({ ...primary, registryPath, quantization: '' }))
+  ])
+  const output = generateModelsFileContent(grouped)
+
+  t.alike(
+    catalogModels(output).map((entry) => entry.registryPath),
+    [primary.registryPath, ...paths]
+  )
+  t.alike(
+    catalogModels(output)
+      .slice(1)
+      .map((entry) => entry.name),
+    bundles.flatMap(([, bundleName]) =>
+      components.map(([, fileName]) => `PARAKEET_TRANSCRIBEPSY_250M_EU_${bundleName}_${fileName}`)
+    )
+  )
+  t.alike(
+    [...output.matchAll(/^export const (PARAKEET_\w+) =/gm)].map((match) => match[1]),
+    ['PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0']
+  )
+})
+
 test('codegen catalogs Core ML source-package files without public model exports', (t) => {
   const paths = [
     'acestep/vae-decoder.mlpackage/Manifest.json',

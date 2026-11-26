@@ -76,6 +76,7 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
 class LlamaInterface {
     _binding;
     _handle;
+    _unloading = null;
     constructor(binding, configurationParams, outputCb) {
         this._binding = binding;
         if (!configurationParams.config) {
@@ -180,11 +181,31 @@ class LlamaInterface {
      * Unload the model and clear resources (including memory).
      */
     unload() {
+        if (this._unloading)
+            return this._unloading;
         if (!this._handle)
             return Promise.resolve();
-        const destroyed = this._binding.destroyInstance(this._handle);
+        const handle = this._handle;
         this._handle = null;
-        return Promise.resolve(destroyed);
+        let destroyed;
+        try {
+            destroyed = Promise.resolve(this._binding.destroyInstance(handle));
+        }
+        catch (error) {
+            this._handle = handle;
+            return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+        const unloading = destroyed
+            .catch((error) => {
+            this._handle = handle;
+            throw error;
+        })
+            .finally(() => {
+            if (this._unloading === unloading)
+                this._unloading = null;
+        });
+        this._unloading = unloading;
+        return unloading;
     }
 }
 exports.LlamaInterface = LlamaInterface;

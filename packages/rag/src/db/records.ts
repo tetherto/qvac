@@ -28,6 +28,8 @@ export interface NamespaceRecord {
   createdAt: Date
   indexStorage?: string
   lineageId?: Uint8Array
+  // Absent on namespaces created before it existed: 'f32'.
+  vectorEncoding?: string | null
 }
 
 export interface DocumentRecord {

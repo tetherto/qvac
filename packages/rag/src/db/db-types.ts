@@ -36,6 +36,8 @@ export interface HyperDBTransaction extends HyperDBReader {
 }
 
 export interface HyperDBInstance {
+  // The core's session; `closing` is set once it, or its Corestore, closes.
+  readonly core?: { closing?: unknown; closed?: boolean } | null
   ready(): Promise<void>
   close(): Promise<void>
   snapshot(): HyperDBReader

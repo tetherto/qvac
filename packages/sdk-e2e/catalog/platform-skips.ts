@@ -323,6 +323,23 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: /^parakeet-transcribepsy-eu-coreml-/,
+    skip: {
+      reason:
+        'Full TranscribePsy EU runs its encoder on Core ML only where its shared-weight bundle can be staged and loaded: macOS and iOS',
+      platforms: [
+        'desktop-linux',
+        'desktop-windows',
+        'desktop-python',
+        'desktop-kotlin',
+        'electron-linux',
+        'electron-windows',
+        'snap',
+        'mobile-android'
+      ]
+    }
+  },
+  {
     match: ['parakeet-unified-coreml-ios'],
     skip: {
       reason:
@@ -446,6 +463,22 @@ const RULES: Rule[] = [
       reason:
         "Asserts on the Bare worker processes the JS client spawns, by reading this process's own child table. The Kotlin desktop client runs its worker in-process as a BareKit worklet, so there is no child process to check",
       platforms: ['desktop-kotlin']
+    }
+  },
+  {
+    match: /^qvac-rag-.*-bare$/,
+    skip: {
+      reason:
+        'Runs @qvac/rag in the rag-e2e-plugin worker fixture, which the JS consumers register in their worker config; the Python and Kotlin legs run the worker their package ships, which bundles only the built-in plugins, and the mobile consumer has no step interpreter',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
+    }
+  },
+  {
+    match: /^qvac-rag-.*-node$/,
+    skip: {
+      reason:
+        'Runs @qvac/rag in the JS consumer process through the ragLocal binding, which only the desktop and Electron consumers have',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin', 'mobile']
     }
   },
 

@@ -71,7 +71,7 @@ test('checksum cache: changes during hashing fail and are never retained', async
 })
 
 test('registry cache: warm reuse still rejects a changed expected checksum', async (t) => {
-  const { validateCachedFile } = await import('@/handlers/load-model/registry-download-utils')
+  const { validateCachedFile } = await import('@/handlers/load-model/cached-file')
   const { file, reads } = fixture(t)
   const digest = await measureChecksum(file)
   const size = fs.statSync(file).size
@@ -80,6 +80,49 @@ test('registry cache: warm reuse still rejects a changed expected checksum', asy
   t.is(await validateCachedFile(file, 'model.gguf', size, '0'.repeat(64)), null)
   // Another process may own the file, so a mismatch is only a cache miss.
   t.ok(fs.existsSync(file), 'checksum mismatch is a cache miss and does not delete the file')
+})
+
+test('registry cache: an existing file that is not used is reported with the reason', async (t) => {
+  const { validateCachedFile } = await import('@/handlers/load-model/cached-file')
+  const { getEngineLogger } = await import('@/logging/index')
+  const warnings: string[] = []
+  let capturing = true
+  getEngineLogger().addTransport((level, _namespace, message) => {
+    if (capturing && level === 'warn') warnings.push(message)
+  })
+  t.teardown(() => {
+    capturing = false
+  })
+  const { file } = fixture(t)
+  const digest = await measureChecksum(file)
+  const size = fs.statSync(file).size
+  const wrong = '0'.repeat(64)
+
+  t.is(await validateCachedFile(`${file}.missing`, 'model.gguf', size, digest), null)
+  t.is(warnings.length, 0, 'a missing file is a plain cache miss')
+
+  t.is(await validateCachedFile(file, 'model.gguf', size + 1, digest), null)
+  t.ok(warnings.pop()?.includes(`size ${size}, expected ${size + 1}`))
+
+  t.is(await validateCachedFile(file, 'model.gguf', size, wrong), null)
+  t.ok(warnings.pop()?.includes(`checksum ${digest}, expected ${wrong}`))
+
+  const underFile = path.join(file, 'model.gguf')
+  t.is(await validateCachedFile(underFile, 'model.gguf', size, digest), null)
+  t.ok(warnings.pop()?.startsWith(`Ignoring cached model.gguf at ${underFile}: `))
+
+  const changing = path.join(path.dirname(file), 'changing.gguf')
+  fs.writeFileSync(changing, 'changing model bytes')
+  const createReadStream = fs.createReadStream
+  fs.createReadStream = (...args: Parameters<typeof createReadStream>) => {
+    const stream = createReadStream(...args)
+    stream.on('end', () => fs.appendFileSync(changing, '!'))
+    return stream
+  }
+  const changingSize = fs.statSync(changing).size
+  t.is(await validateCachedFile(changing, 'changing.gguf', changingSize, digest), null)
+  fs.createReadStream = createReadStream
+  t.ok(warnings.pop()?.includes('checksum failed: File changed during checksum calculation'))
 })
 
 test('shard cache: unchanged shards reuse verification and corruption is invalidated', async (t) => {

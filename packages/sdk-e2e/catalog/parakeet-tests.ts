@@ -315,9 +315,10 @@ export const parakeetTranscribePsyCoremlWav: TestDefinition = {
 // ── TranscribePsy EU tests ────────────────────────────────────────────────────
 // TranscribePsy-250M-EU: the full 25-language model, one GGUF with its CAFE
 // language adapters and gate embedded, published from the S3 registry. It runs
-// on ggml on every platform (no Core ML distribution). Without `language` the
-// gate routes each recording itself; the English fixtures must come out the
-// same on the automatic route and on the English trunk picked explicitly.
+// on ggml on every platform, and on macOS and iOS the loader also stages its
+// shared-weight Core ML encoder and decoder. Without `language` the gate
+// routes each recording itself; the English fixtures must come out the same on
+// the automatic route and on the English trunk picked explicitly.
 
 export const parakeetTranscribePsyEuWav = createParakeetTest(
   'parakeet-transcribepsy-eu-wav',
@@ -380,6 +381,25 @@ export const parakeetTranscribePsyEuEnWav = createParakeetTest(
   { validation: 'contains-all', contains: ['test', 'automation'] },
   120000
 )
+
+// macOS 15 / iOS 18 or later: the same constant stages the model's own
+// shared-weight Core ML encoder and its decoder, and the batch run has to
+// report that it encoded on Core ML rather than on ggml.
+export const parakeetTranscribePsyEuCoremlWav: TestDefinition = {
+  testId: 'parakeet-transcribepsy-eu-coreml-wav',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-transcribepsy-eu',
+    estimatedDurationMs: 300000
+  },
+  steps: [
+    ...parakeetSteps('parakeet-transcribepsy-eu'),
+    { project: { from: '$run', path: 'stats.encoderUsedCoreml', as: 'encoderUsedCoreml' } },
+    { assert: { on: '$encoderUsedCoreml', named: 'valueIn', with: { values: [1] } } }
+  ]
+}
 
 // ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
 // Multilingual CTC with a required `modelConfig.language` mask. Happy path
@@ -482,7 +502,8 @@ export const parakeetTranscribePsyEuTests = [
   parakeetTranscribePsyEuSilence,
   parakeetTranscribePsyEuCorruptedWav,
   parakeetTranscribePsyEuDeWav,
-  parakeetTranscribePsyEuEnWav
+  parakeetTranscribePsyEuEnWav,
+  parakeetTranscribePsyEuCoremlWav
 ]
 
 export const parakeetIndicConformerTests = [
