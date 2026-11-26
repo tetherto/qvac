@@ -99,3 +99,33 @@ test('two platform packages cannot silently select different core providers', ()
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /Cannot mix shared-core packages/)
 })
+
+test('shared addon helpers link the core and validate its Linux runtime directly', () => {
+  for (const host of ['linux-x64', 'android-arm64', 'win32-x64']) {
+    const result = configure(host, ({ statements }) => {
+      statements[1] = 'project(packaged_core LANGUAGES CXX)'
+      const helper = path.resolve(packageRoot, '../../cmake/qvac-addon/qvac-addon.cmake')
+      statements.push(
+        `include("${helper.replace(/\\/g, '/')}")`,
+        'file(WRITE "${CMAKE_BINARY_DIR}/stub.cpp" "int stub;\\n")',
+        'add_library(addon OBJECT "${CMAKE_BINARY_DIR}/stub.cpp")',
+        'add_library(addon_module SHARED $<TARGET_OBJECTS:addon>)',
+        'add_library(fabric_module SHARED IMPORTED)',
+        'set_target_properties(fabric_module PROPERTIES IMPORTED_LOCATION "${location}")',
+        'set(qvac_fabric_soname "qvac__fabric@0.bare")',
+        'qvac_addon_link_fabric(addon fabric)',
+        'qvac_addon_finalize(addon)',
+        'get_target_property(links addon_module LINK_LIBRARIES)',
+        'get_target_property(provider addon_module QVAC_ADDON_CXX_PROVIDER)',
+        'file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/import.txt" CONTENT "${links}|provider=${provider}|defs=$<TARGET_PROPERTY:addon,COMPILE_DEFINITIONS>")'
+      )
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(
+      result.imported,
+      /fabric_module;qvac-fabric::ggml;qvac-fabric::ggml-base;qvac-fabric::ggml-vector-index/
+    )
+    assert.match(result.imported, /GGML_SHARED/)
+    assert.match(result.imported, /provider=qvac-fabric::ggml-base\|/)
+  }
+})

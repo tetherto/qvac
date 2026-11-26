@@ -382,7 +382,8 @@ the original missing-RUNPATH package. Android supports DT_RUNPATH from API 24;
 these builds target API 29. Those Windows inference runs used isolated `/MD`
 overrides. The shared Windows triplets, common addon setup and Fabric packaging
 now select that runtime directly; consumers still need to adopt the released
-Fabric package in the follow-up migration.
+Fabric package before the coordinated release. The shared CMake helpers now
+link the core directly without the earlier experimental linkage hook.
 
 Linux binding audits found the same Bare interception of the allocation-operator
 family in released Fabric and the shared-core build. No other C++ runtime symbols
@@ -392,4 +393,6 @@ has not been exercised. Bare-sidecar inference passed outside the sandbox.
 
 The shared-CRT ownership path must stay green in the installed-port tests.
 Android APK loading and remaining GPU/NPU execution coverage remain unverified.
-This PR does not update all consumer npm ranges or remove their compatibility paths.
+All consumer npm ranges must move to the matching published Fabric version
+before the coordinated release. The shared CMake helpers require the final
+shared-core layout on Linux, Windows and Android; Apple retains static linkage.

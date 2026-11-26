@@ -1,44 +1,14 @@
-# Asserts that a built addon module imports its C++ runtime from its provider
-# and not from whatever C++ runtime the host process happens to load first.
-#
-# Run as a POST_BUILD step by qvac_addon_finalize, with:
-#   READELF  path to readelf (CMAKE_READELF)
-#   MODULE   the built .bare module
-#   FABRIC   the legacy @qvac/fabric module MODULE links against
-#   PROVIDER explicit shared-core provider (takes precedence over FABRIC)
-#
-# This exists because both halves of the failure are silent. -nostdlib++ links
-# cleanly whether or not fabric ends up providing the runtime, and a module that
-# resolves it elsewhere loads and runs -- it just stops matching typed catches on
-# any exception that crossed the seam, which surfaces a package-level "Unknown
-# error" a long way from the link that caused it. Checking the built ELF is the
-# only place the invariant is directly observable.
-#
-# Which version node to require, and whether to require one at all, comes out of
-# FABRIC itself. Reading it from fabric's package config instead would make the
-# check depend on which platform's prebuild leg wrote that config last, since it
-# installs to a platform-shared share/ path and the artifact merge keeps one
-# copy: a config from a leg whose fabric shares libc++ through a shared library
-# turns this assertion off, which is precisely the state it exists to catch.
-
+# Verify Linux clients import the shared core's versioned C++ runtime.
+# Required: READELF, MODULE and PROVIDER (the platform-local ggml-base library).
 cmake_minimum_required(VERSION 3.25)
 
-# Explicit PROVIDER supports a relocated shared core without changing legacy callers.
-if(PROVIDER)
-  set(FABRIC "${PROVIDER}")
-endif()
-
-foreach(_required READELF MODULE FABRIC)
+foreach(_required READELF MODULE PROVIDER)
   if(NOT ${_required})
     message(FATAL_ERROR "assert-fabric-cxx-runtime: ${_required} is required")
   endif()
 endforeach()
-
 if(NOT EXISTS "${READELF}")
-  message(FATAL_ERROR
-    "assert-fabric-cxx-runtime: no readelf at '${READELF}'. It verifies that "
-    "${MODULE} imports fabric's C++ runtime; install binutils or llvm rather "
-    "than skipping the check.")
+  message(FATAL_ERROR "assert-fabric-cxx-runtime: no readelf at '${READELF}'")
 endif()
 
 function(read_dyn_syms path out_lines)
@@ -58,7 +28,7 @@ function(read_dyn_syms path out_lines)
   # here are dynamic objects that certainly have entries, so parsing none means
   # the output was not understood -- a readelf variant printing another format,
   # or a wrapper on PATH printing something else entirely -- and every question
-  # below would answer itself the permissive way: fabric would look like it
+  # below would answer itself the permissive way: the provider would look like it
   # exports no runtime, and the module like it imports nothing unpinned.
   set(_entries "")
   foreach(_line IN LISTS _syms)
@@ -78,59 +48,30 @@ function(read_dyn_syms path out_lines)
   set(${out_lines} "${_entries}" PARENT_SCOPE)
 endfunction()
 
-# Whether fabric is the process' one C++ runtime shows up in its exports: the
-# link that embeds libc++ defines the cxxabi entry points, and the ones that
-# share a libc++ shared library (Android, the ASan build) import them like any
-# other consumer. __cxa_throw stands in for the whole block, which fabric's
-# symbols.map splices in as a unit or not at all.
-read_dyn_syms("${FABRIC}" _fabric_sym_lines)
+# ggml-base exports libc++ and libc++abi as one versioned runtime surface.
+read_dyn_syms("${PROVIDER}" _provider_sym_lines)
 
-set(_fabric_defines_runtime FALSE)
+set(_provider_defines_runtime FALSE)
 set(_version "")
-foreach(_line IN LISTS _fabric_sym_lines)
+foreach(_line IN LISTS _provider_sym_lines)
   if(_line MATCHES "[ \t]UND[ \t]")
     continue()
   endif()
   # Anchored, so __cxa_throw_bad_array_new_length is not mistaken for it.
   if(_line MATCHES "[ \t]__cxa_throw(@@([^ \t@]+))?$")
-    set(_fabric_defines_runtime TRUE)
+    set(_provider_defines_runtime TRUE)
     set(_version "${CMAKE_MATCH_2}")
     break()
   endif()
 endforeach()
 
-if(NOT _fabric_defines_runtime AND PROVIDER)
+if(NOT _provider_defines_runtime)
   message(FATAL_ERROR "${PROVIDER} was selected as the runtime provider but exports no __cxa_throw")
-endif()
-
-if(NOT _fabric_defines_runtime)
-  execute_process(
-    COMMAND "${READELF}" --dynamic -W "${FABRIC}"
-    OUTPUT_VARIABLE _fabric_dynamic
-    ERROR_VARIABLE _readelf_error
-    RESULT_VARIABLE _readelf_status)
-  if(NOT _readelf_status EQUAL 0)
-    message(FATAL_ERROR "readelf failed on ${FABRIC}: ${_readelf_error}")
-  endif()
-  if(_fabric_dynamic MATCHES "\\[libqvac-ggml-base[^]]*\\.so[^]]*\\]")
-    message(FATAL_ERROR
-      "${FABRIC} uses the shared ggml core, but ${MODULE} was checked through "
-      "the legacy Fabric runtime path. Migrate the consumer to link the shared "
-      "core directly and pass it as PROVIDER to assert-fabric-cxx-runtime.")
-  endif()
-  if(NOT _fabric_dynamic MATCHES "\\[libc\\+\\+\\.so[^]]*\\]")
-    message(FATAL_ERROR
-      "${FABRIC} exports no C++ runtime and has no direct shared libc++ dependency; "
-      "cannot establish the runtime provider for ${MODULE}.")
-  endif()
-  # The explicit shared-libc++ (ASan) layout has no embedded runtime to pin to.
-  message(STATUS "qvac-addon: ${FABRIC} uses shared libc++; no embedded runtime to pin to")
-  return()
 endif()
 
 if(NOT _version)
   message(FATAL_ERROR
-    "${FABRIC}\n"
+    "${PROVIDER}\n"
     "exports its C++ runtime with no ELF version node, so ${MODULE} would "
     "resolve that runtime from the host process instead -- silently, at both "
     "build and load time. Update @qvac/fabric to a release that stamps one. A "
@@ -140,10 +81,10 @@ endif()
 
 read_dyn_syms("${MODULE}" _dyn_sym_lines)
 
-# The C++ runtime surface fabric exports, by mangled prefix: cxxabi entry points,
+# The C++ runtime surface ggml-base exports, by mangled prefix: cxxabi entry points,
 # the personality routine, typeinfo / typeinfo names / vtables, the operator
 # new/delete family, and the standard library itself. Mirrors
-# packages/fabric/symbols-linux-cxx-runtime.map.
+# ggml/src/shared-core.map in qvac-fabric-llm.cpp.
 set(_cxx_runtime_prefixes
   "__cxa_" "__gxx_personality" "__dynamic_cast"
   "_ZT" "_Znw" "_Zna" "_Zdl" "_Zda"
@@ -195,7 +136,7 @@ if(_unpinned)
     "the host process' C++ runtime instead of fabric's. Under bare that host "
     "runtime is GNU libstdc++, and an exception crossing the seam between the "
     "two stops matching typed catches.\n"
-    "${FABRIC}\n"
+    "${PROVIDER}\n"
     "exports that runtime under ${_version}, so check that nothing on this "
     "target's link line reintroduces a C++ standard library of its own "
     "(-static-libstdc++, -stdlib=, a bundled libc++.a).\n"
@@ -209,9 +150,9 @@ if(NOT _pinned)
   message(FATAL_ERROR
     "${MODULE}\n"
     "imports no C++ runtime symbol from\n"
-    "${FABRIC}\n"
-    "so it is not sharing fabric's runtime. Either something on its link line "
+    "${PROVIDER}\n"
+    "so it is not sharing the shared core's runtime. Either something on its link line "
     "gave it one of its own (-static-libstdc++, a bundled libc++.a), or it has "
     "no C++ runtime needs at all -- in which case it should not be asking to "
-    "import fabric's, and qvac_addon_static_cxx_runtime is what it wants.")
+    "import the core's, and qvac_addon_static_cxx_runtime is what it wants.")
 endif()

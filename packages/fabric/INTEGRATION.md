@@ -390,7 +390,8 @@ can call `qvac_use_windows_shared_crt()` after including
 `cmake/qvac-addon/windows-runtime.cmake`.
 
 Fabric stages redistributable Release runtime DLLs beside its Windows `.bare`
-entry point. The platform-package slicer declares sibling DLLs as Bare bundle
+entry point. Shared addon helpers link the core import libraries directly and
+stage core and CRT DLLs beside native test executables. The platform-package slicer declares sibling DLLs as Bare bundle
 assets so bundles preserve the shared core and CRT beside the addon. Load
 Fabric before the consumer addon as described above. Windows
 provides the UCRT; Debug runtimes are development-only and are not packaged.

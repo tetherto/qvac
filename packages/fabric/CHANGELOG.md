@@ -16,6 +16,11 @@
 
 ### Changed
 
+- Shared addon helpers link the core directly on Linux, Windows and Android,
+  propagate its compile definitions, and stage core/CRT DLLs for Windows native
+  tests. Linux validates libc++ imports against ggml-base; the old Fabric-only
+  consumer linkage path is removed.
+
 - Windows port dependencies and addon builds use the shared MSVC CRT (`/MD`,
   `/MDd` for Debug). Fabric packages the Release runtime DLLs beside its entry
   point; consumers must rebuild with matching CRT settings when adopting it.

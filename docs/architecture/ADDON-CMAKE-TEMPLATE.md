@@ -74,7 +74,7 @@ Present, in the same order, in essentially every addon:
 - `VCPKG_OVERLAY_TRIPLETS` prepend of `../../vcpkg-overlays/triplets`.
 - Android STL set before `project()`.
 - libc++ on Linux (`-stdlib=libc++`) — the library, but not how it is linked:
-  each target either imports the one runtime fabric owns or carries its own
+  each target either imports the one runtime ggml-base owns or carries its own
   static copy, chosen per target by the two helpers below.
 - lint-cpp sync (`configure_file` of `.clang-format` / `.clang-tidy` /
   `.valgrind.supp` / pre-commit hook).
@@ -90,14 +90,17 @@ New shared blocks introduced by the fabric form (also extract):
 
 - **Runtime discovery**: `set(qvac-fabric_DIR …)` + `find_package(qvac-fabric)`
   + `qvac_addon_fabric_layout()` + `include_bare_module`.
-- **Two-target link split**: `::headers` on the lib target, `_module` on the
-  module target.
+- **Core linkage**: headers and `GGML_SHARED` definitions on the addon library;
+  Fabric and the three shared core targets on its module. Linux imports libc++
+  from the versioned ggml-base provider. Apple retains static ggml in Fabric.
+  Dynamic-backend builds require matching shared-core metadata; there is no
+  fallback to the old Fabric-only layout.
 - **Backend discovery in fabric**: no backends define; the addon calls
   `qvac_fabric_load_backends()` (or loads an explicit `backendsDir` it was
   given).
 - **Platform-derived `GGML_BACKEND_DL`**.
-- **Test-harness staging**: copy `.bare` + glob fabric backends next to the test
-  exe, set rpath, win32 delay-load helper. This is **test-only** — the
+- **Test-harness staging**: copy `.bare` and Fabric backends next to the test
+  executable, plus sibling Windows core/CRT DLLs; set rpath and the Windows delay-load helper. This is **test-only** — the
   production addon build stages no backends (see note below).
 
 > **The addon never packages ggml backends.** `add_bare_module(… EXPORTS)`
@@ -135,7 +138,7 @@ New shared blocks introduced by the fabric form (also extract):
 | Android 16 KB page-size link flags | addon fails to load on Pixel 9-class devices | Applied unconditionally in `qvac_addon_finalize` |
 | Apple `compiler-rt` `force_load` (Xcode 16 `__isPlatformVersionAtLeast`) | module aborts at first `@available` call | Applied unconditionally in `qvac_addon_finalize` |
 | lint-cpp `.valgrind.supp` / pre-commit hook | inconsistent local dev hooks | Opt-in flags on `qvac_addon_project_setup` |
-| Fabric's C++ runtime actually reaching the module | `-nostdlib++` links fine, the module loads, and typed `catch` silently stops matching anything that crossed the fabric boundary — a package-level `"Unknown error"` with no build or load diagnostic | `qvac_addon_finalize` runs `assert-fabric-cxx-runtime.cmake` on the built ELF, which reads the node to require out of the fabric module on the link line and fails the build if that fabric exports no version node, or if the module imports its runtime unpinned or not at all |
+| The core's C++ runtime actually reaching the module | `-nostdlib++` links fine, the module loads, and typed `catch` silently stops matching anything that crossed the fabric boundary — a package-level `"Unknown error"` with no build or load diagnostic | `qvac_addon_finalize` runs `assert-fabric-cxx-runtime.cmake` on the built ELF, which reads the required version node from the linked ggml-base provider and fails the build if that provider exports no version node, or if the module imports its runtime unpinned or not at all |
 | Module exports beyond the bare entry points | co-loaded addons can interpose each other's typeinfo and `inference-addon-cpp` statics under an `RTLD_GLOBAL` host | `addon-symbols.map` applied to every ELF module by `qvac_addon_finalize` |
 
 > **The Android page-size and Apple `compiler-rt` fixes are folded into
@@ -224,7 +227,7 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
 - `qvac_addon_stage_fabric_for_test(<test_target> <fabric_target>)` — test-only:
   `GGML_BACKEND_DL`/`GGML_BACKEND_DIR`, copy `qvac__fabric-<suffix>@<major>.bare` + glob fabric
   backends next to the test binary, set `$ORIGIN`/`@loader_path` rpath, link
-  `bare_delay_load` on win32, and take fabric's C++ runtime on Linux so the test
+  `bare_delay_load` on win32, and take ggml-base's C++ runtime on Linux so the test
   binary links the way the production module does. (ASan and coverage stay in the
   addon's test file.)
 
