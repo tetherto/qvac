@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       languages:
-        description: "Comma-separated languages: js, python, kotlin"
+        description: "Comma-separated languages: js, python, kotlin, swift"
         type: string
-        default: js,python,kotlin
+        default: js,python,kotlin,swift
       platforms:
         description: "Comma-separated platforms: linux, mac, windows, android, ios, electron, snap"
         type: string
@@ -91,7 +91,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           branches: main, release-*, feature-*, tmp-*
-          paths: packages/sdk/ packages/sdk-e2e/ packages/inference/ packages/test-suite/ packages/sdk-python/ packages/sdk-kotlin/
+          paths: packages/sdk/ packages/sdk-e2e/ packages/inference/ packages/test-suite/ packages/sdk-python/ packages/sdk-kotlin/ packages/sdk-swift/
       # main's kinds of run: a newer run of the same kind cancels this one's tests.
       - id: kind
         if: steps.pr.outputs.ok == 'true'
@@ -136,7 +136,7 @@ jobs:
     with:
       targets: test:integration,test:mobile
       # Every language's e2e configurations; plan keeps the languages and platforms the label or dispatch names.
-      packages: sdk,sdk-python,sdk-kotlin
+      packages: sdk,sdk-python,sdk-kotlin,sdk-swift
       labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,electron,snap' || '' }}
       tags: ci:sdk
       event: ${{ needs.context.outputs.event }}

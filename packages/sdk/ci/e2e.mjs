@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families, sdk-python's python
-// family and sdk-kotlin's kotlin family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm
+// family, sdk-kotlin's kotlin family and sdk-swift's swift family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm
 // installs, the consumer and the producer run over MQTT, and the results are checked and compared with the newest
 // dispatch run on the base branch. Usage: node ci/e2e.mjs <family|seed>. CI_MODELS_PHASE=plan installs and plans
 // the leg's models; the run then reuses the install (see _desktop.yml).
@@ -25,14 +25,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
 export const E2E = join(ROOT, 'packages/sdk-e2e')
-const FAMILIES = ['desktop', 'python', 'kotlin', 'electron', 'snap']
+const FAMILIES = ['desktop', 'python', 'kotlin', 'swift', 'electron', 'snap']
 // The package whose test:integration runs a family, which uploads <package>/test/results/e2e.
 const OWNERS = {
   python: join(ROOT, 'packages/sdk-python'),
-  kotlin: join(ROOT, 'packages/sdk-kotlin')
+  kotlin: join(ROOT, 'packages/sdk-kotlin'),
+  swift: join(ROOT, 'packages/sdk-swift')
 }
 // The external consumer in sdk-e2e's qvac-test.config.js that runs a non-JS family.
-const EXTERNAL = { python: 'python', kotlin: 'kotlin-desktop' }
+const EXTERNAL = { python: 'python', kotlin: 'kotlin-desktop', swift: 'swift-macos' }
 const ownerOf = (family) => OWNERS[family] ?? SDK
 // Checked before any value reaches a command line, as main's run step did.
 export const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/
@@ -326,6 +327,11 @@ function kotlinDesktop(env) {
   run('node', ['runners/kotlin/scripts/desktop.mjs', 'build', '--prebuilt-sdk'], { cwd: E2E, env })
 }
 
+// The Swift bridge, the swift-macos consumer's prepare step: run:consumer:external skips an entry's prepare.
+function swiftBridge(env) {
+  run('node', ['runners/swift/scripts/prepare.mjs'], { cwd: E2E, env })
+}
+
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.
 function snapBuild(env) {
   rmSync(join(E2E, '.npmrc'), { force: true })
@@ -547,6 +553,7 @@ async function main(family, env) {
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
   const platform = platformOf(env.CI_RUNNER_LABEL)
   if (family === 'snap' && platform !== 'linux') throw new Error('Snap runs on Linux only')
+  if (family === 'swift' && platform !== 'macos') throw new Error('Swift runs on macOS only')
   const options = runOptions(env.CI_SUITE)
   // A rerun's previously failed tests, from the e2e router; empty runs the suite.
   const tests = list('tests', env.CI_TESTS)
@@ -589,6 +596,7 @@ async function main(family, env) {
   try {
     if (family === 'python') pythonVenv(e)
     if (family === 'kotlin') kotlinDesktop(e)
+    if (family === 'swift') swiftBridge(e)
     // The bootstrap below runs the JS desktop consumer, on the worker this bundles.
     if (family === 'desktop' || EXTERNAL[family]) {
       run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })

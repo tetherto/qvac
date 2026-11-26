@@ -1,0 +1,71 @@
+{
+  "name": "sdk-swift",
+  "root": "packages/sdk-swift",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
+  "targets": {
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-swift",
+        "command": "node ../sdk/ci/e2e.mjs swift"
+      },
+      "configurations": {
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "setup": ["node22"],
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "secrets": [
+          "GITHUB_TOKEN",
+          "MQTT_HOST",
+          "MQTT_USERNAME",
+          "MQTT_PASSWORD",
+          "MQTT_CA_CERT",
+          "MQTT_CLIENT_CERT",
+          "MQTT_CLIENT_KEY"
+        ],
+        "timeoutMinutes": 360,
+        "modelCache": {
+          "path": "../sdk-e2e/.qvac-cache",
+          "plan": true
+        }
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/mobile.mjs swift"
+      },
+      "configurations": {
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_26"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "mode": "producer",
+          "projectArnVar": "SDK_DEVICE_FARM_PROJECT_ARN",
+          "devicePoolsVar": {
+            "iOS": "SDK_IOS_DEVICE_FARM_POOLS"
+          },
+          "jobTimeoutMinutes": 120
+        },
+        "secrets": ["GITHUB_TOKEN", "MQTT_HOST", "MQTT_USERNAME", "MQTT_PASSWORD"],
+        "timeoutMinutes": 280
+      }
+    }
+  }
+}

@@ -24,11 +24,20 @@ export const MODES = {
 
 // Each e2e row is one language on one platform: the language is its project, the platform its configuration. The
 // configurations a project declares are the platforms that language runs on.
-const LANGUAGES = { [SDK]: 'js', '@qvac/sdk-python': 'python', 'sdk-kotlin': 'kotlin' }
+const LANGUAGES = {
+  [SDK]: 'js',
+  '@qvac/sdk-python': 'python',
+  'sdk-kotlin': 'kotlin',
+  'sdk-swift': 'swift'
+}
 const PLATFORMS = ['linux', 'mac', 'windows', 'android', 'ios', 'electron', 'snap']
 const OS = { linux: 'linux', darwin: 'mac', win32: 'windows', android: 'android', ios: 'ios' }
 // A client's own folder: a smoke run takes the client when the PR changed it, or with CLIENTS on the PR.
-const CLIENT_DIRS = { python: 'packages/sdk-python/', kotlin: 'packages/sdk-kotlin/' }
+const CLIENT_DIRS = {
+  python: 'packages/sdk-python/',
+  kotlin: 'packages/sdk-kotlin/',
+  swift: 'packages/sdk-swift/'
+}
 // What every client is generated from or talks to.
 const CLIENT_SOURCES = [
   'packages/sdk/package.json',

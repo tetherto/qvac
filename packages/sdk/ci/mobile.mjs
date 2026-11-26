@@ -2,6 +2,7 @@
 // The SDK's test:mobile in _mobile.yml's producer mode, as test-android-sdk.yml and test-ios-sdk.yml ran it. The build
 // phase builds the consumer app with this run's id and broker baked in, and hands the group the app, a stub test package
 // and the test spec. MOBILE_PHASE=produce waits for the device, drives the tests over MQTT and checks the results.
+// Usage: node ci/mobile.mjs <js|kotlin|swift>; kotlin and swift are sdk-kotlin's and sdk-swift's test:mobile.
 
 import { execFileSync } from 'node:child_process'
 import {
@@ -55,6 +56,7 @@ const output = (pairs) =>
 
 export function family(app, platform) {
   if (app === 'kotlin' && platform === 'Android') return 'kotlin-android'
+  if (app === 'swift' && platform === 'iOS') return 'swift-ios'
   if (app === 'js' && ['Android', 'iOS'].includes(platform)) {
     return platform === 'iOS' ? 'ios' : 'android'
   }
@@ -80,6 +82,11 @@ function buildKotlin(env) {
   })
 }
 
+// The Swift e2e app for iPhones with the run baked in, written to ipa.
+function buildSwift(env, ipa) {
+  run('node', ['runners/swift/scripts/ios.mjs', 'ipa', ipa], { cwd: E2E, env })
+}
+
 function build(app, env) {
   const fam = family(app, env.PLATFORM)
   const runId = runIdOf(fam, env)
@@ -100,29 +107,26 @@ function build(app, env) {
   const ios = env.PLATFORM === 'iOS'
   // The group's IOS_SIGNING: the imported profile's UUID, its export method, and the team.
   const signing = (env.IOS_SIGNING || '').split(',')
-  // The Kotlin app bakes its run in from E2E_RUN_ID, as main's job env set it; unset, it registers as a wildcard.
-  if (app === 'kotlin') buildKotlin({ ...e, E2E_RUN_ID: runId })
-  else {
-    run(
-      'npx',
-      ['qvac-test', `build:consumer:${ios ? 'ios' : 'android'}`, '--runId', runId, '--config', '.'],
-      {
-        cwd: E2E,
-        env: ios
-          ? {
-              ...e,
-              QVAC_IOS_BUNDLE_ID: BUNDLE_ID,
-              QVAC_IOS_TEAM_ID: signing[2],
-              QVAC_IOS_CODE_SIGN_IDENTITY: 'Apple Distribution',
-              QVAC_IOS_PROVISIONING_PROFILE: signing[0],
-              QVAC_IOS_EXPORT_METHOD: signing[1]
-            }
-          : e
-      }
-    )
+  const iosSigning = {
+    QVAC_IOS_BUNDLE_ID: BUNDLE_ID,
+    QVAC_IOS_TEAM_ID: signing[2],
+    QVAC_IOS_CODE_SIGN_IDENTITY: 'Apple Distribution',
+    QVAC_IOS_PROVISIONING_PROFILE: signing[0],
+    QVAC_IOS_EXPORT_METHOD: signing[1]
   }
   const ext = ios ? 'ipa' : 'apk'
   const app_ = join(E2E, 'build/consumers', fam, `consumer.${ext}`)
+  // The Kotlin and Swift apps bake their run in from E2E_RUN_ID; unset, it registers as a wildcard.
+  if (app === 'kotlin') buildKotlin({ ...e, E2E_RUN_ID: runId })
+  else if (app === 'swift') {
+    buildSwift({ ...e, ...iosSigning, E2E_RUN_ID: runId, QVAC_TEST_PLATFORM: fam }, app_)
+  } else {
+    run(
+      'npx',
+      ['qvac-test', `build:consumer:${ios ? 'ios' : 'android'}`, '--runId', runId, '--config', '.'],
+      { cwd: E2E, env: ios ? { ...e, ...iosSigning } : e }
+    )
+  }
   if (!existsSync(app_)) throw new Error(`${app_} was not built`)
   // A stub test package: the device runs the app, and the producer drives it from here.
   const tmp = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'sdk-mobile-'))
@@ -143,6 +147,10 @@ function build(app, env) {
         'io.tether.qvac.e2e.kotlin/io.tether.qvac.e2e.MainActivity'
       )
       .replaceAll('ReactNativeJS', 'QvacE2E')
+  }
+  // The Swift app runs as its own process, which the syslog capture follows.
+  if (app === 'swift') {
+    spec = spec.replaceAll('--process-name QVACTestConsumer', '--process-name QvacSwiftE2E')
   }
   const specFile = join(tmp, `qvac-test-spec-${runId}.yml`)
   writeFileSync(specFile, spec)
@@ -225,7 +233,7 @@ async function produce(app, env) {
   } catch (err) {
     failure = err
   }
-  const slug = app === 'kotlin' ? 'sdk-kotlin' : 'sdk'
+  const slug = { kotlin: 'sdk-kotlin', swift: 'sdk-swift' }[app] ?? 'sdk'
   keepResults(join(ROOT, 'packages', slug, 'test/results/e2e', fam), [reports])
   await compareBaseline({
     env: e,
