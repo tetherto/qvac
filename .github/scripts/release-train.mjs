@@ -8,7 +8,7 @@
 //   release-train.mjs linked <train>
 //   release-train.mjs pack <train> <dest-dir>
 //   release-train.mjs stage <package-dir> <tarball-dir>
-//   release-train.mjs publish <moved-json> [--dry-run]
+//   release-train.mjs publish <moved-json> <tarball-dir> [--dry-run]
 //   release-train.mjs wait <moved-json> <published-json> <tarball-dir>
 //   release-train.mjs tag <moved-json> [--push]
 //
@@ -38,6 +38,7 @@ import {
   publishedCommit,
   publishedElsewhere,
   readRepoJson,
+  repackMismatches,
   repoRoot,
   shasumMismatches,
   slugOf,
@@ -253,6 +254,23 @@ function checkLinked ([name]) {
   console.log(`The '${name}' train links no package outside itself`)
 }
 
+// Packs one project's tarball into `out` and returns its file name. The same
+// call builds the tarballs the checks install and re-packs before publishing,
+// so the two can be compared byte for byte.
+function packProject (dir, out, head) {
+  const dist = join(repoRoot, dir, 'dist')
+  if (!existsSync(dist) || !readdirSync(dist).length) throw new Error(`${dir}/dist is empty; build it first`)
+  const before = new Set(readdirSync(out))
+  const restore = stampGitHead(dir, head)
+  try {
+    capture('pnpm', ['pack', '--pack-destination', out], { cwd: join(repoRoot, dir), env: { ...process.env, PNPM_CONFIG_IGNORE_SCRIPTS: 'true' } })
+  } finally {
+    restore()
+  }
+  const [file] = readdirSync(out).filter((entry) => !before.has(entry))
+  return file
+}
+
 function packTrain ([name, dest]) {
   if (!dest) fail(['usage: pack <train> <dest-dir>'])
   const resolved = train(name)
@@ -262,21 +280,26 @@ function packTrain ([name, dest]) {
   mkdirSync(out, { recursive: true })
   const index = {}
   for (const project of resolved.projects) {
-    const dir = roots[project]
-    const dist = join(repoRoot, dir, 'dist')
-    if (!existsSync(dist) || !readdirSync(dist).length) throw new Error(`${dir}/dist is empty; build it first`)
-    const before = new Set(readdirSync(out))
-    const restore = stampGitHead(dir, head)
-    try {
-      capture('pnpm', ['pack', '--pack-destination', out], { cwd: join(repoRoot, dir), env: { ...process.env, PNPM_CONFIG_IGNORE_SCRIPTS: 'true' } })
-    } finally {
-      restore()
-    }
-    const [file] = readdirSync(out).filter((entry) => !before.has(entry))
+    const file = packProject(roots[project], out, head)
     index[project] = file
     console.log(`packed ${project} as ${file} (sha1 ${sha1(join(out, file))})`)
   }
   writeFileSync(join(out, TARBALL_INDEX), JSON.stringify(index, null, 2) + '\n')
+}
+
+// What this job would publish, packed again and compared with the tarballs
+// the checks ran on. A dist that did not reach this job, or reached it under
+// another path, packs to other bytes and stops here, before npm has anything.
+function unlikeBuilt (projects, tarballDir, head) {
+  const index = JSON.parse(readFileSync(join(tarballDir, TARBALL_INDEX), 'utf8'))
+  const out = mkdtempSync(join(tmpdir(), 'train-repack-'))
+  try {
+    return repackMismatches(projects,
+      (project) => sha1(join(out, packProject(project.dir, out, head))),
+      (project) => sha1(join(tarballDir, index[project.name])))
+  } finally {
+    rmSync(out, { recursive: true, force: true })
+  }
 }
 
 function stagePackage ([dir, tarballDir]) {
@@ -288,7 +311,8 @@ function stagePackage ([dir, tarballDir]) {
   console.log(`${path}: ${Object.keys(tarballs).join(', ')} resolve from ${resolve(tarballDir)}`)
 }
 
-function publishTrain ([movedJson], options) {
+function publishTrain ([movedJson, tarballDir], options) {
+  if (!tarballDir) fail(['usage: publish <moved-json> <tarball-dir> [--dry-run]'])
   const moved = JSON.parse(movedJson ?? '[]')
   const head = capture('git', ['rev-parse', 'HEAD']).trim()
   // A re-run of failed jobs does not resolve the train again, so a version
@@ -314,6 +338,9 @@ function publishTrain ([movedJson], options) {
     setOutputs({ published: '[]' })
     return
   }
+
+  const unlike = unlikeBuilt(pending, resolve(tarballDir), head)
+  if (unlike.length) fail(unlike)
 
   const restores = pending.map((project) => stampGitHead(project.dir, head))
   try {
