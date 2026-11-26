@@ -12,15 +12,20 @@
 // speculative-decoding.test.js; here it must answer correctly with drafting
 // off and on, and its speed is recorded against plain decoding.
 //
-// Opt-in with QVAC_RUN_BONSAI_27B=1: about 16 GB of models, desktop-only.
+// The model also has to answer after thinking (its default mode, with
+// PrismML's sampling), call a tool and answer from its result (the agentic
+// use PrismML benchmarks), and describe an image through its mmproj.
+//
+// Opt-in with QVAC_RUN_BONSAI_27B=1: about 17 GB of models, desktop-only.
 //
 // prestage-ignore: Ternary-Bonsai-2.5-27B-Q2_0.gguf — opt-in via QVAC_RUN_BONSAI_27B=1, desktop-only
 // prestage-ignore: Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf — opt-in via QVAC_RUN_BONSAI_27B=1, desktop-only
+// prestage-ignore: Ternary-Bonsai-2.5-27B-mmproj-Q8_0.gguf — opt-in via QVAC_RUN_BONSAI_27B=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
+const { ensureModel, getMediaPath, safeTest } = require('./utils')
 const { recordPerformance, coldPrompt } = require('./_perf-helper.js')
 
 const platform = os.platform()
@@ -45,7 +50,18 @@ const skip = isMobile
 
 const MODEL = 'Ternary-Bonsai-2.5-27B-Q2_0.gguf'
 const MTP_MODEL = 'Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf'
+const MMPROJ = 'Ternary-Bonsai-2.5-27B-mmproj-Q8_0.gguf'
 const TIMEOUT = 7_200_000
+
+// PrismML's thinking-mode sampling. llama.cpp's default min-p of 0.05 is not
+// part of it.
+const THINKING_SAMPLING = {
+  temp: '1.0',
+  'top-p': '0.95',
+  'top-k': '20',
+  'min-p': '0',
+  seed: '42'
+}
 
 // PrismML's CUDA preset for the -mtp files.
 const MTP_CONFIG = {
@@ -93,10 +109,14 @@ function config(extra = {}) {
   }
 }
 
-async function loadModel(name, cfg) {
+async function modelPath(name) {
   const [file, dir] = await ensureModel({ modelName: name })
+  return path.join(dir, file)
+}
+
+async function loadModel(name, cfg, files = {}) {
   const model = new LlmLlamacpp({
-    files: { model: [path.join(dir, file)] },
+    files: { model: [await modelPath(name)], ...files },
     config: cfg,
     logger: null,
     opts: { stats: true }
@@ -115,6 +135,40 @@ async function runOnce(model, prompt, generationParams) {
     })
     .await()
   return { output, stats: response.stats, totalTime: Date.now() - start }
+}
+
+// The chat template renders calls as Qwen3.5's <function=NAME> XML inside
+// <tool_call>; JSON is accepted too.
+function extractToolCalls(output) {
+  const calls = []
+  for (const [, block] of output.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/g)) {
+    const inner = block.trim()
+    try {
+      calls.push(JSON.parse(inner))
+      continue
+    } catch {}
+    const fn = /<function=([^>\s]+)\s*>([\s\S]*?)<\/function>/.exec(inner)
+    if (!fn) continue
+    const args = {}
+    for (const [, key, value] of fn[2].matchAll(
+      /<parameter=([^>\s]+)\s*>([\s\S]*?)<\/parameter>/g
+    )) {
+      args[key.trim()] = value.trim()
+    }
+    calls.push({ name: fn[1].trim(), arguments: args })
+  }
+  return calls
+}
+
+const WEATHER_TOOL = {
+  type: 'function',
+  name: 'get_weather',
+  description: 'Get the current temperature for a city',
+  parameters: {
+    type: 'object',
+    properties: { city: { type: 'string', description: 'City' } },
+    required: ['city']
+  }
 }
 
 async function assertAnswers(t, model, label) {
@@ -190,6 +244,95 @@ safeTest(
       )
     } finally {
       await withDrafting.unload()
+    }
+  }
+)
+
+safeTest(
+  'Ternary Bonsai 2.5 27B Q2_0 answers after thinking',
+  { timeout: TIMEOUT, skip },
+  async (t) => {
+    // Thinking is on by default; leave room for the trace and the answer.
+    const model = await loadModel(
+      MODEL,
+      config({ ...THINKING_SAMPLING, ctx_size: '8192', n_predict: '4096' })
+    )
+    try {
+      const { output, stats } = await runOnce(model, [
+        { role: 'user', content: 'What is 17 multiplied by 23?' }
+      ])
+      const end = output.indexOf('</think>')
+      t.ok(end > 0, `closed its thinking after ${stats.generatedTokens} tokens`)
+      const answer = end > 0 ? output.slice(end + '</think>'.length) : ''
+      t.ok(/\b391\b/.test(answer), `answer after thinking: ${JSON.stringify(answer.trim())}`)
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
+safeTest(
+  'Ternary Bonsai 2.5 27B Q2_0 calls a tool and answers from its result',
+  { timeout: TIMEOUT, skip },
+  async (t) => {
+    const model = await loadModel(MODEL, config({ tools: 'true', n_predict: '256' }))
+    try {
+      const question = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        WEATHER_TOOL,
+        { role: 'user', content: 'What is the temperature in Paris right now?' }
+      ]
+      const first = await runOnce(model, question, NO_THINKING)
+      const call = extractToolCalls(first.output).find((c) => c.name === 'get_weather')
+      t.ok(call, `called get_weather: ${JSON.stringify(first.output.trim().slice(0, 300))}`)
+      t.ok(/paris/i.test(call?.arguments?.city || ''), `city argument: ${call?.arguments?.city}`)
+
+      const second = await runOnce(
+        model,
+        [
+          ...question,
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }]
+          },
+          {
+            role: 'tool',
+            content: '{"city":"Paris","temperature_c":18}',
+            tool_call_id: 'call_1',
+            name: 'get_weather'
+          }
+        ],
+        NO_THINKING
+      )
+      t.absent(second.output.includes('<tool_call>'), 'answered instead of calling again')
+      t.ok(
+        /\b18\b/.test(second.output),
+        `answer uses the result: ${JSON.stringify(second.output.trim())}`
+      )
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
+safeTest(
+  'Ternary Bonsai 2.5 27B Q2_0 describes an image through its mmproj',
+  { timeout: TIMEOUT, skip },
+  async (t) => {
+    const model = await loadModel(MODEL, config(), { projectionModel: await modelPath(MMPROJ) })
+    try {
+      const { output } = await runOnce(
+        model,
+        [
+          { role: 'user', type: 'media', content: getMediaPath('elephant.jpg') },
+          { role: 'user', content: 'What animal is in the image? Answer in one word.' }
+        ],
+        NO_THINKING
+      )
+      t.ok(/elephant/i.test(output), `recognised the elephant: ${JSON.stringify(output.trim())}`)
+    } finally {
+      await model.unload()
     }
   }
 )
