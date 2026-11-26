@@ -22,6 +22,11 @@
       "node": "crypto",
       "react-native": "./dist/shims/crypto.js",
       "default": "./dist/shims/crypto.js"
+    },
+    "#fs": {
+      "bare": "bare-fs",
+      "node": "fs",
+      "default": "bare-fs"
     }
   },
   "scripts": {

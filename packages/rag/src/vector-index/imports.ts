@@ -2,5 +2,5 @@
 // that refuses module loading after startup.
 export const importers = {
   turbovec: (): Promise<unknown> => import('@qvac/turbovec-ggml'),
-  bareFs: (): Promise<unknown> => import('bare-fs')
+  fs: (): Promise<unknown> => import('#fs')
 }
