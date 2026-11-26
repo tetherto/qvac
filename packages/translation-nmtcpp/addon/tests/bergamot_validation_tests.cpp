@@ -1,8 +1,12 @@
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 
 #include <gtest/gtest.h>
+#ifdef __unix__
+#include <signal.h>
+#endif
 
 #include "model-interface/bergamot.hpp"
 
@@ -216,6 +220,89 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
   // max-length-factor in custom params, output is expected to change or
   // become shorter.
   EXPECT_NE(customOutput, defaultOutput);
+}
+
+namespace {
+
+void hostTerminate() {}
+
+#ifdef __unix__
+void hostSignalHandler(int, siginfo_t*, void*) {}
+
+bool isHostSignalHandler(int signal) {
+  struct sigaction current = {};
+  sigaction(signal, nullptr, &current);
+  return (current.sa_flags & SA_SIGINFO) &&
+         current.sa_sigaction == hostSignalHandler;
+}
+#endif
+
+} // namespace
+
+// QVAC-28896: loading a Bergamot model used to replace the process's
+// std::terminate and SIGSEGV/SIGFPE handlers with Marian's. In sdk-kotlin on
+// Linux, the JVM's own SIGSEGV (an implicit null check in JIT code) then became
+// a Marian abort that killed the process.
+TEST(BergamotValidation, LoadingAModelKeepsTheHostErrorHandlers) {
+  fs::path modelDir;
+  if (fs::exists(fs::path{"models/unit-test/berg-en-it"})) {
+    modelDir = fs::path{"models/unit-test/berg-en-it"};
+  } else if (fs::exists(fs::path{"../../../models/unit-test/berg-en-it"})) {
+    modelDir = fs::path{"../../../models/unit-test/berg-en-it"};
+  } else {
+    GTEST_SKIP() << "Bergamot unit-test model directory not found.";
+  }
+
+  const std::string modelPath =
+      (modelDir / "model.enit.intgemm.alphas.bin").string();
+  const std::string vocabPath = (modelDir / "vocab.enit.spm").string();
+  if (!fs::exists(modelPath) || !fs::exists(vocabPath)) {
+    GTEST_SKIP() << "Required Bergamot model files are missing in "
+                 << modelDir.string();
+  }
+
+  // Install handlers the way a host process such as a JVM would.
+  const std::terminate_handler previousTerminate =
+      std::set_terminate(hostTerminate);
+#ifdef __unix__
+  struct sigaction host = {};
+  sigemptyset(&host.sa_mask);
+  host.sa_flags = SA_SIGINFO;
+  host.sa_sigaction = hostSignalHandler;
+  struct sigaction previousSegv = {};
+  struct sigaction previousFpe = {};
+  sigaction(SIGSEGV, &host, &previousSegv);
+  sigaction(SIGFPE, &host, &previousFpe);
+#endif
+
+  bergamot_params params;
+  params.model_path = modelPath;
+  params.src_vocab_path = vocabPath;
+  params.dst_vocab_path = vocabPath;
+  bergamot_context* ctx = bergamotInit("", params);
+  const bool loaded = ctx != nullptr;
+  std::string output;
+  if (loaded) {
+    output = bergamotTranslate(ctx, "The weather is nice today.");
+    bergamotFree(ctx);
+  }
+
+  const bool terminateKept = std::get_terminate() == hostTerminate;
+#ifdef __unix__
+  const bool segvKept = isHostSignalHandler(SIGSEGV);
+  const bool fpeKept = isHostSignalHandler(SIGFPE);
+  sigaction(SIGSEGV, &previousSegv, nullptr);
+  sigaction(SIGFPE, &previousFpe, nullptr);
+#endif
+  std::set_terminate(previousTerminate);
+
+  ASSERT_TRUE(loaded);
+  EXPECT_FALSE(output.empty());
+  EXPECT_TRUE(terminateKept) << "Marian replaced the host's std::terminate handler";
+#ifdef __unix__
+  EXPECT_TRUE(segvKept) << "Marian replaced the host's SIGSEGV handler";
+  EXPECT_TRUE(fpeKept) << "Marian replaced the host's SIGFPE handler";
+#endif
 }
 
 // Note: We cannot test valid file initialization here because that would require
