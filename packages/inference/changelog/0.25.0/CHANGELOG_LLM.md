@@ -426,7 +426,7 @@ await loadModel({
 On macOS and iOS, `PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0` now stages its published Core ML bundles beside the GGUF. The new `decoderUsedCoreml` stat reports whether the run decoded on Core ML, and `ASR_BACKEND_IDS` gains `WebGPU` (5).
 
 ```typescript
-import { loadModel, transcribe, PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 } from '@qvac/inference'
+import { loadModel, transcribeStream, PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 } from '@qvac/inference'
 
 const modelId = await loadModel({
   modelSrc: PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,
@@ -434,8 +434,12 @@ const modelId = await loadModel({
   modelConfig: { language: 'auto' }
 })
 
-const call = transcribe({ modelId, audioChunk: '/path/to/recording.wav' })
-const stats = await call.stats
+const session = await transcribeStream({ modelId })
+session.write(audio) // a Uint8Array of audio
+session.end()
+for await (const text of session) console.log(text)
+
+const stats = await session.stats
 stats?.encoderUsedCoreml // 1 when this run encoded on Core ML
 stats?.decoderUsedCoreml // 1 when every transcription decoded on the Core ML decoder
 ```
