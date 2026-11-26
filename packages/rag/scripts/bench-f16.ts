@@ -12,7 +12,6 @@ import fs from 'bare-fs'
 import Corestore from 'corestore'
 
 import { createRag } from '../dist/index.js'
-import { setNativeIndexLoader } from '../dist/vector-index/native.js'
 
 const CHUNKS_PER_DOCUMENT = 8
 const DOCUMENTS_PER_INGEST = 50
@@ -85,10 +84,16 @@ function sample(): Float32Array {
 type Rag = ReturnType<typeof createRag>
 type Hit = { id: string; score: number }
 
+// Every index build fails, so the scan answers.
+const SCAN_ONLY = {
+  create(): never {
+    throw new Error('scan only')
+  }
+}
+
 async function open(scan: boolean): Promise<{ rag: Rag; corestore: Corestore }> {
-  setNativeIndexLoader(scan ? () => Promise.resolve(null) : null)
   const corestore = new Corestore(`${dir}/store`)
-  const rag = createRag({ corestore })
+  const rag = createRag({ corestore, index: { provider: scan ? SCAN_ONLY : undefined } })
   await rag.ready()
   return { rag, corestore }
 }
