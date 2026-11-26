@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.33.1] - 2026-11-25
+
+### Changed
+
+- `qvac-fabric` dependency bumped `12032.0.0` -> `12032.0.1`. No struct,
+  exported signature, op, type or RPC protocol (118) change, so consumers on
+  `^0.33.0` take this release without a rebuild.
+- Vulkan and HIP on AMD GPUs run flash attention over kv_rows lists
+  (`ggml_flash_attn_ext_rows`). Vulkan used to reject the op, and AMD used a
+  kernel that decoded about 8x slower
+  ([qvac-fabric-llm.cpp#561](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/561)).
+- CUDA MMQ on NVIDIA: the dense stream-k split walks column tiles outermost,
+  and matmuls that share an activation quantize it once. Vulkan: stream-k
+  `MUL_MAT` for coopmat2. `GGML_CUDA_DISABLE_MMQ_COL_OUTER=1`,
+  `GGML_CUDA_DISABLE_MMQ_SRC1_SHARING=1` and `GGML_VK_DISABLE_STREAM_K=1` turn
+  them off; `GGML_VK_FORCE_STREAM_K=1` uses stream-k where the heuristic
+  would keep the regular grid
+  ([qvac-fabric-llm.cpp#586](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/586)).
+- Vulkan prompt processing: on Mesa before 25.3, shared-memory availability
+  moves onto the workgroup barriers (`GGML_VK_SHARED_AVAIL_REWRITE=0` turns it
+  off); on RDNA3, the large int8 coopmat1 MMQ tile uses 32x64 warp tiles
+  (`GGML_VK_MMQ_CM1_WIDE=0`); a SWIGLU that feeds a quantized matmul is
+  computed in the matmul's Q8_1 quantize pass (`GGML_VK_FUSE_GLU_Q8_1=0`)
+  ([qvac-fabric-llm.cpp#565](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/565)).
+- CUDA: few-row MMQ for F8_E4M3 and CUTLASS-repacked NVFP4 weights on DGX
+  Spark
+  ([qvac-fabric-llm.cpp#574](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/574)).
+- CUDA and HIP: `GGML_OP_ROPE_FLUX` kernel
+  ([qvac-fabric-llm.cpp#578](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/578)).
+- HIP on gfx1151: scale and residual add fuse into one kernel
+  ([qvac-fabric-llm.cpp#576](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/576)).
+
+### Fixed
+
+- HIP on gfx1151: the long-query tile attention keeps F32 accumulation when
+  the op requests `GGML_PREC_F32`
+  ([qvac-fabric-llm.cpp#562](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/562)).
+
 ## [0.33.0] - 2026-11-23
 
 ### Breaking

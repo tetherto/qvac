@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { sessionIdSchema } from '@/schemas/request-base'
+import { sessionGrantSchema } from '@/schemas/session-grants'
 
 export const openSessionRequestSchema = z.object({
   type: z.literal('openSession'),
@@ -11,7 +12,8 @@ export const openSessionRequestSchema = z.object({
     .min(1)
     .max(128)
     .optional()
-    .describe('Human-readable label for logs and diagnostics.')
+    .describe('Human-readable label for logs and diagnostics.'),
+  grant: sessionGrantSchema.optional()
 })
 
 export const openSessionResponseSchema = z.object({
