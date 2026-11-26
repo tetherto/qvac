@@ -443,8 +443,9 @@ function logStreamingProgress(response, tag) {
 const skipHeavyPlatform = isMobile || isDarwin
 
 // Vulkan compiles each pipeline on its first use in a process, which takes
-// seconds on a cold driver shader cache. An untimed pass of the same workload
-// keeps those compiles out of the timed runs the TPS assertion compares.
+// seconds on a cold driver shader cache. Where the TPS assertion runs, earlier
+// passes of the same workload keep those compiles out of the last pass, which
+// the assertion compares. Every pass checks the answers.
 const warmUpBeforeTiming = isLinuxX64 && !useCpu
 
 safeTest(
@@ -455,30 +456,35 @@ safeTest(
     // Keep it pinned so enabling a new default backend cannot change what it
     // measures; CUDA remains covered by the rest of the suite.
     const singleModel = await setupModel(t, { backend: 'vulkan' })
-    if (warmUpBeforeTiming) {
+    let warmUp = warmUpBeforeTiming
+    let singleNativeTpsValues = []
+    let singleWallTpsValues = []
+    for (let pass = 0; pass < (warmUp ? 2 : 1); pass++) {
+      t.comment(`single pass ${pass + 1}`)
+      singleNativeTpsValues = []
+      singleWallTpsValues = []
+      let backendDevice
       for (const item of CASES) {
-        await collectText(await singleModel.run(buildPrompt(item), runOptionsForCase(item)))
+        const startedAt = Date.now()
+        const singleResponse = await singleModel.run(buildPrompt(item), runOptionsForCase(item))
+        const singleText = await collectText(singleResponse)
+        const elapsedMs = Date.now() - startedAt
+        backendDevice = singleResponse.stats.backendDevice
+        const generatedTokens = toNumber(singleResponse.stats.generatedTokens)
+        const singleNativeTps = toNumber(singleResponse.stats.TPS)
+        const singleWallTps = elapsedMs > 0 ? (generatedTokens * 1000) / elapsedMs : 0
+        singleNativeTpsValues.push(singleNativeTps)
+        singleWallTpsValues.push(singleWallTps)
+        t.comment(`single native TPS ${item.id}: ${singleNativeTps}`)
+        t.comment(`single wall TPS ${item.id}: ${singleWallTps}`)
+        t.comment(`${item.id}: ${singleText.trim()}`)
+        t.ok(
+          containsExpectedWord(singleText, item.expected),
+          `single ${item.id} includes ${item.expected}`
+        )
       }
-    }
-    const singleNativeTpsValues = []
-    const singleWallTpsValues = []
-    for (const item of CASES) {
-      const startedAt = Date.now()
-      const singleResponse = await singleModel.run(buildPrompt(item), runOptionsForCase(item))
-      const singleText = await collectText(singleResponse)
-      const elapsedMs = Date.now() - startedAt
-      const generatedTokens = toNumber(singleResponse.stats.generatedTokens)
-      const singleNativeTps = toNumber(singleResponse.stats.TPS)
-      const singleWallTps = elapsedMs > 0 ? (generatedTokens * 1000) / elapsedMs : 0
-      singleNativeTpsValues.push(singleNativeTps)
-      singleWallTpsValues.push(singleWallTps)
-      t.comment(`single native TPS ${item.id}: ${singleNativeTps}`)
-      t.comment(`single wall TPS ${item.id}: ${singleWallTps}`)
-      t.comment(`${item.id}: ${singleText.trim()}`)
-      t.ok(
-        containsExpectedWord(singleText, item.expected),
-        `single ${item.id} includes ${item.expected}`
-      )
+      // A CPU fallback skips the TPS assertion, so it needs no warm-up.
+      warmUp = warmUp && backendDevice === 'gpu'
     }
     const avgSingleNativeTps =
       singleNativeTpsValues.reduce((sum, value) => sum + value, 0) / singleNativeTpsValues.length
@@ -489,48 +495,49 @@ safeTest(
 
     const batchModel = await setupModel(t, { parallel: '4', backend: 'vulkan' })
     const batchInput = CASES.map(buildBatchItem)
-    // Twice: the first batch prefills from empty slots, the timed one from slots
-    // that already hold the shared system prompt, which takes other pipelines.
-    if (warmUpBeforeTiming) {
-      for (let pass = 0; pass < 2; pass++) {
-        await (await batchModel.run(batchInput)).await()
+    // Three passes on warm-up: the first prefills from empty slots, the later
+    // ones from slots that already hold the shared system prompt, which takes
+    // other pipelines.
+    let batchResponse
+    let batchElapsedMs
+    for (let pass = 0; pass < (warmUp ? 3 : 1); pass++) {
+      t.comment(`batch pass ${pass + 1}`)
+      const batchStartedAt = Date.now()
+      batchResponse = await batchModel.run(batchInput)
+      const streamingProgress = logStreamingProgress(batchResponse)
+      const batchResults = await batchResponse.await()
+      batchElapsedMs = Date.now() - batchStartedAt
+      streamingProgress.flush()
+
+      t.comment(`batch avgConcurrentSeq: ${toNumber(batchResponse.stats.avgConcurrentSeq)}`)
+      t.ok(
+        toNumber(batchResponse.stats.avgConcurrentSeq) > 3.05,
+        'batch stats report concurrent sequence decoding'
+      )
+
+      t.alike(
+        batchResults.map((result) => result.id),
+        CASES.map((item) => item.id),
+        'all ids are reported in order'
+      )
+      t.alike(
+        streamingProgress.ids().sort(),
+        CASES.map((item) => item.id).sort(),
+        'all ids emitted streaming chunks'
+      )
+      const resultsById = new Map(batchResults.map((result) => [result.id, result.output]))
+      for (const item of CASES) {
+        const output = resultsById.get(item.id) || ''
+        console.log(`[continuous-batching result] ${item.id}: ${output.trim()}`)
+        t.comment(`${item.id}: ${output.trim()}`)
+        t.ok(containsExpectedWord(output, item.expected), `${item.id} includes ${item.expected}`)
       }
     }
-    const batchStartedAt = Date.now()
-    const batchResponse = await batchModel.run(batchInput)
-    const streamingProgress = logStreamingProgress(batchResponse)
-    const batchResults = await batchResponse.await()
-    const batchElapsedMs = Date.now() - batchStartedAt
-    streamingProgress.flush()
     const batchNativeTps = toNumber(batchResponse.stats.TPS)
     const batchGeneratedTokens = toNumber(batchResponse.stats.generatedTokens)
     const batchWallTps = batchElapsedMs > 0 ? (batchGeneratedTokens * 1000) / batchElapsedMs : 0
-
     t.comment(`batch native TPS: ${batchNativeTps}`)
     t.comment(`batch wall TPS: ${batchWallTps}`)
-    t.comment(`batch avgConcurrentSeq: ${toNumber(batchResponse.stats.avgConcurrentSeq)}`)
-    t.ok(
-      toNumber(batchResponse.stats.avgConcurrentSeq) > 3.05,
-      'batch stats report concurrent sequence decoding'
-    )
-
-    t.alike(
-      batchResults.map((result) => result.id),
-      CASES.map((item) => item.id),
-      'all ids are reported in order'
-    )
-    t.alike(
-      streamingProgress.ids().sort(),
-      CASES.map((item) => item.id).sort(),
-      'all ids emitted streaming chunks'
-    )
-    const resultsById = new Map(batchResults.map((result) => [result.id, result.output]))
-    for (const item of CASES) {
-      const output = resultsById.get(item.id) || ''
-      console.log(`[continuous-batching result] ${item.id}: ${output.trim()}`)
-      t.comment(`${item.id}: ${output.trim()}`)
-      t.ok(containsExpectedWord(output, item.expected), `${item.id} includes ${item.expected}`)
-    }
 
     const nativeTpsComparison = `batch native TPS (${batchNativeTps}) vs average single native TPS (${avgSingleNativeTps})`
     const wallTpsComparison = `batch wall TPS (${batchWallTps}) vs average single wall TPS (${avgSingleWallTps})`
