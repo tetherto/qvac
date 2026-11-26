@@ -79,6 +79,9 @@ bergamotInit(const char* modelPath, const bergamot_params& params) {
 
   // Enable throwing exceptions instead of abort() to get meaningful error messages
   marian::setThrowExceptionOnAbort(true);
+  // Keep the host's std::terminate and SIGSEGV/SIGFPE handlers: a JVM raises
+  // SIGSEGV on purpose, and Marian's handler would turn it into an abort.
+  marian::setInstallErrorHandlers(false);
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[BERGAMOT_INIT] Enabled throwExceptionOnAbort");

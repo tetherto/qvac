@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Loading a Bergamot model no longer replaces the process's `std::terminate`
+  and Linux `SIGSEGV`/`SIGFPE` handlers with Marian's (QVAC-28896). In
+  sdk-kotlin on Linux desktop, the JVM raises `SIGSEGV` itself, and Marian's
+  handler turned it into an abort that killed the process. The `marian-dev`
+  override moves to `1.0.0#2`
+  ([tetherto/qvac-ext-marian-dev#17](https://github.com/tetherto/qvac-ext-marian-dev/pull/17)),
+  where those handlers are opt-in, and `bergamotInit` opts out explicitly.
+
 ## [0.28.0] - 2026-11-23
 
 ### Changed
