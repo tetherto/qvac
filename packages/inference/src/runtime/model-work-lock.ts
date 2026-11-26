@@ -43,7 +43,11 @@ export async function withModelWorkLock<T>(
   }
 }
 
-function untilSettledOrAborted(pending: Promise<unknown>, signal: AbortSignal): Promise<void> {
+/** Resolves once `pending` settles or `signal` aborts, whichever comes first. */
+export function untilSettledOrAborted(
+  pending: Promise<unknown>,
+  signal: AbortSignal
+): Promise<void> {
   if (signal.aborted) return Promise.resolve()
   return new Promise<void>((resolve) => {
     const onAbort = () => resolve()

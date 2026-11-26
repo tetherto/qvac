@@ -184,9 +184,7 @@ test('callers grant the verify job no more than contents: read', () => {
 })
 
 test('wrapper drift is still checked somewhere at PR time', () => {
-  // The merge-time job covers push/dispatch; sanity-checks covers PRs. Losing
-  // the PR-time half would push every drift failure to after the merge.
-  const sanityChecks = read('.github/actions/sanity-checks/action.yaml')
-  assert.match(sanityChecks, /check:generated/)
+  // The merge-time job covers push/dispatch; pr-checks' verify:generated covers PRs.
+  assert.match(read('.github/workflows/pr-checks.yml'), /targets: .*verify:generated/)
 })
 

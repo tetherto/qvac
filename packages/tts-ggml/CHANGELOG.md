@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Parler with a fixed `seed` reproduces its output bit for bit again on Linux
+  CUDA when `streamChunkTokens` is set. The first call on a loaded model could
+  differ from every later call by one step in a few samples of the first
+  chunk: Fabric's fused CUDA kernels follow the graph buffer layout, and the
+  DAC decoder inherited the layout an earlier, larger window had left behind
+  ([qvac-fabric-speech.cpp#464](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/464)).
+
 ## [0.17.0] - 2026-11-23
 
 ### Changed

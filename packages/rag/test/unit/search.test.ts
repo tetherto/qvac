@@ -248,6 +248,8 @@ test('reusing an input buffer after the call does not change what was stored', a
   t.is(hit.score, 1, 'both the stored vector and the query kept their values')
 })
 
+const listeners = { addEventListener() {}, removeEventListener() {} }
+
 test('an aborted signal cancels the search', async (t) => {
   const { rag, spaceId } = await openRag(t)
   const chunks: Array<[string, number[]]> = []
@@ -257,7 +259,7 @@ test('an aborted signal cancels the search', async (t) => {
 
   await rejectsWithCode(
     t,
-    rag.search({ ...query, signal: { aborted: true } as AbortSignal }),
+    rag.search({ ...query, signal: { aborted: true, ...listeners } as unknown as AbortSignal }),
     ERR_CODES.OPERATION_CANCELLED,
     'already aborted'
   )
@@ -268,8 +270,9 @@ test('an aborted signal cancels the search', async (t) => {
   const midScan = {
     get aborted() {
       return ++checks > 2
-    }
-  } as AbortSignal
+    },
+    ...listeners
+  } as unknown as AbortSignal
   await rejectsWithCode(
     t,
     rag.scoped({ namespace: 'ns' }).search({ vector: [1, 0, 0], spaceId, k: 1, signal: midScan }),
@@ -283,6 +286,12 @@ test('an aborted signal cancels the search', async (t) => {
     rag.search({ ...query, signal: 'stop' as never }),
     ERR_CODES.INVALID_INPUT,
     'a non-signal is rejected'
+  )
+  await rejectsWithCode(
+    t,
+    rag.search({ ...query, signal: { aborted: false } as AbortSignal }),
+    ERR_CODES.INVALID_INPUT,
+    'an object without listener methods is rejected'
   )
 })
 

@@ -33,7 +33,7 @@ The original safetensors checkpoint cannot be loaded directly. See the addon's [
 
 ## Features
 
-Choose a device with `modelConfig.backend`, using its exact GGML name, such as `CPU`, `CUDA0`, `Vulkan0`, or `MTL0`. `Metal` and `Metal0` are aliases. If omitted, the addon selects a GPU, then CPU. An explicitly requested device must be available. `modelConfig.threads` accepts integers from 1 to 1024. `modelConfig.backendsDir` optionally selects a directory of GGML backend modules.
+Choose a device with `modelConfig.backend`, using its exact GGML name, such as `CPU`, `CUDA0`, `Vulkan0`, or `MTL0`. `Metal` and `Metal0` are aliases. If omitted, the addon selects a GPU other than OpenCL, then CPU. An explicitly requested device must be available, and MegaLoc rejects OpenCL devices. `modelConfig.threads` accepts integers from 1 to 1024. `modelConfig.backendsDir` optionally selects a directory of GGML backend modules.
 
 `stats` exposes `totalTime` in milliseconds, `weightBytes`, `cpuFallbackNodes`, and `backendId`. Backend IDs are CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, and other=99. GPU support depends on the installed Fabric build. For a batch, `totalTime` sums the native times; the other fields describe the final image.
 

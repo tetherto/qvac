@@ -190,6 +190,9 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     ...(stats?.encoderUsedCoreml !== undefined && {
       encoderUsedCoreml: stats.encoderUsedCoreml
     }),
+    ...(stats?.decoderUsedCoreml !== undefined && {
+      decoderUsedCoreml: stats.decoderUsedCoreml
+    }),
     ...(stats?.aoscActive !== undefined && { aoscActive: stats.aoscActive }),
     // MOSS-Transcribe-Diarize reports its counters under its own names. Its
     // stage timings land on the shared encoder/decoder fields and its segment
@@ -307,6 +310,8 @@ export async function* transcribe(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break
+    // Counted before filtering: an update that carries only silence yields nothing.
+    ctx.touch()
     requestLogger.debug('Streaming Transcription Update:', output)
 
     const chunks = (Array.isArray(output) ? output : [output]) as AsrAddonSegment[]
@@ -436,6 +441,8 @@ export async function* transcribeStream(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) continue
+    // Counted before filtering: an update that carries only silence yields nothing.
+    ctx.touch()
     requestLogger.debug('Live Transcription Update:', output)
 
     if (!Array.isArray(output)) {

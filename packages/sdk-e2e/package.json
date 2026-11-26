@@ -7,11 +7,12 @@
   "description": "SDK tests using QVAC test framework",
   "scripts": {
     "prepare:sdk": "node scripts/prepare-sdk.mjs",
+    "prepare:rag": "cd ../rag && npm install --ignore-scripts && npm run build",
     "build": "npm run clean && tsc && npm run emit:resource-table",
     "build:catalog": "tsc -p catalog",
     "emit:catalog-json": "npm run build:catalog && node scripts/emit-catalog-json.mjs",
     "bundle:sdk": "node scripts/bundle-sdk.mjs",
-    "install:build": "npm install --install-links && npm run build",
+    "install:build": "npm run prepare:rag && npm install --install-links && npm run build",
     "install:build:sdk": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run reconcile:inference && npm run install:build && npm run bundle:sdk && npm run unpin:consumer-inference",
     "install:build:full": "node scripts/build-local-inference.mjs",
     "pin:consumer-inference": "node scripts/pin-consumer-inference.mjs",
@@ -40,10 +41,13 @@
     "check:catalog": "npm run build:catalog && npm run check:resource-table && npm run check:step-dependencies && npm run check:skip-matrix && qvac-test catalog:validate --config=."
   },
   "dependencies": {
+    "@qvac/rag": "file:../rag",
     "@qvac/sdk": "file:../sdk",
     "@qvac/test-suite": "^0.15.0",
+    "corestore": "^7.4.5",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
+    "rag-e2e-plugin": "file:./plugins/rag",
     "react-native": "0.88.1",
     "react-native-bare-kit": "^0.17.1"
   },

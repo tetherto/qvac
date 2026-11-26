@@ -1,4 +1,5 @@
 import { MegaLoc, assessFit as classificationAssessFit } from '@qvac/classification-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -34,6 +35,7 @@ export const imageEmbeddingPlugin = definePlugin({
     })
     return { model }
   },
+  provides: [CAPABILITY_CONTRACTS.embedding],
   handlers: {
     embed: defineHandler({
       requestSchema: embedRequestSchema,

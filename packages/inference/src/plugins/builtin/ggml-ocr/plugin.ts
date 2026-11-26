@@ -1,4 +1,5 @@
 import { requestParent } from '@/schemas/plugin'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -92,6 +93,7 @@ export const ocrPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.ocr],
   handlers: {
     ocrStream: defineHandler({
       requestSchema: ocrStreamRequestSchema,

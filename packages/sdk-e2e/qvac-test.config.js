@@ -124,7 +124,7 @@ export default {
       include: ['./dist/runners/js/**', './dist/catalog/**'],
       dependencies: 'auto',
       metroConfig: './metro.config.js',
-      qvacConfig: './fixtures/qvac.config.e2e.json',
+      qvacConfig: './fixtures/qvac.config.e2e.mobile.json',
       expoPlugins: [['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]],
       assets: {
         patterns: [

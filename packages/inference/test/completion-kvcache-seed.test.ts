@@ -209,6 +209,29 @@ test('completion: a seeded chat points the addon at the source file and writes o
   clearRegistry()
 })
 
+test('completion: an unloadable seed leaves the request and the seed file intact', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const modelId = `seed-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { cache_share_across_keys: true })
+  const complete = completer(modelId)
+  const history = [user('Hi')]
+
+  await complete(history, { kvCache: 'base' })
+  const source = calls[0]!.cacheKey!
+  const fs = await import('bare-fs')
+  fs.writeFileSync(source, 'unreadable cache')
+  // The addon offers a seed only as a donor and starts cold when it fails to
+  // load, so the request succeeds.
+  await complete(history, { kvCache: 'chat-1', seedFrom: 'base' })
+  t.is(calls[1]!.baseCacheKey, source, 'the addon is pointed at the seed')
+  t.is(await readBytes(source), 'unreadable cache', 'the seed file is left byte-identical')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 test('completion: a seed is refused when the source is missing or sharing is off', async (t) => {
   await setIsolatedHome()
   clearRegistry()

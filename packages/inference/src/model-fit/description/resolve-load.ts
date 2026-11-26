@@ -15,10 +15,13 @@ import { getPlugin } from '@/plugins/registry'
 import { getConfiguredCacheDir, getRuntimeContext } from '@/runtime/state'
 import {
   acceptsLegacyFlatCache,
+  coremlBundleNameOf,
   getModelCacheLayout,
   getSingleFileCacheName
 } from '@/utils/cache/layout'
 import { hasFileOfSize } from '@/utils/cache/paths'
+import { findCachedLiveCoremlModelPath } from '@/handlers/load-model/coreml-sidecars'
+import { getDarwinMajor } from '@/utils/darwin-version'
 import { generateShortHash } from '@/utils/formatting'
 import { joinWithinBase } from '@/utils/path-security'
 import { formatZodError } from '@/utils/zod-error'
@@ -32,6 +35,7 @@ import {
   type FitStubSetMember,
   type FitStubUnavailableReason
 } from '@/model-fit/description/fetch'
+import { fitModelPath } from '@/model-fit/model-path'
 
 export interface LoadDescription {
   transcriptionWorkload?: TranscriptionFitWorkload | undefined
@@ -105,8 +109,12 @@ async function cachedCatalogPath(entry: RegistryItem): Promise<string | undefine
   const flat = await legacyFlatCachePath(entry, cacheDir)
   if (flat !== undefined) return flat
 
-  const layout = getModelCacheLayout(entry, getRuntimeContext().platform, generateShortHash)
-  if (layout === undefined) return undefined
+  const { platform } = getRuntimeContext()
+  const darwinMajor = getDarwinMajor(platform)
+  const layout = getModelCacheLayout(entry, platform, generateShortHash, darwinMajor)
+  if (layout === undefined) {
+    return await findCachedLiveCoremlModelPath(entry, platform, cacheDir, darwinMajor)
+  }
 
   for (const file of layout.files) {
     if (!(await hasFileOfSize(joinWithinBase(cacheDir, file.path), file.size))) return undefined
@@ -174,7 +182,8 @@ function stubSetFor(registryPath: string): FitStubSet | undefined {
 const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([
   ModelType.nmtcppTranslation,
   ModelType.ggmlClassification,
-  ModelType.ggmlImageEmbedding
+  ModelType.ggmlImageEmbedding,
+  ModelType.ggmlStereoDepth
 ])
 
 class NoStubError extends Error {
@@ -226,7 +235,10 @@ export async function resolveLoadFromStubs(
     const location = srcString(src)
     // Fitters take absolute paths only, while a load also takes one relative
     // to the working directory.
-    if (location !== '' && fs.existsSync(location)) return path.resolve(location)
+    if (location !== '' && fs.existsSync(location)) return fitModelPath(location)
+    // No fitter reads a compiled Core ML bundle: a plugin that takes one
+    // answers `unknown` for the load, so the bundle needs no description.
+    if (coremlBundleNameOf(location) !== undefined) return location
 
     const entry = catalogEntryFor(src)
     const cached = entry === undefined ? undefined : await cachedCatalogPath(entry)

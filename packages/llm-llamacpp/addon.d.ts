@@ -98,6 +98,7 @@ export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawEr
 export declare class LlamaInterface {
     private readonly _binding;
     private _handle;
+    private _unloading;
     constructor(binding: unknown, configurationParams: AddonConfigurationParams, outputCb: AddonOutputCallback);
     /**
      * Moves addon to the LISTENING state after all the initialization is done

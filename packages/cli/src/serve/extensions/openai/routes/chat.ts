@@ -1,8 +1,8 @@
-import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { removePrivateTempFile } from '@/serve/lib/temp-file'
 import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import {
@@ -324,7 +324,7 @@ async function runBlocking(
       })
     )
   } finally {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
   }
 }
 
@@ -429,7 +429,7 @@ async function runStreaming(
 
     endSSE(raw)
   } finally {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
   }
 }
 

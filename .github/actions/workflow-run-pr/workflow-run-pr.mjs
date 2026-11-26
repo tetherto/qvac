@@ -103,9 +103,25 @@ const status = (gh, env, sha, state, description) =>
     target_url: `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
   })
 
+// A `/merge-guard accept <sha>` naming this head, from someone with write access, as Merge Guard reads it.
+export async function accepted(gh, repo, number, headSha) {
+  for (const c of await gh.all(`repos/${repo}/issues/${number}/comments`)) {
+    // The full SHA: a short prefix can be matched by another commit a fork author searches for.
+    const sha = /^\/merge-guard accept ([0-9a-f]{40})\b/.exec(c.body?.trim() ?? '')?.[1]
+    if (sha !== headSha) continue
+    const { permission } = await gh.get(
+      `repos/${repo}/collaborators/${encodeURIComponent(c.user.login)}/permission`
+    )
+    if (['admin', 'write'].includes(permission)) return true
+  }
+  return false
+}
+
 async function main(env) {
   const repo = env.GITHUB_REPOSITORY
-  if (env.GITHUB_EVENT_NAME !== 'workflow_run') {
+  // Merge Guard's accept dispatches a build of one PR head; it is checked below as a workflow_run build is.
+  const dispatched = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && Boolean(env.DISPATCH_PR)
+  if (env.GITHUB_EVENT_NAME !== 'workflow_run' && !dispatched) {
     // A dispatch builds its own ref from its own workflow file, as before.
     return write(env, {
       ok: 'true',
@@ -119,22 +135,32 @@ async function main(env) {
     console.log(`::notice::Not building: ${why}`)
     write(env, { ok: 'false', refused: '' })
   }
-  const headSha = env.HEAD_SHA
-  const headRepo = env.HEAD_REPO
-  if (!SHA.test(headSha || '') || !headRepo || !env.HEAD_BRANCH)
-    return skip('no head commit in the trigger')
   const gh = github(env)
-  const owner = headRepo.split('/')[0]
-  const pulls = await gh.get(
-    `repos/${repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${env.HEAD_BRANCH}`)}&per_page=100`
-  )
-  const { pr, skip: why } = matchPr(pulls, {
-    headSha,
-    headRepo,
-    repo,
-    branches: list(env.BRANCHES)
-  })
-  if (!pr) return skip(why)
+  const headSha = dispatched ? env.DISPATCH_SHA : env.HEAD_SHA
+  let pr
+  if (dispatched) {
+    if (!/^\d+$/.test(env.DISPATCH_PR) || !SHA.test(headSha || ''))
+      return skip('a PR dispatch names the PR number and its 40-character head')
+    pr = await gh.get(`repos/${repo}/pulls/${env.DISPATCH_PR}`)
+    if (
+      pr.state !== 'open' ||
+      !same(pr.base?.repo?.full_name, repo) ||
+      !branchAllowed(pr.base.ref, list(env.BRANCHES))
+    )
+      return skip(`PR #${pr.number} is not open into a built base`)
+    if (pr.head?.sha !== headSha) return skip(`head moved from ${headSha} to ${pr.head?.sha}`)
+  } else {
+    const headRepo = env.HEAD_REPO
+    if (!SHA.test(headSha || '') || !headRepo || !env.HEAD_BRANCH)
+      return skip('no head commit in the trigger')
+    const owner = headRepo.split('/')[0]
+    const pulls = await gh.get(
+      `repos/${repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${env.HEAD_BRANCH}`)}&per_page=100`
+    )
+    const match = matchPr(pulls, { headSha, headRepo, repo, branches: list(env.BRANCHES) })
+    if (!match.pr) return skip(match.skip)
+    pr = match.pr
+  }
   const files = await gh.all(`repos/${repo}/pulls/${pr.number}/files`)
   // The files are the PR's current ones, so they describe headSha only if the head did not move while they were read.
   const after = await gh.get(`repos/${repo}/pulls/${pr.number}`)
@@ -144,8 +170,9 @@ async function main(env) {
     return skip(`PR #${pr.number} changes nothing under ${prefixes.join(' ')}`)
   const fork = !same(pr.head.repo.full_name, repo)
 
-  // The event payload still holds the PR title at this point; the API has the run name once it is evaluated.
-  let title = ''
+  // The event payload still holds the PR title at this point; the API has the run name once it is evaluated. A
+  // dispatch builds the head as a push would.
+  let title = dispatched ? '[synchronize] ' : ''
   for (let i = 0; i < 5 && !RUN_NAME.test(title); i++) {
     if (i) await new Promise((resolve) => setTimeout(resolve, 3000))
     title = (await gh.get(`repos/${repo}/actions/runs/${env.TRIGGER_ID}`)).display_title ?? ''
@@ -179,10 +206,13 @@ async function main(env) {
       ].join('\n') + '\n'
     )
   }
-  // A truncated list cannot prove the PR leaves .github alone.
-  if (fork && (touchesCi(files) || files.length >= 3000)) {
-    const reason =
-      'Fork PRs that change .github/ are not built with secrets; a maintainer can dispatch the branch'
+  // A truncated list cannot prove the PR leaves .github alone. A maintainer's accept of this head lifts it after review.
+  if (
+    fork &&
+    (touchesCi(files) || files.length >= 3000) &&
+    !(await accepted(gh, repo, pr.number, headSha))
+  ) {
+    const reason = `Fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${headSha}`
     console.log(`::error title=Fork PR changes CI files::${reason}`)
     await status(gh, env, headSha, 'failure', reason)
     return write(env, { ok: 'false', refused: reason, pr: String(pr.number), sha: headSha })
