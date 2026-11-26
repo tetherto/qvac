@@ -222,4 +222,5 @@ does not include WebGPU; consumers do not build or ship a separate backend.
 
 The shared-core migration and its package-boundary tests are described
 in [the regression guide](test/regression/README.md#shared-core-packaging-step-2).
-Default builds retain the current linkage until the coordinated migration.
+Dynamic-backend Fabric builds use the shared ggml core by default; consumer addon
+migration remains separate work.

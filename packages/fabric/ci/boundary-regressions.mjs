@@ -65,7 +65,6 @@ if (phase === 'build') {
     `--triplet=${triplet}`,
     `--x-manifest-root=${join(pkg, 'test/native')}`,
     `--x-install-root=${join(build, 'vcpkg_installed')}`,
-    `--overlay-ports=${join(root, 'vcpkg-overlays/ports')}`,
     `--overlay-triplets=${build}`
   ])
   required(cmake, [
