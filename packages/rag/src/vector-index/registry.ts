@@ -90,6 +90,8 @@ export interface OpenIndex {
 interface Entry {
   namespace: string
   dir: string | undefined
+  // The provider whose index this is; a directory's release forgets only its own.
+  provider: NativeIndexModule | null
   store: SnapshotStore | null
   snapshotEvery: number
   native: NativeIndex | null
@@ -209,7 +211,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       // directory, with any fs, starts from fresh ones.
       const detached: Entry[] = []
       for (const [key, entry] of entries) {
-        if (entry.dir !== dir) continue
+        if (entry.dir !== dir || entry.provider !== claimed.provider) continue
         entries.delete(key)
         detached.push(entry)
       }
@@ -240,6 +242,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       entry = {
         namespace,
         dir: config.dir,
+        provider: runtime.native.module,
         store:
           snapshots && files ? createSnapshotStore(config.dir as string, coreKey, files) : null,
         snapshotEvery: config.snapshotEvery,

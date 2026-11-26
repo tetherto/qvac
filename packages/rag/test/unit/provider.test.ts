@@ -432,3 +432,31 @@ test('without searchFiltered, a small scope scans and a large one over-fetches',
   t.ok((await compare(highest)) > 0, 'three quarters of the index: over-fetched')
   t.is((await indexed.rag.indexStatus({ namespace: 'ns' })).mode, 'index', 'not a fallback')
 })
+
+test("releasing a directory keeps another provider's in-memory indexes on it", async (t) => {
+  const store = await openStore(t)
+  const dir = await tmp(t)
+  const snapshotting = memoryProvider({ snapshots: true })
+  const inMemory = memoryProvider()
+  const files = fs.promises as unknown as SnapshotFileSystem
+
+  const a = createRag({
+    corestore: store,
+    index: { provider: snapshotting.provider, dir, fs: files }
+  })
+  await a.ready()
+  const b = createRag({ corestore: store, index: { provider: inMemory.provider, dir } })
+  await b.ready()
+  t.teardown(() => b.close())
+
+  const { spaceId } = await a.createNamespace({ name: 'ns', space: SPACE })
+  await a.ingest({ namespace: 'ns', documents: ranked(spaceId, 3) })
+  const query = { scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 1 }
+  await a.search(query)
+  await b.search(query)
+  t.is(inMemory.calls.creates, 1)
+
+  await a.close()
+  t.alike(ids(await b.search(query)), ['d02'])
+  t.is(inMemory.calls.creates, 1, 'the in-memory index was not rebuilt')
+})
