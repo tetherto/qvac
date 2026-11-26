@@ -73,7 +73,7 @@ const port: EmbeddingsPort = {
     return Float32Array.from(embedding.flat())
   },
   async embedQuery(text) {
-    const { embedding } = await embed({ modelId, text })
+    const { embedding } = await embed({ modelId, input: text })
     return Float32Array.from(embedding)
   }
 }
