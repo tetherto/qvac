@@ -1,4 +1,5 @@
 import {
+  errorResponseSchema,
   bciTranscribeResponseSchema,
   bciTranscribeClientParamsSchema,
   bciTranscribeStreamResponseSchema,
@@ -14,6 +15,7 @@ import {
   type TranscribeSegment
 } from '@qvac/inference/surface'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
+import { reconstructError } from '@/client/rpc/rpc-error'
 import { getClientLogger } from '@/logging'
 import { TranscriptionFailedError } from '@/utils/errors-client'
 import { decoratePromise } from '@/utils/decorate-promise'
@@ -277,6 +279,11 @@ function parseResponseLine(line: string): BciTranscribeStreamResponse | null {
 
   const obj = parsed as Record<string, unknown>
   if (obj['type'] === 'error') {
+    // The worker's error rides along as `cause` so its code survives.
+    const frame = errorResponseSchema.safeParse(parsed)
+    if (frame.success) {
+      throw new TranscriptionFailedError(frame.data.message, reconstructError(frame.data))
+    }
     throw new TranscriptionFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
@@ -299,7 +306,7 @@ function processWith<T>(
   return extract(response)
 }
 
-function processLine(line: string): string | undefined | null {
+export function processLine(line: string): string | undefined | null {
   return processWith(line, (response) => (response.text?.trim() ? response.text : undefined))
 }
 
