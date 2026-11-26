@@ -496,13 +496,15 @@ function(qvac_addon_finalize addon_target)
           "runtime, which nothing else detects; install binutils or llvm.")
       endif()
       # What to require of the module -- and whether to require anything, since
-      # a fabric that shares libc++ through a shared library exports no runtime
-      # to pin to -- is read out of fabric's own binary by the script, not out
+      # the ASan shared-libc++ layout has no embedded runtime to pin to -- is
+      # read out of fabric's own binary by the script, not out
       # of QVAC_FABRIC_OWNS_CXX_RUNTIME / QVAC_FABRIC_ABI_VERSION in its
       # package config. Those describe the platform whose prebuild leg wrote
       # the config last: it installs to a platform-shared share/ path that every
       # leg produces and the artifact merge collapses to one file. The module on
       # this target's link line is per-platform and cannot be the wrong one.
+      # Shared-core consumers must migrate to an explicit PROVIDER; the legacy
+      # path rejects that layout rather than silently skipping the assertion.
       add_custom_command(TARGET ${addon_target}_module POST_BUILD
         COMMAND ${CMAKE_COMMAND}
           -D "READELF=${_qaf_readelf}"

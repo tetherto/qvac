@@ -4,6 +4,10 @@
 
 ### Breaking
 
+- RPC protocol 118 -> 119. `GGML_OP_TOP_K_ROWS` goes in before
+  `GGML_OP_UNARY`, shifting every later op id (`GGML_OP_COUNT` 133 -> 134).
+  A `12032.0.x` RPC peer and a `12032.1.0` peer cannot connect:
+  `@qvac/ggml-rpc-server` and its clients must move to this release together.
 - Dynamic-backend builds on Linux, Windows and Android share ggml core libraries
   between Fabric and its backends. Native addons must rebuild against the new
   layout and ship with the matching Fabric version. Linux libc++ is provided by
@@ -19,9 +23,13 @@
   release without a temporary port overlay or registry baseline changes.
 - Backend logging uses the shared core's callback directly, removing per-module
   logger forwarding and keeping callback replacement consistent across modules.
+  This also removes the forwarding bridge's synchronous stderr echo of ERROR
+  and CONT lines. As with upstream ggml, an asynchronous callback may lose
+  queued diagnostic lines if the process aborts before delivering them.
 
 ### Added
 
+- ggml APIs: `ggml_top_k_rows` and `ggml_lightning_indexer_rows`.
 - Regression coverage for allocation/free, logging and abort callbacks across
   module boundaries, plus shared-core packaging and Linux runtime ownership.
 

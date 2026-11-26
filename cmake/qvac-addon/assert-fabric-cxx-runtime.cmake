@@ -104,11 +104,27 @@ if(NOT _fabric_defines_runtime AND PROVIDER)
 endif()
 
 if(NOT _fabric_defines_runtime)
-  # This fabric resolves libc++ from a shared library, which the module resolves
-  # it from too, so there is one runtime either way and no node to pin to.
-  message(STATUS
-    "qvac-addon: ${FABRIC} exports no C++ runtime of its own; "
-    "nothing for ${MODULE} to pin to")
+  execute_process(
+    COMMAND "${READELF}" --dynamic -W "${FABRIC}"
+    OUTPUT_VARIABLE _fabric_dynamic
+    ERROR_VARIABLE _readelf_error
+    RESULT_VARIABLE _readelf_status)
+  if(NOT _readelf_status EQUAL 0)
+    message(FATAL_ERROR "readelf failed on ${FABRIC}: ${_readelf_error}")
+  endif()
+  if(_fabric_dynamic MATCHES "\\[libqvac-ggml-base[^]]*\\.so[^]]*\\]")
+    message(FATAL_ERROR
+      "${FABRIC} uses the shared ggml core, but ${MODULE} was checked through "
+      "the legacy Fabric runtime path. Migrate the consumer to link the shared "
+      "core directly and pass it as PROVIDER to assert-fabric-cxx-runtime.")
+  endif()
+  if(NOT _fabric_dynamic MATCHES "\\[libc\\+\\+\\.so[^]]*\\]")
+    message(FATAL_ERROR
+      "${FABRIC} exports no C++ runtime and has no direct shared libc++ dependency; "
+      "cannot establish the runtime provider for ${MODULE}.")
+  endif()
+  # The explicit shared-libc++ (ASan) layout has no embedded runtime to pin to.
+  message(STATUS "qvac-addon: ${FABRIC} uses shared libc++; no embedded runtime to pin to")
   return()
 endif()
 
