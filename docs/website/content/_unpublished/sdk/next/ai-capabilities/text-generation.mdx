@@ -54,7 +54,9 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 
 ## Backend reporting
 
-Read `backendName` from `await run.stats`, `final.stats`, or a `completionStats` event. It identifies the backend used by the primary model after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, or `"opencl"`. `backendDevice` keeps reporting the device class: `"cpu"`, `"gpu"`, or `"npu"`. The reported backend can differ from the requested `modelConfig.backend` priority list after fallback.
+Read `backendName` from `await run.stats`, `final.stats`, or a `completionStats` event. It is the lowercase backend family that holds the primary model's weights after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. An AMD NPU load reports `"xdna"`. The reported backend can differ from the requested `modelConfig.backend` priority list after fallback.
+
+`backendDevice` still reports the device that backend selection resolved: `"cpu"`, `"gpu"`, or `"npu"`. A GPU load with `gpu_layers: 0` keeps its weights on the CPU, so it reports `backendDevice` `"gpu"` and `backendName` `"cpu"`.
 
 ```ts
 const run = completion({
@@ -65,7 +67,7 @@ const final = await run.final;
 console.log(final.stats?.backendName);
 ```
 
-If placement spans several backend families, `backendName` contains their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. It describes the primary model and does not include a separately configured multimodal projector or draft model. Older addons can omit this field. For `batchCompletion()`, read the field from the batch-level `run.stats`.
+CPU is left out whenever an accelerator holds any weights, so a partial offload reports only the accelerator, the same as a full offload. A model split across accelerator families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. A separately configured multimodal projector or draft model adds no names. The field is absent with older addons and when the addon can't identify the backend. For `batchCompletion()`, read the field from the batch-level `run.stats`.
 
 ## Examples
 

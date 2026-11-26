@@ -35,14 +35,16 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 
 ## Backend reporting
 
-The `stats` returned by `embed()` includes `backendDevice`, either `"cpu"` or `"gpu"`, and `backendName` when the addon supports it. `backendName` identifies the backend used by the primary model after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, or `"opencl"`. It can differ from the requested `modelConfig.backend` priority list after fallback. If a model spans several backend families, their distinct names are sorted and comma-separated, such as `"cuda,vulkan"`.
+The `stats` returned by `embed()` includes `backendDevice`, either `"cpu"` or `"gpu"`, and `backendName` when the addon supports it. `backendName` is the lowercase backend family that holds the primary model's weights after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It can differ from the requested `modelConfig.backend` priority list after fallback.
+
+`backendDevice` still reports the device that backend selection resolved. A GPU load with `gpuLayers: 0` keeps its weights on the CPU, so it reports `backendDevice` `"gpu"` and `backendName` `"cpu"`. CPU is left out whenever an accelerator holds any weights, so a partial offload reports only the accelerator. A model split across accelerator families reports their distinct names sorted and comma-separated, such as `"cuda,vulkan"`.
 
 ```ts
 const result = await embed({ modelId, text: "Hello world" });
 console.log(result.stats?.backendName);
 ```
 
-Older addons can omit `backendName`. The field describes the primary model and does not include a separately configured multimodal projector or draft model.
+The field is absent with older addons and when the addon can't identify the backend. It describes the primary model, so a separately configured multimodal projector adds no names.
 
 ## Example
 

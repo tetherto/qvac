@@ -30,7 +30,7 @@ export const completionStatsSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.'
+      'Lowercase backend families holding the primary model weights after loading and fitting. CPU is left out when an accelerator holds any weights. Multiple accelerator families are sorted and comma-separated. Absent with older addons or when the backend cannot be identified.'
     )
 })
 
