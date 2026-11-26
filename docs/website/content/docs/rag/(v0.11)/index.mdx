@@ -31,10 +31,10 @@ schemaType: TechArticle
 
 <Steps>
 <Step>
-Install `@qvac/rag` and a Corestore:
+Install `@qvac/rag`, a Corestore, and the SDK (for the embeddings port in this walkthrough):
 
 ```bash
-npm install @qvac/rag corestore
+npm install @qvac/rag corestore @qvac/sdk
 ```
 
 On Bare, also install `@qvac/turbovec-ggml` for indexed search.
@@ -47,7 +47,7 @@ Create a RAG instance with an embeddings port. The port wraps any embedding func
 ```typescript
 import Corestore from 'corestore'
 import { createRag, type EmbeddingsPort } from '@qvac/rag'
-import { embed, embedBatch, loadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
+import { embed, embedBatch, loadModel, unloadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
 
 const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16 })
 
@@ -105,11 +105,12 @@ console.log(hits.map(h => h.content))
 </Step>
 
 <Step>
-Close the store when done:
+Close the store and unload the model when done:
 
 ```typescript
 await rag.close()
 await corestore.close()
+await unloadModel({ modelId })
 ```
 
 </Step>
