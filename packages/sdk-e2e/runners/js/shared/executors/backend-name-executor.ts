@@ -29,8 +29,10 @@ function requireBackend(stats: { backendName?: string; backendDevice?: string } 
   ) {
     throw new Error(`Expected canonical, distinct, sorted backend families, got ${name}`)
   }
+  // backendDevice is the device that backend selection resolved, so a GPU load with zero offloaded
+  // layers reports "gpu" next to backendName "cpu". Only an accelerator name pins the device.
   const device = stats?.backendDevice
-  const deviceMatches = name === 'cpu' ? device === 'cpu' : device === 'gpu' || device === 'npu'
+  const deviceMatches = name === 'cpu' || device === 'gpu' || device === 'npu'
   if (!deviceMatches) {
     throw new Error(`backendDevice disagrees with backendName: ${JSON.stringify(stats)}`)
   }
