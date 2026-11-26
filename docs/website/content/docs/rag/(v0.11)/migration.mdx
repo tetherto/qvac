@@ -16,9 +16,16 @@ tocMaxDepth: 2
 
 [`embed()`](/sdk/reference/api#embed), [`createVectorIndex()`](/sdk/reference/api#createvectorindex) and [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex) stay. A managed document store now lives in the standalone [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package, and `qvac serve openai` vector stores are built on it.
 
-## Stay on the RAG API for now
+Your route forward depends on the language:
 
-Pin the last versions that include it:
+- **JavaScript and TypeScript:** use [`@qvac/rag`](#javascript-and-typescript-qvacrag) for the managed document store, or [`embed()`](/sdk/reference/api#embed) with the [TurboVec index](/rag/turbovec-index) or an [external vector DB](/rag/external-vector-db).
+- **Python, Kotlin and React Native:** build retrieval from `embed()` and the SDK vector index, or call the [CLI vector stores](/cli/http-server#vector-stores). See [Python and Kotlin](#python-and-kotlin) and [React Native](#react-native-and-expo).
+
+Existing workspaces and CLI vector stores are not migrated — keep your source documents and ingest them again after upgrading. See [Existing data](#existing-data).
+
+## Staying on the RAG API for now
+
+If you are not ready to migrate, pin the last versions that include the built-in RAG API:
 
 | Package | Pin |
 |---|---|

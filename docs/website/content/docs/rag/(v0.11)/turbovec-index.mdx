@@ -5,6 +5,8 @@ description: Use the SDK's TurboVec index for fast nearest-neighbour search whil
 schemaType: HowTo
 ---
 
+## Overview
+
 The SDK's [`createVectorIndex()`](/sdk/reference/api#createvectorindex) builds an on-device TurboVec index over vectors you embed with [`embed()`](/sdk/reference/api#embed). The index holds only vectors and the ids you assigned; your documents stay in whatever database you already have. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
 
 This approach works from JavaScript, TypeScript, Python and Kotlin.
@@ -17,6 +19,8 @@ This approach works from JavaScript, TypeScript, Python and Kotlin.
   similarity. The index lives in the SDK worker; after a worker restart, reopen
   it from the snapshot.
 </Callout>
+
+## Example
 
 The following script keeps the documents in a plain `Map`, embeds them with `embed()`, and indexes the vectors in a TurboVec index created with `createVectorIndex()`. Search returns the ids you assigned, so the documents can live in any database. The index is saved with `write()` and reopened with `loadVectorIndex()`; only the vectors are stored, never the documents.
 
@@ -59,6 +63,8 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 </WrapCode>
 </Tab>
 </Tabs>
+
+## Calibration and staged search
 
 A fresh TurboVec index attempts TQ+ calibration before encoding its first successful nonempty `add()` batch when that batch has at least 1,000 vectors. A smaller first batch leaves it uncalibrated, and later adds do not calibrate it. `index.calibrated` reports the state after creation, loading, or the last successful add. Calibration improves recall when the fit succeeds and persists in snapshots.
 
