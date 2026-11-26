@@ -38,6 +38,7 @@ import {
   publishedCommit,
   publishedElsewhere,
   readRepoJson,
+  repackMismatches,
   repoRoot,
   shasumMismatches,
   slugOf,
@@ -293,16 +294,9 @@ function unlikeBuilt (projects, tarballDir, head) {
   const index = JSON.parse(readFileSync(join(tarballDir, TARBALL_INDEX), 'utf8'))
   const out = mkdtempSync(join(tmpdir(), 'train-repack-'))
   try {
-    return projects.flatMap((project) => {
-      let packed
-      try {
-        packed = sha1(join(out, packProject(project.dir, out, head)))
-      } catch (error) {
-        return [`${project.name}@${project.version}: ${error.message}`]
-      }
-      const built = sha1(join(tarballDir, index[project.name]))
-      return packed === built ? [] : [`${project.name}@${project.version} packs to sha1 ${packed} in this job; the built tarball has ${built}`]
-    })
+    return repackMismatches(projects,
+      (project) => sha1(join(out, packProject(project.dir, out, head))),
+      (project) => sha1(join(tarballDir, index[project.name])))
   } finally {
     rmSync(out, { recursive: true, force: true })
   }
