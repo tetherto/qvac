@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   license:
-    uses: tetherto/qvac-actions/.github/workflows/public-reusable-license.yml@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-license.yml@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
     permissions:
       contents: read
       pull-requests: write
