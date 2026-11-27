@@ -25,7 +25,13 @@ export const completionStatsSchema = z.object({
   // Speculative decoding (`spec_type`): draft tokens proposed, and accepted.
   draftTokens: z.number().optional(),
   draftAcceptedTokens: z.number().optional(),
-  backendDevice: z.enum(['cpu', 'gpu', 'npu']).optional()
+  backendDevice: z.enum(['cpu', 'gpu', 'npu']).optional(),
+  backendName: z
+    .string()
+    .optional()
+    .describe(
+      'Lowercase backend families holding the primary model weights after loading and fitting. CPU is left out when an accelerator holds any weights. Multiple accelerator families are sorted and comma-separated. Absent with older addons or when the backend cannot be identified.'
+    )
 })
 
 export type CompletionStats = z.infer<typeof completionStatsSchema>

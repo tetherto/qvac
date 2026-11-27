@@ -143,6 +143,8 @@ export async function embed(
     ...(response.stats?.backendDevice !== undefined && {
       backendDevice: response.stats.backendDevice
     }),
+    ...(typeof response.stats?.backendName === 'string' &&
+      response.stats.backendName.length > 0 && { backendName: response.stats.backendName }),
     ...(response.stats?.context_size !== undefined && { contextSize: response.stats.context_size })
   }
 

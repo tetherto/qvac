@@ -60,7 +60,10 @@ class QvacCompletionApiTest {
                     event("thinkingDelta", 1) { put("text", "hmm") },
                     event("contentDelta", 2) { put("text", "world") },
                     event("completionStats", 3) {
-                        put("stats", buildJsonObject { put("tokensPerSecond", 12.5) })
+                        put("stats", buildJsonObject {
+                            put("tokensPerSecond", 12.5)
+                            put("backendName", "metal")
+                        })
                     },
                     event("completionDone", 4) {
                         put("stopReason", "eos")
@@ -80,6 +83,7 @@ class QvacCompletionApiTest {
         assertEquals("hello world", result.text)
         assertEquals("hmm", result.thinking)
         assertEquals(12.5, result.stats?.tokensPerSecond)
+        assertEquals("metal", result.stats?.backendName)
         assertEquals("eos", result.stopReason)
         assertEquals(-1.0, transport.lastPayload?.get("generationParams")?.jsonObject
             ?.get("predict")?.jsonPrimitive?.doubleOrNull)

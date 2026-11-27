@@ -300,6 +300,15 @@ test('vlaStatsSchema: accepts architecture-neutral prefill_* timings', (t) => {
   t.is(result.success, true)
 })
 
+test('vlaStatsSchema: preserves optional backendName and rejects invalid types', (t) => {
+  for (const backendName of ['cpu', 'metal', 'cuda']) {
+    t.alike(vlaStatsSchema.parse({ backendName }), { backendName })
+  }
+  for (const backendName of [1, null, ['metal']]) {
+    t.is(vlaStatsSchema.safeParse({ backendName }).success, false)
+  }
+})
+
 test('vlaStatsSchema: accepts empty stats', (t) => {
   const result = vlaStatsSchema.safeParse({})
   t.is(result.success, true)
@@ -761,7 +770,7 @@ test('vla plugin: dispatches vlaHparams', async function (t) {
 async function withRegisteredVlaModel<T>(
   options: {
     runImpl: (input: unknown) => Promise<{
-      await(): Promise<{ actions: Float32Array; stats?: Record<string, number> }>
+      await(): Promise<{ actions: Float32Array; stats?: Record<string, unknown> }>
     }>
     hparams: { actionDim: number; chunkSize: number }
   },
@@ -798,7 +807,7 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
         return {
           await: async () => ({
             actions: expectedActions,
-            stats: { total_ms: 100 }
+            stats: { total_ms: 100, backendName: 'metal' }
           })
         }
       },
@@ -836,12 +845,44 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
       t.is(result.actionDim, 3)
       t.is(result.chunkSize, 1)
       t.is(result.stats?.total_ms, 100)
+      t.is(result.stats?.backendName, 'metal')
       // Round-trip the actions base64 by decoding here (mirrors what the
       // client does).
       const actionsB64 = result.actions
       t.ok(typeof actionsB64 === 'string' && actionsB64.length > 0)
     }
   )
+})
+
+test('vlaRun op: drops an empty or non-string backendName', async function (t) {
+  for (const backendName of ['', 1, null, ['metal']]) {
+    await withRegisteredVlaModel(
+      {
+        runImpl: async function () {
+          return {
+            await: async () => ({
+              actions: new Float32Array([0]),
+              stats: { total_ms: 1, backendName }
+            })
+          }
+        },
+        hparams: { actionDim: 1, chunkSize: 1 }
+      },
+      async (modelId) => {
+        const result = await vlaRun({
+          type: 'vlaRun',
+          modelId,
+          images: [encodeBase64(new Uint8Array(new Float32Array([0]).buffer))],
+          imgWidth: 1,
+          imgHeight: 1,
+          state: encodeBase64(new Uint8Array(new Float32Array([0]).buffer)),
+          tokens: encodeBase64(new Uint8Array(new Int32Array([0]).buffer)),
+          mask: encodeBase64(new Uint8Array([0]))
+        })
+        t.alike(result.stats, { total_ms: 1 })
+      }
+    )
+  }
 })
 
 test('vlaRun op: forwards optional noise when provided', async function (t) {
