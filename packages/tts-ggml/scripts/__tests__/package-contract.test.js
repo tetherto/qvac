@@ -32,7 +32,7 @@ const runtimeProbes = [
 ]
 const developmentOnlyModules = ['@qvac/asr-ggml', 'bare-subprocess', 'brittle']
 const werAsrPackage = '@qvac/asr-ggml'
-const werAsrVersion = '0.14.0'
+const caretRangePattern = /^\^\d+\.\d+\.\d+$/
 const lazilyLoadedDevDependencies = new Set(['@qvac/registry-client'])
 const lazilyLoadedDevDependenciesByFile = new Map([
   ['examples/pcm-chunk-player.js', new Set(['bare-subprocess'])]
@@ -173,7 +173,7 @@ test('enhanced examples have package scripts', () => {
 test('WER helper uses asr-ggml as a development dependency', () => {
   assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
   assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
-  assert.equal(packageJson.devDependencies[werAsrPackage], werAsrVersion)
+  assert.match(packageJson.devDependencies[werAsrPackage], caretRangePattern)
   const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
   assert.match(source, /@qvac\/asr-ggml/)
   assert.doesNotMatch(source, /transcription-whispercpp/)
