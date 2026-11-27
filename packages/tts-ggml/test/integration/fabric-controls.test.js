@@ -21,9 +21,11 @@ async function collect(response) {
   return { samples, terminalCount, tokenIds }
 }
 
+const COSYVOICE_TEST_TIMEOUT_MS = 600000
+
 test(
   'CosyVoice returns owned speech tokens and replays them through native streaming',
-  { skip: NO_GPU },
+  { timeout: COSYVOICE_TEST_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureCosyvoiceModel({
       targetDir: path.join(getBaseDir(), 'models', 'cosyvoice3')
