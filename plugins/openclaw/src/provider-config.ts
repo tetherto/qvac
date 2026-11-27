@@ -76,29 +76,37 @@ export interface OpenClawProvider {
   readonly models: OpenClawModel[]
 }
 
+// OpenClaw types the members it takes from its zod schema as `z.input`, so each
+// optional one also admits `undefined`; `models.providers` is declared by hand
+// and does not. This mirror is both read from and returned as an
+// OpenClawConfig, so under exactOptionalPropertyTypes each member has to match.
 export interface OpenClawConfigLike {
   readonly agents?: {
     readonly defaults?: {
-      readonly experimental?: Record<string, unknown>
-      readonly models?: Record<string, {}>
+      readonly experimental?: Record<string, unknown> | undefined
+      readonly models?: Record<string, {}> | undefined
     }
   }
   readonly models?: {
-    readonly mode?: OpenClawModelsMode
+    readonly mode?: OpenClawModelsMode | undefined
     readonly providers?: Record<string, ModelProviderConfig>
   }
   readonly secrets?: {
-    readonly providers?: Record<string, SecretProviderConfig>
-    readonly defaults?: {
-      readonly env?: string
-      readonly file?: string
-      readonly exec?: string
-    }
-    readonly resolution?: {
-      readonly maxProviderConcurrency?: number
-      readonly maxRefsPerProvider?: number
-      readonly maxBatchBytes?: number
-    }
+    readonly providers?: Record<string, SecretProviderConfig> | undefined
+    readonly defaults?:
+      | {
+          readonly env?: string | undefined
+          readonly file?: string | undefined
+          readonly exec?: string | undefined
+        }
+      | undefined
+    readonly resolution?:
+      | {
+          readonly maxProviderConcurrency?: number | undefined
+          readonly maxRefsPerProvider?: number | undefined
+          readonly maxBatchBytes?: number | undefined
+        }
+      | undefined
     readonly [key: string]: unknown
   }
 }
