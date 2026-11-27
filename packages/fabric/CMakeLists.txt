@@ -15,6 +15,8 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+list(PREPEND VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/ports")
+
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
@@ -24,6 +26,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
 string(JSON _pkg_version GET "${_pkg_json}" "version")
 
 project(qvac-fabric VERSION ${_pkg_version} LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/windows-runtime.cmake")
+qvac_use_windows_shared_crt()
 
 # Test-only AddressSanitizer build, enabled with QVAC_FABRIC_ASAN=1 (set by
 # link-local-qvac-fabric with asan:true, which also exports VCPKG_* sanitizer
@@ -38,11 +42,28 @@ if(DEFINED ENV{QVAC_FABRIC_ASAN} AND NOT "$ENV{QVAC_FABRIC_ASAN}" STREQUAL "0")
   set(QVAC_FABRIC_ASAN ON)
 endif()
 
+find_package(OpenSSL)
+find_package(llama CONFIG REQUIRED)
+find_package(ggml CONFIG REQUIRED)
+get_target_property(_ggml_base_type ggml::ggml-base TYPE)
+set(QVAC_FABRIC_SHARED_CORE OFF)
+if(_ggml_base_type STREQUAL "SHARED_LIBRARY")
+  set(QVAC_FABRIC_SHARED_CORE ON)
+endif()
+if(GGML_BACKEND_DL AND NOT QVAC_FABRIC_SHARED_CORE)
+  message(FATAL_ERROR "Dynamic backends require the shared-core qvac-fabric port")
+endif()
+if(QVAC_FABRIC_ASAN AND QVAC_FABRIC_SHARED_CORE)
+  message(FATAL_ERROR "Shared-core packaging does not yet support QVAC_FABRIC_ASAN")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
   if(QVAC_FABRIC_ASAN)
     add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
     add_link_options(-stdlib=libc++ -fsanitize=address)
+  elseif(QVAC_FABRIC_SHARED_CORE)
+    add_link_options(-stdlib=libc++ -nostdlib++)
   else()
     # libc++ is still linked statically, so the prebuild stays self-contained
     # (no DT_NEEDED on libc++.so.1), but it is whole-archived rather than pulled
@@ -89,13 +110,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# llama-targets.cmake transitively requires OpenSSL::SSL via cpp-httplib's
-# IMPORTED interface. Make OpenSSL discoverable before find_package(llama) so
-# the target chain resolves on local builds.
-find_package(OpenSSL)
-find_package(llama CONFIG REQUIRED)
-find_package(ggml CONFIG REQUIRED)
-
 # The qvac-fabric[vector-index] feature exports the ANN index API
 # (ggml_vec_index_*) as a static library separate from the ggml core. We request
 # the feature unconditionally, so a missing target is a port contract break
@@ -121,6 +135,7 @@ endif()
 # directly into the runtime module, so there is nothing to stage.
 set(BACKEND_DL_LIBS "")
 bare_target(_fabric_host)
+qvac_install_windows_runtime("${_fabric_host}")
 set(_fabric_split_backends OFF)
 if(_fabric_host STREQUAL "linux-x64")
   set(_fabric_split_backends ON)
@@ -146,6 +161,18 @@ if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   endforeach()
 endif()
 
+if(QVAC_FABRIC_SHARED_CORE)
+  foreach(_core ggml::ggml-base ggml::ggml ggml::ggml-vector-index)
+    get_target_property(_core_type ${_core} TYPE)
+    if(NOT _core_type STREQUAL "SHARED_LIBRARY")
+      message(FATAL_ERROR "Core target ${_core} must be shared, got ${_core_type}")
+    endif()
+    if(NOT WIN32)
+      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ${_core})
+    endif()
+  endforeach()
+endif()
+
 # The module is named after the platform package that ships it,
 # qvac__fabric-<suffix>, so that package is an ordinary addon: require.addon(),
 # bare-pack and bare-link all find prebuilds/<host>/qvac__fabric-<suffix>.bare
@@ -154,6 +181,36 @@ include(cmake/qvac-fabric-hosts.cmake)
 qvac_fabric_module_name("${_fabric_host}" _fabric_module_name)
 
 add_bare_module(qvac-fabric NAME ${_fabric_module_name} EXPORTS ${BACKEND_DL_LIBS})
+if(QVAC_FABRIC_SHARED_CORE AND ANDROID)
+  # cmake-bare sets a companion-directory RUNPATH on Linux only.
+  target_link_options(${qvac-fabric}_module PRIVATE
+    "LINKER:--enable-new-dtags" "LINKER:-rpath,$ORIGIN/${_fabric_module_name}")
+endif()
+if(QVAC_FABRIC_SHARED_CORE)
+  # Platform-specific metadata must stay beside that platform's libraries.
+  file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qvac-shared-core.cmake"
+    CONTENT "set(_qvac_core_abi 1)\nset(_qvac_core_definitions \"$<TARGET_PROPERTY:ggml::ggml-base,INTERFACE_COMPILE_DEFINITIONS>\")\n")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/qvac-shared-core.cmake"
+    DESTINATION ${_fabric_host}/${_fabric_module_name})
+endif()
+if(QVAC_FABRIC_SHARED_CORE AND WIN32)
+  # Eager DLL dependencies are needed before the addon can run backend discovery.
+  foreach(_core ggml::ggml-base ggml::ggml ggml::ggml-vector-index)
+    install(FILES $<TARGET_FILE:${_core}> DESTINATION ${_fabric_host})
+    install(FILES $<TARGET_LINKER_FILE:${_core}> DESTINATION ${_fabric_host}/${_fabric_module_name})
+  endforeach()
+endif()
+
+
+if(QVAC_FABRIC_SHARED_CORE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_custom_command(TARGET ${qvac-fabric}_module POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+      "-DREADELF=${CMAKE_READELF}"
+      "-DMODULE=$<TARGET_FILE:${qvac-fabric}_module>"
+      "-DPROVIDER=$<TARGET_FILE:ggml::ggml-base>"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/assert-fabric-cxx-runtime.cmake"
+    VERBATIM)
+endif()
 
 # The XDNA module loads its NPU kernels from its own directory, so they ship
 # beside the staged backend modules.
@@ -233,6 +290,9 @@ endif()
 # handled. ggml-base is already on the link line via llama; vector-index is
 # not (it is a standalone archive), so it must still be linked or those
 # EXPORTS have nowhere to resolve from (LNK2001).
+if(QVAC_FABRIC_SHARED_CORE)
+  target_link_libraries(${qvac-fabric} PRIVATE ggml::ggml-vector-index)
+endif()
 if(UNIX)
   foreach(_ggml_static ggml::ggml ggml::ggml-base ggml::ggml-vector-index)
     if(TARGET ${_ggml_static})
@@ -371,6 +431,11 @@ elseif(WIN32)
     # itself is linked above; without that, EXPORTS would be unresolved
     # (LNK2001) because llama/ggml do not depend on this target.
     "$<TARGET_FILE:ggml::ggml-vector-index>")
+  if(QVAC_FABRIC_SHARED_CORE)
+    list(REMOVE_ITEM _fabric_export_libs
+      "$<TARGET_FILE:ggml::ggml>" "$<TARGET_FILE:ggml::ggml-base>"
+      "$<TARGET_FILE:ggml::ggml-vector-index>")
+  endif()
   # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
   # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
   # vcpkg export ships it as an INTERFACE (or OBJECT) target with no TARGET_FILE,
@@ -467,6 +532,7 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfigVersion.cmake
   cmake/qvac-fabric-hosts.cmake
+  cmake/qvac-fabric-shared-core.cmake
   DESTINATION share/qvac-fabric/cmake)
 
 # --- Platform-specific -------------------------------------------------------

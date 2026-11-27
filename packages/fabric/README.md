@@ -96,11 +96,16 @@ runner-provisioned XRT and installs the pinned IRON environment through
 [setup-xdna](../../.github/actions/setup-xdna/action.yml). Compilation does
 not require NPU hardware.
 
-CUDA and XDNA share `ggml-base-libstdcxx`, a static archive compiled against
-libstdc++ in the same CMake configure. CUDA links its C++ runtime statically;
-XDNA uses the system libstdc++ dynamically to match XRT's C++ ABI. Each module
-embeds the required ggml-base objects. Its `.xclbin` and `.insts.bin` files ship beside it. Hosts
-without XRT skip this optional backend when loading modules.
+CUDA and XDNA link the shared ggml core through its C API. CUDA keeps a
+private static libstdc++; XDNA uses the system shared libstdc++ to match XRT's
+C++ ABI. Neither module embeds another ggml-base. The core provides libc++ for
+Fabric and its libc++ consumers. XDNA's `.xclbin` and `.insts.bin` files ship
+beside the backend; hosts without XRT skip this optional backend when loading
+modules.
+
+Backend logs use the shared core's callback directly, including during module
+scoring and initialization. Replacing or resetting that callback affects every
+module using that core; no per-module logger forwarding is needed.
 
 For a build-only CI check, dispatch
 [Prebuilds (Fabric)](../../.github/workflows/prebuilds-fabric.yml) with
@@ -214,3 +219,8 @@ Pass `-D VCPKG_MANIFEST_FEATURES=webgpu` to `bare-make generate` when building
 Fabric, then build, install and run `npm run link:platform`. Build speech and
 LLM consumers against this platform package. The default published runtime
 does not include WebGPU; consumers do not build or ship a separate backend.
+
+The shared-core migration and its package-boundary tests are described
+in [the regression guide](test/regression/README.md#shared-core-packaging-step-2).
+Dynamic-backend Fabric builds use the shared ggml core by default; consumer addon
+migration remains separate work.

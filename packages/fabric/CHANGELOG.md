@@ -1,5 +1,41 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- Dynamic-backend builds on Linux, Windows and Android share ggml core libraries
+  between Fabric and its backends. Native addons must rebuild against the new
+  layout and ship with the matching Fabric version. Linux libc++ is provided by
+  the shared ggml core instead of the Fabric addon; Linux CUDA and XDNA retain
+  their existing C++ runtimes. macOS and iOS retain static ggml linkage.
+
+### Changed
+
+- Shared addon helpers link the core directly on Linux, Windows and Android,
+  propagate its compile definitions, and stage core/CRT DLLs for Windows native
+  tests. Linux validates libc++ imports against ggml-base; the old Fabric-only
+  consumer linkage path is removed.
+
+- Windows port dependencies and addon builds use the shared MSVC CRT (`/MD`,
+  `/MDd` for Debug). Fabric packages the Release runtime DLLs beside its entry
+  point; consumers must rebuild with matching CRT settings when adopting it.
+- Windows platform packages declare sibling DLLs as Bare bundle assets, keeping
+  the shared ggml core and MSVC runtime beside the addon in relocated bundles.
+- Validate shared-core source on top of `qvac-fabric` `12032.2.0` through a
+  temporary port overlay pinned to the restored source PR. Registry baselines
+  remain unchanged.
+- Backend logging uses the shared core's callback directly, removing per-module
+  logger forwarding and keeping callback replacement consistent across modules.
+  This also removes the forwarding bridge's synchronous stderr echo of ERROR
+  and CONT lines. As with upstream ggml, an asynchronous callback may lose
+  queued diagnostic lines if the process aborts before delivering them.
+
+### Added
+
+- Regression coverage for allocation/free, logging and abort callbacks across
+  module boundaries, plus shared-core packaging and Linux runtime ownership.
+
 ## [0.34.0] - 2026-11-26
 
 ### Breaking

@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "default-features": false,
+      "features": [
+        "gpu-backends",
+        "vector-index"
+      ],
+      "version>=": "12032.2.0"
+    }
+  ]
+}

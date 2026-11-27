@@ -3,13 +3,14 @@
 // dynamic-linking layout.
 //
 // Scans the linux and win32 prebuild artifacts and fails (exit 1) when
-//   - the addon (.bare) hard-links a GPU userspace loader or an external C++
-//     runtime (either breaks a CPU-only host at addon load, gh#3853), or
+//   - the addon (.bare) hard-links a GPU userspace loader, or on Linux an
+//     external C++ runtime (breaks a CPU-only host at addon load, gh#3853), or
 //   - the runtime-loaded Vulkan backend module is missing, or itself depends
 //     on an external C++ runtime (its load would fail silently on stock
 //     hosts).
 //   - the Linux CUDA backend module is missing or links an external
 //     C++ runtime. CUDA stays isolated in that module for CPU-only hosts.
+//   - a Windows binary imports a Debug CRT or an unpackaged Release CRT.
 //
 // This is the blocking twin of test/integration/prebuild-dynamic-linking.
 // test.js: the integration legs are continue-on-error (a signal, not a
@@ -26,6 +27,8 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import windowsRuntimePolicy from './windows-runtime-policy.cjs'
+const { windowsRuntimeViolations } = windowsRuntimePolicy
 
 const TARGETS = ['linux-x64', 'linux-arm64']
 const WIN_TARGETS = ['win32-x64']
@@ -181,8 +184,7 @@ function peImports(buffer) {
   return imports
 }
 
-// The prebuild links the static CRT; a dynamic UCRT shows up as the
-// api-ms-win-crt-* API sets.
+// GPU loaders belong in backend modules. Release CRT imports require packaged DLLs.
 const FORBIDDEN_WIN_IMPORTS = [
   'vulkan-1.dll',
   'opencl.dll',
@@ -191,7 +193,6 @@ const FORBIDDEN_WIN_IMPORTS = [
   'cublas64',
   'cublaslt64'
 ]
-const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
 
 const prebuildsDir = process.argv[2]
 const partial = Boolean(process.env.BUILD_PLATFORM)
@@ -296,13 +297,21 @@ for (const target of WIN_TARGETS) {
     continue
   }
   checkedTargets++
+  const packagedFiles = fs
+    .readdirSync(path.join(prebuildsDir, target), { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
 
   const addonImports = peImports(fs.readFileSync(addonPath))
   console.log(`${target}/${moduleName}.bare imports: ${addonImports.join(', ')}`)
-  for (const dll of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+  for (const dll of FORBIDDEN_WIN_IMPORTS) {
     if (addonImports.some((n) => n.startsWith(dll))) {
       fail(`${target}: addon imports ${dll}* (breaks hosts without it)`)
     }
+  }
+
+  for (const error of windowsRuntimeViolations(addonImports, packagedFiles)) {
+    fail(`${target}: addon ${error}`)
   }
 
   const modulePath = path.join(prebuildsDir, target, moduleName, 'qvac-diffusion-ggml-vulkan.dll')
@@ -316,10 +325,8 @@ for (const target of WIN_TARGETS) {
   if (!moduleImports.includes('vulkan-1.dll')) {
     fail(`${target}: Vulkan module does not import vulkan-1.dll (broken module)`)
   }
-  for (const dll of FORBIDDEN_WIN_RUNTIME) {
-    if (moduleImports.some((n) => n.startsWith(dll))) {
-      fail(`${target}: Vulkan module imports ${dll}* (LoadLibrary fails on stock hosts)`)
-    }
+  for (const error of windowsRuntimeViolations(moduleImports, packagedFiles)) {
+    fail(`${target}: Vulkan module ${error}`)
   }
 
   const cudaPath = path.join(prebuildsDir, target, moduleName, 'qvac-diffusion-ggml-cuda.dll')
@@ -334,10 +341,8 @@ for (const target of WIN_TARGETS) {
   if (!cudaImports.some((name) => name.startsWith('cublas64'))) {
     fail(`${target}: CUDA module does not import cublas64* (broken module)`)
   }
-  for (const dll of FORBIDDEN_WIN_RUNTIME) {
-    if (cudaImports.some((name) => name.startsWith(dll))) {
-      fail(`${target}: CUDA module imports ${dll}* (LoadLibrary fails on stock hosts)`)
-    }
+  for (const error of windowsRuntimeViolations(cudaImports, packagedFiles)) {
+    fail(`${target}: CUDA module ${error}`)
   }
 }
 

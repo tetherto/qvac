@@ -5,6 +5,7 @@ const os = require('bare-os')
 const fs = require('bare-fs')
 const proc = require('bare-process')
 const test = require('brittle')
+const { windowsRuntimeViolations } = require('../../scripts/windows-runtime-policy.cjs')
 
 const PREBUILDS_DIR = path.resolve(__dirname, '../../prebuilds')
 
@@ -173,9 +174,8 @@ function peImports(buffer) {
 
 // The Windows counterparts of FORBIDDEN_NEEDED and FORBIDDEN_RUNTIME: the
 // addon must not import the Vulkan loader, and neither it nor the backend
-// module may import the dynamic Visual C++ runtime (the prebuild links the
-// static CRT, see vcpkg-overlays/triplets/x64-windows.cmake). A dynamic UCRT
-// shows up as the api-ms-win-crt-* API sets, not as ucrtbase.dll.
+// module may import Debug runtimes. Release MSVC runtimes must be packaged
+// beside the addon; modern Windows provides UCRT.
 const FORBIDDEN_WIN_IMPORTS = [
   'vulkan-1.dll',
   'opencl.dll',
@@ -184,7 +184,6 @@ const FORBIDDEN_WIN_IMPORTS = [
   'cublas64',
   'cublaslt64'
 ]
-const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
 
 test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', async (t) => {
   if (os.platform() !== 'linux') {
@@ -285,10 +284,14 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUD
   t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
 
   // 1. The addon must load on a host without a Vulkan runtime: no GPU loader
-  //    and no dynamic CRT in its import table (QVAC-25560).
+  //    imports; Release CRT imports must resolve to packaged DLLs (QVAC-25560).
+  const packagedFiles = fs
+    .readdirSync(path.join(PREBUILDS_DIR, target), { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
   const addonImports = peImports(fs.readFileSync(addonPath))
   t.comment(`${moduleName}.bare imports: ${addonImports.join(', ')}`)
-  for (const dll of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+  for (const dll of FORBIDDEN_WIN_IMPORTS) {
     t.absent(
       addonImports.find((n) => n.startsWith(dll)),
       `addon must not import ${dll}* (breaks hosts without it)`
@@ -297,6 +300,12 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUD
 
   // 2. GPU support must not silently disappear: the Vulkan backend has to
   //    ship as a runtime-loaded DLL next to the addon...
+  t.alike(
+    windowsRuntimeViolations(addonImports, packagedFiles),
+    [],
+    'addon runtime DLLs are packaged Release runtimes'
+  )
+
   const vulkanModulePath = path.join(
     PREBUILDS_DIR,
     target,
@@ -314,12 +323,11 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUD
     moduleImports.find((n) => n === 'vulkan-1.dll'),
     'Vulkan module imports vulkan-1.dll (loaded only when present at runtime)'
   )
-  for (const dll of FORBIDDEN_WIN_RUNTIME) {
-    t.absent(
-      moduleImports.find((n) => n.startsWith(dll)),
-      `Vulkan module must not import ${dll}* (LoadLibrary must work on stock hosts)`
-    )
-  }
+  t.alike(
+    windowsRuntimeViolations(moduleImports, packagedFiles),
+    [],
+    'Vulkan module runtime DLLs are packaged Release runtimes'
+  )
 
   const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'qvac-diffusion-ggml-cuda.dll')
   const requireCuda = proc.env.CI === 'true' || proc.env.QVAC_REQUIRE_CUDA_MODULE === 'true'
@@ -335,12 +343,11 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUD
     cudaImports.some((name) => name.startsWith('cublas64')),
     'CUDA module imports cublas64*'
   )
-  for (const dll of FORBIDDEN_WIN_RUNTIME) {
-    t.absent(
-      cudaImports.find((name) => name.startsWith(dll)),
-      `CUDA module must not import ${dll}* (LoadLibrary must work on stock hosts)`
-    )
-  }
+  t.alike(
+    windowsRuntimeViolations(cudaImports, packagedFiles),
+    [],
+    'CUDA module runtime DLLs are packaged Release runtimes'
+  )
 })
 
 // File-level layout checks above prove the module EXISTS; this proves Linux

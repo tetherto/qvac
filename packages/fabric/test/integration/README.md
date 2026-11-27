@@ -1,5 +1,8 @@
 # `@qvac/fabric` integration tests
 
+For model-free module allocation/callback tests and the Linux fabric/diffusion
+coexistence binding audit, see [shared core regression coverage](../regression/README.md).
+
 These tests run **real inference** through the two migrated consumers
 (`@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`) in a single Bare process to
 prove that the shared `qvac__fabric-<host>.bare` runtime resolves, loads once, and
