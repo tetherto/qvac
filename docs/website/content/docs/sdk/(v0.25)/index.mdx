@@ -7,6 +7,16 @@ ogImage: /og-sdk-main.png
 schemaType: TechArticle
 ---
 
+<Callout type="warn">
+  **RAG moved to its own package.** The `rag*` functions (`ragIngest`,
+  `ragSearch`, and the rest) are removed in this version — the managed document
+  store now lives in [`@qvac/rag`](/rag). Embeddings and the vector index stay
+  in the SDK, so you can still build retrieval from
+  [`embed()`](/sdk/reference/api#embed) and
+  [`createVectorIndex()`](/sdk/reference/api#createvectorindex). See [RAG](/sdk/ai-capabilities/rag)
+  for that path, or the [migration guide](/rag/migration) to move off `rag*`.
+</Callout>
+
 ## Overview
 
 Install the JS/TS, Python, or Kotlin client in your project. Then, load models and use them to perform AI inference locally.
@@ -58,7 +68,7 @@ The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilit
 * [**Text generation:**](/sdk/ai-capabilities/text-generation) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
 * [**Text embeddings:**](/sdk/ai-capabilities/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
 * [**Multimodal embeddings:**](/sdk/ai-capabilities/multimodal-embeddings) text, image, and audio embeddings in a shared vector space for cross-media search and retrieval.
-* [**RAG:**](/sdk/ai-capabilities/rag) retrieval-augmented generation with embeddings and a vector index.
+* [**RAG:**](/sdk/ai-capabilities/rag) retrieval-augmented generation built from embeddings and a vector index; the managed document store now lives in [`@qvac/rag`](/rag).
 * [**Fine-tuning:**](/sdk/ai-capabilities/fine-tuning) adapting LLMs to domain-specific tasks via LoRA.
 * [**Multimodal:**](/sdk/ai-capabilities/multimodal) LLM inference over text, images, and other media within a single conversation context.
 * [**Batch processing:**](/sdk/ai-capabilities/batch-processing) run multiple LLM prompts concurrently through a single loaded model in one call.

@@ -5,13 +5,14 @@ description: Retrieval-augmented generation with embeddings and a vector index.
 schemaType: HowTo
 ---
 
-<Callout type="info">
-  The SDK no longer manages documents for RAG. This page builds retrieval from
-  `embed()` and the vector index. For a managed document store with chunking,
-  ingestion and search, use the standalone
-  [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package. Coming from
-  the `rag*` functions of SDK 0.24 and earlier? See [Migrate from the SDK RAG
-  API](/resources/rag-migration).
+<Callout type="warn">
+  **RAG moved to its own package.** The `rag*` functions (`ragIngest`,
+  `ragSearch`, and the rest) are removed in this version — the managed document
+  store now lives in [`@qvac/rag`](/rag). Embeddings and the vector index stay
+  in the SDK, so you can still build retrieval from
+  [`embed()`](/sdk/reference/api#embed) and
+  [`createVectorIndex()`](/sdk/reference/api#createvectorindex), as this page
+  shows. See the [migration guide](/rag/migration) to move off `rag*`.
 </Callout>
 
 ## Overview
@@ -49,6 +50,12 @@ Regarding vector storage, you may use:
   the embedding dimensionality produced by your model (e.g., GTE Large
   embeddings used in the example are 1024‑dimensional).
 </Callout>
+
+### Managed retrieval with `@qvac/rag`
+
+Both options above leave the document store, the chunking, and the query loop to you. [`@qvac/rag`](/rag) is a separate npm package that supplies all three out of the box: it keeps documents in a Corestore, chunks and embeds them on ingest, and returns the matching chunks from a single `search()` call.
+
+It is JavaScript and TypeScript only, and it does not depend on `@qvac/sdk` — you pass embeddings in through a port, which can wrap the SDK's [`embed()`](/sdk/reference/api#embed). Choose it when you want a document store you don't have to build; stay on this page when you already have one, or when you work in Python or Kotlin. See the [RAG collection](/rag) for what it adds.
 
 ## Examples
 
@@ -108,6 +115,8 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 A fresh TurboVec index attempts TQ+ calibration before encoding its first successful nonempty `add()` batch when that batch has at least 1,000 vectors. A smaller first batch leaves it uncalibrated, and later adds do not calibrate it. `index.calibrated` reports the state after creation, loading, or the last successful add. Calibration improves recall when the fit succeeds and persists in snapshots.
 
 Staged search is off for every new or loaded index. Use `await index.setStagedSearch({ enabled: true })` to trade recall for faster queries, or pass `false` to score every vector. On supported hosts, staged search applies at 32,768 or more vectors and a dimension divisible by 32. Other dimensions and indexes loaded from v3 snapshots retain the setting but search every vector. `index.stagedSearch` reports the setting, which is not saved in snapshots. Generic `F32`, `Q8`, and `Q4` storage reject staged search controls.
+
+#### IVF search
 
 IVF (Inverted File Index) search groups the vectors into lists and scans only the lists closest to each query. Turn it on with `await index.setIvf({ nLists, nProbe })`, where `nLists` is the number of lists to build and `nProbe` is the number each search scans. Pass `null` to turn it off. IVF is off on every new or loaded index, and snapshots don't save the setting.
 
