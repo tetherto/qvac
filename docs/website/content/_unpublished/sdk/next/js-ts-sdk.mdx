@@ -69,7 +69,7 @@ Add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
 }
 ```
 
-The plugin configures `expo-build-properties` for you, so you don't need to add it to `plugins`. Don't configure `expo-bare-kit` alongside it: both add Bare Kit to the app, and prebuild fails.
+The plugin configures `expo-build-properties` for you, so you don't need to add it to `plugins`. If your app runs its own Bare workers with `expo-bare-kit`, see [Expo with your own Bare workers](#expo-with-your-own-bare-workers).
 
 QVAC ships part of its Android and iOS binaries as separate packages that your app needs. Pass `installMissingPrebuilds` to the plugin to have `npx expo prebuild` add them, or add them yourself. See [Install QVAC](/resources/tutorials/expo#step-3-install-qvac) in the Expo tutorial.
 
@@ -103,6 +103,32 @@ The worker runs in the app's process. A worker that stops before its cleanup fin
 <Callout type="info">
   QVAC does not run on Android emulators. On Android, you **must** use a physical device.
 </Callout>
+
+### Expo with your own Bare workers
+
+An app holds one Bare Kit, which carries the native addons of every worker. When your app installs [`expo-bare-kit`](https://github.com/holepunchto/expo-bare-kit) 0.3.1 or later, the QVAC plugin adds its worker to expo-bare-kit, and expo-bare-kit adds Bare Kit and the addons of all workers to the app. Prebuild then writes no `android/qvac-bare-kit` or `ios/QvacBareKit`.
+
+Set up expo-bare-kit as its README describes, including the Metro wrapper in `metro.config.js`, and keep `@qvac/sdk/expo-plugin` in `plugins`, in any order. Don't list the QVAC worker yourself.
+
+expo-bare-kit stows every worker with the same `imports` and `defer`. List your own workers with the options of the QVAC worker, which `qvacWorkerOptions()` returns:
+
+```js title="app.config.js"
+import { qvacWorkerOptions } from '@qvac/sdk/expo-plugin'
+
+export default ({ config }) => ({
+  ...config,
+  plugins: [
+    '@qvac/sdk/expo-plugin',
+    ['expo-bare-kit', { workers: [['app.js', qvacWorkerOptions()]] }]
+  ]
+})
+```
+
+Prebuild writes the QVAC worker entry to `qvac/`, and expo-bare-kit packs it when Metro starts. Run `npx expo prebuild` again after you change `qvac.config` or reinstall packages.
+
+If the app already ran prebuild without expo-bare-kit, run `npx expo prebuild --clean` once after installing it, which removes the Bare Kit module QVAC added. `includeAudioDecoder: false` is not supported with expo-bare-kit.
+
+On iOS, the QVAC worker runs on V8, expo-bare-kit's default engine. Leave `ios.engine` unset or set it to `v8`.
 
 ## Quickstart
 

@@ -1,6 +1,8 @@
 export { default as withAndroidArchitecture } from './withAndroidArchitecture'
 export { default as withAndroidNdkVersion } from './withAndroidNdkVersion'
 export { default as withDeviceInfo } from './withDeviceInfo'
+export { qvacWorkerOptions } from './mobile-worker'
+export type { QvacWorkerOptions } from './mobile-worker'
 export { default as withMobileBundle } from './withMobileBundle'
 export { default as withOpenCL } from './withOpenCL'
 export { default as withQvacSDK } from './withQvacSDK'

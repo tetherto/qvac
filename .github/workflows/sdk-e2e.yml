@@ -47,6 +47,10 @@ on:
         description: Test filters for every leg, comma-separated categories or prefixes; empty runs all
         type: string
         default: ""
+      expo-bare-kit:
+        description: Build the mobile apps with expo-bare-kit adding Bare Kit and the SDK worker
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -355,6 +359,7 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       # The PR's base for the baseline comparison; a workflow_run build has no GITHUB_BASE_REF.
       CI_BASE_REF: ${{ needs.context.outputs.base-ref }}
+      QVAC_E2E_EXPO_BARE_KIT: ${{ inputs.expo-bare-kit && '1' || '' }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@342190a4e25a97f70169424e81ab149fd447aace # 0.7.0

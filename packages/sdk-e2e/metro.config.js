@@ -50,4 +50,14 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform)
 }
 
-module.exports = config
+// An app with expo-bare-kit installed has Metro pack the workers it lists, the SDK's among them.
+function hasExpoBareKit() {
+  try {
+    require.resolve('expo-bare-kit/metro', { paths: [projectRoot] })
+    return true
+  } catch {
+    return false
+  }
+}
+
+module.exports = hasExpoBareKit() ? require('expo-bare-kit/metro')(config) : config

@@ -362,15 +362,50 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
  */
 const SDK_PINNED_MODULES = ['bare-type']
 
-function pinSdkModules(imports: ImportsMap, sdkPath: string, logger: Logger) {
+function pinSdkModules(imports: ImportsMap, sdkPath: string, logger: Logger | undefined) {
   const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
   for (const name of SDK_PINNED_MODULES) {
     try {
       imports[name] = pathToFileURL(sdkRequire.resolve(name)).href
     } catch {
-      logger.debug(`   ${name} is not among the SDK's dependencies; bundling the project's`)
+      logger?.debug(`   ${name} is not among the SDK's dependencies; bundling the project's`)
     }
   }
+}
+
+export interface WorkerImports {
+  imports: ImportsMap
+  /** Maps the entry's imports of an SDK the project does not install to its real path. */
+  resolveImport: ((specifier: string) => string) | undefined
+}
+
+/** The import map the worker of the SDK at `sdkPath` is bundled with from `projectRoot`. */
+export function resolveWorkerImports(
+  projectRoot: string,
+  sdkPath: string,
+  sdkName: string,
+  logger?: Logger
+): WorkerImports {
+  const imports = JSON.parse(
+    fs.readFileSync(resolveImportsMapPath(sdkPath, sdkName), 'utf8')
+  ) as ImportsMap
+
+  // An SDK the project installs is imported by name. One outside the project is
+  // imported by its real path, and so is its bare-stow runtime, which the
+  // generated shim imports.
+  const installedSdk = findInAncestorNodeModules(projectRoot, sdkName)
+  const sdkByName = installedSdk !== null && realpath(installedSdk) === sdkPath
+  const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
+  if (!sdkByName) {
+    const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+    Object.assign(imports, sdkImportsMap(sdkPath, sdkName))
+    for (const runtime of ['bare-stow-runtime', 'bare-stow-runtime/process']) {
+      imports[runtime] = pathToFileURL(sdkRequire.resolve(runtime)).href
+    }
+  }
+
+  pinSdkModules(imports, sdkPath, logger)
+  return { imports, resolveImport }
 }
 
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
@@ -493,24 +528,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.info(`📦 SDK: ${sdkName}`)
   logger.debug(`   Path: ${sdkPath}`)
 
-  const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
-  const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as ImportsMap
-
-  // An SDK the project installs is imported by name. One outside the project is
-  // imported by its real path, and so is its bare-stow runtime, which the
-  // generated shim imports.
-  const installedSdk = findInAncestorNodeModules(projectRoot, sdkName)
-  const sdkByName = installedSdk !== null && realpath(installedSdk) === sdkPath
-  const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
-  if (!sdkByName) {
-    const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
-    Object.assign(imports, sdkImportsMap(sdkPath, sdkName))
-    for (const runtime of ['bare-stow-runtime', 'bare-stow-runtime/process']) {
-      imports[runtime] = pathToFileURL(sdkRequire.resolve(runtime)).href
-    }
-  }
-
-  pinSdkModules(imports, sdkPath, logger)
+  const { imports, resolveImport } = resolveWorkerImports(projectRoot, sdkPath, sdkName, logger)
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
