@@ -227,6 +227,9 @@ struct nmt_model {
       nullptr; // decoder final layer norm bias
   struct ggml_tensor* m_lm_head_w =
       nullptr; // language model head weight (often shared with embeddings)
+  // True when m_lm_head_w holds a copy of the decoder embeddings, for a model
+  // whose output projection is tied to them (has_lm_head == false).
+  bool lm_head_tied = false;
   struct ggml_tensor* m_final_logits_bias =
       nullptr; // final logits bias (shape: 1 x vocab_size)
 

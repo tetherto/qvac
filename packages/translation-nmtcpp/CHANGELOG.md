@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Beam search decodes all live beams in one decoder graph per step. The beams
+  share one self-attention KV cache: each cell records the sequences that use
+  it, so a beam that continues another shares its prefix instead of copying
+  it, and a mask keeps each beam to its own history. This replaces the pool
+  of `2 * beam_size` caches and the one-graph-per-beam loop.
+- Decoder weight matrices and the output projection are placed with
+  `GGML_OP_MUL_MAT`, so on CPU they use the repacked `CPU_REPACK` layout. A
+  model whose output projection is tied to the decoder embeddings gets a
+  repacked copy of them (about 34 MB for IndicTrans2 200M q4_0); the
+  embeddings stay in place for the token lookup.
+- IndicTrans2 en-indic 200M q4_0, 4 beams, FLORES-200 en->hin on CPU: 2.1x to
+  3.7x faster per sentence across Apple M2, Neoverse-N2, AMD EPYC and Intel
+  Xeon, with BLEU within 0.1 on all 1012 sentences. Greedy decoding is 1.2x
+  to 1.5x faster. On Intel Xeon 6975P the 4-beam gain needs the x86 repack
+  `vzeroupper` fix in `qvac-fabric-llm.cpp`; without it the 4-beam time there
+  stays about the same.
+
 ## [0.28.0] - 2026-11-23
 
 ### Changed

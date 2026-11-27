@@ -144,9 +144,11 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   ctx->state->n_encode += 1;
 
   nmtBatchFree(ctx->state->batch);
-  ctx->state->batch = nmtBatchInit(ctx->model.hparams.n_decoder_ctx, 1);
-
   const int beam_size = ctx->model.config.beam_size;
+  // Beam search decodes one batch row per live beam, so the batch needs at
+  // least beam_size rows.
+  ctx->state->batch = nmtBatchInit(
+      std::max<int>(ctx->model.hparams.n_decoder_ctx, beam_size), 1);
   int max_tokens = 50;
   max_tokens = ctx->model.config.max_length > 0 ? ctx->model.config.max_length
                                                 : max_tokens;

@@ -14,6 +14,9 @@ void applyRepetitionPenalty(
 struct ggml_cgraph* nmtBuildGraphDecoder(
     nmt_context& ctx, nmt_state& state, const nmt_batch& batch, bool worstCase);
 
+// Runs the decoder graph for every token in the batch and leaves the logits,
+// one row per token, in state.logits_tensor.
+bool nmtDecodeGraph(nmt_context& ctx, nmt_batch& batch, nmt_state& state);
 bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state);
 
 void indictransComputeSinusoidalPositionalEmbeddingsToBuffer(

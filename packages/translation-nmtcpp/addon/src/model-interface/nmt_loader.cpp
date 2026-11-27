@@ -521,25 +521,33 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model),
           GGML_OP_NONE,
           buft_list));
+      // Weight matrices are only used by matrix multiplications, so they can
+      // live in a buffer that stores them in a layout tuned for that (the CPU
+      // backend's repacked weights), as whisper.cpp does.
+      ggml_context* nmt_ctx_mat = get_ctx(select_weight_buft(
+          hparams,
+          ggml_new_tensor_2d(ctx, wtype, d_model, d_model),
+          GGML_OP_MUL_MAT,
+          buft_list));
 
       layer.attn_ln_0_w = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.attn_ln_0_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.attn_q_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
+          nmt_ctx_mat, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
       layer.attn_q_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.attn_k_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
+          nmt_ctx_mat, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
       layer.attn_k_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.attn_v_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
+          nmt_ctx_mat, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
       layer.attn_v_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.attn_ln_1_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
+          nmt_ctx_mat, ggml_new_tensor_2d(ctx, wtype, d_model, d_model));
       layer.attn_ln_1_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.mlp_ln_w = ggml_dup_tensor(
@@ -547,14 +555,14 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       layer.mlp_ln_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.mlp_0_w = ggml_dup_tensor(
-          nmt_ctx,
+          nmt_ctx_mat,
           ggml_new_tensor_2d(
               ctx, wtype, n_text_state, hparams.decoder_ffn_dim));
       layer.mlp_0_b = ggml_dup_tensor(
           nmt_ctx,
           ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.decoder_ffn_dim));
       layer.mlp_1_w = ggml_dup_tensor(
-          nmt_ctx,
+          nmt_ctx_mat,
           ggml_new_tensor_2d(
               ctx, wtype, hparams.decoder_ffn_dim, n_text_state));
       layer.mlp_1_b = ggml_dup_tensor(
@@ -600,6 +608,14 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state),
           GGML_OP_NONE,
           buft_list));
+      // Weight matrices are only used by matrix multiplications, so they can
+      // live in a buffer that stores them in a layout tuned for that (the CPU
+      // backend's repacked weights), as whisper.cpp does.
+      ggml_context* nmt_ctx_mat = get_ctx(select_weight_buft(
+          hparams,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state),
+          GGML_OP_MUL_MAT,
+          buft_list));
 
       // Self-attention tensors
       layer.attn_ln_0_w = ggml_dup_tensor(
@@ -607,19 +623,23 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       layer.attn_ln_0_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.attn_q_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.attn_q_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.attn_k_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.attn_k_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.attn_v_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.attn_v_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.attn_ln_1_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.attn_ln_1_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
 
@@ -629,19 +649,23 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       layer.cross_attn_ln_0_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.cross_attn_q_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.cross_attn_q_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.cross_attn_k_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.cross_attn_k_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.cross_attn_v_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.cross_attn_v_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.cross_attn_ln_1_w = ggml_dup_tensor(
-          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
+          nmt_ctx_mat,
+          ggml_new_tensor_2d(ctx, wtype, n_text_state, n_text_state));
       layer.cross_attn_ln_1_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
 
@@ -651,14 +675,14 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       layer.mlp_ln_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.mlp_0_w = ggml_dup_tensor(
-          nmt_ctx,
+          nmt_ctx_mat,
           ggml_new_tensor_2d(
               ctx, wtype, n_text_state, hparams.decoder_ffn_dim));
       layer.mlp_0_b = ggml_dup_tensor(
           nmt_ctx,
           ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.decoder_ffn_dim));
       layer.mlp_1_w = ggml_dup_tensor(
-          nmt_ctx,
+          nmt_ctx_mat,
           ggml_new_tensor_2d(
               ctx, wtype, hparams.decoder_ffn_dim, n_text_state));
       layer.mlp_1_b = ggml_dup_tensor(
@@ -782,7 +806,21 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     model.m_decoder_norm_w = ggml_dup_tensor(nmt_ctx, meta_dec_norm_w);
     model.m_decoder_norm_b = ggml_dup_tensor(nmt_ctx, meta_dec_norm_b);
 
-    model.m_lm_head_w = ggml_dup_tensor(nmt_ctx, meta_lm_head);
+    // The output projection is only used by a matrix multiplication, so it
+    // can live in a buffer laid out for that. When the model ties it to the
+    // decoder embeddings, it is filled from them after loading (the
+    // embeddings stay where they are, since token lookup reads them by row).
+    // A model without its own output projection reuses the decoder
+    // embeddings; a separate copy only pays off when the multiplication has a
+    // faster buffer (such as CPU_REPACK) than the one the embeddings are in.
+    ggml_backend_buffer_type_t lm_head_buft =
+        select_weight_buft(hparams, meta_lm_head, GGML_OP_MUL_MAT, buft_list);
+    if (model.type == MODEL_INDICTRANS && !hparams.has_lm_head &&
+        lm_head_buft == buft) {
+      model.m_lm_head_w = nullptr;
+    } else {
+      model.m_lm_head_w = ggml_dup_tensor(get_ctx(lm_head_buft), meta_lm_head);
+    }
     model.m_final_logits_bias = nullptr;
 
     if (model.type == MODEL_INDICTRANS && hparams.layernorm_embedding) {
@@ -818,7 +856,9 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       model.tensors["decoder.final_layer_norm.bias"] = model.m_decoder_norm_b;
     }
 
-    model.tensors["lm_head.weight"] = model.m_lm_head_w;
+    if (model.m_lm_head_w != nullptr) {
+      model.tensors["lm_head.weight"] = model.m_lm_head_w;
+    }
 
     ggml_free(ctx);
   }
@@ -917,13 +957,34 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     if (model.n_loaded == 0) {
     } else {
       size_t expected = model.tensors.size();
-      if (model.type == MODEL_INDICTRANS && !hparams.has_lm_head) {
+      if (model.type == MODEL_INDICTRANS && !hparams.has_lm_head &&
+          model.m_lm_head_w != nullptr) {
         expected -= 1;
       }
       if ((size_t)model.n_loaded != expected) {
         return false;
       }
     }
+  }
+
+  if (model.type == MODEL_INDICTRANS && !hparams.has_lm_head &&
+      model.m_lm_head_w != nullptr && model.m_decoder_embeddings != nullptr &&
+      ggml_are_same_shape(model.m_lm_head_w, model.m_decoder_embeddings) &&
+      model.m_lm_head_w->type == model.m_decoder_embeddings->type) {
+    // The embeddings stay in a host buffer (token lookup reads them by row),
+    // so fill the copy straight from them instead of staging another
+    // full-size host copy, which would stay resident after loading.
+    const size_t n_bytes = ggml_nbytes(model.m_decoder_embeddings);
+    if (ggml_backend_buffer_is_host(model.m_decoder_embeddings->buffer)) {
+      ggml_backend_tensor_set(
+          model.m_lm_head_w, model.m_decoder_embeddings->data, 0, n_bytes);
+    } else {
+      std::vector<uint8_t> tied(n_bytes);
+      ggml_backend_tensor_get(
+          model.m_decoder_embeddings, tied.data(), 0, n_bytes);
+      ggml_backend_tensor_set(model.m_lm_head_w, tied.data(), 0, n_bytes);
+    }
+    model.lm_head_tied = true;
   }
 
   if (model.type == MODEL_INDICTRANS) {
