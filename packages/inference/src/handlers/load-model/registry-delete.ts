@@ -225,11 +225,7 @@ async function findLiveCoremlBundleSet(
 async function planUncatalogued(registryPath: string, registrySource: string): Promise<DeletePlan> {
   const filename = registryPath.split('/').pop() || registryPath
   if (detectShardedModel(filename).isSharded) {
-    // The lookup matches by prefix, so it can return other models' shards.
-    const family = shardFamily(registryPath)
-    const shards = (await findModelShards(registryPath, undefined, 'query')).filter(
-      (shard) => shard.source === registrySource && shardFamily(shard.path) === family
-    )
+    const shards = await findModelShards(registryPath, registrySource, undefined, 'query')
     return {
       targets: [getShardedModelCacheDir(generateShortHash(registryPath))],
       bindings: shards.flatMap((shard) => (shard.blobBinding ? [shard.blobBinding] : [])),
@@ -247,8 +243,4 @@ async function planUncatalogued(registryPath: string, registrySource: string): P
     bindings: model?.blobBinding ? [model.blobBinding] : [],
     registryPaths: [registryPath]
   }
-}
-
-function shardFamily(registryPath: string): string {
-  return registryPath.replace(/-\d{5}-of-\d{5}\./, '.')
 }
