@@ -3,6 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
+const os = require('bare-os')
 const test = require('brittle')
 
 const ASRGgml = require('../../index.js')
@@ -20,6 +21,30 @@ const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit
 const totalUsed = (fit) => fit.devices.reduce((sum, row) => sum + row.usedBytes, 0)
 
 const APPLE_PLATFORMS = ['darwin', 'ios']
+
+test(
+  'a Whisper Core ML encoder sidecar returns an unsized fit result',
+  { skip: !APPLE_PLATFORMS.includes(process.platform), timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const directory = fs.mkdtempSync(path.join(global.testDir || os.tmpdir(), 'asr-fit-coreml-'))
+    const stagedModel = path.join(directory, 'tiny.fit.gguf')
+    try {
+      fs.copyFileSync(MODEL_DESCRIPTION_PATH, stagedModel)
+      const request = { engine: 'whisper', modelPath: stagedModel, backendsDir }
+      const plain = await ASRGgml.assessFit(request)
+      t.ok(isVerdict(plain), 'the ggml model can be projected without a sidecar')
+
+      fs.mkdirSync(path.join(directory, 'tiny-encoder.mlmodelc'))
+      const coreml = await ASRGgml.assessFit(request)
+      t.is(coreml.status, 'unknown')
+      t.alike(coreml.devices, [])
+      t.alike(coreml.stats, {})
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
+  }
+)
+
 const QUANTIZATION_SUFFIX = /[.-](?:f16|f32|bf16|q[0-9]_[0-9k]|mxfp4|nvfp4)$/
 // The smallest diarizer capacity's weights; a charged bundle costs more.
 const SMALLEST_DIARIZER_BYTES = 190 * 1024 * 1024
