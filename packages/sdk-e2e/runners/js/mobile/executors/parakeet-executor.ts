@@ -86,14 +86,16 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
 
       // The Core ML checks: the Unified encoder sidecar, the TranscribePsy
       // distribution, whose encoder-less GGUF only loads with its bundles, and
-      // the full TranscribePsy EU model's shared-weight encoder.
+      // the full TranscribePsy EU model's shared-weight encoder. The sidecar
+      // loads in the background, so `encoderOnCoreml` (loaded at `load()`) can
+      // be 0; `encoderUsedCoreml` reports what this job ran on.
       if (
         testId === 'parakeet-unified-coreml-ios' ||
         testId.startsWith('parakeet-transcribepsy-coreml-') ||
         testId.startsWith('parakeet-transcribepsy-eu-coreml-')
       ) {
         const stats = await operation.stats
-        if (stats?.encoderOnCoreml !== 1 || stats.encoderUsedCoreml !== 1) {
+        if (stats?.encoderUsedCoreml !== 1) {
           return {
             passed: false,
             output: `Expected Core ML encoder use during batch transcription, got ${JSON.stringify(stats)}`
