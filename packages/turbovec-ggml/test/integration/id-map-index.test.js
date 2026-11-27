@@ -340,6 +340,18 @@ test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', async (t) 
   await runTurboVecRoundTrip(t, 'turbovec-q2', 2)
 })
 
+test('IdMapIndex: TurboVec q3 add + search + persistence round-trip', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    expectThrows(
+      t,
+      () => new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q3' }),
+      'TurboVec q3 requires a 64-bit target'
+    )
+    return
+  }
+  await runTurboVecRoundTrip(t, 'turbovec-q3', 3)
+})
+
 test('IdMapIndex: validates production bit widths and TurboVec dimensions', async (t) => {
   expectThrows(
     t,
@@ -354,7 +366,7 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', asyn
     )
     t.is(
       error && error.message,
-      'IdMapIndex: bitWidth must be 2, 4, 8, or 32',
+      'IdMapIndex: bitWidth must be 2, 3, 4, 8, or 32',
       `non-numeric bitWidth ${JSON.stringify(bitWidth)} gets the bitWidth error`
     )
   }
@@ -374,7 +386,7 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', asyn
     'TurboVec dimensions must be divisible by 8'
   )
   if (SUPPORTS_TURBOVEC) {
-    for (const storage of ['turbovec-q2', 'turbovec-q4']) {
+    for (const storage of ['turbovec-q2', 'turbovec-q3', 'turbovec-q4']) {
       const max = new IdMapIndex({ dim: 16384, storage })
       const vector = new Float32Array(16384)
       vector[0] = 1
@@ -391,7 +403,12 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', asyn
   if (SUPPORTS_TURBOVEC) {
     const q2 = new IdMapIndex({ dim: TURBOVEC_DIM, bitWidth: 2 })
     t.is(q2.bitWidth, 2, 'bitWidth 2 selects TurboVec q2')
+    t.is(q2.storage, 'turbovec-q2', 'bitWidth 2 reports turbovec-q2 storage')
     q2.dispose()
+    const q3 = new IdMapIndex({ dim: TURBOVEC_DIM, bitWidth: 3 })
+    t.is(q3.bitWidth, 3, 'bitWidth 3 selects TurboVec q3')
+    t.is(q3.storage, 'turbovec-q3', 'bitWidth 3 reports turbovec-q3 storage')
+    q3.dispose()
   }
   const defaulted = new IdMapIndex({ dim: DIM, bitWidth: undefined })
   t.is(defaulted.bitWidth, 8, 'undefined bitWidth uses default')
@@ -427,6 +444,7 @@ test('IdMapIndex: native create takes dim and storage only', { skip: IS_MOBILE }
   ]) {
     const handle = binding.idx_create({ dim: DIM, storage })
     t.is(binding.idx_bit_width(handle), bitWidth, `${storage} creates a ${bitWidth}-bit index`)
+    t.is(binding.idx_storage(handle), storage, `${storage} reports its storage`)
     binding.idx_dispose(handle)
   }
   expectThrows(t, () => binding.idx_create({ dim: DIM }), 'missing storage is rejected')
@@ -463,7 +481,17 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     'number id': () => binding.idx_remove_async(handle, 5),
     'number handle': () => binding.idx_len(5),
     'missing handle': () => binding.idx_compact_async(),
-    'object filter handle': () => binding.idx_search_prepared_filtered_async(handle, {}, vector, 1)
+    'object filter handle': () => binding.idx_search_prepared_filtered_async(handle, {}, vector, 1),
+    'string thread count': () => binding.idx_set_threads(handle, '2'),
+    'zero thread count': () => binding.idx_set_threads(handle, 0),
+    'too many threads': () => binding.idx_set_threads(handle, 257),
+    'non-string sync path': () => binding.idx_sync_async(handle, 42),
+    'non-boolean write fast flag': () => binding.idx_write_async(handle, 'x.tvim', null, 1),
+    'plain-array snapshot bytes': () => binding.idx_from_bytes_async([1, 2, 3]),
+    'Int8Array snapshot bytes': () => binding.idx_from_bytes_async(new Int8Array(4)),
+    'number ids handle': () => binding.idx_ids_async(5),
+    'number toBytes handle': () => binding.idx_to_bytes_async(5),
+    'number serializedSize handle': () => binding.idx_serialized_size(5)
   }
   try {
     for (const [name, fn] of Object.entries(cases)) {
@@ -472,6 +500,21 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     }
   } finally {
     binding.idx_dispose(handle)
+  }
+})
+
+// The JS wrapper's write() passes the fast flag after the token, so a direct
+// call with the earlier (handle, path, token) form keeps working.
+test('IdMapIndex: native write keeps its token argument third', { skip: IS_MOBILE }, async (t) => {
+  const binding = require('../../binding')
+  const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
+  const file = tmpPath('id-map-index-native-write')
+  try {
+    await binding.idx_write_async(handle, file, binding.idx_abort_token_create())
+    t.ok(fs.existsSync(file), 'a write with a token in the third slot runs')
+  } finally {
+    binding.idx_dispose(handle)
+    if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
@@ -491,6 +534,8 @@ test('IdMapIndex: paths with a NUL character are rejected, not truncated', async
     t.absent(fs.existsSync(file), 'write did not create the truncated path')
 
     await idx.write(file)
+    error = await expectRejects(t, () => idx.sync(`${file}\0.junk`), 'sync rejects a NUL path')
+    t.is(error && error.code, errorCode('InvalidArgument'), 'sync rejects with InvalidArgument')
     const loaders = {
       load: () => IdMapIndex.load(`${file}\0.junk`),
       loadMmap: () => IdMapIndex.loadMmap(`${file}\0.junk`),
@@ -1135,6 +1180,355 @@ test('IdMapIndex: TurboVec staged search is off until turned on', async (t) => {
     t.is(plain.stagedSearch, false, 'other storages report it off')
   } finally {
     if (loaded !== null) await loaded.dispose()
+    await idx.dispose()
+    await plain.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+// `rows` seeded unit rows with ids 1..rows.
+function seededBatch(rows, seed = CALIBRATION_SEED) {
+  const vectors = seededUnitRows(rows, seed)
+  const ids = new BigUint64Array(rows)
+  for (let i = 0; i < rows; i++) ids[i] = BigInt(i + 1)
+  return { vectors, ids }
+}
+
+function sortedIds(ids) {
+  return Array.from(ids).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+}
+
+function sameBytes(a, b) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
+test('IdMapIndex: storage tells TurboVec q4 from generic q4, also after a load', async (t) => {
+  const storages = SUPPORTS_TURBOVEC
+    ? ['f32', 'q8', 'q4', 'turbovec-q2', 'turbovec-q3', 'turbovec-q4']
+    : ['f32', 'q8', 'q4']
+  for (const storage of storages) {
+    const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
+    const file = tmpPath(`id-map-index-storage-${storage}`)
+    let loaded = null
+    try {
+      t.is(idx.storage, storage, `${storage} reports its storage`)
+      t.is(idx.legacy, false, `${storage} is not legacy`)
+      await idx.addWithIds(normalizedPatternVec(0), new BigUint64Array([1n]))
+      await idx.write(file)
+      loaded = await IdMapIndex.load(file)
+      t.is(loaded.storage, storage, `${storage} survives a snapshot`)
+      t.is(loaded.legacy, false, `a loaded ${storage} snapshot of this release is not legacy`)
+    } finally {
+      if (loaded !== null) await loaded.dispose()
+      await idx.dispose()
+      if (fs.existsSync(file)) fs.unlinkSync(file)
+    }
+  }
+})
+
+test('IdMapIndex: ids lists the live ids', async (t) => {
+  const storages = SUPPORTS_TURBOVEC ? ['f32', 'q8', 'turbovec-q4'] : ['f32', 'q8']
+  for (const storage of storages) {
+    const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
+    try {
+      const empty = await idx.ids()
+      t.ok(empty instanceof BigUint64Array, `${storage} ids resolves to a BigUint64Array`)
+      t.is(empty.length, 0, `${storage} empty index has no ids`)
+
+      const { vectors, ids } = seededBatch(50)
+      const big = 1n << 63n
+      ids[7] = big
+      await idx.addWithIds(vectors, ids)
+      t.alike(sortedIds(await idx.ids()), sortedIds(ids), `${storage} lists every added id`)
+
+      await idx.remove(big)
+      await idx.remove(3n)
+      const left = sortedIds(await idx.ids())
+      t.is(left.length, ids.length - 2, `${storage} removed ids are gone`)
+      t.absent(left.includes(big) || left.includes(3n), `${storage} lists no removed id`)
+      t.alike(await idx.ids(), await idx.ids(), `${storage} order is stable without changes`)
+    } finally {
+      await idx.dispose()
+    }
+  }
+})
+
+test('IdMapIndex: write with fast durability writes a loadable snapshot', async (t) => {
+  const storages = SUPPORTS_TURBOVEC ? ['turbovec-q4'] : []
+  for (const storage of storages) {
+    const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
+    const file = tmpPath(`id-map-index-fast-${storage}`)
+    let loaded = null
+    try {
+      const { vectors, ids } = seededBatch(20)
+      await idx.addWithIds(vectors, ids)
+      await idx.write(file, { durability: 'fast' })
+      loaded = await IdMapIndex.load(file)
+      t.is(loaded.length, ids.length, `${storage} fast snapshot has every row`)
+      t.is(
+        (await loaded.search(vectors.subarray(0, TURBOVEC_DIM), 1)).ids[0],
+        ids[0],
+        `${storage} fast snapshot is searchable`
+      )
+      await idx.write(file, { durability: 'durable' })
+      t.pass(`${storage} durable write still works when named`)
+    } finally {
+      if (loaded !== null) await loaded.dispose()
+      await idx.dispose()
+      if (fs.existsSync(file)) fs.unlinkSync(file)
+    }
+  }
+
+  const idx = new IdMapIndex({ dim: DIM })
+  const file = tmpPath('id-map-index-fast-q8')
+  try {
+    await idx.addWithIds(unitVec(1), new BigUint64Array([1n]))
+    // A delta log could start from a reloaded fast snapshot.
+    const error = await expectRejects(
+      t,
+      () => idx.write(file, { durability: 'fast' }),
+      'q8 rejects a fast write'
+    )
+    t.is(error && error.code, errorCode('InvalidArgument'), 'q8 fast write is InvalidArgument')
+    t.absent(fs.existsSync(file), 'a rejected fast write leaves no file')
+    await idx.write(file, { durability: 'durable' })
+    t.pass('q8 durable write still works when named')
+    for (const durability of ['FAST', 1, null]) {
+      const error = await expectRejects(
+        t,
+        () => idx.write(tmpPath('id-map-index-bad-durability'), { durability }),
+        `durability ${JSON.stringify(durability)} is rejected`
+      )
+      t.ok(error instanceof TypeError, `durability ${JSON.stringify(durability)} is a TypeError`)
+    }
+  } finally {
+    await idx.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+test('IdMapIndex: threads splits work without changing results', async (t) => {
+  const storages = SUPPORTS_TURBOVEC ? ['f32', 'turbovec-q4'] : ['f32']
+  const { vectors, ids } = seededBatch(AUTO_CALIBRATE_MIN_ROWS)
+  // Many queries, so a search splits them across threads.
+  const queries = vectors.subarray(0, 64 * TURBOVEC_DIM)
+  for (const storage of storages) {
+    const single = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
+    const multi = new IdMapIndex({ dim: TURBOVEC_DIM, storage, threads: 4 })
+    const file = tmpPath(`id-map-index-threads-${storage}`)
+    let loaded = null
+    try {
+      t.is(single.threads, 1, `${storage} defaults to 1 thread`)
+      t.is(multi.threads, 4, `${storage} takes threads from the constructor`)
+      await single.addWithIds(vectors, ids)
+      await multi.addWithIds(vectors, ids)
+      t.is(multi.calibrated, single.calibrated, `${storage} calibrates the same with 4 threads`)
+      const expected = await single.search(queries, 10)
+      t.alike(await multi.search(queries, 10), expected, `${storage} 4-thread search matches`)
+      t.alike(
+        await multi.search(queries.subarray(0, TURBOVEC_DIM), 10),
+        await single.search(queries.subarray(0, TURBOVEC_DIM), 10),
+        `${storage} single-query 4-thread search matches`
+      )
+
+      await multi.setThreads(256)
+      t.is(multi.threads, 256, `${storage} accepts the 256-thread maximum`)
+      t.alike(await multi.search(queries, 10), expected, `${storage} 256-thread search matches`)
+      await multi.setThreads(1)
+      t.is(multi.threads, 1, `${storage} goes back to 1 thread`)
+
+      await multi.setThreads(3)
+      await multi.write(file)
+      loaded = await IdMapIndex.load(file)
+      t.is(loaded.threads, 1, `${storage} thread count is not saved in snapshots`)
+    } finally {
+      if (loaded !== null) await loaded.dispose()
+      await single.dispose()
+      await multi.dispose()
+      if (fs.existsSync(file)) fs.unlinkSync(file)
+    }
+  }
+
+  for (const threads of [0, 257, 1.5, '2', null]) {
+    const label = JSON.stringify(threads)
+    const error = expectThrows(
+      t,
+      () => new IdMapIndex({ dim: DIM, threads }),
+      `constructor threads ${label} is rejected`
+    )
+    t.ok(error instanceof TypeError, `constructor threads ${label} is a TypeError`)
+  }
+  const idx = new IdMapIndex({ dim: DIM })
+  try {
+    for (const threads of [0, 257, 1.5, '2']) {
+      await expectRejects(
+        t,
+        () => idx.setThreads(threads),
+        `setThreads(${JSON.stringify(threads)}) is rejected`
+      )
+    }
+    t.is(idx.threads, 1, 'a rejected setThreads keeps the thread count')
+  } finally {
+    await idx.dispose()
+  }
+})
+
+test('IdMapIndex: toBytes and fromBytes round-trip a TurboVec index', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  class ExtendedIdMapIndex extends IdMapIndex {}
+  const { vectors, ids } = seededBatch(AUTO_CALIBRATE_MIN_ROWS)
+  const query = vectors.subarray(0, TURBOVEC_DIM)
+  const file = tmpPath('id-map-index-to-bytes')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q3' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  const loaded = []
+  try {
+    const emptySize = idx.serializedSize
+    t.ok(emptySize > 0, 'an empty TurboVec index has a serialized size')
+    await idx.addWithIds(vectors, ids)
+    t.ok(idx.serializedSize > emptySize, 'serializedSize grows with the rows')
+    await idx.setStagedSearch(true)
+    const bytes = await idx.toBytes()
+    t.ok(bytes instanceof Uint8Array, 'toBytes resolves to a Uint8Array')
+    t.is(bytes.length, idx.serializedSize, 'serializedSize is the length toBytes returns')
+    await idx.write(file)
+    t.ok(sameBytes(bytes, fs.readFileSync(file)), 'toBytes matches the snapshot file byte for byte')
+
+    // Changed after the call: the load must use the bytes as they were.
+    const copy = bytes.slice()
+    const pending = ExtendedIdMapIndex.fromBytes(copy)
+    copy.fill(0)
+    const restored = await pending
+    loaded.push(restored)
+    t.is(
+      Object.getPrototypeOf(restored),
+      ExtendedIdMapIndex.prototype,
+      'fromBytes keeps the subclass'
+    )
+    t.is(restored.storage, 'turbovec-q3', 'fromBytes restores the storage')
+    t.is(restored.length, ids.length, 'fromBytes restores every row')
+    t.is(restored.calibrated, true, 'fromBytes restores the calibration')
+    t.is(restored.stagedSearch, false, 'fromBytes loads with staged search off')
+    t.is(restored.threads, 1, 'fromBytes loads with 1 thread')
+    await idx.setStagedSearch(false)
+    t.alike(
+      await restored.search(query, 5),
+      await idx.search(query, 5),
+      'fromBytes searches the same'
+    )
+
+    const fromFile = await IdMapIndex.fromBytes(fs.readFileSync(file))
+    loaded.push(fromFile)
+    t.is(fromFile.length, ids.length, 'fromBytes reads a snapshot file read into memory')
+
+    await plain.addWithIds(vectors.subarray(0, TURBOVEC_DIM), ids.subarray(0, 1))
+    t.is(plain.serializedSize, 0, 'serializedSize is 0 for a storage toBytes rejects')
+    let error = await expectRejects(
+      t,
+      () => plain.toBytes(),
+      'toBytes rejects non-TurboVec storage'
+    )
+    t.is(error && error.code, errorCode('InvalidArgument'), 'toBytes rejects with InvalidArgument')
+    await plain.write(file)
+    error = await expectRejects(
+      t,
+      () => IdMapIndex.fromBytes(fs.readFileSync(file)),
+      'fromBytes rejects a v2 snapshot'
+    )
+    t.is(
+      error && error.code,
+      errorCode('BadMagic'),
+      'fromBytes rejects a v2 snapshot with BadMagic'
+    )
+    error = await expectRejects(
+      t,
+      () => IdMapIndex.fromBytes(new Uint8Array(64)),
+      'fromBytes rejects bytes that are not a snapshot'
+    )
+    t.is(error && error.code, errorCode('BadMagic'), 'fromBytes rejects junk with BadMagic')
+    error = await expectRejects(
+      t,
+      () => IdMapIndex.fromBytes([1, 2, 3]),
+      'fromBytes rejects a plain array'
+    )
+    t.ok(error instanceof TypeError, 'fromBytes rejects a plain array with a TypeError')
+  } finally {
+    for (const index of loaded) await index.dispose()
+    await idx.dispose()
+    await plain.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+test('IdMapIndex: sync saves a TurboVec index incrementally', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  const { vectors, ids } = seededBatch(AUTO_CALIBRATE_MIN_ROWS + 200)
+  const first = AUTO_CALIBRATE_MIN_ROWS
+  const rowsOf = (from, to) => vectors.subarray(from * TURBOVEC_DIM, to * TURBOVEC_DIM)
+  const file = tmpPath('id-map-index-sync')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  const loaded = []
+  try {
+    await idx.addWithIds(rowsOf(0, first), ids.subarray(0, first))
+    await idx.sync(file)
+    assertTv8Header(t, file, 4)
+    let reader = await IdMapIndex.load(file)
+    loaded.push(reader)
+    t.is(reader.length, first, 'the first sync writes every row')
+
+    await idx.addWithIds(rowsOf(first, first + 100), ids.subarray(first, first + 100))
+    t.is(await idx.remove(ids[0]), true, 'a row is removed before the next sync')
+    await idx.sync(file)
+    reader = await IdMapIndex.load(file)
+    loaded.push(reader)
+    t.is(reader.length, first + 99, 'a later sync saves the adds and the remove')
+    t.absent(await reader.contains(ids[0]), 'the removed row is gone after the sync')
+    t.alike(
+      await reader.search(rowsOf(first + 50, first + 51), 3),
+      await idx.search(rowsOf(first + 50, first + 51), 3),
+      'the synced index searches as the original does'
+    )
+
+    // The reader is bound to the file now and keeps syncing to it.
+    await reader.addWithIds(rowsOf(first + 100, first + 200), ids.subarray(first + 100))
+    await reader.sync(file)
+    const third = await IdMapIndex.load(file)
+    loaded.push(third)
+    t.is(third.length, first + 199, 'an index loaded from a synced file continues the sync')
+
+    // The original has fallen behind the file the reader advanced.
+    await idx.addWithIds(rowsOf(first + 100, first + 101), ids.subarray(first + 100, first + 101))
+    let error = await expectRejects(t, () => idx.sync(file), 'a stale writer cannot sync')
+    t.is(error && error.code, errorCode('IOError'), 'a stale writer rejects with IOError')
+
+    // write() leaves an unclaimed snapshot, which a later sync rewrites whole,
+    // as upstream turbovec does: a sync, write, sync sequence never gets stuck.
+    await third.write(file)
+    await reader.sync(file)
+    const rewritten = await IdMapIndex.load(file)
+    loaded.push(rewritten)
+    t.is(rewritten.length, reader.length, 'a sync over a write() snapshot rewrites it')
+
+    error = await expectRejects(
+      t,
+      () => plain.sync(tmpPath('id-map-index-sync-plain')),
+      'sync rejects non-TurboVec storage'
+    )
+    t.is(error && error.code, errorCode('InvalidArgument'), 'sync rejects with InvalidArgument')
+    await expectRejects(t, () => idx.sync(''), 'sync rejects an empty path')
+  } finally {
+    for (const index of loaded) await index.dispose()
     await idx.dispose()
     await plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)

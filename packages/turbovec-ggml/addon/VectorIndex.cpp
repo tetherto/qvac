@@ -17,11 +17,13 @@ namespace {
 constexpr int F32_BIT_WIDTH = 32;
 constexpr int Q8_BIT_WIDTH = 8;
 constexpr int Q4_BIT_WIDTH = 4;
+constexpr int Q3_BIT_WIDTH = 3;
 // Fabric rejects a TurboVec add with any component at or above this.
 constexpr float TURBOVEC_MAX_ABS = 1e16F;
 
 constexpr bool isTurboVec(VectorStorage storage) noexcept {
   return storage == VectorStorage::TurboVecQ4 ||
+         storage == VectorStorage::TurboVecQ3 ||
          storage == VectorStorage::TurboVecQ2;
 }
 
@@ -35,6 +37,8 @@ ggml_vec_index_t* createIndex(int dim, VectorStorage storage) {
     return ggml_vec_index_create(dim, Q4_BIT_WIDTH);
   case VectorStorage::TurboVecQ4:
     return ggml_vec_index_create_turbovec_q4(dim);
+  case VectorStorage::TurboVecQ3:
+    return ggml_vec_index_create_turbovec(dim, Q3_BIT_WIDTH);
   case VectorStorage::TurboVecQ2:
     return ggml_vec_index_create_turbovec_q2(dim);
   }
@@ -82,10 +86,64 @@ parseVectorStorage(std::string_view storage) noexcept {
   if (storage == "turbovec-q4") {
     return VectorStorage::TurboVecQ4;
   }
+  if (storage == "turbovec-q3") {
+    return VectorStorage::TurboVecQ3;
+  }
   if (storage == "turbovec-q2") {
     return VectorStorage::TurboVecQ2;
   }
   return std::nullopt;
+}
+
+const char* storageName(int storage) noexcept {
+  switch (storage) {
+  case GGML_VEC_INDEX_STORAGE_F32:
+    return "f32";
+  case GGML_VEC_INDEX_STORAGE_Q8:
+    return "q8";
+  case GGML_VEC_INDEX_STORAGE_Q4:
+    return "q4";
+  case GGML_VEC_INDEX_STORAGE_TURBOVEC_Q2:
+    return "turbovec-q2";
+  case GGML_VEC_INDEX_STORAGE_TURBOVEC_Q3:
+    return "turbovec-q3";
+  case GGML_VEC_INDEX_STORAGE_TURBOVEC_Q4:
+    return "turbovec-q4";
+  default:
+    return nullptr;
+  }
+}
+
+SnapshotBytes::~SnapshotBytes() {
+  if (data != nullptr) {
+    ggml_vec_index_bytes_free(data);
+  }
+}
+
+SnapshotBytes::SnapshotBytes(SnapshotBytes&& other) noexcept
+    : data(other.data), size(other.size) {
+  other.data = nullptr;
+  other.size = 0;
+}
+
+uint8_t* SnapshotBytes::release() noexcept {
+  uint8_t* bytes = data;
+  data = nullptr;
+  size = 0;
+  return bytes;
+}
+
+SnapshotBytes& SnapshotBytes::operator=(SnapshotBytes&& other) noexcept {
+  if (this != &other) {
+    if (data != nullptr) {
+      ggml_vec_index_bytes_free(data);
+    }
+    data = other.data;
+    size = other.size;
+    other.data = nullptr;
+    other.size = 0;
+  }
+  return *this;
 }
 
 VectorIndexFilter::VectorIndexFilter(ggml_vec_index_filter_t* handle) noexcept
@@ -285,8 +343,66 @@ int VectorIndex::searchIvf(
       handle_, queries, nQ, k, nProbe, outScores, outIds);
 }
 
-int VectorIndex::write(const std::string& path) noexcept {
-  return ggml_vec_index_write(handle_, path.c_str());
+int VectorIndex::write(const std::string& path, bool fast) noexcept {
+  if (!fast) {
+    return ggml_vec_index_write(handle_, path.c_str());
+  }
+  // A reloaded fast snapshot cannot tell it was written without fsyncs, so it
+  // could become the base of a delta log that outlives it. TurboVec storage
+  // has no delta logs.
+  const int kind = storage();
+  if (kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q2 &&
+      kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q3 &&
+      kind != GGML_VEC_INDEX_STORAGE_TURBOVEC_Q4) {
+    return GGML_VEC_INDEX_E_INVALID_ARG;
+  }
+  return ggml_vec_index_write_with_durability(
+      handle_, path.c_str(), GGML_VEC_INDEX_DURABILITY_FAST);
+}
+
+int VectorIndex::sync(const std::string& path) noexcept {
+  return ggml_vec_index_sync(handle_, path.c_str());
+}
+
+int VectorIndex::ids(std::vector<uint64_t>& out) const {
+  size_t count = 0;
+  int rc = ggml_vec_index_ids(handle_, nullptr, 0, &count);
+  if (rc != GGML_VEC_INDEX_OK) {
+    return rc;
+  }
+  out.resize(count);
+  if (count == 0) {
+    return GGML_VEC_INDEX_OK;
+  }
+  // Callers hold the index alone, so the count cannot change between the
+  // two calls; a mismatch would be a fabric bug.
+  size_t copied = 0;
+  rc = ggml_vec_index_ids(handle_, out.data(), out.size(), &copied);
+  if (rc == GGML_VEC_INDEX_OK && copied != count) {
+    return GGML_VEC_INDEX_E_INTERNAL;
+  }
+  return rc;
+}
+
+int VectorIndex::toBytes(SnapshotBytes& out) const noexcept {
+  SnapshotBytes bytes;
+  const int rc = ggml_vec_index_to_bytes(handle_, &bytes.data, &bytes.size);
+  if (rc == GGML_VEC_INDEX_OK) {
+    out = std::move(bytes);
+  }
+  return rc;
+}
+
+size_t VectorIndex::serializedSize() const noexcept {
+  return ggml_vec_index_serialized_size(handle_);
+}
+
+int VectorIndex::setThreads(int nThreads) noexcept {
+  return ggml_vec_index_set_threads(handle_, nThreads);
+}
+
+int VectorIndex::threads() const noexcept {
+  return ggml_vec_index_threads(handle_);
 }
 
 int VectorIndex::compactDelta(
@@ -320,12 +436,28 @@ VectorIndex::loadMmap(const std::string& path, int* status) noexcept {
   return VectorIndex(raw);
 }
 
+VectorIndex VectorIndex::fromBytes(
+    const uint8_t* bytes, size_t size, int* status) noexcept {
+  ggml_vec_index_t* raw = nullptr;
+  *status = ggml_vec_index_from_bytes_with_flags(
+      bytes, size, GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF, &raw);
+  return VectorIndex(raw);
+}
+
 int VectorIndex::len() const noexcept { return ggml_vec_index_len(handle_); }
 
 int VectorIndex::dim() const noexcept { return ggml_vec_index_dim(handle_); }
 
 int VectorIndex::bitWidth() const noexcept {
   return ggml_vec_index_bit_width(handle_);
+}
+
+int VectorIndex::storage() const noexcept {
+  return ggml_vec_index_storage(handle_);
+}
+
+bool VectorIndex::legacy() const noexcept {
+  return ggml_vec_index_turbovec_is_legacy(handle_) == 1;
 }
 
 } // namespace turbovec_ggml

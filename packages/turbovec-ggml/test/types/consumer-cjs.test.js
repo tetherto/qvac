@@ -32,9 +32,45 @@ async function checkAsyncTypes(index, query, ids) {
     const built = await index.buildIvf(1);
     const staged = await index.setStagedSearch(true);
     const length = index.length;
+    const synced = await index.sync('index.tvim');
+    const listed = await index.ids();
+    const bytes = await index.toBytes();
+    const restored = await SubIdMapIndex.fromBytes(bytes);
+    const threadsSet = await index.setThreads(4);
+    const threads = index.threads;
+    const storage = index.storage;
+    const legacy = index.legacy;
+    const serializedSize = index.serializedSize;
+    const writeOptions = { durability: 'fast' };
+    const written = await index.write('index.tvim', writeOptions);
+    const q3 = new idMapIndex_1.default({ dim: 128, storage: 'turbovec-q3', threads: 2 });
+    const q3ByWidth = new idMapIndex_1.default({ dim: 128, bitWidth: 3 });
     const filterFreed = filter.dispose();
     const freed = await index.dispose();
-    return { hits, removed, present, filtered, loaded, added, built, staged, length, filterFreed, freed };
+    return {
+        hits,
+        removed,
+        present,
+        filtered,
+        loaded,
+        added,
+        built,
+        staged,
+        length,
+        synced,
+        listed,
+        restored,
+        threadsSet,
+        threads,
+        storage,
+        legacy,
+        serializedSize,
+        written,
+        q3,
+        q3ByWidth,
+        filterFreed,
+        freed
+    };
 }
 async function checkSignalTypes(index, query, signal) {
     const options = { signal };

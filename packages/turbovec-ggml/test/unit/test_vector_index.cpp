@@ -2,6 +2,8 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -16,6 +18,8 @@
 #include "VectorIndexErrors.hpp"
 
 using turbovec_ggml::parseVectorStorage;
+using turbovec_ggml::SnapshotBytes;
+using turbovec_ggml::storageName;
 using turbovec_ggml::VectorIndex;
 using turbovec_ggml::VectorIndexFilter;
 using turbovec_ggml::VectorStorage;
@@ -89,6 +93,7 @@ TEST(VectorIndexTest, ParsesEveryStorageName) {
   EXPECT_EQ(parseVectorStorage("q8"), VectorStorage::Q8);
   EXPECT_EQ(parseVectorStorage("q4"), VectorStorage::Q4);
   EXPECT_EQ(parseVectorStorage("turbovec-q4"), VectorStorage::TurboVecQ4);
+  EXPECT_EQ(parseVectorStorage("turbovec-q3"), VectorStorage::TurboVecQ3);
   EXPECT_EQ(parseVectorStorage("turbovec-q2"), VectorStorage::TurboVecQ2);
   EXPECT_FALSE(parseVectorStorage("").has_value());
   EXPECT_FALSE(parseVectorStorage("q16").has_value());
@@ -105,6 +110,7 @@ TEST(VectorIndexTest, CreatesEveryStorageModeWithItsBitWidth) {
       {VectorStorage::Q8, 8},
       {VectorStorage::Q4, 4},
       {VectorStorage::TurboVecQ4, 4},
+      {VectorStorage::TurboVecQ3, 3},
       {VectorStorage::TurboVecQ2, 2}};
   for (const auto& c : cases) {
     const VectorIndex idx(128, c.storage);
@@ -676,6 +682,157 @@ TEST(VectorIndexTest, LoadFailureReportsStatusWithoutHandle) {
   VectorIndex loaded = VectorIndex::load(missing.path(), &status);
   EXPECT_EQ(status, GGML_VEC_INDEX_E_IO);
   EXPECT_FALSE(loaded.valid());
+}
+
+TEST(VectorIndexTest, StorageNamesRoundTripThroughTheParser) {
+  std::vector<const char*> names{"f32", "q8", "q4"};
+  if constexpr (TURBOVEC_TARGET) {
+    names.insert(names.end(), {"turbovec-q2", "turbovec-q3", "turbovec-q4"});
+  }
+  for (const char* name : names) {
+    const auto storage = parseVectorStorage(name);
+    ASSERT_TRUE(storage.has_value()) << name;
+    const VectorIndex idx(128, *storage);
+    EXPECT_STREQ(storageName(idx.storage()), name);
+    EXPECT_FALSE(idx.legacy()) << name;
+  }
+  EXPECT_EQ(storageName(GGML_VEC_INDEX_STORAGE_NONE), nullptr);
+  EXPECT_EQ(storageName(-1), nullptr);
+  EXPECT_EQ(storageName(GGML_VEC_INDEX_STORAGE_TURBOVEC_Q4 + 1), nullptr);
+}
+
+TEST(VectorIndexTest, IdsListsTheLiveIds) {
+  VectorIndex idx(DIM, VectorStorage::F32);
+  std::vector<uint64_t> ids{99};
+  ASSERT_EQ(idx.ids(ids), GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(ids.empty());
+
+  const Batch batch = gaussianBatch(20, 100);
+  ASSERT_EQ(
+      idx.add(batch.vectors.data(), 20, batch.ids.data()), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(idx.remove(105), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(idx.ids(ids), GGML_VEC_INDEX_OK);
+  std::sort(ids.begin(), ids.end());
+  std::vector<uint64_t> expected = batch.ids;
+  expected.erase(std::find(expected.begin(), expected.end(), 105));
+  EXPECT_EQ(ids, expected);
+}
+
+TEST(VectorIndexTest, ToBytesMatchesTheSnapshotFileAndLoadsBack) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const TempFile file("turbovec-ggml-unit-to-bytes");
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  const Batch batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
+  ASSERT_EQ(
+      idx.add(
+          batch.vectors.data(),
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
+          batch.ids.data()),
+      GGML_VEC_INDEX_OK);
+  SnapshotBytes bytes;
+  ASSERT_EQ(idx.toBytes(bytes), GGML_VEC_INDEX_OK);
+  ASSERT_NE(bytes.data, nullptr);
+  EXPECT_EQ(idx.serializedSize(), bytes.size);
+  ASSERT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
+  std::ifstream in(file.path(), std::ios::binary);
+  const std::vector<uint8_t> written(
+      (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  EXPECT_EQ(std::vector<uint8_t>(bytes.data, bytes.data + bytes.size), written);
+
+  SnapshotBytes moved(std::move(bytes));
+  EXPECT_EQ(bytes.data, nullptr); // NOLINT(bugprone-use-after-move)
+  int status = -1;
+  VectorIndex loaded = VectorIndex::fromBytes(moved.data, moved.size, &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  ASSERT_TRUE(loaded.valid());
+  EXPECT_EQ(loaded.len(), VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
+  EXPECT_EQ(loaded.storage(), GGML_VEC_INDEX_STORAGE_TURBOVEC_Q4);
+  EXPECT_TRUE(loaded.calibrated());
+  EXPECT_FALSE(loaded.staged());
+}
+
+TEST(VectorIndexTest, ToBytesAndSyncRejectOtherStorages) {
+  const TempFile file("turbovec-ggml-unit-sync-q8");
+  VectorIndex idx(DIM, VectorStorage::Q8);
+  SnapshotBytes bytes;
+  EXPECT_EQ(idx.toBytes(bytes), GGML_VEC_INDEX_E_INVALID_ARG);
+  EXPECT_EQ(bytes.data, nullptr);
+  EXPECT_EQ(idx.serializedSize(), 0U);
+  EXPECT_EQ(idx.sync(file.path()), GGML_VEC_INDEX_E_INVALID_ARG);
+
+  int status = GGML_VEC_INDEX_OK;
+  const std::vector<uint8_t> junk(64, 0);
+  const VectorIndex loaded =
+      VectorIndex::fromBytes(junk.data(), junk.size(), &status);
+  EXPECT_EQ(status, GGML_VEC_INDEX_E_BAD_MAGIC);
+  EXPECT_FALSE(loaded.valid());
+}
+
+TEST(VectorIndexTest, SyncSavesTurboVecChanges) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const TempFile file("turbovec-ggml-unit-sync");
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ2);
+  const Batch batch = gaussianBatch(40);
+  ASSERT_EQ(
+      idx.add(batch.vectors.data(), 20, batch.ids.data()), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(idx.sync(file.path()), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(
+      idx.add(batch.vectors.data() + 20 * DIM, 20, batch.ids.data() + 20),
+      GGML_VEC_INDEX_OK);
+  ASSERT_EQ(idx.sync(file.path()), GGML_VEC_INDEX_OK);
+
+  int status = -1;
+  const VectorIndex loaded = VectorIndex::load(file.path(), &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  EXPECT_EQ(loaded.len(), 40);
+  EXPECT_TRUE(loaded.contains(40));
+}
+
+TEST(VectorIndexTest, FastWriteIsLoadable) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const TempFile file("turbovec-ggml-unit-fast");
+  {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+    const auto v = unitVec(1);
+    const uint64_t id = 11;
+    ASSERT_EQ(idx.add(v.data(), 1, &id), GGML_VEC_INDEX_OK);
+    ASSERT_EQ(idx.write(file.path(), true), GGML_VEC_INDEX_OK);
+  }
+  int status = -1;
+  const VectorIndex loaded = VectorIndex::load(file.path(), &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(loaded.contains(11));
+}
+
+// A delta log could start from a reloaded fast snapshot of these storages.
+TEST(VectorIndexTest, FastWriteRejectsDeltaCapableStorages) {
+  const TempFile file("turbovec-ggml-unit-fast-q8");
+  for (const VectorStorage storage :
+       {VectorStorage::F32, VectorStorage::Q8, VectorStorage::Q4}) {
+    VectorIndex idx(DIM, storage);
+    EXPECT_EQ(idx.write(file.path(), true), GGML_VEC_INDEX_E_INVALID_ARG);
+    EXPECT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
+  }
+}
+
+TEST(VectorIndexTest, ThreadCountIsStoredAndBounded) {
+  VectorIndex idx(DIM, VectorStorage::F32);
+  EXPECT_EQ(idx.threads(), 1);
+  EXPECT_EQ(idx.setThreads(4), GGML_VEC_INDEX_OK);
+  EXPECT_EQ(idx.threads(), 4);
+  EXPECT_EQ(idx.setThreads(VectorIndex::MAX_THREADS), GGML_VEC_INDEX_OK);
+  EXPECT_EQ(idx.threads(), VectorIndex::MAX_THREADS);
+  EXPECT_EQ(idx.setThreads(0), GGML_VEC_INDEX_E_INVALID_ARG);
+  EXPECT_EQ(
+      idx.setThreads(VectorIndex::MAX_THREADS + 1),
+      GGML_VEC_INDEX_E_INVALID_ARG);
+  EXPECT_EQ(idx.threads(), VectorIndex::MAX_THREADS);
 }
 
 TEST(VectorIndexErrorsTest, MapsEveryFabricErrorCode) {

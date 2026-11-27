@@ -2,7 +2,9 @@ import RootIdMapIndex from '@qvac/turbovec-ggml'
 import IdMapIndex, {
   IdMapIndex as NamedIdMapIndex,
   IdMapIndexCallOptions,
-  IdMapIndexFilter
+  IdMapIndexFilter,
+  IdMapIndexStorage,
+  IdMapIndexWriteOptions
 } from '@qvac/turbovec-ggml/idMapIndex'
 
 const rootConstructor: typeof NamedIdMapIndex = RootIdMapIndex
@@ -36,9 +38,45 @@ export async function checkAsyncTypes(index: IdMapIndex, query: Float32Array, id
   const built: void = await index.buildIvf(1)
   const staged: void = await index.setStagedSearch(true)
   const length: number = index.length
+  const synced: void = await index.sync('index.tvim')
+  const listed: BigUint64Array = await index.ids()
+  const bytes: Uint8Array = await index.toBytes()
+  const restored: SubIdMapIndex = await SubIdMapIndex.fromBytes(bytes)
+  const threadsSet: void = await index.setThreads(4)
+  const threads: number = index.threads
+  const storage: IdMapIndexStorage = index.storage
+  const legacy: boolean = index.legacy
+  const serializedSize: number = index.serializedSize
+  const writeOptions: IdMapIndexWriteOptions = { durability: 'fast' }
+  const written: void = await index.write('index.tvim', writeOptions)
+  const q3 = new IdMapIndex({ dim: 128, storage: 'turbovec-q3', threads: 2 })
+  const q3ByWidth = new IdMapIndex({ dim: 128, bitWidth: 3 })
   const filterFreed: Promise<void> = filter.dispose()
   const freed: void = await index.dispose()
-  return { hits, removed, present, filtered, loaded, added, built, staged, length, filterFreed, freed }
+  return {
+    hits,
+    removed,
+    present,
+    filtered,
+    loaded,
+    added,
+    built,
+    staged,
+    length,
+    synced,
+    listed,
+    restored,
+    threadsSet,
+    threads,
+    storage,
+    legacy,
+    serializedSize,
+    written,
+    q3,
+    q3ByWidth,
+    filterFreed,
+    freed
+  }
 }
 
 // The shape of an AbortSignal from bare-abort-controller, the DOM, or Node.
