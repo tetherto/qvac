@@ -47,6 +47,8 @@ Release Date: 2026-11-25
   Added: MOSS_IMAGE_SFT_5B_BF16, MOSS_IMAGE_VAE, MOSS_IMAGE_SFT_TOKENIZER, BOTPSY_0_8B_TOOL_CALLING_BF16, BOTPSY_0_8B_TOOL_CALLING_Q4_K_M (and 4 more)
 - Prefix QVAC-trained model constants with QVAC_ and regenerate the catalogs. (see PR [#5941](https://github.com/tetherto/qvac/pull/5941)) - See [model changes](./models.md)
   Added: QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M, TAESDXL_VAE, TAESD_VAE
+- Add Inkling 2 Mini and Ternary Bonsai 2.5 27B model constants. (see PR [#6023](https://github.com/tetherto/qvac/pull/6023)) - See [model changes](./models.md)
+  Added: INKLING2_MINI_26B_A3B_MULTIMODAL_UD_Q4_K_M, MMPROJ_INKLING2_MINI_26B_A3B_MULTIMODAL_F16, INKLING2_MINI_26B_A3B_DSPARK_Q8_0, INKLING2_MINI_26B_A3B_DFLASH2_Q8_0, TERNARY_BONSAI_2_5_27B_MULTIMODAL_Q2_0 (and 1 more)
 
 ## 📘 Docs
 
