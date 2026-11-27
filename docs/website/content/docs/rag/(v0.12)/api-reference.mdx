@@ -77,13 +77,14 @@ The optional second argument accepts `onProgress({ stage, done, total })` and `s
 
 A document may carry no chunks — `chunks: []`, or text that is empty or only whitespace. It is stored with a `chunkCount` of 0 and matches no search.
 
-Input is validated before anything is written, and fails with `INVALID_INPUT`:
+The whole call is checked before anything is written, and fails with `INVALID_INPUT`:
 
 - a string that is not well-formed UTF-16 (a lone surrogate, such as half an emoji left by cutting a string) in a name, ID, text, chunk content, metadata, or space field;
 - a stored row over 8 MiB — a chunk with its content, metadata, and vector, or a document with its metadata;
 - a `__proto__` key in `metadata`;
-- a `signal` that is not an `AbortSignal`;
-- a generation above 2^32.
+- a `signal` that is not an `AbortSignal`.
+
+Documents then commit one at a time, in input order, each as soon as its chunks are embedded. So a failure part-way through leaves the documents before it saved, and the failing one at the generation it already had; an abort skips the rest. One failure is reached only here: a document already at generation 2^32 cannot be replaced, and raises `INVALID_INPUT` when its turn comes rather than up front, because the generation is read from the store. Use the returned `documents` to see what was saved, rather than treating the call as all-or-nothing.
 
 Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced`, or `unchanged`.
 
