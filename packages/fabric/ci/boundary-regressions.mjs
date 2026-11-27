@@ -1,4 +1,4 @@
-// Build and exercise the registry port, including /MDd on Windows.
+// Build and exercise the draft overlay port, including /MDd on Windows.
 import { spawnSync } from 'node:child_process'
 import { accessSync, chmodSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, join, delimiter, dirname } from 'node:path'
@@ -65,7 +65,8 @@ if (phase === 'build') {
     `--triplet=${triplet}`,
     `--x-manifest-root=${join(pkg, 'test/native')}`,
     `--x-install-root=${join(build, 'vcpkg_installed')}`,
-    `--overlay-triplets=${build}`
+    `--overlay-triplets=${build}`,
+    `--overlay-ports=${join(root, 'vcpkg-overlays/ports')}`
   ])
   required(cmake, [
     '-S',
