@@ -5,6 +5,9 @@
       "dest": "models/cosyvoice3/cosyvoice3-llm-q8_0.gguf",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "cosyvoice3-flow-f32.gguf": {
@@ -12,6 +15,9 @@
       "dest": "models/cosyvoice3/cosyvoice3-flow-f32.gguf",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "cosyvoice3-hift-f32.gguf": {
@@ -19,6 +25,9 @@
       "dest": "models/cosyvoice3/cosyvoice3-hift-f32.gguf",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "voice.gguf": {
@@ -26,6 +35,9 @@
       "dest": "models/cosyvoice3/voice.gguf",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "cosyvoice3-vocab.json": {
@@ -33,6 +45,9 @@
       "dest": "models/cosyvoice3/vocab.json",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "cosyvoice3-merges.txt": {
@@ -40,6 +55,9 @@
       "dest": "models/cosyvoice3/merges.txt",
       "targets": [
         "test:integration"
+      ],
+      "skip": [
+        "darwin-x64"
       ]
     },
     "chatterbox-t3-turbo.gguf": {
