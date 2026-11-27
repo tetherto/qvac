@@ -217,7 +217,7 @@ export const executor = createExecutor({
     new RerankExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
-    new ModelFitExecutor(resources, hostLlamaOnCpu),
+    new ModelFitExecutor(resources, hostLlamaOnCpu, Platform.OS),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new PathTraversalExecutor(),
