@@ -84,7 +84,9 @@ The whole call is checked before anything is written, and fails with `INVALID_IN
 - a `__proto__` key in `metadata`;
 - a `signal` that is not an `AbortSignal`.
 
-Documents then commit one at a time, in input order, each as soon as its chunks are embedded. So a failure part-way through leaves the documents before it saved, and the failing one at the generation it already had; an abort skips the rest. One failure is reached only here: a document already at generation 2^32 cannot be replaced, and raises `INVALID_INPUT` when its turn comes rather than up front, because the generation is read from the store. Use the returned `documents` to see what was saved, rather than treating the call as all-or-nothing.
+Documents then commit one at a time, in input order, each as soon as its chunks are embedded. So a failure part-way through leaves the documents before it saved, and the failing one at the generation it already had; an abort skips the rest. One failure is reached only here: a document already at generation 2^32 cannot be replaced, and raises `INVALID_INPUT` when its turn comes rather than up front, because the generation is read from the store.
+
+The two exits differ. An abort returns normally, with `cancelled` true and `documents` listing what committed before it. Every other failure throws, so there is no result to read even though the documents before it are saved — list the namespace to see what landed.
 
 Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced`, or `unchanged`.
 
