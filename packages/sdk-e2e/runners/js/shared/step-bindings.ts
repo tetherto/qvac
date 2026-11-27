@@ -354,13 +354,27 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     return { markedAt: state.cutoffMs }
   },
 
-  /** Reads until enough entries have arrived past the mark, or the window closes. */
+  /**
+   * Reads until enough entries have arrived past the mark, or the window closes. With
+   * `containing`, only entries whose message holds that text count and are returned.
+   */
   loggingStreamCollect: async (params: never) => {
-    const p = params as { streamId: string; target?: number; timeoutMs?: number }
+    const p = params as {
+      streamId: string
+      target?: number
+      timeoutMs?: number
+      containing?: string
+    }
     const state = loggingStreamState(p.streamId)
     const target = p.target ?? 1
     const deadline = Date.now() + (p.timeoutMs ?? 5000)
-    const since = () => state.collected.filter((entry) => entry.timestamp >= state.cutoffMs)
+    const { containing } = p
+    const since = () =>
+      state.collected.filter(
+        (entry) =>
+          entry.timestamp >= state.cutoffMs &&
+          (containing === undefined || entry.message.includes(containing))
+      )
     while (since().length < target && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }

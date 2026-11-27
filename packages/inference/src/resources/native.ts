@@ -1,12 +1,7 @@
 import os from 'bare-os'
 import { randomUUID } from 'bare-crypto'
 import type { ResourceCollectorDependencies } from '@/resources/types'
-
-// Load independently so one unavailable native addon cannot disable the other collector.
-const [cpuModule, gpuModule] = await Promise.allSettled([
-  import('bare-cpu-info'),
-  import('bare-gpu-info')
-])
+import { cpuModule, gpuModule } from '@/resources/native-modules.cjs'
 
 function supportedEnumValues(values: Record<string, number>, unknownValue: number) {
   return Object.values(values).filter((value) => value !== unknownValue)
@@ -14,17 +9,14 @@ function supportedEnumValues(values: Record<string, number>, unknownValue: numbe
 
 const cpuArchitectures =
   cpuModule.status === 'fulfilled'
-    ? supportedEnumValues(
-        cpuModule.value.default.constants.arch,
-        cpuModule.value.default.constants.arch.UNKNOWN
-      )
+    ? supportedEnumValues(cpuModule.value.constants.arch, cpuModule.value.constants.arch.UNKNOWN)
     : []
 
 const gpuTypes =
   gpuModule.status === 'fulfilled'
     ? supportedEnumValues(
-        gpuModule.value.default.constants.gpuType,
-        gpuModule.value.default.constants.gpuType.UNKNOWN
+        gpuModule.value.constants.gpuType,
+        gpuModule.value.constants.gpuType.UNKNOWN
       )
     : []
 
@@ -37,11 +29,11 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
   platform: os.platform(),
   createCPUInfo() {
     if (cpuModule.status !== 'fulfilled') return undefined
-    return new cpuModule.value.default()
+    return new cpuModule.value()
   },
   createGPUInfo() {
     if (gpuModule.status !== 'fulfilled') return undefined
-    return new gpuModule.value.default()
+    return new gpuModule.value()
   },
   createGPUId() {
     return randomUUID()
@@ -49,15 +41,18 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
   now() {
     return Date.now()
   },
-  sampleProcessMemory() {
-    // A throw here is a sampling failure, not a platform gap: let it reach the
-    // collector so the metric reports `failed` rather than `unavailable`.
+  // A throw from either reader is a sampling failure, not a platform gap: it
+  // reaches the collector so that metric reports `failed` rather than
+  // `unavailable`. `os.memoryUsage()` throws on JavaScriptCore, whose binding
+  // has no heap statistics, and the allowance is read all the same.
+  sampleProcessUsedBytes() {
     const usage = os.memoryUsage()
-    const available = reportsProcessAllowance ? os.availableMemory() : 0
-    return {
-      usedBytes: usage && usage.rss > 0 ? usage.rss : undefined,
-      // Zero states no headroom, which is not a budget.
-      availableBytes: available > 0 ? available : undefined
-    }
+    return usage && usage.rss > 0 ? usage.rss : undefined
+  },
+  sampleProcessAvailableBytes() {
+    if (!reportsProcessAllowance) return undefined
+    const available = os.availableMemory()
+    // Zero states no headroom, which is not a budget.
+    return available > 0 ? available : undefined
   }
 }

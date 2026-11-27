@@ -75,18 +75,6 @@ export interface GPUInfoContext {
   destroy(): void
 }
 
-/**
- * The process's own memory position, as opposed to the system-wide view.
- *
- * @property usedBytes - The process's resident footprint (RSS).
- * @property availableBytes - How much more this process may allocate before
- *   the OS intervenes. `undefined` where the platform states no such limit.
- */
-export interface ProcessMemorySample {
-  usedBytes: number | undefined
-  availableBytes: number | undefined
-}
-
 export interface ResourceCollectorDependencies {
   cpuArchitectures: readonly number[]
   gpuTypes: readonly number[]
@@ -96,7 +84,18 @@ export interface ResourceCollectorDependencies {
   createGPUInfo(): GPUInfoContext | undefined
   createGPUId(): string
   now(): number
-  sampleProcessMemory(): ProcessMemorySample
+  /**
+   * The process's resident footprint (RSS), or `undefined` where the platform
+   * does not expose it. Read apart from the allowance: a throw fails this
+   * reading only.
+   */
+  sampleProcessUsedBytes(): number | undefined
+  /**
+   * How much more this process may allocate before the OS intervenes, or
+   * `undefined` where the platform states no such limit. A throw fails this
+   * reading only.
+   */
+  sampleProcessAvailableBytes(): number | undefined
 }
 
 export interface SystemResourceCollector {

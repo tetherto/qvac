@@ -23,7 +23,7 @@
     "react-native-bare-kit": "^0.17.1",
     "react-native-worklets": "0.13.0",
     "react-native-performance-toolkit": "0.3.1",
-    "react-native-nitro-modules": "0.35.4",
+    "react-native-nitro-modules": "0.37.2",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.11.2",

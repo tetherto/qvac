@@ -5,6 +5,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import { generateShortHash, getModelsCacheDir, renameWithCachedChecksum } from '@/utils/index'
 import { DownloadCancelledError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
+import '@/runtime/dispose-symbols'
 
 const logger = getEngineLogger()
 

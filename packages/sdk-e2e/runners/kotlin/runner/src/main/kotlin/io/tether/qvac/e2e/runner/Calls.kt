@@ -695,8 +695,13 @@ class Calls(
         val state = logStream(params["streamId"])
         val target = asDouble(params["target"])?.toInt() ?: 1
         val deadline = System.currentTimeMillis() + (asDouble(params["timeoutMs"])?.toLong() ?: 5000L)
+        // With `containing`, only entries whose message holds that text count and are returned.
+        val containing = params["containing"]?.toString()
         fun since() = synchronized(state.collected) {
-            state.collected.filter { (asDouble(it["timestamp"]) ?: 0.0) >= state.cutoffMs }
+            state.collected.filter {
+                (asDouble(it["timestamp"]) ?: 0.0) >= state.cutoffMs &&
+                    (containing == null || it["message"]?.toString()?.contains(containing) == true)
+            }
         }
         while (since().size < target && System.currentTimeMillis() < deadline) delay(50)
         return mapOf("entries" to since())

@@ -123,6 +123,7 @@ Generate a tree-shaken Bare worker bundle with selected plugins.
 | `--language <language>` | Language of the app that starts the worker: `javascript` (default) or `python` |
 | `--host <host>` | Host to bundle for (repeatable). Defaults to this machine, or every phone host for `react-native` |
 | `--defer <module>` | Defer a module (repeatable) |
+| `--ios-engine <engine>` | Engine the worker runs with on iOS, for `--target react-native`: `javascriptcore` (default) or `v8`. With `v8` the app must carry the `com.apple.developer.kernel.extended-virtual-addressing` entitlement, which free Apple developer accounts cannot sign with |
 | `--no-install` | Do not install missing addon platform packages for phone hosts |
 | `-q, --quiet` | Minimal output |
 | `-v, --verbose` | Detailed output |

@@ -240,6 +240,7 @@ qvac bundle sdk [options]
 | `--language <lang>`   | Language of the app that starts the worker: `javascript` (default) or `python`                                     |
 | `--host <host>`       | Host to bundle for (repeatable). Defaults to this machine, or every phone host for `react-native`                  |
 | `--defer <module>`    | Defer a module (repeatable)                                                                                        |
+| `--ios-engine <name>` | Engine for the iOS worker with `react-native`: `javascriptcore` (default) or `v8` (needs an entitlement)           |
 | `--no-install`        | Do not install missing addon platform packages for phone hosts                                                     |
 | `--quiet, -q`         | Minimal output                                                                                                     |
 | `--verbose, -v`       | Detailed output                                                                                                    |
@@ -253,6 +254,11 @@ qvac bundle sdk
 
 # Bundle for React Native and write Bare Kit and the addons into android/ and ios/
 qvac bundle sdk --target react-native
+
+# Run the iOS worker on V8 instead of JavaScriptCore. The app must carry the
+# com.apple.developer.kernel.extended-virtual-addressing entitlement, which free
+# Apple developer accounts cannot sign with.
+qvac bundle sdk --target react-native --ios-engine v8
 
 # Bundle for a Python app, which starts it with Client(worker_path="qvac/worker")
 qvac bundle sdk --language python

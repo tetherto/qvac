@@ -250,12 +250,15 @@ async def _logging_stream_collect(transport: Any, params: dict[str, Any]) -> Any
     state = _logging_state(params["streamId"])
     target = int(params.get("target") or 1)
     deadline = time.monotonic() + (float(params.get("timeoutMs") or 5000) / 1000)
+    # With `containing`, only entries whose message holds that text count and are returned.
+    containing = params.get("containing")
 
     def since() -> list[Any]:
         return [
             entry
             for entry in state["collected"]
             if (entry or {}).get("timestamp", 0) >= state["cutoffMs"]
+            and (containing is None or str(containing) in str((entry or {}).get("message", "")))
         ]
 
     while len(since()) < target and time.monotonic() < deadline:

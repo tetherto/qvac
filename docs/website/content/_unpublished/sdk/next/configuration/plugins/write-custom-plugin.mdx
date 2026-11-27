@@ -64,6 +64,7 @@ Write plugin code that can be statically bundled. Guidelines:
 - Avoid Node-only standard library usage in worker/plugin code.
 - Avoid dynamic imports in worker/plugin code.
 - Keep worker/plugin imports static and predictable.
+- Do not use top-level `await` in worker/plugin code. On iOS the worker runs on JavaScriptCore by default, which has no ES modules, so the bundle converts every module to CommonJS. Bundling for iOS fails, naming the module, when one uses it.
 
 ## Handler payload rules
 

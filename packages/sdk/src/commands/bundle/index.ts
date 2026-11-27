@@ -23,7 +23,12 @@ import {
   listBundledAddonModules,
   listBundledAddons
 } from '@/commands/bundle/addons'
-import { assertReactNativeBareKitSupported, stageAddons } from '@/commands/bundle/link'
+import {
+  assertReactNativeBareKitSupported,
+  DEFAULT_IOS_ENGINE,
+  stageAddons,
+  type IosEngine
+} from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
@@ -121,6 +126,13 @@ export interface BundleSdkOptions {
    * list links only those hosts. Defaults to true.
    */
   link?: boolean | string[] | undefined
+  /**
+   * The JavaScript engine Bare Kit runs the worker with on iOS. Defaults to
+   * `'javascriptcore'`, which every Apple developer account can sign. `'v8'`
+   * needs the `com.apple.developer.kernel.extended-virtual-addressing`
+   * entitlement, which free accounts cannot sign with.
+   */
+  iosEngine?: IosEngine | undefined
 }
 
 export interface BundleSdkResult {
@@ -196,6 +208,7 @@ interface VerifyOutputOptions {
   hosts: string[]
   target: BundleTarget
   network: boolean | undefined
+  iosEngine: IosEngine | undefined
   logger: Logger
 }
 
@@ -223,7 +236,7 @@ function bundlerBareStowDir(): string {
 }
 
 async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleResult> {
-  const { projectRoot, bundlePath, hosts, target, network, logger } = options
+  const { projectRoot, bundlePath, hosts, target, network, iosEngine, logger } = options
 
   logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
@@ -233,6 +246,7 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
     bareStowDir: bundlerBareStowDir(),
     desktopRuntime: DESKTOP_RUNTIMES[target],
     ...(network !== undefined ? { network } : {}),
+    ...(iosEngine !== undefined ? { iosEngine } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
 
@@ -268,6 +282,23 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
   return result
 }
 
+/**
+ * The React Native target's options for a bundle that iOS runs on
+ * JavaScriptCore, which has no ES modules: bare-stow then converts every module
+ * to CommonJS. The phones share one bundle, so Android loads the converted
+ * modules as well. Undefined for every other bundle, which keeps its ES modules.
+ */
+export function reactNativeTargetOptions(
+  target: BundleTarget,
+  iosEngine: IosEngine | undefined,
+  hosts: string[]
+): stow.TargetOptions | undefined {
+  if (target !== 'react-native') return undefined
+  if ((iosEngine ?? DEFAULT_IOS_ENGINE) !== 'javascriptcore') return undefined
+  if (!hosts.some((host) => host.startsWith('ios-'))) return undefined
+  return { ios: { engine: 'javascriptcore' } }
+}
+
 function defaultHosts(target: BundleTarget): string[] {
   if (target === 'react-native') return DEFAULT_HOSTS.filter(isMobileHost)
   if (target === 'bare-kit') return DEFAULT_HOSTS.filter((host) => host.startsWith('android-'))
@@ -286,6 +317,7 @@ interface StowBundleOptions {
   hosts: string[]
   imports: ImportsMap
   deferModules: string[]
+  targetOptions: stow.TargetOptions | undefined
 }
 
 /** Writes bare-stow's harness package for the target to `outputDir`, and returns the bundle's path. */
@@ -303,7 +335,8 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
     defer: deferModules,
     hosts,
     language,
-    languageOptions: options.languageOptions
+    languageOptions: options.languageOptions,
+    ...(options.targetOptions !== undefined && { targetOptions: options.targetOptions })
   }
 
   let bundlePath: string | undefined
@@ -353,24 +386,6 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
       'builds for, or leave it out of the bundle with `defer`.',
     { cause: error }
   )
-}
-
-/**
- * Packages every importer gets from the SDK's own dependencies. Their newer
- * releases need a newer Bare than the Bare Kit this SDK links, and a project
- * may install one through another package's range.
- */
-const SDK_PINNED_MODULES = ['bare-type']
-
-function pinSdkModules(imports: ImportsMap, sdkPath: string, logger: Logger) {
-  const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
-  for (const name of SDK_PINNED_MODULES) {
-    try {
-      imports[name] = pathToFileURL(sdkRequire.resolve(name)).href
-    } catch {
-      logger.debug(`   ${name} is not among the SDK's dependencies; bundling the project's`)
-    }
-  }
 }
 
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
@@ -510,8 +525,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
   }
 
-  pinSdkModules(imports, sdkPath, logger)
-
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
   for (const spec of pluginSpecifiers) {
@@ -544,6 +557,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   await removeStaleScratch(outputDir)
   await removeStaleScratch(scanOutputDir)
 
+  const targetOptions = reactNativeTargetOptions(target, options.iosEngine, hosts)
+
   const stowOptions = {
     projectRoot,
     entryPath,
@@ -553,7 +568,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     outputDir,
     hosts,
     imports,
-    deferModules
+    deferModules,
+    targetOptions
   }
 
   const addonsMissingPlatformPackages = () =>
@@ -649,6 +665,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         hosts,
         target,
         network: options.network,
+        iosEngine: options.iosEngine,
         logger
       })
     }
@@ -662,6 +679,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         hosts: linkHosts,
         imports,
         defer: deferModules,
+        iosEngine: options.iosEngine,
         logger
       })
       staged.push(...nativeModules.staged)
