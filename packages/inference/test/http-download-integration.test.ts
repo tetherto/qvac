@@ -285,8 +285,15 @@ test('downloadModelFromHttp: an empty cache is not marked when HEAD gives no siz
   fs.rmSync(completeMarkerPath(modelPath))
 
   await downloadModelFromHttp(url)
-  t.ok(bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT), 'the empty file was downloaded again')
-  t.is(fs.readFileSync(completeMarkerPath(modelPath), 'utf8'), String(CONTENT.length), 'the marker has the real size')
+  t.ok(
+    bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT),
+    'the empty file was downloaded again'
+  )
+  t.is(
+    fs.readFileSync(completeMarkerPath(modelPath), 'utf8'),
+    String(CONTENT.length),
+    'the marker has the real size'
+  )
   await server.close()
 })
 
