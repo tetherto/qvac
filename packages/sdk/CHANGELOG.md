@@ -591,6 +591,7 @@ QvacMessage.user(
 - The registry client printed its log to the console regardless of `loggerConsoleOutput`. It now prints only when that setting is on.
 - When the worker failed before it signalled ready, `WorkerStartupError` said only that it failed. Its message now includes the worker's own error.
 - The model fit check now passes `image-max-megapixels` to the language model fitter, so the fit request carries the same image limit as the load.
+- `npm install @qvac/sdk` could fail with `ERESOLVE` after `bare-stow-target-react-native@0.3.1` was published, because that version needs a newer `bare-stow` than the SDK pins. The SDK now pins `bare-stow-target-react-native` to `0.3.0`.
 
 ## Model Changes
 

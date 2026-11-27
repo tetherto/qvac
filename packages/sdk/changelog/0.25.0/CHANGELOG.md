@@ -40,6 +40,7 @@ Release Date: 2026-11-25
 - Pass image-max-megapixels to llm-llamacpp's fitter. (see PR [#5940](https://github.com/tetherto/qvac/pull/5940))
 - Show why qvac serve re-downloads a cached model. (see PR [#5959](https://github.com/tetherto/qvac/pull/5959))
 - Drop a KV cache file the addon cannot load. (see PR [#5968](https://github.com/tetherto/qvac/pull/5968))
+- Pin bare-stow-target-react-native to 0.3.0 so npm installs resolve. (see PR [#6020](https://github.com/tetherto/qvac/pull/6020))
 
 ## 📦 Models
 
