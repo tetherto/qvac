@@ -85,7 +85,11 @@ common_speculative_type detectSpeculativeType(const std::string& path);
 /// Resolves `spec-type: "auto"` with `detectSpeculativeType`, then copies
 /// `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
-/// before it creates the target context (`server_output_limits`). A draft
+/// before it creates the target context (`server_output_limits`). Without
+/// `spec-draft-n-max`, `n_max` takes fabric's default for the resolved type
+/// (`common_speculative_set_default_n_max`: 5 for `draft-dflash`, 3
+/// otherwise); throws `std::invalid_argument` when `spec-draft-n-min`
+/// exceeds it. A draft
 /// model (DFlash or an external MTP head) is placed like the target model
 /// (its GPU layers and devices), since the addon has no separate options for
 /// it. `n_max` is

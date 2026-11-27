@@ -19,18 +19,31 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
 - Write every turn's cache with `saveCache` once the run finishes. The addon
   otherwise keeps it in memory, and the session, the auto-cache rename and a
   restart all read the file.
-- Validate a newly written cache before marking it initialized. The addon
-  commits or rolls back a cancelled or failed request itself (a cancel after
-  prefill keeps the prompt and the tokens streamed so far), so keep the file
-  rather than deleting it; only an auto cache with no key to move to is
-  dropped, and the addon's copy of the conversation goes with the file.
+- Validate a newly written cache before marking it initialized. The addon commits
+  or rolls back cancelled and failed requests, so keep the last committed file
+  after an ordinary request failure. A cancellation after prefill keeps the
+  prompt and the tokens streamed so far. If the addon refuses to load the turn's
+  own file, roll back the turn, delete the file and discard the addon's copy.
+  A failure loading a seed leaves the seed alone. Also roll back an auto cache
+  when the turn has no key to save it under.
 - Use `deleteCache({ auto: true })` to reclaim inactive auto caches without
   deleting caller-owned named caches; active cache keys remain protected.
 - Prompt-prefix sharing across cache identities is opt-in at model load. The SDK
   sends `cache_share_across_keys: false` when it is omitted, so a keyed request
   reuses only its own state and a keyless request starts cold and resets. Set it
   to `true` to let any request reuse the longest prefix held by another
-  conversation; keyless state then remains available in model memory.
+  conversation; keyless state then remains available in model memory. The
+  setting stays part of the model id, but not of the cache folder name, so
+  turning it on keeps reading the files existing conversations already wrote.
+- The cache folder name also ignores other settings that cannot change what a
+  cache file holds. A sent `verbosity` counts as its default `0`, so loads that
+  send different values share a folder. Unlike `cache_share_across_keys`, which
+  the SDK always fills in, an omitted `verbosity` stays omitted, so a load that
+  omits it and one that sends it get different folders. `openclCacheDir` and
+  `cache_ram_mib` are left out. A load whose folder name differs from its model
+  id records the mapping under `~/.qvac/kv-cache-dir-ids/`, so
+  `deleteCache({ kvCacheKey, modelId })` finds the folder in a process that has
+  not loaded the model.
 
 Implementation and focused tests are authoritative for the current cache format.
 

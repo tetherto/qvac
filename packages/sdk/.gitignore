@@ -12,3 +12,4 @@ qvac/
 PR_DESCRIPTION.md
 examples/finetune/results/
 *.tgz
+/contract/*.json

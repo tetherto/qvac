@@ -1,5 +1,6 @@
 import { requestParent } from '@/schemas/plugin'
-import ImageClassifier from '@qvac/classification-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
+import ImageClassifier, { assessFit as classificationAssessFit } from '@qvac/classification-ggml'
 import {
   definePlugin,
   defineHandler,
@@ -14,6 +15,7 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { classify } from '@/plugins/builtin/ggml-classification/ops/classify'
+import { classificationFitRequest } from '@/plugins/builtin/ggml-classification/fit'
 import { InferenceCancelledError } from '@/errors/index'
 import { getRequestRegistry } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
@@ -23,6 +25,8 @@ export const classificationPlugin = definePlugin({
   displayName: 'Image Classification (GGML)',
   addonPackage: ADDON_CLASSIFICATION,
   loadConfigSchema: classificationConfigSchema,
+  fitRequest: classificationFitRequest,
+  assessFit: classificationAssessFit,
   skipPrimaryModelPathValidation: true,
 
   createModel(params: CreateModelParams): PluginModelResult {
@@ -59,6 +63,7 @@ export const classificationPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.classification],
   handlers: {
     classify: defineHandler({
       requestSchema: classifyRequestSchema,

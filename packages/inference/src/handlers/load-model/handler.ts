@@ -15,7 +15,13 @@ import { withModelWorkLock } from '@/runtime/model-work-lock'
 import { createResolveSession } from '@/handlers/load-model/resolve-session'
 import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
-import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/utils/index'
+import {
+  generateShortHash,
+  canonicalConfigString,
+  kvCacheIdentityConfig,
+  recordKvCacheDirId,
+  transformConfigForReload
+} from '@/utils/index'
 import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
 import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import {
@@ -135,15 +141,21 @@ export async function handleLoadModel(
     // (`plugin.createModel(...)` / `model.load(false)`) does not accept
     // an abort signal, so cancel is honored at gates: here, if cancel
     // arrived during download / resolveConfig, and inside `loadModel`
-    // after its fit check. Both surface `InferenceCancelledError`
-    // before sinking time into the addon work.
+    // after its fit check and again after the native load, where the
+    // loaded model is unloaded instead of registered.
     if (ctx.signal.aborted) {
       throw new InferenceCancelledError(requestId)
     }
+    ctx.startLoadDeadline()
 
     const configStr = canonicalConfigString(request.modelConfig)
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
     const modelId = generateShortHash(modelHashInput)
+    const kvCacheIdentityStr = canonicalConfigString(kvCacheIdentityConfig(request.modelConfig))
+    await recordKvCacheDirId(
+      modelId,
+      generateShortHash(`${request.modelType}:${modelSrc}:${kvCacheIdentityStr}`)
+    )
 
     let pluginArtifacts: Record<string, string> = {}
     if (pluginResolveResult) {
@@ -185,15 +197,6 @@ export async function handleLoadModel(
       }
     )
 
-    // Load phase soft-cancel limitation: `plugin.createModel(...)` and
-    // `model.load(false)` ran without a signal. A cancel that arrived
-    // during the load phase has just landed in the registry but the
-    // model is now loaded and registered. Surface
-    // `InferenceCancelledError` so the caller's promise rejects
-    // consistently — even though the model state is the "loaded"
-    // post-condition. The orphan-model edge case is a known
-    // limitation that requires a per-load cancel surface on the addon
-    // to fix end-to-end.
     if (ctx.signal.aborted) {
       throw new InferenceCancelledError(requestId)
     }
@@ -271,6 +274,8 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
     sessionId: resolveSessionId(request),
     kind: 'loadModel'
   })
+  // A reload downloads nothing, so its load deadline covers all of it.
+  ctx.startLoadDeadline()
   try {
     // Under the same lock as a load of this id: a session loading the same
     // configuration waits until the reload is done instead of taking a lease

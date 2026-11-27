@@ -1,0 +1,86 @@
+name: Pull request of a workflow_run
+description: >-
+  The open PR a workflow_run build is for, from the API, matched on the trigger's head SHA, repository and branch.
+  Outputs ok=false when there is none or it moved on; refuses fork PRs that change .github/. Load it from the default
+  branch. On any other event it passes the run's own ref through.
+
+inputs:
+  github-token:
+    description: Token with pull-requests and actions read, and statuses write when status-context is set
+    required: true
+  branches:
+    description: Base branches built, names or prefixes ending in *
+    required: true
+  paths:
+    description: Path prefixes, one of which the PR must change; empty builds any change
+    default: ""
+  labels:
+    description: Labels that route this workflow; any other applied label reruns as a push. Empty routes every label
+    default: ""
+  status-context:
+    description: Commit status to set pending, or failed when refused, on the PR head
+    default: ""
+
+outputs:
+  ok:
+    description: true when the run builds
+    value: ${{ steps.pr.outputs.ok }}
+  refused:
+    description: Why a fork PR was refused, else empty
+    value: ${{ steps.pr.outputs.refused }}
+  pr:
+    description: PR number; empty outside workflow_run
+    value: ${{ steps.pr.outputs.pr }}
+  sha:
+    description: The 40-character commit to build
+    value: ${{ steps.pr.outputs.sha }}
+  repository:
+    description: The repository holding that commit
+    value: ${{ steps.pr.outputs.repository }}
+  same-repo:
+    description: true for a branch of this repository, from the API
+    value: ${{ steps.pr.outputs.same-repo }}
+  fork:
+    description: true for a fork PR, from the API
+    value: ${{ steps.pr.outputs.fork }}
+  draft:
+    description: true for a draft PR
+    value: ${{ steps.pr.outputs.draft }}
+  base-ref:
+    description: The PR's base branch
+    value: ${{ steps.pr.outputs.base-ref }}
+  base-sha:
+    description: The PR's base commit
+    value: ${{ steps.pr.outputs.base-sha }}
+  labels:
+    description: JSON array of the PR's label names
+    value: ${{ steps.pr.outputs.labels }}
+  action:
+    description: The PR event this run stands for, synchronize, labeled or reopened
+    value: ${{ steps.pr.outputs.action }}
+  label:
+    description: The label applied, for a labeled run
+    value: ${{ steps.pr.outputs.label }}
+  event:
+    description: A pull_request event payload rebuilt from the API, for scripts that read one
+    value: ${{ steps.pr.outputs.event }}
+
+runs:
+  using: composite
+  steps:
+    - id: pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        TRIGGER_ID: ${{ github.event.workflow_run.id }}
+        DISPATCH_PR: ${{ github.event.inputs.pr }}
+        DISPATCH_SHA: ${{ github.event.inputs.sha }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        BRANCHES: ${{ inputs.branches }}
+        PATHS: ${{ inputs.paths }}
+        LABELS: ${{ inputs.labels }}
+        STATUS_CONTEXT: ${{ inputs.status-context }}
+      run: node "$GITHUB_ACTION_PATH/workflow-run-pr.mjs"

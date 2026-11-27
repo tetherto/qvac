@@ -4,6 +4,67 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.1] - 2026-11-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.33.0` -> `^0.34.0`, which carries
+  `qvac-fabric` `12032.0.1` -> `12032.2.0`
+  ([#6016](https://github.com/tetherto/qvac/pull/6016)): Inkling 2 and
+  Inkling 2 Mini with the DSpark and DFlash2 speculative drafters, qwen4exp
+  sparse attention over per-token K/V rows, and Vulkan fusions and RDNA3 and
+  RDNA4 matmul tuning. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.34.0` with it.
+- `@qvac/fabric` 0.34 changes the RPC protocol from 118 to 119 and the
+  `common.h` structs, so it is not ABI-compatible with 0.33.x. Every addon
+  loaded in one process must resolve the same `@qvac/fabric` minor.
+  This is a patch release, so existing caret ranges pick it up: mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.34.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.36.0] - 2026-11-23
+
+### Security
+
+- Native OpenCV moves from `opencv4` 4.11.0 to 4.14.0. The PNG decoder in
+  4.11.0 does not bounds-check animated PNG (APNG) frames, so a crafted image
+  passed to OCR can overflow the heap. The fixes ship from OpenCV 4.12.0
+  ([opencv#26739](https://github.com/opencv/opencv/pull/26739),
+  [opencv#26782](https://github.com/opencv/opencv/pull/26782),
+  [opencv#26854](https://github.com/opencv/opencv/pull/26854),
+  [opencv#27138](https://github.com/opencv/opencv/pull/27138)), and
+  `vcpkg.json` now requires `opencv4` `>= 4.12.0`. Existing binaries require a
+  rebuild.
+- The `microsoft/vcpkg` registry block that owns OpenCV moves from
+  `16c71a39` (June 2025) to the `2026.10.16` release, which also updates the
+  image codecs OpenCV links: libpng 1.6.47 -> 1.6.59, libjpeg-turbo 3.1.0 ->
+  3.2.0, libwebp 1.5.0 -> 1.6.0, tiff 4.7.0 -> 4.7.2, liblzma 5.8.1 -> 5.8.4
+  and zlib 1.3.1 -> 1.3.2. libjpeg-turbo 3.2 depends on `libspng` and OpenCV
+  4.14 on `cpu-features` (Android), so both now resolve from that block. Brotli
+  keeps its own baseline.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. It also brings 0.32's
+  Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)), which installs CUDA
+  automatically. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.31.x or
+  0.32.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
+- This package needed no code change for the new fabric.
+
+- The image-decode FuzzTest seeds a two-frame animated PNG, so bounded fuzzing
+  reaches the APNG frame-control path.
+
 ## [0.35.0] - 2026-11-19
 
 ### Changed

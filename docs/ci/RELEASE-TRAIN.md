@@ -77,11 +77,13 @@ native addon's copy has no prebuilds, so the train never links one (see
 
 5. Write a changelog section for each package (`qv-sdk-changelog`). The
    `@qvac/sdk` section also carries the Python and Kotlin clients, which have
-   no changelog of their own. When the train moves `@qvac/sdk`, bring
-   `packages/sdk-python` and `packages/sdk-kotlin` to its new version (the
-   `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`). The
-   `sdk-kotlin` check fails on a Kotlin version that does not match, and
-   sdk-kotlin's `verify:generated` in `sdk-checks.yml` checks it on both PRs.
+   no changelog of their own. Both clients are generated from the SDK at build
+   time and the Python package takes the SDK's version. When the train moves
+   `@qvac/sdk`, bring `packages/sdk-kotlin/package.json`'s version and
+   `@qvac/sdk` pin to its new version (the `sdk-kotlin` sync of
+   `qv-sdk-inference-version`). The `sdk-kotlin` check fails on a Kotlin version
+   that does not match, and sdk-kotlin's typecheck in `sdk-checks.yml` checks it
+   on both PRs.
 
    Take every package outside the train out of the workspace in a separate
    commit. pnpm links a workspace package whenever its version satisfies the
@@ -189,13 +191,13 @@ Before npm publish:
   npm does not have yet.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as their `verify:deps` targets run it.
-- **`sdk-python`**: the Python contract check, build, version lockstep and
-  `twine check`.
-- **`sdk-kotlin`**: `sdk-checks.yml`'s sdk-kotlin checks on every published runtime
-  profile, against the workspace `@qvac/sdk` and `@qvac/inference`: version
-  lockstep, contract, unit tests, the Maven publications and the standalone
-  consumers. Needs the `@qvac/sdk` GitHub release, which the Maven zips attach
-  to.
+- **`sdk-python`**: the Python client generated from this commit's SDK, the
+  wheel and source package built at the SDK's version, and `twine check`.
+- **`sdk-kotlin`**: `sdk-checks.yml`'s sdk-kotlin checks against the workspace
+  `@qvac/sdk` and `@qvac/inference`: version lockstep, the generated client
+  compiled for the JVM, and the generator, wire-vocabulary and JVM unit tests.
+  `publish-kotlin.yml` builds every runtime profile's Maven zip and attaches
+  them to the `@qvac/sdk` GitHub release, with no tests of its own.
 - **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
   `@qvac/inference` tarball, as `publish-npm.yml` runs it for an inference release. Pin upstream
   with the `PEAR_E2E_*_VERSION` repository variables.
@@ -206,9 +208,13 @@ After npm publish, `package-checks` runs again with every package installed
 from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
 for it.
 
-On the release PR, outside `release-train.yml`: when the PR touches the SDK,
-`sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select,
-including the Kotlin worker conformance leg.
+On the release PR, outside `release-train.yml`: when the PR touches the SDK or a
+client, `sdk-e2e.yml` runs the full e2e suite in every language on Linux, Mac,
+Windows, Android and iOS. Python installs the wheel PyPI gets and Kotlin on
+Android builds against its Maven package, both built from the PR's commit;
+Kotlin on desktop builds its experimental JVM worker host from the checkout,
+as users get it. The release is
+tested by hand before it ships, so publishing does not wait for this run.
 
 ### Dry run
 

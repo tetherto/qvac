@@ -5,12 +5,7 @@ import HyperDB from 'hyperdb'
 import dbSpec from '../../src/db/hyperspec/hyperdb/index.js'
 import { createRag } from '../../src/index.js'
 import { QvacErrorRAG } from '../../src/errors.js'
-import {
-  loadNativeIndex,
-  setNativeIndexLoader,
-  type NativeIndex,
-  type NativeIndexModule
-} from '../../src/vector-index/native.js'
+import { loadNativeIndex } from '../../src/vector-index/native.js'
 import type {
   Corestore as Store,
   HyperDBReader,
@@ -20,7 +15,9 @@ import type {
   EmbeddedDocumentInput,
   EmbeddingSpace,
   EmbeddingsPort,
+  IndexHandle,
   IndexOptions,
+  IndexProvider,
   Rag
 } from '../../src/types.js'
 
@@ -88,7 +85,7 @@ export async function openRag(
   index?: IndexOptions
 ): Promise<Fixture> {
   const store = new Corestore(await tmp(t))
-  const rag = createRag({ corestore: store, index })
+  const rag = createRag({ corestore: store, index: { provider: testProvider, ...index } })
   await rag.ready()
   let spaceId = ''
   for (const name of namespaces) {
@@ -163,10 +160,53 @@ export async function rejectsWithCode(
   }
 }
 
-// Forces the scan path for one test, as if the addon were not installed.
+// The runtime's timers; the test tsconfig loads no types that declare them.
+const timers = globalThis as unknown as {
+  setTimeout: (callback: () => void, ms: number) => unknown
+  clearTimeout: (timer: unknown) => void
+}
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => timers.setTimeout(resolve, ms))
+}
+
+// A hang fails the test instead of stalling the run.
+export async function settles<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: unknown
+  const timeout = new Promise<never>((resolve, reject) => {
+    timer = timers.setTimeout(() => reject(new Error(`${label} did not settle`)), 5000)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    timers.clearTimeout(timer)
+  }
+}
+
+// The provider `openRag` and other test openers pass, for one test.
+let testProvider: IndexProvider | undefined
+
+export function useProvider(t: Test, provider: IndexProvider | undefined): void {
+  testProvider = provider
+  t.teardown(() => {
+    testProvider = undefined
+  })
+}
+
+export function currentProvider(): IndexProvider | undefined {
+  return testProvider
+}
+
+// Every index build fails, so search scans.
+export const SCAN_ONLY: IndexProvider = {
+  create() {
+    throw new Error('scan only')
+  }
+}
+
+// Forces the scan path for one test.
 export function useScan(t: Test): void {
-  setNativeIndexLoader(() => Promise.resolve(null))
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, SCAN_ONLY)
 }
 
 export interface NativeCalls {
@@ -175,32 +215,39 @@ export interface NativeCalls {
   compacts: number
 }
 
+export interface RealProvider extends IndexProvider {
+  create(dim: number, storage: Parameters<IndexProvider['create']>[1]): IndexHandle
+  load(path: string): Promise<IndexHandle>
+}
+
+// The installed TurboVec module.
+export async function realNativeIndex(): Promise<RealProvider> {
+  const { module } = await loadNativeIndex()
+  if (!module) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
+  return module as RealProvider
+}
+
 // Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
 export async function countNativeCalls(t: Test): Promise<NativeCalls> {
-  setNativeIndexLoader(null)
-  const real = (await loadNativeIndex()) as NativeIndexModule
-  if (!real) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
+  const real = await realNativeIndex()
   const calls: NativeCalls = { creates: 0, loads: 0, compacts: 0 }
-  function counted(native: NativeIndex): NativeIndex {
-    const compact = native.compact.bind(native)
+  function counted(native: IndexHandle): IndexHandle {
+    const compact = (native.compact as () => Promise<void>).bind(native)
     native.compact = () => {
       calls.compacts++
-      compact()
+      return compact()
     }
     return native
   }
-  setNativeIndexLoader(() =>
-    Promise.resolve({
-      create(dim, storage) {
-        calls.creates++
-        return counted(real.create(dim, storage))
-      },
-      load(path) {
-        calls.loads++
-        return counted(real.load(path))
-      }
-    })
-  )
-  t.teardown(() => setNativeIndexLoader(null))
+  useProvider(t, {
+    create(dim, storage) {
+      calls.creates++
+      return counted(real.create(dim, storage))
+    },
+    async load(path) {
+      calls.loads++
+      return counted(await real.load(path))
+    }
+  })
   return calls
 }

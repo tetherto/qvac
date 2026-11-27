@@ -9,6 +9,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Installation](#installation)
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
+  - [`fit`](#fit)
   - [`configure`](#configure)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
@@ -108,6 +109,76 @@ qvac doctor --json
 
 # Fail-fast in a script (exit 1 on any required check)
 qvac doctor --quiet || exit 1
+```
+
+### `fit`
+
+Check whether one model, or several loaded together, fit this machine's memory
+before anything is downloaded. Each model's engine fitter runs against the
+registry's weightless description of the model, tens of KB, or against the
+model's own files when it is already downloaded. The answer is the one
+`POST /qvac/v1/models/fit` gives for the same input.
+
+```bash
+qvac fit [options] [models...]
+```
+
+Each model is an SDK model constant name, such as `QWEN3_8B_INST_Q4_K_M`, or a
+`serve.models` alias from the config file.
+
+**Options:**
+
+| Flag                         | Description                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--set <[target:]key=value>` | Config to judge with, for one model or model type, or for every model without a target. Repeatable. |
+| `--catalog`                  | Judge every SDK model on its own, and list the models with no verdict apart, each with its reason.  |
+| `--json`                     | Output the answer as JSON, in the shape the `models/fit` route returns.                             |
+| `-c, --config <path>`        | Config file with `serve.models` aliases (default: auto-detect `qvac.config.*`).                     |
+
+A `--set` target is a model, or a model type such as `llamacpp-completion` for
+every model of that type. A model's own setting wins over its type's, and its
+type's over one for every model. A dotted key nests (`contextParams.n_ctx=4096`).
+A value is read as JSON when it parses (`8192`, `true`, `["a"]`) and as a string
+otherwise. A companion source, such as `projectionModelSrc`, names an SDK model
+constant.
+
+**Output:** each model's verdict alone, the context and GPU layers a language
+model was judged at, and the memory it takes on each device against what is
+free. An `unknown` model shows why it has no verdict, and a model whose devices
+each fit but overflow the pool they share names that pool. Then the verdict, with
+what the models take from each memory pool: for one model its own, for several
+all of them loaded together. A Metal GPU and the CPU share one pool, the host's
+memory.
+
+**Exit status:** `0` fits, `2` does not fit, `3` unknown, `1` error. Catalog
+mode exits `0` once every model is judged.
+
+**What to pass:**
+
+- A language model is judged at the SDK's default context of 1024 tokens unless
+  `ctx_size` is set. `--set ctx_size=0` reports the longest context that fits.
+- A model made of several parts needs its companion files and engine in its
+  config: a TTS model needs `ttsEngine`, a translation model its `engine` and a
+  language pair (`from`, `to`). A translation model is judged once downloaded.
+- A companion file on its own, such as a projector, VAE or codec, cannot be
+  judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it.
+  The error is followed by a hint, and catalog mode lists these models under
+  their own heading.
+
+**Examples:**
+
+```bash
+# One model at 8K context
+qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
+
+# Two models loaded together, the larger at the longest context that fits
+qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
+
+# A translation model with its language pair
+qvac fit BERGAMOT_DE_EN --set engine=Bergamot --set from=de --set to=en
+
+# Every SDK model, language models at the longest context that fits, as JSON
+qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json
 ```
 
 ### `configure`
@@ -388,27 +459,27 @@ See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
-| Flag                             | Description                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                             |
-| `-p, --port <number>`            | Port to listen on (default: `11435`).                                                                                                |
-| `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                              |
-| `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request.  |
-| `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                              |
-| `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                              |
-| `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                           |
-| `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                           |
-| `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                            |
-| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).     |
-| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                      |
-| `--enable-admin`                 | Allow the admin-only routes (runtime suspend/resume). Needs `--api-key` on a non-loopback bind, even with `--allow-unauthenticated`. |
-| `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                                |
-| `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                 |
-| `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                                |
-| `--load-concurrency <n>`         | Max simultaneous model loads (default: `1`).                                                                                         |
-| `--load-timeout <ms>`            | Per-load timeout in milliseconds (default: unbounded).                                                                               |
-| `--no-cancel-load-on-disconnect` | Keep loading a model even if the client that triggered the load disconnects.                                                         |
-| `-v, --verbose`                  | Detailed output.                                                                                                                     |
+| Flag                             | Description                                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                                            |
+| `-p, --port <number>`            | Port to listen on (default: `11435`).                                                                                                               |
+| `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                                             |
+| `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request.                 |
+| `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                                             |
+| `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                                             |
+| `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                                          |
+| `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                                          |
+| `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                                           |
+| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).                    |
+| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                                     |
+| `--enable-admin`                 | Allow the admin-only routes (runtime suspend/resume, plugin invoke). Needs `--api-key` on a non-loopback bind, even with `--allow-unauthenticated`. |
+| `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                                               |
+| `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                                |
+| `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                                               |
+| `--load-concurrency <n>`         | Max simultaneous model loads (default: `1`).                                                                                                        |
+| `--load-timeout <ms>`            | Per-load timeout in milliseconds (default: unbounded).                                                                                              |
+| `--no-cancel-load-on-disconnect` | Keep loading a model even if the client that triggered the load disconnects.                                                                        |
+| `-v, --verbose`                  | Detailed output.                                                                                                                                    |
 
 With lazy loading on (the default), the server starts even when some preload models fail; a failed model still loads lazily on the next request. With `--no-lazy-load`, preloaded models are the only ones that can serve, so if every preload model fails the server exits non-zero instead of listening — under a supervisor (systemd, Docker) that surfaces the failure rather than a running-but-empty server. The worker stderr behind the failure (for example a missing addon) is logged either way.
 
@@ -426,7 +497,7 @@ Every request, `/openapi.json` included, must carry a `Host` header naming a loo
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
-The QVAC surface serves **`POST /qvac/v1/translate`**: text translation through an NMT alias whose `config` carries the `engine` and the `from` / `to` languages. `text` takes one string or an array, and `stream: true` emits Server-Sent Events. **`POST /qvac/v1/ocr`** reads the text in a PNG, JPEG or BMP image through an OCR alias. **`POST /qvac/v1/classifications`** ranks the labels for a PNG or JPEG image through a classification alias. **`/qvac/v1/audio/generations`** and **`/qvac/v1/audio/edits`** generate and edit music as async jobs through an `audiogen` alias, and **`POST /qvac/v1/audio/understandings`** describes a recording. It also serves **`GET /qvac/v1/system`** for the host's CPU, memory and GPU capacity, and **`POST /qvac/v1/models/fit`** to ask whether `serve.models` aliases or SDK model constants fit together before they are loaded. And it serves **`POST /qvac/v1/chat/batch`**: up to 64 chat prompts decoded together on one LLM alias, returned in prompt order. **`POST /qvac/v1/images/upscale`** upscales a PNG or JPEG through an ESRGAN alias loaded with `config.mode: "upscale"` and returns it in the `/v1/images` `b64_json` shape. **`GET /qvac/v1/registry/models`** browses and searches the live model registry, read-only. **`GET /qvac/v1/runtime/state`** and **`GET /qvac/v1/runtime/models`** report the runtime's lifecycle state and loaded models; **`POST /qvac/v1/runtime/suspend`** and **`/resume`** are admin-only and need `--enable-admin`.
+The QVAC surface serves **`POST /qvac/v1/translate`**: text translation through an NMT alias whose `config` carries the `engine` and the `from` / `to` languages. `text` takes one string or an array, and `stream: true` emits Server-Sent Events. **`POST /qvac/v1/ocr`** reads the text in a PNG, JPEG or BMP image through an OCR alias. **`POST /qvac/v1/classifications`** ranks the labels for a PNG or JPEG image through a classification alias. **`/qvac/v1/audio/generations`** and **`/qvac/v1/audio/edits`** generate and edit music as async jobs through an `audiogen` alias, and **`POST /qvac/v1/audio/understandings`** describes a recording. It also serves **`GET /qvac/v1/system`** for the host's CPU, memory and GPU capacity, and **`POST /qvac/v1/models/fit`** to ask whether `serve.models` aliases or SDK model constants fit together before they are loaded. And it serves **`POST /qvac/v1/chat/batch`**: up to 64 chat prompts decoded together on one LLM alias, returned in prompt order. **`POST /qvac/v1/images/upscale`** upscales a PNG or JPEG through an ESRGAN alias loaded with `config.mode: "upscale"` and returns it in the `/v1/images` `b64_json` shape. **`GET /qvac/v1/registry/models`** browses and searches the live model registry, read-only. **`GET /qvac/v1/runtime/state`** and **`GET /qvac/v1/runtime/models`** report the runtime's lifecycle state and loaded models; **`POST /qvac/v1/runtime/suspend`** and **`/resume`** are admin-only and need `--enable-admin`. **`/qvac/v1/vla/*`** (experimental) predicts robot action chunks from a SmolVLA, π₀.₅ or GR00T alias, reports its hyperparameters, and switches GR00T embodiments. **`POST /qvac/v1/bci/transcriptions`** (experimental, admin-only) transcribes a neural-signal recording through a BCI alias, in the `/v1/audio/transcriptions` shape, with an SSE stream option. **`POST /qvac/v1/plugins/:name/invoke`** calls a handler of a custom plugin registered in the worker, admin-only too.
 
 See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared configuration and model loading, the [QVAC surface](./docs/serve/default.md), and the [OpenAI-compatible surface](./docs/serve/openai.md) — supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
 

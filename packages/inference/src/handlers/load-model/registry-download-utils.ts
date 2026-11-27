@@ -39,50 +39,6 @@ export function buildBlobBinding(meta: {
 }
 
 /**
- * Validate a cached file against expected size and checksum. Never deletes: a
- * mismatched file may be an older SDK's download in progress.
- */
-export async function validateCachedFile(
-  modelPath: string,
-  modelFileName: string,
-  expectedSize: number,
-  expectedChecksum?: string,
-  hooks?: DownloadHooks
-): Promise<string | null> {
-  try {
-    await fsPromises.access(modelPath)
-
-    const localStats = await fsPromises.stat(modelPath)
-    const localSize = localStats.size
-
-    if (localSize === expectedSize) {
-      logger.info(`✅ Model cached with correct size: ${modelPath}`)
-
-      if (expectedChecksum && expectedChecksum.length === 64) {
-        const checksum = await measureChecksum(modelPath, hooks)
-        if (checksum !== expectedChecksum) {
-          throw new ChecksumValidationFailedError(
-            `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`
-          )
-        }
-      }
-      logger.info(`✅ Model already cached and validated: ${modelPath}`)
-      return modelPath
-    }
-
-    logger.warn(
-      `📥 Cached file is incomplete (expected ${expectedSize}, got ${localSize}); downloading: ${modelPath}`
-    )
-    return null
-  } catch (error) {
-    if (error instanceof ChecksumValidationFailedError) {
-      logger.warn(`📥 Cached file failed checksum validation; downloading: ${modelPath}`)
-    }
-    return null
-  }
-}
-
-/**
  * Download a single file from the registry to filesystem.
  * When blobBinding is provided, uses direct blob download (skips metadata sync).
  * Otherwise falls back to metadata-based downloadModel.

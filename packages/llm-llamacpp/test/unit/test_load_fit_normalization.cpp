@@ -2021,6 +2021,49 @@ TEST_F(LoadFitNormalizationTest, FalseyValueOnNegatedSpellingEnablesKvOffload) {
   EXPECT_FALSE(result.params.no_kv_offload);
 }
 
+// Several slots share one KV pool, split evenly; one slot has the same layout
+// either way and keeps a per-slot cache.
+TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedWithSeveralSlots) {
+  for (const std::string parallel : {"1", "2"}) {
+    auto config = baseConfig();
+    config["parallel"] = parallel;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+    const bool unified = parallel != "1";
+    EXPECT_EQ(result.params.kv_unified, unified) << "parallel=" << parallel;
+    EXPECT_EQ(result.fitSnapshot.kvUnified, unified) << "parallel=" << parallel;
+  }
+}
+
+// The pool and each slot's share follow ctx-size and parallel only.
+TEST_F(LoadFitNormalizationTest, KvUnifiedIsNotAnOption) {
+  for (const std::string key :
+       {"kv-unified",
+        "kv_unified",
+        "no-kv-unified",
+        "kv-unified-per-slot",
+        "kv_unified_per_slot"}) {
+    auto config = baseConfig();
+    config[key] = "true";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"})));
+      FAIL() << key << " must be rejected";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"))
+          << key;
+    }
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {
   auto config = baseConfig();
   config["kv-offload"] = "maybe";

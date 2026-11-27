@@ -45,7 +45,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *
  * @param params - The completion parameters
  * @param params.modelId - The identifier of the model to use for completion
- * @param params.history - Array of conversation messages with role, content, and optional attachments
+ * @param params.history - Array of conversation messages. A user message passes media as ordered `content` parts, `[{ type: "text", text }, { type: "media", path }]`, so each image sits where the text refers to it. `attachments` is deprecated.
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true
  * @param params.tools - Optional array of tools (can be simple ToolInput with Zod schemas or full Tool objects)
  * @param params.mcp - Optional array of MCP client inputs for tool integration
@@ -77,12 +77,14 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
  *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
- *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
- *   - The configHash includes model config + system prompt to ensure cache isolation
+ *   - Structure: `{kvCacheKey}/{modelFolder}/{configHash}.bin`
+ *   - `modelFolder` hashes the model and its load config, ignoring settings that do not change the cache contents:
+ *     `cache_share_across_keys` and `verbosity` count as their defaults when sent, `openclCacheDir` and `cache_ram_mib` are left out
+ *   - `configHash` hashes the system prompt
  *   - `true`: Auto-generate cache key based on conversation history
  *   - `"custom-key"`: Use provided string as cache key for manual session management
  *   - `false` or `undefined`: No caching
- *   - ⚡ Performance: When cache exists, only the last message is sent to the model (includes multimodal attachments)
+ *   - ⚡ Performance: The whole conversation is sent every turn; the model keeps the longest prefix it already holds and decodes only the rest
  *   - 🗑️ Cleanup: Use `deleteCache({ kvCacheKey })` to remove cached sessions
  *
  *   **Auto-cache (`kvCache: true`) — assistant turn contract.** When

@@ -18,6 +18,7 @@
   - [SequenceDriver and TextLlmContext](#sequencedriver-and-textllmcontext)
 - [Queued vs active requests](#queued-vs-active-requests)
 - [Per-sequence context caps](#per-sequence-context-caps)
+  - [One shared KV pool](#one-shared-kv-pool)
 - [Sequence ids and streaming](#sequence-ids-and-streaming)
 - [Cache per slot](#cache-per-slot)
 - [KV reuse: single-prompt vs batch](#kv-reuse-single-prompt-vs-batch)
@@ -57,7 +58,7 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. The slots share one KV cache, each limited to an even share: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window ([details](#one-shared-kv-pool)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
 The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
@@ -347,7 +348,23 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affe
 - **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
 - **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `contextOverflow`.
-- **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
+- **Cache loading** — a cached prompt is rejected when its positions or its KV cells exceed `C / N`.
+
+### One shared KV pool
+
+With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. llama-server lets one slot fill the buffer unless `--kv-unified-per-slot` caps it; the addon keeps each slot to its even share, `C / N`, so it has no per-slot option:
+
+```js
+config: { parallel: '4', ctx_size: '8192' } // one 8192-cell pool, 2048 per slot
+```
+
+- **Pool size** — `ctx_size` sizes the whole pool, rounded up to a multiple of 256. With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool, not of each slot, so each slot gets that context divided by `N`; when memory is short and `ctx_size` is unset, fit can lower the pool to `fit-ctx` (4096 by default). Set `ctx_size` to `N x` a slot size to get that slot size.
+- **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out, so decoding can be slower than with one buffer per slot. Slots sharing the buffer are not isolated from each other, so do not treat one model instance as a boundary between callers that do not trust each other.
+- **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
+- **Known issues with `parallel >= 2`** — fabric takes the whole buffer as one sequence's context in two places, until a fabric change gives it the slot limit:
+  - DeepSeek V4 and V4.1 keep one cache per sequence and size each to the whole buffer, so those caches take `parallel` times the memory. A load that fits with one buffer per slot can run out of memory.
+  - Models with long RoPE factors (for example Phi-3) use the long factors whenever `C` exceeds the model's original context, even though each slot stays within it, so their output changes.
+- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot; fabric restores it into the shared buffer. A file saved now holds one stream (DeepSeek V4 and V4.1 keep one per slot), which earlier versions cannot restore at `parallel >= 2`. A file longer than the slot limit fails its request with `ContextLengthExeeded`; raise the limit or delete it. Any other file that fails to load fails its request with `UnableToLoadSessionFile`; delete it, and the next request on that `cacheKey` runs without it.
 
 ---
 
@@ -521,13 +538,12 @@ whether a per-job stats source exists for that id:
   contributes to the same aggregate, which is why a job's own figures can
   differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
-  snapshot starts from that same aggregate, then `TTFT`, `TPS`,
-  `generatedTokens` and `promptTokens` are overridden with the job's OWN
-  observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
-  the model decodes speculatively (`spec-type`; see the README's
-  speculative decoding section). All other keys (`ppTPS`, `CacheTokens`,
-  `avgConcurrentSeq`, `backendDevice`) stay
-  model-level.
+  snapshot starts from that same aggregate, then `TTFT`, `TPS`, `ppTPS`,
+  `generatedTokens`, `promptTokens`, and `CacheTokens` are overridden with
+  the job's observed figures, as are `draftTokens` / `draftAcceptedTokens`
+  when the model decodes speculatively (`spec-type`; see the README's
+  speculative decoding section). `avgConcurrentSeq` and `backendDevice`
+  report model-level information.
 
 Four variants:
 
@@ -548,6 +564,9 @@ engine per request):
   experienced while sharing the GPU, not isolated compute speed (which is
   unmeasurable under fused batch decode).
 - `generatedTokens` / `promptTokens` — the request's own token counts.
+- `CacheTokens` — the KV cells the request's slot holds when it ends. An
+  image counts the cells it fills, as `promptTokens` does, so on an M-RoPE
+  model it counts more than the positions it advances.
 
 ### 1. Single request, no batching (`parallel = 1`)
 
@@ -584,15 +603,15 @@ a multimodal one fills them in.)
 
 Each request is its own tagged job; the scheduler batches whatever overlaps.
 Every job gets its own `JobEnded`, routed to its own response sink by job id,
-with `TTFT` / `TPS` / `generatedTokens` / `promptTokens` overridden by that
-job's observed figures:
+with `TTFT` / `TPS` / `ppTPS` / `generatedTokens` / `promptTokens` /
+`CacheTokens` overridden by that job's observed figures:
 
 ```json
 {
   "TTFT": 121.7,
   "TPS": 33.2,
   "ppTPS": 1450.0,
-  "CacheTokens": 840,
+  "CacheTokens": 201,
   "generatedTokens": 174,
   "promptTokens": 28,
   "stopReason": "eos",
@@ -603,8 +622,13 @@ job's observed figures:
 
 Here `TPS` (33.2) is this job's observed rate while `avgConcurrentSeq` (2.9)
 tells you the model was shared; the aggregate decode rate is roughly
-`TPS * avgConcurrentSeq`. `sum(generatedTokens)` over an epoch's jobs equals
-the generic snapshot's `generatedTokens`.
+`TPS * avgConcurrentSeq`. `sum(generatedTokens)` and `sum(CacheTokens)` over
+an epoch's jobs equal the generic snapshot's `generatedTokens` and
+`CacheTokens`.
+
+`ppTPS` measures the prompt tokens processed for the job during its prefill
+steps. Queue wait is outside that measurement. Sharing a step with other
+requests can lower the job's rate because they share the batch budget.
 
 ### 3. Multiple async batched runs (`parallel >= 2`, micro-batch < parallel)
 
@@ -627,8 +651,17 @@ the group collapses its OWN prompts into one figure set:
   drag the averages down). Averaged, not summed, because the group's prompts
   run simultaneously — summing rates would double-count wall-clock. The
   average answers "what did one of my prompts typically experience".
-- `generatedTokens`, `promptTokens` — summed over the group (tokens are
-  additive).
+- `generatedTokens`, `promptTokens`, `CacheTokens` — summed over the group
+  (tokens are additive; `CacheTokens` is the cells the group's slots hold).
+- `ppTPS` — newly evaluated prompt tokens divided by the elapsed time of
+  steps that processed them. A shared decode step contributes its full time
+  once per participating job, even if several of its slots fed prompt tokens.
+  Media uses evaluated tokens and includes media encoding time. Queue wait
+  and generation-only steps are outside the measurement. A mixed step that
+  processes prompt and generation tokens contributes its full duration to the
+  job's elapsed prefill time. A job with no measured prefill reports zero.
+  The SDK exposes this as
+  `promptTokensPerSecond`.
 - `stopReason` — kept only if every prompt of the group stopped for the same
   reason; otherwise the key is absent rather than guessed. The sample below
   shows the mixed case (A hit EOS, B hit its prediction limit).
@@ -645,7 +678,7 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
   "TTFT": 110.3,
   "TPS": 31.8,
   "ppTPS": 1450.0,
-  "CacheTokens": 840,
+  "CacheTokens": 415,
   "generatedTokens": 355,
   "promptTokens": 61,
   "avgConcurrentSeq": 3.4,
@@ -655,8 +688,11 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
 
 A single `run(batch)` call with nothing else in flight is still tagged with
 its own native group id, registered in `BatchHandler._groups` like any other
-job; it just has no concurrent traffic to diverge from, so its own figures
-happen to equal the generic aggregate snapshot.
+job. Its `generatedTokens` and `promptTokens` counts match the generic
+aggregate snapshot.
+Its `ppTPS` can differ when a step processes both prompt and generation
+tokens. The job includes the entire step, while `runtimeStats()` divides
+its time between prefill and generation in proportion to their token counts.
 
 ### 4. One batched run of exactly `parallel` prompts (full width)
 

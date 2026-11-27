@@ -55,7 +55,7 @@ public:
    */
   EvalMessageResult evalMessage(
       const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-      bool prefill) override;
+      bool prefill, const CancelRequested& cancelRequested = {}) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -70,7 +70,7 @@ public:
   EvalMessageResult evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-      bool prefill) override;
+      bool prefill, const CancelRequested& cancelRequested = {}) override;
 
   /**
    * The generate response method. It generates the response token by token.
@@ -213,8 +213,7 @@ public:
       const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
       bool isPrefillOnlyRequest) override;
 
-  void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
+  void onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) override;
 
   void syncPosition(llama_pos currentPos) override;
 

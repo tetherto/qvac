@@ -489,6 +489,39 @@ test('llmConfigBaseSchema: rejects invalid prefetch-weights values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 1 }).success, false)
 })
 
+test('llmConfigBaseSchema: accepts Core ML FFN splits in METALxN form', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '8192x2' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects Core ML FFN splits fabric refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x3' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '0x1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1 ' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-cache': '' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn': 'true' }).success, false)
+})
+
+test('llmConfigSchema: Core ML FFN split requires coreml-ffn, the cache does not', (t) => {
+  const split = llmConfigSchema.safeParse({ 'coreml-ffn-split': '3072x1' })
+  t.is(split.success, false)
+  t.is(split.error?.issues[0]?.path[0], 'coreml-ffn-split')
+  t.is(
+    llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success,
+    true
+  )
+  t.is(llmConfigSchema.safeParse({ 'coreml-ffn-cache': '/tmp/c' }).success, true)
+  t.is(
+    llmConfigSchema.safeParse({
+      'coreml-ffn': true,
+      'coreml-ffn-split': '3072x1',
+      'coreml-ffn-cache': '/tmp/c'
+    }).success,
+    true
+  )
+})
+
 test('llmConfigBaseSchema: accepts both forms of fit-target', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 512 }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '1024,512' }).success, true)
@@ -526,7 +559,7 @@ test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
 })
 
 test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
-  for (const value of ['none', 'draft-mtp', 'draft-dflash']) {
+  for (const value of ['none', 'draft-mtp', 'draft-dflash', 'draft-dspark', 'auto']) {
     t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
   }
   t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
@@ -602,11 +635,30 @@ test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t
     const result = llmConfigSchema.safeParse(config)
     t.is(result.success, false)
     t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+    t.is(
+      result.error?.issues[0]?.message,
+      "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
+    )
   }
 })
 
+test('llmConfigSchema: rejects a drafter spec_type without a draftModelSrc', (t) => {
+  for (const spec_type of ['draft-dflash', 'draft-dspark', 'auto'] as const) {
+    for (const config of [{ spec_type }, { spec_type, draftModelSrc: '' }]) {
+      const result = llmConfigSchema.safeParse(config)
+      t.is(result.success, false)
+      t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+      t.is(result.error?.issues[0]?.message, `spec_type '${spec_type}' requires draftModelSrc.`)
+    }
+  }
+})
+
+test('llmConfigSchema: accepts draft-mtp without a draftModelSrc', (t) => {
+  t.is(llmConfigSchema.safeParse({ spec_type: 'draft-mtp' }).success, true)
+})
+
 test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
-  for (const spec_type of ['draft-mtp', 'draft-dflash'] as const) {
+  for (const spec_type of ['draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'] as const) {
     t.is(
       llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
         .success,

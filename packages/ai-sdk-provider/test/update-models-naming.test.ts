@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { generateExportName } from '../models/update-models/naming.ts'
@@ -9,6 +8,10 @@ import { generateModelsFileContent } from '../models/update-models/codegen.ts'
 import { synthesizeServeConfig } from '../src/managed/config-synthesizer.ts'
 
 const { allModels } = modelConstants
+
+const inferenceModels: Record<string, unknown> = await import(
+  new URL('../../inference/src/models/registry/models.ts', import.meta.url).href
+)
 
 const cases = [
   {
@@ -134,13 +137,50 @@ test('diffusion naming: a tokenizer.json is named after its model', () => {
   )
 })
 
+const qvacToolCallingTags = ['generation', 'tool-calling', 'qwen3.5', 'instruct', 'qvac']
+const qvacToolCallingRepo =
+  'am17an/Qwen3.5-9B-toolcall-preview-GGUF/resolve/02fe3b87e1c2ccd5989edadbde131a33bb3ae601'
+
+test('LLM naming: the qvac tag prefixes the export name with QVAC_', () => {
+  const name = (tags: string[]): string =>
+    generateExportName({
+      path: `${qvacToolCallingRepo}/Qwen3.5-9B-9b-v5s1-imat-Q4_K_M.gguf`,
+      engine: 'llamacpp-completion',
+      name: '',
+      quantization: 'q4_k_m',
+      params: '9B',
+      tags,
+      usedNames: new Set()
+    })
+
+  assert.equal(name(qvacToolCallingTags), 'QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M')
+  assert.equal(
+    name(qvacToolCallingTags.filter((tag) => tag !== 'qvac')),
+    'QWEN3_5_9B_TOOL_CALLING_Q4_K_M'
+  )
+})
+
+test('LLM naming: a qvac-tagged projector keeps MMPROJ_ ahead of QVAC_', () => {
+  assert.equal(
+    generateExportName({
+      path: `${qvacToolCallingRepo}/mmproj-Qwen3.5-9B-F16.gguf`,
+      engine: 'llamacpp-completion',
+      name: '',
+      quantization: 'f16',
+      params: '9B',
+      tags: qvacToolCallingTags,
+      usedNames: new Set()
+    }),
+    'MMPROJ_QVAC_QWEN3_5_9B_TOOL_CALLING_F16'
+  )
+})
+
 test('generated Parakeet names match the SDK and work in managed config', () => {
-  const sdkModels: Record<string, { registryPath: string; name: string }> = JSON.parse(
-    readFileSync(new URL('../../sdk/contract/models.json', import.meta.url), 'utf8')
-  )
-  const namesByPath = new Map(
-    Object.values(sdkModels).map((model) => [model.registryPath, model.name])
-  )
+  const sdkModels = Object.entries(inferenceModels)
+    .filter(([, value]) => typeof (value as { src?: unknown } | null)?.src === 'string')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, value]) => value as { registryPath: string; name: string })
+  const namesByPath = new Map(sdkModels.map((model) => [model.registryPath, model.name]))
   const parakeetModels = allModels.filter((model) => model.addon === 'parakeet')
   assert.ok(parakeetModels.length > 0)
 

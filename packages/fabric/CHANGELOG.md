@@ -1,5 +1,231 @@
 # Changelog
 
+## [0.34.0] - 2026-11-26
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `12032.0.1` -> `12032.2.0`.
+- RPC protocol 118 -> 119. `GGML_OP_TOP_K_ROWS` goes in after
+  `GGML_OP_TOP_K_MASK`, so every later op id moves. A 118 RPC peer and a 119
+  one cannot connect: `@qvac/ggml-rpc-server` and its clients move to this
+  release together
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)).
+- `common.h`: `common_params_sampling` gains `backend_sampling_auto`, and
+  `common_init_result` gains `sampler_argmax()`. Native consumers must rebuild
+  against these headers, and every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- `ggml_view_2d`, `ggml_view_3d` and `ggml_view_4d` assert that the source is
+  contiguous along dim 0 (`nb[0]` is the type size), so such a view of a
+  permuted tensor aborts; permute and reshape it instead. Parakeet's
+  channels-first convolution on mobile GPUs hit this
+  ([qvac-fabric-llm.cpp#568](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/568),
+  fixed in
+  [qvac-fabric-speech.cpp#469](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/469)).
+
+### Added
+
+- Inkling 2 and Inkling 2 Mini, text and vision
+  ([qvac-fabric-llm.cpp#568](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/568)),
+  with the DSpark
+  ([qvac-fabric-llm.cpp#570](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/570))
+  and DFlash2
+  ([qvac-fabric-llm.cpp#599](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/599))
+  speculative drafters.
+- ggml API: `ggml_top_k_rows` and `ggml_lightning_indexer_rows`
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)),
+  `ggml_flash_attn_ext_has_indexed_bias` and
+  `ggml_flash_attn_ext_add_indexed_bias`
+  ([qvac-fabric-llm.cpp#602](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/602)).
+- llama API: `llama_set_sampler_active`; common: `common_sampler_is_argmax`,
+  `common_sampler_params_is_argmax` and `common_sampler_init_argmax_backend`
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+
+### Changed
+
+- qwen4exp sparse attention reads per-token K/V row lists, also with a
+  one-sequence cache, and its indexer reads the pooled keys in place on CPU and
+  CUDA. CUDA and Metal top-k break ties deterministically. RPC does not offer
+  the new ops, so RPC devices keep the mask attention
+  ([qvac-fabric-llm.cpp#546](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/546)).
+- Vulkan: non-contiguous `SCALE`, a one-pass SITU activation
+  (`GGML_VK_FUSE_SITU=0` turns it off) and gated delta net states written
+  straight into the recurrent cache (`GGML_VK_FUSE_GDN_CACHE=0`). Split-K for
+  narrow matmuls on RDNA3 and RDNA4. On RADV RDNA3, an f16-B coopmat matmul
+  for dense K-quant prefill (`GGML_VK_DENSE_F16COOPMAT=0`), not bit-exact
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- `backend_sampling_auto` samples greedy requests on the backend. Only the
+  `llama-server` defaults, which these packages do not ship, turn it on;
+  other callers keep CPU sampling
+  ([qvac-fabric-llm.cpp#587](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/587)).
+- Greedy `common_sampler` sampling takes the arg-max of the raw logits and
+  falls back to the sampler chain on a tie, a NaN logit or a winner with a
+  negative logit bias.
+  Recurrent graphs that do not read the moved states are reused after a
+  partial rollback. Inkling 2 adds its relative-position bias inside flash
+  attention
+  ([qvac-fabric-llm.cpp#602](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/602)).
+- No change to these packages from the speech engines imported under
+  `engines/speech`, built only with `FABRIC_BUILD_SPEECH`
+  ([qvac-fabric-llm.cpp#590](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/590)),
+  the NVRTC fusion pass building with MSVC, which the Windows CUDA module does
+  not enable
+  ([qvac-fabric-llm.cpp#597](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/597)),
+  or the shared ggml core and its revert
+  ([qvac-fabric-llm.cpp#595](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/595),
+  [qvac-fabric-llm.cpp#604](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/604)).
+
+## [0.33.1] - 2026-11-25
+
+### Changed
+
+- `qvac-fabric` dependency bumped `12032.0.0` -> `12032.0.1`. No struct,
+  exported signature, op, type or RPC protocol (118) change, so consumers on
+  `^0.33.0` take this release without a rebuild.
+- Vulkan and HIP on AMD GPUs run flash attention over kv_rows lists
+  (`ggml_flash_attn_ext_rows`). Vulkan used to reject the op, and AMD used a
+  kernel that decoded about 8x slower
+  ([qvac-fabric-llm.cpp#561](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/561)).
+- CUDA MMQ on NVIDIA: the dense stream-k split walks column tiles outermost,
+  and matmuls that share an activation quantize it once. Vulkan: stream-k
+  `MUL_MAT` for coopmat2. `GGML_CUDA_DISABLE_MMQ_COL_OUTER=1`,
+  `GGML_CUDA_DISABLE_MMQ_SRC1_SHARING=1` and `GGML_VK_DISABLE_STREAM_K=1` turn
+  them off; `GGML_VK_FORCE_STREAM_K=1` uses stream-k where the heuristic
+  would keep the regular grid
+  ([qvac-fabric-llm.cpp#586](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/586)).
+- Vulkan prompt processing: on Mesa before 25.3, shared-memory availability
+  moves onto the workgroup barriers (`GGML_VK_SHARED_AVAIL_REWRITE=0` turns it
+  off); on RDNA3, the large int8 coopmat1 MMQ tile uses 32x64 warp tiles
+  (`GGML_VK_MMQ_CM1_WIDE=0`); a SWIGLU that feeds a quantized matmul is
+  computed in the matmul's Q8_1 quantize pass (`GGML_VK_FUSE_GLU_Q8_1=0`)
+  ([qvac-fabric-llm.cpp#565](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/565)).
+- CUDA: few-row MMQ for F8_E4M3 and CUTLASS-repacked NVFP4 weights on DGX
+  Spark
+  ([qvac-fabric-llm.cpp#574](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/574)).
+- CUDA and HIP: `GGML_OP_ROPE_FLUX` kernel
+  ([qvac-fabric-llm.cpp#578](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/578)).
+- HIP on gfx1151: scale and residual add fuse into one kernel
+  ([qvac-fabric-llm.cpp#576](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/576)).
+
+### Fixed
+
+- HIP on gfx1151: the long-query tile attention keeps F32 accumulation when
+  the op requests `GGML_PREC_F32`
+  ([qvac-fabric-llm.cpp#562](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/562)).
+
+## [0.33.0] - 2026-11-23
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.5.0` -> `12032.0.0`, which rebases
+  fabric from upstream b11739 onto b12032
+  ([qvac-fabric-llm.cpp#506](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/506)).
+- RPC protocol 117 -> 118. `GGML_OP_TOP_K_MASK` goes in before
+  `GGML_OP_UNARY`, so every later op id moves, and the ragged ops now come
+  before the ConvRot ops. An 11739 RPC peer and a 12032 one cannot connect:
+  `@qvac/ggml-rpc-server` and its clients move to this release together.
+- `common.h`: `common_control_vector_load` takes `n_layer`,
+  `fs_path_to_utf8` is removed, and `common_params` gains fields, among them
+  `common_params_speculative_draft::n_max_explicit`. Native consumers must
+  rebuild against these headers, and every addon loaded in one process must
+  resolve the same `@qvac/fabric` minor.
+- `mtmd.h` / `mtmd-helper.h`: `mtmd_gen_audio_process` takes an
+  `mtmd_gen_state`, and `mtmd_gen_inp`, `mtmd_gen_out`, `mtmd_caps`,
+  `mtmd_audio_stream_params`, `mtmd_helper_gen_audio_inp` and
+  `mtmd_helper_video_init_params` change layout. `mtmd_helper_model_can_chat`
+  and `mtmd_helper_support_video` are deprecated in favour of
+  `mtmd_helper_get_capabilities`.
+
+### Added
+
+- ggml API: `ggml_top_k_mask`, `ggml_backend_tensor_copy_n`,
+  `ggml_backend_tensor_set_n`, `ggml_backend_tensor_get_n`,
+  `ggml_prec_get_acc` and `ggml_prec_get_src`.
+- The CUDA 13 modules (`@qvac/fabric-linux-x64-cuda`, linux-arm64,
+  win32-x64) include CUTLASS MXFP4/NVFP4 matmuls for compute capability 12.x
+  GPUs. Other GPUs and the Jetson module are unchanged
+  ([qvac-registry-vcpkg#502](https://github.com/tetherto/qvac-registry-vcpkg/pull/502)).
+
+### Changed
+
+- `draft-dflash` drafts 5 tokens per step when the draft length is not set,
+  instead of 3. The CLI argument parser applies it; callers that fill
+  `common_params` themselves call `common_speculative_set_default_n_max` once
+  the spec types are final. Other spec types keep 3
+  ([qvac-fabric-llm.cpp#557](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/557)).
+- Faster few-row mat-muls: CUDA on DGX Spark at 9-16 columns (bit-identical
+  results), and Vulkan on NVIDIA at 9-32 columns
+  (`GGML_VK_DISABLE_NARROW_MUL_MAT` turns it off)
+  ([qvac-fabric-llm.cpp#555](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/555)).
+
+### Fixed
+
+- WebGPU dequantizes quantized weights in `f32`, so Intel GPUs that flush
+  subnormal `f16` values no longer produce corrupted output
+  ([qvac-fabric-llm.cpp#567](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/567)).
+- WebGPU browser builds: the logger runs without pthreads, device creation
+  keeps the adapter that passed validation, and the Memory64 build compiles
+  ([qvac-fabric-llm.cpp#554](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/554)).
+
+## [0.32.0] - 2026-11-23
+
+This release splits the Linux x64 CUDA backend into its own automatically
+installed package so Fabric can continue to ship all backends within npm's
+package size limit. Installation and inference behavior remain unchanged.
+
+### Changed
+
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override;
+  applications require no installation or inference configuration changes.
+- Fabric publishing checks every compressed platform and backend tarball against
+  a 190 MB budget before publishing any packages.
+- The Fabric meta, platform and CUDA packages move together to 0.32.0.
+  Existing consumers using `^0.31.0` stay on the previous packaging; adopting
+  this layout requires explicitly updating their Fabric dependency ranges.
+
+## Pull Requests
+
+- [#5824](https://github.com/tetherto/qvac/pull/5824) - QVAC-28570: split Fabric Linux x64 GPU backend packages.
+
+## [0.31.2] - 2026-11-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.4.0` -> `11739.5.0`. No struct,
+  exported signature, op, type or RPC protocol (117) change, so consumers on
+  `^0.31.0` take this release without a rebuild.
+- A sequence saved with another KV stream count now restores into its own
+  stream, so a single-sequence state from a per-sequence cache loads into a
+  `kv_unified` cache or after `n_seq_max` changes
+  ([qvac-fabric-llm.cpp#553](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/553)).
+  A whole-context restore still needs a matching stream count.
+- `ggml_vec_index_build_ivf` trains its centroids with spherical e-means
+  ([qvac-fabric-llm.cpp#543](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/543)):
+  with `n_iter > 0` the centroids are unit length and the lists differ from
+  0.31.1; `n_iter = 0` is unchanged.
+- CUDA: row bias, GELU and layer norm fuse into the cuBLAS F16 matmul, plus a
+  faster small batched matmul, strided copy and short-row softmax, each
+  limited to the GPUs it was measured on
+  ([qvac-fabric-llm.cpp#542](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/542)).
+- Metal: few-row MMA kernels for q4_K, q6_K and iq4_nl/iq4_xs, and a chunked
+  top-k for long rows
+  ([qvac-fabric-llm.cpp#544](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/544)).
+
+### Fixed
+
+- A composite memory (iswa, msa, dsa, dsa-iswa, hybrid, hybrid-iswa, dsv4)
+  that fails partway through a restore now drops the sequence from every part
+  instead of leaving it half old and half new
+  ([qvac-fabric-llm.cpp#556](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/556)).
+- WebGPU sizes its flash-attention and MMVQ scratch for the largest small
+  batch, so a graph reserved at `n_ubatch` no longer re-reserves for a later
+  small batch
+  ([qvac-fabric-llm.cpp#559](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/559)).
+
 ## [0.31.1] - 2026-11-18
 
 ### Fixed

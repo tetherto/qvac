@@ -1,15 +1,15 @@
 {
   "name": "qvac-sdk-kotlin-runtime",
-  "version": "0.24.0",
+  "version": "0.24.2",
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "./gradlew --no-daemon checkVersionAlignment checkContract compileKotlinJvm",
+    "typecheck": "./gradlew --no-daemon checkVersionAlignment checkWireLiterals compileKotlinJvm",
     "build": "./gradlew --no-daemon :android-example:assembleDebug :android-example:compileDebugAndroidTestKotlin",
     "test:unit": "./gradlew --no-daemon jvmTest :android-example:testDebugUnitTest"
   },
   "dependencies": {
-    "@qvac/sdk": "0.24.0"
+    "@qvac/sdk": "0.24.2"
   },
   "nx": {
     "includedScripts": []

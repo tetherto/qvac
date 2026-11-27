@@ -31,18 +31,18 @@ type RecordedCall = {
   baseCacheKey: string | undefined
 }
 
-type HistoryEntry = { role: string; content: string; attachments: never[] }
+type HistoryEntry = { role: string; content: string }
 
 function user(content: string): HistoryEntry {
-  return { role: 'user', content, attachments: [] }
+  return { role: 'user', content }
 }
 
 function assistant(content: string): HistoryEntry {
-  return { role: 'assistant', content, attachments: [] }
+  return { role: 'assistant', content }
 }
 
 function system(content: string): HistoryEntry {
-  return { role: 'system', content, attachments: [] }
+  return { role: 'system', content }
 }
 
 async function setIsolatedHome(): Promise<void> {
@@ -204,6 +204,29 @@ test('completion: a seeded chat points the addon at the source file and writes o
 
   await complete([user('Fresh chat')], { kvCache: 'chat-2' })
   t.is(calls[3]!.baseCacheKey, undefined, 'a chat without seedFrom names no source')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: an unloadable seed leaves the request and the seed file intact', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const modelId = `seed-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { cache_share_across_keys: true })
+  const complete = completer(modelId)
+  const history = [user('Hi')]
+
+  await complete(history, { kvCache: 'base' })
+  const source = calls[0]!.cacheKey!
+  const fs = await import('bare-fs')
+  fs.writeFileSync(source, 'unreadable cache')
+  // The addon offers a seed only as a donor and starts cold when it fails to
+  // load, so the request succeeds.
+  await complete(history, { kvCache: 'chat-1', seedFrom: 'base' })
+  t.is(calls[1]!.baseCacheKey, source, 'the addon is pointed at the seed')
+  t.is(await readBytes(source), 'unreadable cache', 'the seed file is left byte-identical')
 
   unregisterModel(modelId)
   clearRegistry()

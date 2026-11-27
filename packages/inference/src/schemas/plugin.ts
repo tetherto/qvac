@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import type {
   ModelFitModelResult,
   TranscriptionFitWorkload,
@@ -10,6 +10,15 @@ import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { trackedRequestSchema } from '@/schemas/request-base'
+import { capabilityContractRuntimeSchema, type CapabilityDeclaration } from '@/schemas/capabilities'
+
+// Plugin authors import from the `plugin-utils` entry point, which is this
+// module, so the contracts a plugin declares in `provides` are available there.
+export {
+  CAPABILITY_CONTRACTS,
+  type CapabilityContract,
+  type CapabilityDeclaration
+} from '@/schemas/capabilities'
 
 /**
  * Granularity at which the addon can cancel.
@@ -233,6 +242,17 @@ export interface QvacPlugin<
    */
   assessFit?: (request: never) => Promise<ModelFitModelResult>
   handlers: Record<string, PluginHandlerDefinition>
+  /**
+   * The capability contracts this plugin provides. Reference an entry of
+   * `CAPABILITY_CONTRACTS` to provide a QVAC contract; a contract QVAC does
+   * not define needs a dotted ID, such as `acme.diarization`, and its
+   * operation lists. Every required operation needs a handler of the same
+   * name, a handler belongs to at most one contract ID, and each handler's
+   * reply/stream/duplex shape must match the operation's. A plugin without
+   * `provides` adds nothing to `getRuntimeCapabilities`; its handlers are
+   * called as before.
+   */
+  provides?: readonly CapabilityDeclaration[] | undefined
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined
   /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */
@@ -391,6 +411,7 @@ export const pluginDefinitionRuntimeSchema = z
     fitRequest: functionRuntimeSchema.optional(),
     assessFit: functionRuntimeSchema.optional(),
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
+    provides: z.array(capabilityContractRuntimeSchema).optional(),
     logging: z
       .object({
         module: z.unknown().optional(),
@@ -444,6 +465,9 @@ export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as c
 
 /** Image descriptors for visual place recognition and retrieval with MegaLoc. */
 export const PLUGIN_IMAGE_EMBEDDING = '@qvac/inference/ggml-image-embedding/plugin' as const
+
+/** Stereo disparity from a rectified left/right image pair with BridgeDepth. */
+export const PLUGIN_STEREO_DEPTH = '@qvac/inference/ggml-stereo-depth/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
@@ -519,6 +543,7 @@ export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_IMAGE_EMBEDDING,
+  PLUGIN_STEREO_DEPTH,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,

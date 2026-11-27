@@ -185,7 +185,18 @@ function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOp
   return model.run(prompt, opts)
 }
 
+let warnedAttachments = false
+
 export function transformMessages(messages: Array<HistoryMsg | Tool>): ChatHistory[] {
+  if (
+    !warnedAttachments &&
+    messages.some((message) => 'attachments' in message && message.attachments?.length)
+  ) {
+    warnedAttachments = true
+    logger.warn(
+      "History `attachments` is deprecated and will be removed in a future release. Pass media as ordered `content` parts: [{ type: 'text', text }, { type: 'media', path }]."
+    )
+  }
   const transformed: ChatHistory[] = []
   for (const message of messages) {
     transformed.push(...transformMessage(message))
@@ -241,6 +252,26 @@ function isNothingCachedRejection(error: unknown): boolean {
   }
   const message = (error as { message?: unknown }).message
   return typeof message === 'string' && /no conversation is cached/.test(message)
+}
+
+// The addon refuses a cache file it cannot restore with
+// `UnableToLoadSessionFile`, and one longer than the slot limit with
+// `ContextLengthExeeded`. Both name the file, so a seed source that fails to
+// load is not taken for the turn's own.
+function isCacheLoadFailure(error: unknown, cachePath: string): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const message = (error as { message?: unknown }).message
+  if (typeof message !== 'string' || !message.includes(`'${cachePath}'`)) return false
+  const code = (error as { code?: unknown }).code
+  if (code !== undefined) {
+    return (
+      typeof code === 'string' &&
+      /^\[\s*[\w.-]+\s*::\s*(?:UnableToLoadSessionFile|ContextLengthExeeded)\s*\]$/.test(code)
+    )
+  }
+  return /^(?:TextLlmContext::|MtmdLlmContext::)?(?:loadCache|acceptLoadedState):/.test(
+    message.trim()
+  )
 }
 
 /**
@@ -472,9 +503,9 @@ export async function* completion(
   // registers one deferred unwind that `commitTurn` short-circuits. The addon
   // leaves the file consistent whatever the outcome — it commits or rolls back
   // the request itself — so the unwind keeps it (`releaseTurn`) except where
-  // the file has no key to live under. A rollback also drops the addon's copy
-  // of the conversation, which a later key switch or unload would otherwise
-  // write back to the deleted path. ----
+  // the file has no key to live under or cannot be loaded. A rollback also
+  // drops the addon's copy of the conversation, which a later key switch or
+  // unload would otherwise write back to the deleted path. ----
 
   const discardCache = (model as CacheOwningModel).discardCache
   const session = createKvCacheSession(modelId, {
@@ -532,19 +563,32 @@ export async function* completion(
 
   logMessagesToAddon(prompt, 'PROMPT_SEND')
 
-  const result = yield* processModelResponse(
-    model,
-    prompt,
-    toolsToRender,
-    mergedGenerationParams,
-    {
-      cacheKey: turn.cachePath,
-      ...(prefill !== undefined && { prefill }),
-      ...(baseCacheKey !== undefined && { baseCacheKey })
-    },
-    dialect,
-    setActiveResponse
-  )
+  let result: ProcessModelResponseResult
+  try {
+    result = yield* processModelResponse(
+      model,
+      prompt,
+      toolsToRender,
+      mergedGenerationParams,
+      {
+        cacheKey: turn.cachePath,
+        ...(prefill !== undefined && { prefill }),
+        ...(baseCacheKey !== undefined && { baseCacheKey })
+      },
+      dialect,
+      setActiveResponse
+    )
+  } catch (error) {
+    // A file the addon cannot load would fail every later request on its key
+    // the same way, so the turn drops it and the next one starts cold.
+    if (isCacheLoadFailure(error, turn.cachePath)) {
+      requestLogger.warn(
+        `[kv-cache] Cache file failed to load; removing it. path=${turn.cachePath}`
+      )
+      rollbackOnUnwind = true
+    }
+    throw error
+  }
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the file holds whatever the addon kept, cancelled and

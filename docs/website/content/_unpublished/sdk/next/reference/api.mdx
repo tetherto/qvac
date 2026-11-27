@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 64 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 56 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -338,7 +338,7 @@ Two cancel paths are supported:
  - **By `requestId`** (primary) — pass the `requestId` exposed on
    the result of a long-running call (`completion(...)`,
    `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,
-   `transcribe(...)`, `ragIngest(...)`, etc.) to cancel exactly
+   `transcribe(...)`, etc.) to cancel exactly
    that request. A cancel that races the originating call is
    recorded and applied retroactively when the begin arrives.
  - **Broad by `modelId`** (escape hatch) — `{ modelId, kind? }`
@@ -932,6 +932,38 @@ function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise
 
 ---
 
+### `getRuntimeCapabilities`
+
+List the capability contracts the runtime's registered plugins declare,
+with the major version of each. A consumer checks for the `id` and
+`version` it was built against before loading a model.
+
+The report reads plugin registration only. It loads no model, and it does
+not check addons, model files, resources or permissions, so a listed
+operation can still fail for a given model. An operation in
+`partialOperations` is implemented by only some of the contract's plugins,
+and a call uses the plugin of the model it names. The list is empty when no
+registered plugin declares a contract.
+
+**Signature**:
+
+```ts
+function getRuntimeCapabilities(options?: RPCOptions): Promise<RuntimeCapability[]>;
+```
+
+**Throws**:
+
+- `InvalidResponseError` — If the worker returns a different response type.
+- `Error` — If the RPC request fails, including on a worker released before this request existed.
+
+**Example**:
+```ts
+const capabilities = await getRuntimeCapabilities()
+const canTranscribe = capabilities.some((c) => c.id === 'transcription' && c.version === 1)
+```
+
+---
+
 ### `getSystemResources`
 
 Read the worker's system capabilities and optional resource sample.
@@ -1323,305 +1355,6 @@ for await (const blocks of blockStream) {
 
 ---
 
-### `ragChunk`
-
-Chunks documents into smaller pieces for embedding.
-Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
-
-**Signature**:
-
-```ts
-function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]>;
-```
-
-**Throws**:
-
-- `RAGChunkFailedError` — When the operation fails
-
-**Example**:
-```ts
-const chunks = await ragChunk({
-  documents: ["Long document text here..."],
-  chunkOpts: {
-    chunkSize: 256,
-    chunkOverlap: 50,
-    chunkStrategy: "paragraph",
-  },
-});
-```
-
----
-
-### `ragCloseWorkspace`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
-
-**Workspace lifecycle:** Workspaces are implicitly opened.
-This function explicitly closes them, releasing memory and file locks. The workspace data
-remains on disk unless `deleteOnClose` is set to true.
-
-**Signature**:
-
-```ts
-function ragCloseWorkspace(params?: RagCloseWorkspaceParams, options?: RPCOptions): Promise<void>;
-```
-
-**Throws**:
-
-- `RAGCloseWorkspaceFailedError` — When the operation fails
-
-**Example**:
-```ts
-// Close a specific workspace
-await ragCloseWorkspace({ workspace: "my-docs" });
-
-// Close and delete in one call
-await ragCloseWorkspace({ workspace: "my-docs", deleteOnClose: true });
-```
-
----
-
-### `ragDeleteEmbeddings`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Deletes document embeddings from the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace.
-
-**Signature**:
-
-```ts
-function ragDeleteEmbeddings(params: RagDeleteEmbeddingsParams, options?: RPCOptions): Promise<void>;
-```
-
-**Throws**:
-
-- `RAGDeleteFailedError` — When the operation fails or workspace doesn't exist
-
-**Example**:
-```ts
-await ragDeleteEmbeddings({
-  ids: ["doc-1", "doc-2"],
-  workspace: "my-docs",
-});
-```
-
----
-
-### `ragDeleteWorkspace`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Deletes a RAG workspace and all its data.
-The workspace must not be currently loaded/in-use.
-
-**Signature**:
-
-```ts
-function ragDeleteWorkspace(params: RagDeleteWorkspaceParams, options?: RPCOptions): Promise<void>;
-```
-
-**Throws**:
-
-- `RAGDeleteFailedError` — When the workspace doesn't exist or is currently loaded
-
-**Example**:
-```ts
-await ragDeleteWorkspace({ workspace: "my-docs" });
-```
-
----
-
-### `ragIngest`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Ingests documents into the RAG vector database.
-Full pipeline: chunk → embed → save
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed.
-
-**Signature**:
-
-```ts
-function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string };
-```
-
-**Throws**:
-
-- `RAGSaveFailedError` — When the operation fails
-- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
-
-**Example**:
-```ts
-// Simple ingest
-const result = await ragIngest({
-  modelId,
-  documents: ["Document 1", "Document 2"],
-});
-
-// With progress tracking
-const result = await ragIngest({
-  modelId,
-  documents: ["Document 1", "Document 2"],
-  workspace: "my-docs",
-  onProgress: (stage, current, total) => {
-    console.log(`[${stage}] ${current}/${total}`);
-  },
-});
-```
-
----
-
-### `ragListWorkspaces`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Lists all RAG workspaces with their open status.
-
-Returns all workspaces that exist on disk. The `open` field indicates whether
-the workspace is currently loaded in memory and holding active resources
-(Corestore, HyperDB adapter, and possibly a RAG instance).
-
-**Signature**:
-
-```ts
-function ragListWorkspaces(options?: RPCOptions): Promise<RagWorkspaceInfo[]>;
-```
-
-**Throws**:
-
-- `RAGListWorkspacesFailedError` — When the operation fails
-
-**Example**:
-```ts
-const workspaces = await ragListWorkspaces();
-// [{ name: "default", open: true }, { name: "my-docs", open: false }]
-```
-
----
-
-### `ragReindex`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Reindexes the RAG database to optimize search performance.
-For HyperDB, this rebalances centroids using k-means clustering.
-
-**Workspace lifecycle:** This operation requires an existing workspace.
-
-**Note:** Reindex requires a minimum number of documents to perform clustering.
-For HyperDB, this is 16 documents by default. If there are insufficient documents,
-`reindexed` will be `false` with `details` explaining the reason.
-
-**Signature**:
-
-```ts
-function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };
-```
-
-**Throws**:
-
-- `RAGSaveFailedError` — When the operation fails or workspace doesn't exist
-- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
-
-**Example**:
-```ts
-// Simple reindex
-const result = await ragReindex({
-  workspace: "my-docs",
-});
-
-// Check result
-if (!result.reindexed) {
-  console.log("Reindex skipped:", result.details?.reason);
-}
-
-// With progress tracking
-const result = await ragReindex({
-  workspace: "my-docs",
-  onProgress: (stage, current, total) => {
-    console.log(`[${stage}] ${current}/${total}`);
-  },
-});
-```
-
----
-
-### `ragSaveEmbeddings`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Saves pre-embedded documents to the RAG vector database.
-Part of the segregated flow: chunk() → embed() → saveEmbeddings()
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed.
-
-**Signature**:
-
-```ts
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };
-```
-
-**Throws**:
-
-- `RAGSaveFailedError` — When the operation fails
-- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
-
-**Example**:
-```ts
-// Segregated flow
-const chunks = await ragChunk({ documents: ["text1", "text2"] });
-const { embedding: embeddings } = await embedBatch({ modelId, inputs: chunks.map(c => c.content) });
-const embeddedDocs = chunks.map((chunk, i) => ({
-  ...chunk,
-  embedding: embeddings[i],
-  embeddingModelId: modelId,
-}));
-const result = await ragSaveEmbeddings({
-  documents: embeddedDocs,
-  workspace: "my-workspace",
-});
-```
-
----
-
-### `ragSearch`
-
-> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
-
-Searches for similar documents in the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
-doesn't exist, returns an empty array.
-
-**Signature**:
-
-```ts
-function ragSearch(params: RagSearchParams, options?: RPCOptions): Promise<RagSearchResult[]>;
-```
-
-**Throws**:
-
-- `RAGSearchFailedError` — When the operation fails
-
-**Example**:
-```ts
-const results = await ragSearch({
-  modelId,
-  query: "AI and machine learning",
-  topK: 5,
-  workspace: "my-docs",
-});
-```
-
----
-
 ### `rerank`
 
 Scores documents by relevance to a query with a reranker model.
@@ -1735,12 +1468,11 @@ function stopRpcServer(options: StopRpcServerOptions, rpcOptions?: RPCOptions): 
 ### `subscribeServerLogs`
 
 Subscribes to every server-side log through a single stream: SDK server logs,
-per-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG
-logs — without having to open a loggingStream per id.
+per-model addon logs (llamacpp, whispercpp, …) for all loaded models — without
+having to open a loggingStream per id.
 
 Each delivered log keeps its origin in `log.id`: `SDK_LOG_ID` for SDK server
-logs, the model id for model logs, or the RAG workspace key. Use it to tell the
-sources apart.
+logs or the model id for model logs. Use it to tell the sources apart.
 
 Internally this opens a loggingStream on the reserved `SDK_ALL_LOG_ID`
 stream that the worker fans every log into.
@@ -2756,19 +2488,6 @@ and read `error.code` / `error.cause`. Code ranges:
 | `CONTEXT_OVERFLOW` | 52421 | for model "…" |
 | `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
 | `AUDIO_ENCODE_FAILED` | 52424 | Failed to encode audio as …… |
-| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
-| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
-| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
-| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation: … |
-| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed: … |
-| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace "…" is configured for model "…", but you're trying to use model "…". Use a different workspace or the same model |
-| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found: … |
-| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace '…' is currently in use. Close it first. |
-| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace… |
-| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces… |
-| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk documents… |
-| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace '…' is not open |
-| `RAG_WORKSPACE_BUSY` | 52812 | RAG workspace '…' is running another session's operation; retry when it finishes |
 | `VECTOR_INDEX_PROVIDER_UNAVAILABLE` | 52850 | Vector index provider unavailable |
 | `VECTOR_INDEX_NOT_FOUND` | 52851 | Vector index '…' is not open. It was disposed or the worker restarted; create a new index or load a snapshot |
 | `VECTOR_INDEX_INVALID_VECTORS` | 52852 | Invalid vector input: … |

@@ -9,28 +9,33 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method          | Path                                     | Notes                                   |
-| --------------- | ---------------------------------------- | --------------------------------------- |
-| `POST`          | `/qvac/v1/chat/batch`                    | Batch chat completion (LLM)             |
-| `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache              |
-| `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity       |
-| `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them |
-| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                 |
-| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                           |
-| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)          |
-| `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)            |
-| `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image            |
-| `POST`          | `/qvac/v1/classifications`               | Image classification                    |
-| `GET`           | `/qvac/v1/registry/models`               | Browse and search the model registry    |
-| `GET`           | `/qvac/v1/registry/models/lookup`        | One registry entry by source and path   |
-| `POST`          | `/qvac/v1/images/upscale`                | Image upscaling (ESRGAN model)          |
-| `POST`          | `/qvac/v1/audio/generations`             | Music generation job (audiogen model)   |
-| `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)               |
-| `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs       |
-| `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)         |
-| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)     |
-| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live    |
-| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)   |
+| Method          | Path                                     | Notes                                           |
+| --------------- | ---------------------------------------- | ----------------------------------------------- |
+| `POST`          | `/qvac/v1/chat/batch`                    | Batch chat completion (LLM)                     |
+| `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache                      |
+| `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity               |
+| `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them         |
+| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                         |
+| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                                   |
+| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)                  |
+| `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)                    |
+| `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image                    |
+| `POST`          | `/qvac/v1/classifications`               | Image classification                            |
+| `GET`           | `/qvac/v1/registry/models`               | Browse and search the model registry            |
+| `GET`           | `/qvac/v1/registry/models/lookup`        | One registry entry by source and path           |
+| `POST`          | `/qvac/v1/images/upscale`                | Image upscaling (ESRGAN model)                  |
+| `POST`          | `/qvac/v1/audio/generations`             | Music generation job (audiogen model)           |
+| `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)                       |
+| `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs               |
+| `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)                 |
+| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)             |
+| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live            |
+| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)           |
+| `GET`           | `/qvac/v1/vla/models/{model}`            | VLA hyperparameters (experimental)              |
+| `POST`          | `/qvac/v1/vla/actions`                   | Predict robot actions (experimental)            |
+| `POST`          | `/qvac/v1/vla/models/{model}/embodiment` | Switch GR00T embodiment (experimental)          |
+| `POST`          | `/qvac/v1/bci/transcriptions`            | Neural transcription (experimental, admin-only) |
+| `POST`          | `/qvac/v1/plugins/:name/invoke`          | Call a custom plugin (admin-only)               |
 
 ## Binary inputs
 
@@ -362,14 +367,19 @@ load that `loadModel` would refuse fails the request.
 
 `pools` gives each memory pool the verdict was judged on, with what the set takes from it and the
 lowest free and total figures reported for it. Every device that shares the host's memory joins
-the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single model's
-`verdict` is its own `status`. A set of models does not fit when any pool would use more than 90%
-of its free memory.
+the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single
+model's `verdict` is its own `status`. A set of models does not fit when any model does not fit
+alone or any pool would use more than 90% of its free memory.
 
-`models` carries each entry's engine fit result, in request order: its own `status`, one row per
+`models` carries each entry's engine fit result, in request order: its `status`, the model's
+verdict alone, which is `does-not-fit` when rows sharing one pool, such as a Metal GPU and the
+CPU, would together use more than 90% of its free memory; one row per
 device the load uses (the host last), and its `stats`: the context size and GPU layers for a
-llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
-where the backend reports one, so the same GPU matches across engines.
+llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `reason` saying why
+it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
+is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
+
+`qvac fit` answers the same question from the terminal, with the same answer for the same input.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
@@ -1126,3 +1136,297 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   }
 }
 ```
+
+## VLA: `/qvac/v1/vla/*` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Predict robot actions with a vision-language-action model (SmolVLA, π₀.₅ or GR00T), backed by
+the SDK's `vla()`, `vlaHparams()` and `vlaSetEmbodiment()`. `model` names a `serve.models`
+alias whose endpoint category is `vla`.
+
+The server does not tokenize: send the instruction already tokenized with the model's own
+tokenizer (SmolVLM2 for SmolVLA, PaliGemma for π₀.₅, Qwen3-VL for GR00T). It does
+preprocess camera frames and pad the buffers, so read the model's sizes first.
+
+### `GET /qvac/v1/vla/models/{model}`
+
+The model's hyperparameters, verbatim from `vlaHparams()`, and its ggml backend. Loads the
+model if it is not loaded yet.
+
+```json
+{
+  "object": "vla.model",
+  "model": "smolvla",
+  "backend_name": "MTL0",
+  "hparams": {
+    "chunkSize": 50,
+    "actionDim": 7,
+    "maxActionDim": 32,
+    "maxStateDim": 32,
+    "tokenizerMaxLength": 48,
+    "visionImageSize": 512,
+    "numCameras": 2,
+    "stateInputMode": "continuous",
+    "imageInputMode": "pixels"
+  }
+}
+```
+
+### `POST /qvac/v1/vla/actions`
+
+Predict one action chunk. JSON only.
+
+| Field           | Type       | Required | Meaning                                                                                                         |
+| --------------- | ---------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `model`         | `string`   | Yes      | A `serve.models` alias with endpoint category `vla`                                                             |
+| `images`        | `object[]` | Yes      | One frame per camera, `hparams.numCameras` in all (π₀.₅: 1 to that)                                             |
+| `tokens`        | `int[]`    | Yes      | Tokenized instruction, IDs from 0; zero-padded to `hparams.tokenizerMaxLength`, unpadded when that is 0 (GR00T) |
+| `attentionMask` | `(0\|1)[]` | No       | One entry per token, default 1 each; π₀.₅ takes 1s then 0s                                                      |
+| `state`         | `number[]` | No       | Robot state, zero-padded to `hparams.maxStateDim`; ignored by π₀.₅                                              |
+| `noise`         | `number[]` | No       | `chunkSize * maxActionDim` values; required for GR00T and π₀.₅, sampled for SmolVLA                             |
+
+Each `images` entry is one of:
+
+- `{ "pixels", "width", "height", "layout"? }` — base64 RGB bytes, 8 bits per channel,
+  `width * height * 3` long, `hwc` (default) or `chw`. The server letterboxes and normalises
+  them to `visionImageSize`, like the SDK's `vlaPreprocessImage()`.
+- `{ "tensor" }` — base64 little-endian float32 values, passed to the model unchanged: a
+  `3 * size * size` CHW plane in [-1, 1], or the `imagePatchElems` patch buffer that GR00T
+  takes. GR00T accepts `tensor` only.
+
+```json
+{
+  "object": "vla.actions",
+  "model": "smolvla",
+  "chunk_size": 50,
+  "action_dim": 7,
+  "actions": [[0.01, -0.12, 0.33, 0.0, 0.05, -0.02, 1.0], "..."],
+  "stats": { "vision_ms": 41.2, "prefill_total_ms": 63.0, "ode_ms": 120.5, "total_ms": 230.1 }
+}
+```
+
+`actions` holds `chunk_size` rows of `action_dim` values, in execution order. A model runs
+one action request at a time; another one sent meanwhile gets 429. A client disconnect
+cancels the run.
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/vla/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"smolvla","images":[{"pixels":"...","width":640,"height":480},{"pixels":"...","width":640,"height":480}],"tokens":[1,4521,302,2],"state":[0.1,0.2,0.0,0.0,0.0,0.0,0.0,0.04]}'
+```
+
+### `POST /qvac/v1/vla/models/{model}/embodiment`
+
+Switch a multi-embodiment GR00T model to another embodiment in the same GGUF, without a
+reload. `embodiment` is a tag such as `"libero_sim"`, a `cat_id` from 0 to 31, or
+`{ "tag" | "catId", "numCameras"? }`. It answers with the new `hparams` (no `backend_name`);
+re-read `numCameras` before the next action request. The switch is refused while an action
+request runs on the model.
+
+### Errors
+
+| HTTP | `error.code`                 | When                                                                              |
+| ---- | ---------------------------- | --------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                            |
+| 400  | `missing_model`              | `model` is missing                                                                |
+| 400  | `invalid_images`             | Missing, wrong camera count, or a frame of the wrong size or form for the model   |
+| 400  | `invalid_tokens`             | `tokens` is missing, has a negative ID, or is longer than `tokenizerMaxLength`    |
+| 400  | `invalid_attention_mask`     | No entry per token, or a 0 before a 1 for π₀.₅                                    |
+| 400  | `invalid_state`              | `state` is longer than `maxStateDim`                                              |
+| 400  | `invalid_noise`              | `noise` is missing for GR00T or π₀.₅, or is not `chunkSize * maxActionDim` values |
+| 400  | `invalid_vla_request`        | The model refused the inputs                                                      |
+| 400  | `invalid_embodiment`         | Malformed, not in the GGUF, or the model is not a multi-embodiment GR00T          |
+| 400  | `invalid_request`            | The body carries an unknown field                                                 |
+| 400  | `invalid_model_type`         | Alias is not a `vla` model                                                        |
+| 404  | `model_not_found`            | Unknown alias                                                                     |
+| 429  | `request_rejected_by_policy` | Another action request or an embodiment switch is running on the model            |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                     |
+
+### Configuring a VLA model
+
+```json
+{
+  "serve": {
+    "models": {
+      "smolvla": { "model": "SMOLVLA_LIBERO_VISION_Q8", "config": { "backend": ["metal"] } },
+      "groot": { "model": "GROOT_MULTI_Q5_VF16", "config": { "embodiment": "libero_sim" } }
+    }
+  }
+}
+```
+
+## BCI: `POST /qvac/v1/bci/transcriptions` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Admin-only: the route answers `403 admin_disabled` unless the server was started with
+`--enable-admin` (or `"enableAdmin": true` under `serve`). The model's native reader does
+not yet check a recording's channel count against the model, so a mismatched recording can
+crash the worker.
+
+Transcribe a neural-signal recording with a BCI model, backed by the SDK's `bciTranscribe()`,
+or `bciTranscribeStream()` with `stream: true`. `model` names a `serve.models` alias whose
+endpoint category is `bci`. The request and response follow `/v1/audio/transcriptions`.
+
+Send JSON or `multipart/form-data`; `file` takes any of the [binary input](#binary-inputs)
+forms.
+
+| Field              | Type         | Required | Meaning                                                                    |
+| ------------------ | ------------ | -------- | -------------------------------------------------------------------------- |
+| `model`            | `string`     | Yes      | A `serve.models` alias with endpoint category `bci`                        |
+| `file`             | binary input | Yes      | The neural recording (layout below)                                        |
+| `response_format`  | `string`     | No       | `json` (default), `text`, `verbose_json`, `srt` or `vtt`                   |
+| `stream`           | `boolean`    | No       | Decode in sliding windows and send text as server-sent events              |
+| `window_timesteps` | `integer`    | No       | Stream only: decode window in 20 ms timesteps (default 1500, at most 2900) |
+| `hop_timesteps`    | `integer`    | No       | Stream only: window advance, below the window (default 500)                |
+
+The recording is a little-endian `[timesteps u32, channels u32]` header followed by
+`timesteps * channels` float32 samples, one timestep per 20 ms. A file with no samples or
+whose length does not match its header is rejected before the model loads. Without `stream`,
+the recording must fit one decode (at most 3000 timesteps); send a longer one with
+`stream: true`.
+
+`json` answers `{ "text": "not too controversial" }`. `verbose_json` adds `duration` and
+`segments` (`id`, `start`, `end`, `text`, in seconds); `srt` and `vtt` are subtitle files.
+`duration` is the recording's length from its header, and no segment ends after it.
+
+With `stream: true` the response is server-sent events, one `transcript.text.delta` event per
+window that found new text, then `transcript.text.done` with the deltas joined by spaces, then `[DONE]`.
+A stream takes `response_format` `json` or `text` only. A failure after the first event ends
+the stream with an `error` event and no `[DONE]`. A client disconnect cancels the
+transcription.
+
+```text
+data: {"type":"transcript.text.delta","delta":"not too"}
+
+data: {"type":"transcript.text.delta","delta":"controversial"}
+
+data: {"type":"transcript.text.done","text":"not too controversial"}
+
+data: [DONE]
+```
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F file=@recording.bin
+curl -sSN http://localhost:11435/qvac/v1/bci/transcriptions \
+  -F model=bci -F stream=true -F file=@recording.bin
+```
+
+### Errors
+
+| HTTP | `error.code`                 | When                                                                                                                                          |
+| ---- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                                                                        |
+| 400  | `missing_model`              | `model` is missing                                                                                                                            |
+| 400  | `missing_file`               | `file` is missing                                                                                                                             |
+| 400  | `invalid_neural_data`        | Short header, zero channels or samples, a length the header does not match, or model refusal                                                  |
+| 400  | `neural_data_too_large`      | `file` is over the model's input buffer, or a recording over 3000 timesteps without `stream`                                                  |
+| 400  | `invalid_response_format`    | Unknown format, or a timed format with `stream`                                                                                               |
+| 400  | `invalid_window`             | `window_timesteps` or `hop_timesteps` without `stream`, a window over 2900, or a hop not below the window (an omitted side takes its default) |
+| 400  | `invalid_request`            | The body carries an unknown field                                                                                                             |
+| 400  | `invalid_model_type`         | Alias is not a `bci` model                                                                                                                    |
+| 403  | `admin_disabled`             | The server was started without `--enable-admin`                                                                                               |
+| 403  | `origin_not_allowed`         | A browser request from an origin outside the CORS allowlist                                                                                   |
+| 404  | `model_not_found`            | Unknown alias                                                                                                                                 |
+| 429  | `request_rejected_by_policy` | More than 64 BCI requests are already waiting for the model                                                                                   |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                                                                                 |
+
+`file` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring a BCI model
+
+```json
+{
+  "serve": {
+    "models": {
+      "bci": {
+        "model": "BCI_WINDOWED",
+        "config": {
+          "whisperConfig": { "language": "en", "temperature": 0.0 },
+          "bciConfig": { "day_idx": 1 }
+        }
+      }
+    }
+  }
+}
+```
+
+## Plugins: `POST /qvac/v1/plugins/:name/invoke`
+
+Call a handler of a custom plugin, backed by the SDK's `invokePlugin()`, or
+`invokePluginStream()` with `stream: true`. It runs whatever the plugin does, so it is
+**admin-only**: it answers `403 admin_disabled` unless the server was started with
+`--enable-admin`, and refuses browser origins outside the CORS allowlist like the
+[runtime routes](#runtime-qvacv1runtime).
+
+The plugin must be registered in the worker that serve runs. List it under `plugins` in
+`qvac.config.*` and run `qvac bundle sdk`, which writes `qvac/worker.entry.mjs`; serve uses
+that entry when started from the project directory, or the file `QVAC_WORKER_PATH` names.
+Then give the plugin an alias whose `type` is its model type:
+
+```json
+{
+  "serve": {
+    "models": {
+      "echo": { "src": "./models/echo.bin", "type": "echo-plugin" }
+    }
+  }
+}
+```
+
+`:name` is that model type. Built-in plugins answer `400 builtin_plugin`: use their own
+endpoints.
+
+| Field     | Type      | Required | Meaning                                                      |
+| --------- | --------- | -------- | ------------------------------------------------------------ |
+| `model`   | `string`  | Yes      | A `serve.models` alias whose `type` is `:name`               |
+| `handler` | `string`  | Yes      | The plugin handler to call                                   |
+| `params`  | any JSON  | No       | Passed to the handler as-is; the plugin validates it (`{}`)  |
+| `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
+  -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
+```
+
+```json
+{ "object": "plugin.invocation", "model": "echo", "handler": "echo", "result": { "text": "hi" } }
+```
+
+With `stream: true`, a streaming handler answers with Server-Sent Events: a
+`plugin.invocation.chunk` per result, one `plugin.invocation.done`, then `data: [DONE]`.
+
+```text
+data: {"object":"plugin.invocation.chunk","model":"echo","handler":"count","index":0,"result":{"n":1}}
+
+data: {"object":"plugin.invocation.done","model":"echo","handler":"count"}
+
+data: [DONE]
+```
+
+Plugin calls cannot be cancelled: a client disconnect stops the stream, but the handler runs
+to the end.
+
+### Errors
+
+| HTTP | `error.code`              | When                                                         |
+| ---- | ------------------------- | ------------------------------------------------------------ |
+| 400  | `missing_model`           | `model` is missing                                           |
+| 400  | `missing_handler`         | `handler` is missing                                         |
+| 400  | `builtin_plugin`          | `:name` is a built-in model type                             |
+| 400  | `invalid_model_type`      | The alias's `type` is not `:name`                            |
+| 400  | `invalid_plugin_params`   | The plugin rejected `params`                                 |
+| 400  | `handler_type_mismatch`   | `stream` does not match whether the handler streams          |
+| 400  | `invalid_request`         | The body carries an unknown field                            |
+| 403  | `admin_disabled`          | The server was started without `--enable-admin`              |
+| 403  | `origin_not_allowed`      | A browser request from an origin outside the CORS allowlist  |
+| 404  | `model_not_found`         | Unknown alias                                                |
+| 404  | `handler_not_found`       | The plugin has no such handler                               |
+| 502  | `plugin_response_invalid` | The handler's result failed the plugin's own response schema |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled                |
+| 503  | `runtime_suspended`       | The runtime is suspended                                     |
+
+A failure mid-stream arrives as an SSE `error` frame with the same codes.

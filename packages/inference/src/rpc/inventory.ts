@@ -8,7 +8,7 @@ import { getEngineLogger } from '@/logging/index'
 import { throwIfAborted } from './network'
 
 // Command IDs and HELLO layouts, rpc_cmd and rpc_msg_hello_*:
-// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v11739.0.0/ggml/src/ggml-rpc/ggml-rpc.cpp
+// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v12032.0.0/ggml/src/ggml-rpc/ggml-rpc.cpp
 const HELLO = 14
 const HELLO_REQUEST_SIZE = 24
 const HELLO_RESPONSE_SIZE = 28

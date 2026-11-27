@@ -14,28 +14,19 @@ export { embed, embedBatch } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
-export {
-  ragChunk,
-  ragIngest,
-  ragSaveEmbeddings,
-  ragSearch,
-  ragDeleteEmbeddings,
-  ragReindex,
-  ragListWorkspaces,
-  ragCloseWorkspace,
-  ragDeleteWorkspace
-} from '@/api/rag'
 export { createVectorIndex, loadVectorIndex, type VectorIndex } from '@/api/vector-index'
 export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'
 export { getLoadedModelInfo } from '@/api/get-loaded-model-info'
 export { getSystemResources } from '@/api/get-system-resources'
+export { getRuntimeCapabilities } from '@/api/get-runtime-capabilities'
 export { assessModelFit } from '@/api/assess-model-fit'
 export { ocr } from '@/api/ocr'
 export { invokePlugin, invokePluginStream } from '@/api/invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from '@/api/diffusion'
 export { audioGen, audioEdit, audioUnderstand } from '@/api/audio-gen'
 export { classify } from '@/api/classify'
+export { estimateDisparity } from '@/api/estimate-disparity'
 export { video, type VideoProgressTick } from '@/api/video'
 export { upscale } from '@/api/upscale'
 export { worldCreateScene, worldStep } from '@/api/world'

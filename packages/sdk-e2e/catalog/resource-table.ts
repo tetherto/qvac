@@ -34,6 +34,21 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  // The DSpark pair the addon's own tests use, pinned until the pair is in the registry.
+  'llm-dspark': {
+    modelSrc:
+      'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048 }
+  },
+
+  // The DSpark drafter for `llm-dspark`. Only ever loaded as its `draftModelSrc`.
+  'llm-dspark-draft': {
+    modelSrc:
+      'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-DSpark-GGUF/resolve/9235d674d3bbda8a775ca42a4275d11a8c0ab008/LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf',
+    type: 'llamacpp-completion'
+  },
+
   'llm-batch': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llm',
@@ -165,7 +180,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tools-gemma4': {
-    on: ['desktop-linux', 'desktop-python'],
+    on: ['desktop-linux', 'desktop-python', 'desktop-kotlin'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
@@ -237,6 +252,13 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   echo: {
     type: 'echo',
+    modelSrc: '',
+    skipPreDownload: true
+  },
+
+  // The rag-e2e-plugin fixture: @qvac/rag in the worker, no weights of its own.
+  'rag-e2e': {
+    type: 'rag-e2e',
     modelSrc: '',
     skipPreDownload: true
   },
@@ -627,7 +649,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   world: {
-    on: ['desktop-linux', 'desktop-python'],
+    on: ['desktop-linux', 'desktop-python', 'desktop-kotlin'],
     constant: { $const: 'ABOT_WORLD_0_5B_Q8_0' },
     type: 'sdcpp-generation',
     config: {

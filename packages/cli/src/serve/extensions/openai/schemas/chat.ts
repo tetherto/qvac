@@ -1,10 +1,7 @@
 import { z } from 'zod'
-import { randomBytes } from 'node:crypto'
-import { writeFile, unlink } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
 import { namedKvCacheKey } from '@/serve/lib/named-kv-cache'
+import { removePrivateTempFile, writePrivateTempFile } from '@/serve/lib/temp-file'
 import {
   chatMessage,
   responseFormat,
@@ -81,13 +78,11 @@ type DecodedContentPart = { type: 'text'; text: string } | { type: 'media'; imag
 interface TextHistoryItem extends ToolTurnFields {
   role: string
   content: string
-  attachments?: ImageAttachment[]
 }
 
 interface PartsHistoryItem extends ToolTurnFields {
   role: 'user'
   content: DecodedContentPart[]
-  attachments?: never
 }
 
 type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
@@ -97,7 +92,6 @@ type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
 interface SdkHistoryItem extends ToolTurnFields {
   role: string
   content: HistoryContent
-  attachments?: Array<{ path: string }>
 }
 
 // Past tool calls and results go to the SDK as structured fields, so the model's
@@ -140,21 +134,22 @@ function decodeMessage(msg: OpenAIMessage): ChatHistoryItem {
 // image" turn never silently degrades to a text-only answer.
 //
 // A user turn with images stays as ordered parts, so the model sees each image where the client put
-// it. Attachments would place all images before the text. The SDK accepts parts on user turns
-// only; every other turn, and a user turn without images, becomes one text string.
+// it; a turn without images becomes one text string. The model reads images on user turns only.
 function decodeMultimodalContent(role: string, parts: MessageContentPart[]): ChatHistoryItem {
+  if (role !== 'user' && parts.some((part) => part.type === 'image_url')) {
+    throw new UnsupportedImageContentError(
+      `image_url is only supported on user messages, not on a "${role}" message.`
+    )
+  }
   const decoded = parts.map((part): DecodedContentPart =>
     part.type === 'text'
       ? { type: 'text', text: part.text }
       : { type: 'media', image: decodeImageUrl(imageUrlOf(part)) }
   )
-  if (!decoded.some((part) => part.type === 'media')) return { role, content: joinText(decoded) }
-  if (role === 'user') return { role, content: decoded }
-  return { role, content: joinText(decoded), attachments: decoded.flatMap(imageOf) }
-}
-
-function imageOf(part: DecodedContentPart): ImageAttachment[] {
-  return part.type === 'media' ? [part.image] : []
+  if (role === 'user' && decoded.some((part) => part.type === 'media')) {
+    return { role, content: decoded }
+  }
+  return { role, content: joinText(decoded) }
 }
 
 function imageUrlOf(part: Extract<MessageContentPart, { type: 'image_url' }>): string {
@@ -205,37 +200,30 @@ function decodeImageUrl(url: string): ImageAttachment {
   return { ext, bytes }
 }
 
-// Materialize each image (a media part or an attachment) to a flat temp file (mirrors
-// routes/audio.ts's writeTempAudio) and return the SDK history plus the temp paths the caller must
-// unlink in a `finally`. Atomic: if a write fails partway, the files already written this call are
-// removed.
+// Materialize each media part's image to a private temp file (mirrors routes/audio.ts's
+// writeTempAudio) and return the SDK history plus the temp paths the caller must remove with
+// removePrivateTempFile in a `finally`. Atomic: if a write fails partway, the files already
+// written this call are removed.
 export async function writeChatImages(
   history: ChatHistoryItem[]
 ): Promise<{ history: SdkHistoryItem[]; tmpPaths: string[] }> {
   const tmpPaths: string[] = []
   const writeImage = async (image: ImageAttachment): Promise<string> => {
-    const path = join(tmpdir(), `qvac-image-${randomBytes(8).toString('hex')}.${image.ext}`)
-    await writeFile(path, image.bytes)
+    const path = await writePrivateTempFile(`image.${image.ext}`, image.bytes)
     tmpPaths.push(path)
     return path
   }
   const sdkHistory: SdkHistoryItem[] = []
   try {
-    for (const { content, attachments: images, ...item } of history) {
-      const sdkItem: SdkHistoryItem = {
+    for (const { content, ...item } of history) {
+      sdkHistory.push({
         ...item,
         content: typeof content === 'string' ? content : await writeMediaParts(content, writeImage)
-      }
-      if (images !== undefined && images.length > 0) {
-        const attachments: Array<{ path: string }> = []
-        for (const image of images) attachments.push({ path: await writeImage(image) })
-        sdkItem.attachments = attachments
-      }
-      sdkHistory.push(sdkItem)
+      })
     }
     return { history: sdkHistory, tmpPaths }
   } catch (err) {
-    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+    await Promise.all(tmpPaths.map(removePrivateTempFile))
     throw err
   }
 }

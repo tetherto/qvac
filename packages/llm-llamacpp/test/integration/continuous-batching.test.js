@@ -310,12 +310,12 @@ async function setupModel(t, configOverrides = {}) {
     opts: { stats: true }
   })
 
-  await model.load()
-
   t.teardown(async () => {
     await model.unload().catch(() => {})
     specLogger.release()
   })
+
+  await model.load()
 
   return model
 }
@@ -442,6 +442,12 @@ function logStreamingProgress(response, tag) {
 // 1B throughput/correctness run is too slow or complicated for mobile and legacy macOS x64.
 const skipHeavyPlatform = isMobile || isDarwin
 
+// Vulkan compiles each pipeline on its first use in a process, which takes
+// seconds on a cold driver shader cache. Where the TPS assertion runs, earlier
+// passes of the same workload keep those compiles out of the last pass, which
+// the assertion compares. Every pass checks the answers.
+const warmUpBeforeTiming = isLinuxX64 && !useCpu
+
 safeTest(
   'continuous batching answers 16 prompts correctly and improves Linux GPU TPS',
   { timeout: 900_000, skip: skipHeavyPlatform },
@@ -450,25 +456,35 @@ safeTest(
     // Keep it pinned so enabling a new default backend cannot change what it
     // measures; CUDA remains covered by the rest of the suite.
     const singleModel = await setupModel(t, { backend: 'vulkan' })
-    const singleNativeTpsValues = []
-    const singleWallTpsValues = []
-    for (const item of CASES) {
-      const startedAt = Date.now()
-      const singleResponse = await singleModel.run(buildPrompt(item), runOptionsForCase(item))
-      const singleText = await collectText(singleResponse)
-      const elapsedMs = Date.now() - startedAt
-      const generatedTokens = toNumber(singleResponse.stats.generatedTokens)
-      const singleNativeTps = toNumber(singleResponse.stats.TPS)
-      const singleWallTps = elapsedMs > 0 ? (generatedTokens * 1000) / elapsedMs : 0
-      singleNativeTpsValues.push(singleNativeTps)
-      singleWallTpsValues.push(singleWallTps)
-      t.comment(`single native TPS ${item.id}: ${singleNativeTps}`)
-      t.comment(`single wall TPS ${item.id}: ${singleWallTps}`)
-      t.comment(`${item.id}: ${singleText.trim()}`)
-      t.ok(
-        containsExpectedWord(singleText, item.expected),
-        `single ${item.id} includes ${item.expected}`
-      )
+    let warmUp = warmUpBeforeTiming
+    let singleNativeTpsValues = []
+    let singleWallTpsValues = []
+    for (let pass = 0; pass < (warmUp ? 2 : 1); pass++) {
+      t.comment(`single pass ${pass + 1}`)
+      singleNativeTpsValues = []
+      singleWallTpsValues = []
+      let backendDevice
+      for (const item of CASES) {
+        const startedAt = Date.now()
+        const singleResponse = await singleModel.run(buildPrompt(item), runOptionsForCase(item))
+        const singleText = await collectText(singleResponse)
+        const elapsedMs = Date.now() - startedAt
+        backendDevice = singleResponse.stats.backendDevice
+        const generatedTokens = toNumber(singleResponse.stats.generatedTokens)
+        const singleNativeTps = toNumber(singleResponse.stats.TPS)
+        const singleWallTps = elapsedMs > 0 ? (generatedTokens * 1000) / elapsedMs : 0
+        singleNativeTpsValues.push(singleNativeTps)
+        singleWallTpsValues.push(singleWallTps)
+        t.comment(`single native TPS ${item.id}: ${singleNativeTps}`)
+        t.comment(`single wall TPS ${item.id}: ${singleWallTps}`)
+        t.comment(`${item.id}: ${singleText.trim()}`)
+        t.ok(
+          containsExpectedWord(singleText, item.expected),
+          `single ${item.id} includes ${item.expected}`
+        )
+      }
+      // A CPU fallback skips the TPS assertion, so it needs no warm-up.
+      warmUp = warmUp && backendDevice === 'gpu'
     }
     const avgSingleNativeTps =
       singleNativeTpsValues.reduce((sum, value) => sum + value, 0) / singleNativeTpsValues.length
@@ -478,46 +494,50 @@ safeTest(
     t.comment(`average single wall TPS: ${avgSingleWallTps}`)
 
     const batchModel = await setupModel(t, { parallel: '4', backend: 'vulkan' })
-    const batchInput = CASES.map((item) => ({
-      id: item.id,
-      prompt: buildPrompt(item),
-      runOptions: runOptionsForCase(item)
-    }))
-    const batchStartedAt = Date.now()
-    const batchResponse = await batchModel.run(batchInput)
-    const streamingProgress = logStreamingProgress(batchResponse)
-    const batchResults = await batchResponse.await()
-    const batchElapsedMs = Date.now() - batchStartedAt
-    streamingProgress.flush()
+    const batchInput = CASES.map(buildBatchItem)
+    // Three passes on warm-up: the first prefills from empty slots, the later
+    // ones from slots that already hold the shared system prompt, which takes
+    // other pipelines.
+    let batchResponse
+    let batchElapsedMs
+    for (let pass = 0; pass < (warmUp ? 3 : 1); pass++) {
+      t.comment(`batch pass ${pass + 1}`)
+      const batchStartedAt = Date.now()
+      batchResponse = await batchModel.run(batchInput)
+      const streamingProgress = logStreamingProgress(batchResponse)
+      const batchResults = await batchResponse.await()
+      batchElapsedMs = Date.now() - batchStartedAt
+      streamingProgress.flush()
+
+      t.comment(`batch avgConcurrentSeq: ${toNumber(batchResponse.stats.avgConcurrentSeq)}`)
+      t.ok(
+        toNumber(batchResponse.stats.avgConcurrentSeq) > 3.05,
+        'batch stats report concurrent sequence decoding'
+      )
+
+      t.alike(
+        batchResults.map((result) => result.id),
+        CASES.map((item) => item.id),
+        'all ids are reported in order'
+      )
+      t.alike(
+        streamingProgress.ids().sort(),
+        CASES.map((item) => item.id).sort(),
+        'all ids emitted streaming chunks'
+      )
+      const resultsById = new Map(batchResults.map((result) => [result.id, result.output]))
+      for (const item of CASES) {
+        const output = resultsById.get(item.id) || ''
+        console.log(`[continuous-batching result] ${item.id}: ${output.trim()}`)
+        t.comment(`${item.id}: ${output.trim()}`)
+        t.ok(containsExpectedWord(output, item.expected), `${item.id} includes ${item.expected}`)
+      }
+    }
     const batchNativeTps = toNumber(batchResponse.stats.TPS)
     const batchGeneratedTokens = toNumber(batchResponse.stats.generatedTokens)
     const batchWallTps = batchElapsedMs > 0 ? (batchGeneratedTokens * 1000) / batchElapsedMs : 0
-
     t.comment(`batch native TPS: ${batchNativeTps}`)
     t.comment(`batch wall TPS: ${batchWallTps}`)
-    t.comment(`batch avgConcurrentSeq: ${toNumber(batchResponse.stats.avgConcurrentSeq)}`)
-    t.ok(
-      toNumber(batchResponse.stats.avgConcurrentSeq) > 3.05,
-      'batch stats report concurrent sequence decoding'
-    )
-
-    t.alike(
-      batchResults.map((result) => result.id),
-      CASES.map((item) => item.id),
-      'all ids are reported in order'
-    )
-    t.alike(
-      streamingProgress.ids().sort(),
-      CASES.map((item) => item.id).sort(),
-      'all ids emitted streaming chunks'
-    )
-    const resultsById = new Map(batchResults.map((result) => [result.id, result.output]))
-    for (const item of CASES) {
-      const output = resultsById.get(item.id) || ''
-      console.log(`[continuous-batching result] ${item.id}: ${output.trim()}`)
-      t.comment(`${item.id}: ${output.trim()}`)
-      t.ok(containsExpectedWord(output, item.expected), `${item.id} includes ${item.expected}`)
-    }
 
     const nativeTpsComparison = `batch native TPS (${batchNativeTps}) vs average single native TPS (${avgSingleNativeTps})`
     const wallTpsComparison = `batch wall TPS (${batchWallTps}) vs average single wall TPS (${avgSingleWallTps})`
@@ -941,6 +961,7 @@ test(
       t.ok(generated > 0, `${cases[idx].id} reports its own generatedTokens`)
       t.ok(toNumber(stats.TTFT) > 0, `${cases[idx].id} reports its own time to first token`)
       t.ok(toNumber(stats.promptTokens) > 0, `${cases[idx].id} reports its own promptTokens`)
+      t.ok(toNumber(stats.ppTPS) > 0, `${cases[idx].id} reports a prompt processing rate`)
       t.ok(toNumber(stats.TPS) >= 0, `${cases[idx].id} reports an observed TPS`)
     }
   }
@@ -1309,3 +1330,215 @@ test(
     t.ok(toNumber(stats.promptTokens) > 0, 'plain run() reports its own promptTokens')
   }
 )
+
+// Each slot's limit in the tests below: ctx_size / parallel, with ctx_size set to
+// parallel x SLOT_LIMIT.
+const SLOT_LIMIT = 512
+
+// The slots share one KV pool, each limited to its even share.
+test(
+  'continuous batching: slots share one KV pool, each limited to ctx_size / parallel',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '2', ctx_size: String(2 * SLOT_LIMIT) })
+
+    const cases = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
+    const responses = await Promise.all(
+      cases.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    )
+    const texts = await Promise.all(responses.map(collectText))
+    for (let idx = 0; idx < cases.length; idx++) {
+      t.comment(`${cases[idx].id}: ${texts[idx].trim()}`)
+      t.ok(
+        containsExpectedWord(texts[idx], cases[idx].expected),
+        `${cases[idx].id} answered from the shared pool`
+      )
+    }
+
+    await assertGenerationStopsAtLimit(t, model)
+    await assertLongPromptRejectedAtLimit(t, model)
+  }
+)
+
+// The multimodal context applies the same limit in the batch scheduler.
+test(
+  'continuous batching MTMD: a slot is limited to ctx_size / parallel',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupMultimodalBatchModel(t, {
+      parallel: '2',
+      ctx_size: String(2 * SLOT_LIMIT)
+    })
+    await assertLongPromptRejectedAtLimit(t, model)
+    await model.unload()
+  }
+)
+
+test(
+  'continuous batching: kv_unified is not an option',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    await t.exception(
+      setupModel(t, { parallel: '2', kv_unified: 'false' }),
+      /invalid argument: --kv-unified/,
+      'kv_unified is rejected as an invalid argument'
+    )
+  }
+)
+
+// A conversation saved with the default context is longer than a slot of the
+// next load, so its cache file fails when it loads: through the single-prompt
+// cache at parallel 1, through a slot at parallel 2.
+async function assertOverLimitCacheRejected(t, setup, parallel, tag) {
+  t.comment(`${tag}, parallel ${parallel}`)
+  const key = path.join(os.tmpdir(), `qvac-over-limit-${tag}-${parallel}-${Date.now()}.bin`)
+  t.teardown(() => {
+    try {
+      fs.unlinkSync(key)
+    } catch {}
+  })
+
+  const writer = await setup(t, { parallel })
+  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(SLOT_LIMIT + 100)}` }]
+  await collectText(await writer.run(longPrompt, { cacheKey: key }))
+  await writer.saveCache(key)
+  await writer.unload()
+
+  const reader = await setup(t, { parallel, ctx_size: String(Number(parallel) * SLOT_LIMIT) })
+  const error = await reader
+    .run([{ role: 'user', content: 'Hi' }], { cacheKey: key })
+    .then(collectText)
+    .then(
+      () => null,
+      (err) => err
+    )
+  t.comment(`over-limit cache: ${error?.message}`)
+  t.ok(
+    new RegExp(`exceeds the context limit of ${SLOT_LIMIT} `).test(error?.message || ''),
+    'the cache file is rejected when it loads'
+  )
+  await reader.unload()
+}
+
+test(
+  'continuous batching: a cached prompt over the slot limit fails at load',
+  { timeout: 900_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      await assertOverLimitCacheRejected(t, setupModel, parallel, 'text')
+    }
+  }
+)
+
+test(
+  'continuous batching MTMD: a cached prompt over the slot limit fails at load',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      await assertOverLimitCacheRejected(t, setupMultimodalBatchModel, parallel, 'mtmd')
+    }
+  }
+)
+
+// Offsets in a cache file (fabric's sequence-state layout): a 12-byte header
+// whose last word is the token count, the ledger as the token list, then the
+// KV state, whose first word on a plain KV cache is its stream count, followed
+// per stream by a cell count and the cells.
+const CACHE_TOKEN_COUNT_OFFSET = 8
+const CACHE_LEDGER_OFFSET = 12
+
+function cacheStreamCountOffset(view) {
+  return CACHE_LEDGER_OFFSET + 4 * view.getUint32(CACHE_TOKEN_COUNT_OFFSET, true)
+}
+
+// An earlier version saved one KV stream per slot with parallel >= 2: such a
+// file still loads into the unified cache. It is made here from a current file
+// by declaring a second, empty stream, as a per-slot save of slot 0 writes it.
+// The model keeps no checkpoints, so the KV state ends the file.
+test(
+  'continuous batching: a cache file with one KV stream per slot still loads',
+  { timeout: 900_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      t.comment(`parallel ${parallel}`)
+      const key = path.join(os.tmpdir(), `qvac-per-slot-streams-${parallel}-${Date.now()}.bin`)
+      t.teardown(() => {
+        try {
+          fs.unlinkSync(key)
+        } catch {}
+      })
+
+      const writer = await setupModel(t, { parallel })
+      const history = [{ role: 'user', content: 'Name a color.' }]
+      const answer = await collectText(await writer.run(history, { cacheKey: key }))
+      await writer.saveCache(key)
+      await writer.unload()
+
+      const saved = fs.readFileSync(key)
+      const perSlot = new Uint8Array(saved.length + 4)
+      perSlot.set(saved)
+      const view = new DataView(perSlot.buffer)
+      t.is(view.getUint32(cacheStreamCountOffset(view), true), 1, 'the file holds one KV stream')
+      view.setUint32(cacheStreamCountOffset(view), 2, true)
+      fs.writeFileSync(key, perSlot)
+
+      const reader = await setupModel(t, { parallel })
+      const followUp = [
+        ...history,
+        { role: 'assistant', content: answer },
+        { role: 'user', content: 'Name another.' }
+      ]
+      const response = await reader.run(followUp, { cacheKey: key })
+      const output = await collectText(response)
+      const stats = response.stats
+      const reused =
+        toNumber(stats?.CacheTokens) -
+        toNumber(stats?.promptTokens) -
+        toNumber(stats?.generatedTokens)
+      t.comment(`per-slot file: ${JSON.stringify(stats)}`)
+      t.ok(output.length > 0, 'the follow-up runs')
+      t.ok(reused > 0, `the follow-up reused ${reused} cached tokens`)
+      await reader.unload()
+    }
+  }
+)
+
+// A short prompt after filler words, leaving about 100 tokens under the slot
+// limit, so a long answer runs into it.
+async function assertGenerationStopsAtLimit(t, model) {
+  const filler = 'word '.repeat(SLOT_LIMIT - 150)
+  const prompt = [
+    {
+      role: 'user',
+      content: `Ignore this filler: ${filler}\nNow write the numbers from 1 to 1000, separated by commas.`
+    }
+  ]
+  const response = await model.run(prompt, { generationParams: { predict: -1 } })
+  const output = await collectText(response)
+  const stats = response.stats
+  const used = toNumber(stats?.promptTokens) + toNumber(stats?.generatedTokens)
+  t.comment(`generation to the slot limit: ${JSON.stringify(stats)}`)
+  t.is(stats?.stopReason, 'contextOverflow', 'a generation that fills the slot reports it')
+  t.ok(output.length > 0, 'a generation stopped by the slot limit keeps its tokens')
+  // The pool holds two slots, so a slot running past its share would exceed this.
+  t.ok(used <= SLOT_LIMIT, `the generation stopped at the slot limit (${used} tokens)`)
+}
+
+// About 100 tokens over the slot limit.
+async function assertLongPromptRejectedAtLimit(t, model) {
+  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(SLOT_LIMIT + 100)}` }]
+  const error = await model
+    .run(longPrompt)
+    .then(collectText)
+    .then(
+      () => null,
+      (err) => err
+    )
+  t.comment(`long prompt: ${error?.message}`)
+  t.ok(
+    new RegExp(`(per-sequence cap|max(?: context tokens)?) ${SLOT_LIMIT}\\b`).test(
+      error?.message || ''
+    ),
+    `a prompt over one slot is rejected against the ${SLOT_LIMIT}-token limit`
+  )
+}

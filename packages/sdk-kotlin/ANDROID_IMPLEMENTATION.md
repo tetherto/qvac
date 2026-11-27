@@ -43,7 +43,7 @@ non-streamed TTS buffers that exceed Binder's transaction limit.
 Required local gates:
 
 ```bash
-./gradlew checkContract
+./gradlew testContractGenerator checkWireLiterals
 ./gradlew jvmTest
 ./gradlew :android-example:testDebugUnitTest
 ./gradlew :android-example:checkDebugBuild
@@ -83,7 +83,7 @@ metadata, Android/JVM variants, and seven self-contained Android BareKit AARs:
 `publishSdkToReleaseRepository` publishes the same set when the Maven repository
 URL and credentials are supplied. CI should promote only after:
 
-1. Contract freshness and JVM tests pass.
+1. The contract generator, wire-vocabulary and JVM tests pass.
 2. The Android AAR and sample APK build for `arm64-v8a`.
 3. Instrumentation passes on the supported device profile.
 4. Worker/addon digests match the generated SDK version and profile manifest.

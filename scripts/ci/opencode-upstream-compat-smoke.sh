@@ -7,7 +7,7 @@ REPORT_PROMPT_SURFACE="$SCRIPT_DIR/report-opencode-prompt-surface.cjs"
 
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
-QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
+QVAC_MODEL="${QVAC_MODEL:-qwen3.5-2b}"
 OPENCODE_TIMEOUT="${OPENCODE_TIMEOUT:-45m}"
 QVAC_HOST_LOG="${QVAC_HOST_LOG:-}"
 # Override to smoke an unpublished build, e.g. a local `npm pack` tarball.
@@ -129,9 +129,13 @@ fi
 # at the copy installed above; that is the one whose versions are reported.
 QVAC_PLUGIN_DIR="$SMOKE_DIR/node_modules/@qvac/opencode-plugin"
 
+# Deny every tool and cap the agent's steps: OpenCode always keeps `skill`, and
+# a model that calls it instead of answering otherwise loops until the timeout.
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
+  "permissions": [{ "action": "*", "resource": "*", "effect": "deny" }],
+  "agents": { "build": { "steps": 5 } },
   "plugins": [
     {
       "package": "${QVAC_PLUGIN_DIR}",

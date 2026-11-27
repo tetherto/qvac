@@ -259,7 +259,7 @@ class QvacCompletionApiTest {
         )
         val history = listOf(
             QvacMessage.system("be brief"),
-            QvacMessage.user("what is this?", listOf(QvacAttachment("/image.png"))),
+            QvacMessage.user(listOf(QvacContentPart.Text("what is this?"), QvacContentPart.Media("/image.png"))),
         )
         val tools = listOf(
             QvacTool(
@@ -567,6 +567,20 @@ class QvacCompletionApiTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
+    fun deprecatedAttachmentsStillReachTheWire() = runTest {
+        val history = sentPayload(listOf(QvacMessage.user("what is this?", listOf(QvacAttachment("/a.jpg")))))
+            .getValue("history").jsonArray.single().jsonObject
+
+        assertEquals(JsonPrimitive("what is this?"), history["content"])
+        assertEquals(
+            buildJsonArray { add(buildJsonObject { put("path", "/a.jpg") }) },
+            history["attachments"],
+        )
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
     fun invalidPartsAreRejected() {
         val parts = listOf(QvacContentPart.Text("hi"))
         assertFailsWith<IllegalArgumentException> { QvacMessage("assistant", "", parts = parts) }

@@ -1,4 +1,5 @@
-import { MegaLoc } from '@qvac/classification-ggml'
+import { MegaLoc, assessFit as classificationAssessFit } from '@qvac/classification-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -12,12 +13,15 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { embed, embedBatch } from './ops/embed'
+import { imageEmbeddingFitRequest } from './fit'
 
 export const imageEmbeddingPlugin = definePlugin({
   modelType: ModelType.ggmlImageEmbedding,
   displayName: 'Image embeddings (MegaLoc)',
   addonPackage: ADDON_CLASSIFICATION,
   loadConfigSchema: imageEmbeddingConfigSchema,
+  fitRequest: imageEmbeddingFitRequest,
+  assessFit: classificationAssessFit,
   createModel(params) {
     const config = imageEmbeddingConfigSchema.parse(params.modelConfig ?? {})
     const logger = createStreamLogger(params.modelId, ModelType.ggmlImageEmbedding)
@@ -31,6 +35,7 @@ export const imageEmbeddingPlugin = definePlugin({
     })
     return { model }
   },
+  provides: [CAPABILITY_CONTRACTS.embedding],
   handlers: {
     embed: defineHandler({
       requestSchema: embedRequestSchema,

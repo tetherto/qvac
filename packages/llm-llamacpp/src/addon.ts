@@ -19,7 +19,7 @@ export interface AddonMessage {
   /**
    * Per-call sampling overrides forwarded by `LlmLlamacpp.run()` from
    * `RunOptions.generationParams`. Carried on the `text` message and consumed
-   * by the native binding so each `runJob` can use a different temp / top_p /
+   * by the selected binding so each `runJob` can use a different temp / top_p /
    * seed / etc. without re-loading the model.
    */
   generationParams?: GenerationParams;
@@ -36,13 +36,13 @@ export interface AddonMediaMessage {
 export type AddonRunJobMessage = AddonMessage | AddonMediaMessage;
 
 /**
- * Discriminated admission result: the native binding only sets `id` when the
- * scheduler minted one, so a job id exists exactly when the job was accepted.
+ * Discriminated admission result: the binding only sets `id` when a job was
+ * accepted.
  */
 export type AdmissionResult =
   | {
       accepted: true;
-      /** Native-assigned job id used to route this request's streamed output. */
+      /** Binding-assigned job id used to route this request's streamed output. */
       id: number;
     }
   | { accepted: false; id?: never };
@@ -50,21 +50,21 @@ export type AdmissionResult =
 export type AddonRunJobResult = AdmissionResult;
 
 export interface AddonBatchRunItem {
-  /** Optional caller-supplied id; the native binding auto-assigns one when omitted. */
+  /** Optional caller-supplied id; the binding auto-assigns one when omitted. */
   id?: string;
   messages: AddonRunJobMessage[];
 }
 
 /**
  * Batch admission result. The per-sequence `ids` are reported on both
- * branches (they are assigned while parsing the batch input); the native
+ * branches (they are assigned while parsing the batch input); the binding
  * group id used to route the batch's terminal events exists only when the
  * batch was accepted.
  */
 export type AddonBatchRunResult =
   | {
       accepted: true;
-      /** Native group id used by the batch handler to route this group's terminal events. */
+      /** Binding group id used by the batch handler to route this group's terminal events. */
       id: number;
       ids: string[];
     }
@@ -84,7 +84,7 @@ export type AddonOutputCallback = (
   jobId: unknown,
 ) => void;
 
-/** `calcTokens` input as the native binding takes it: `history` and `tools` are JSON array text. */
+/** `calcTokens` binding input: `history` and `tools` are JSON array text. */
 export interface AddonCalcTokensParams {
   text?: string;
   history?: string;
@@ -109,7 +109,7 @@ export interface LlamaBinding {
   calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
   runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
   runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
-  destroyInstance(handle: unknown): void;
+  destroyInstance(handle: unknown): Promise<void> | void;
 }
 
 export type MappedAddonEvent = {
@@ -119,7 +119,7 @@ export type MappedAddonEvent = {
 };
 
 /**
- * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
+ * Normalize a raw binding event into `Output` / `Error` / `JobEnded` /
  * `FinetuneProgress`, or `null` to drop it.
  */
 export function mapAddonEvent(
@@ -188,11 +188,12 @@ export function mapAddonEvent(
 }
 
 /**
- * An interface between Bare addon in C++ and JS runtime.
+ * The JavaScript interface to the native or WebAssembly engine binding.
  */
 export class LlamaInterface {
   private readonly _binding: LlamaBinding;
   private _handle: object | null;
+  private _unloading: Promise<void> | null = null;
 
   constructor(
     binding: unknown,
@@ -216,7 +217,7 @@ export class LlamaInterface {
   }
 
   /**
-   * Active jobs (in-flight + queued) per the native scheduler — the
+   * Active jobs (in-flight + queued) reported by the binding — the
    * authoritative admission count.
    */
   activeJobs(): number {
@@ -239,7 +240,7 @@ export class LlamaInterface {
 
   /**
    * Cancel every inference job live at the moment of this call (or pause a
-   * running finetune). Snapshot-based: the native binding captures the live
+   * running finetune). Snapshot-based: the binding captures the live
    * job ids synchronously before deferring the cancellation, so a job started
    * after this call is never touched.
    */
@@ -249,12 +250,11 @@ export class LlamaInterface {
   }
 
   /**
-   * Cancel a single job by its native-assigned id, leaving other concurrent
-   * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
+   * Cancel a single job by its binding-assigned id, leaving other jobs running.
    */
   async cancelJob(id: number): Promise<void> {
     if (!this._handle) return;
-    // The native binding treats a missing id as cancel-all; cancelling every
+    // The bindings treat a missing id as cancel-all; cancelling every
     // job is cancel()'s job, so require an explicit id here.
     if (typeof id !== "number") {
       throw new TypeError(
@@ -291,11 +291,11 @@ export class LlamaInterface {
   }
 
   /**
-   * Run finetuning when native binding provides support.
+   * Run finetuning when the selected binding provides support.
    */
   finetune(finetuningParams: FinetuneOptions): Promise<number | false> {
     if (typeof this._binding.finetune !== "function") {
-      throw new Error("Finetuning is not exposed by this native binding");
+      throw new Error("Finetuning is not exposed by this binding");
     }
     if (finetuningParams === undefined) {
       throw new Error("Finetuning parameters are required");
@@ -305,7 +305,7 @@ export class LlamaInterface {
 
   /**
    * Run one inference job with an array of message objects, or a batch of
-   * jobs with an array of `{id?, messages}` items. The native binding mints
+   * jobs with an array of `{id?, messages}` items. The binding mints
    * the job id (single) / group id (batch) and returns it so concurrent jobs
    * can be routed; a batch result also carries the per-item `ids` assigned
    * to each sequence.
@@ -324,10 +324,27 @@ export class LlamaInterface {
    * Unload the model and clear resources (including memory).
    */
   unload(): Promise<void> {
+    if (this._unloading) return this._unloading;
     if (!this._handle) return Promise.resolve();
-    this._binding.destroyInstance(this._handle);
+    const handle = this._handle;
     this._handle = null;
-    return Promise.resolve();
+    let destroyed: Promise<void>;
+    try {
+      destroyed = Promise.resolve(this._binding.destroyInstance(handle));
+    } catch (error) {
+      this._handle = handle;
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+    const unloading = destroyed
+      .catch((error) => {
+        this._handle = handle;
+        throw error;
+      })
+      .finally(() => {
+        if (this._unloading === unloading) this._unloading = null;
+      });
+    this._unloading = unloading;
+    return unloading;
   }
 }
 

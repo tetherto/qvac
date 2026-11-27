@@ -9,7 +9,12 @@ import {
 import { z } from 'zod'
 import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { perCallProfilingSchema } from '@/schemas/profiling'
+import { requestDeadlineSchema } from '@/schemas/deadlines'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
+import {
+  getRuntimeCapabilitiesRequestSchema,
+  getRuntimeCapabilitiesResponseSchema
+} from '@/schemas/capabilities'
 import {
   openSessionRequestSchema,
   openSessionResponseSchema,
@@ -66,7 +71,6 @@ import {
   textToSpeechStreamResponseSchema
 } from '@/schemas/text-to-speech'
 import { errorResponseSchema } from '@/schemas/error'
-import { ragRequestSchema, ragResponseSchema, ragProgressUpdateSchema } from '@/schemas/rag'
 import { vectorIndexRequestSchema, vectorIndexResponseSchema } from '@/schemas/vector-index'
 import {
   getModelInfoRequestSchema,
@@ -125,6 +129,10 @@ import {
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
+import {
+  estimateDisparityRequestSchema,
+  estimateDisparityResponseSchema
+} from '@/schemas/stereo-depth'
 import { calcTokensRequestSchema, calcTokensResponseSchema } from '@/schemas/calc-tokens'
 import {
   audioEditStreamRequestSchema,
@@ -163,12 +171,12 @@ export const requestSchema = z.union([
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
   cancelRequestSchema,
-  ragRequestSchema,
   vectorIndexRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   getLoadedModelInfoRequestSchema,
   getSystemResourcesRequestSchema,
+  getRuntimeCapabilitiesRequestSchema,
   assessModelFitRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
@@ -186,6 +194,7 @@ export const requestSchema = z.union([
   resumeRequestSchema,
   stateRequestSchema,
   classifyRequestSchema,
+  estimateDisparityRequestSchema,
   decideRequestSchema,
   rerankRequestSchema
 ])
@@ -220,13 +229,12 @@ export const responseSchema = z.discriminatedUnion('type', [
   textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   errorResponseSchema,
-  ragResponseSchema,
-  ragProgressUpdateSchema,
   vectorIndexResponseSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   getLoadedModelInfoResponseSchema,
   getSystemResourcesResponseSchema,
+  getRuntimeCapabilitiesResponseSchema,
   assessModelFitResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
@@ -245,6 +253,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   resumeResponseSchema,
   stateResponseSchema,
   classifyResponseSchema,
+  estimateDisparityResponseSchema,
   decideResponseSchema,
   rerankResponseSchema
 ])
@@ -278,6 +287,14 @@ export const rpcOptionsSchema = z.object({
     .describe(
       'Caller session to run this request as. Set by a session handle; the ' +
         'transport copies it onto the request body.'
+    ),
+  deadline: requestDeadlineSchema
+    .optional()
+    .describe(
+      'Deadlines the runtime enforces for this call: `queueMs`, `idleMs`, `runMs` and, for ' +
+        '`loadModel`, `loadMs`. Each value can shorten the value the runtime configuration ' +
+        'sets for the same field, and never lengthens it. On expiry the call fails with ' +
+        '`DeadlineExceededError`. The transport copies it onto the request body.'
     )
 })
 

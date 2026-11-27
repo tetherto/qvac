@@ -22,6 +22,7 @@ export type RequestKind =
   | 'batchCompletion'
   | 'embeddings'
   | 'imageEmbedding'
+  | 'stereoDepth'
   | 'decision'
   | 'rerank'
   | 'transcribe'
@@ -39,7 +40,6 @@ export type RequestKind =
   | 'loadModel'
   | 'downloadAsset'
   | 'modelRegistry'
-  | 'rag'
   | 'rpcServer'
   | 'rpcDiscovery'
 
@@ -71,6 +71,8 @@ export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | '
  *    forget on the cancel branch.
  *  - `state` — current lifecycle state. Treat as read-mostly; the
  *    registry mutates it.
+ *  - `overdue`, `touch`, `startLoadDeadline` — the request's deadlines,
+ *    when the runtime configuration or the call set any.
  */
 export interface RequestContext {
   readonly requestId: string
@@ -87,6 +89,18 @@ export interface RequestContext {
   readonly signal: AbortSignal
   readonly scope: DisposableScope
   state: RequestState
+  /**
+   * True from the moment a deadline of the request passes until its teardown
+   * has finished. The request keeps its admission slot for that time.
+   */
+  overdue: boolean
+  /**
+   * Report progress that the caller does not receive as a response, such as
+   * a native training step. Restarts the request's idle deadline.
+   */
+  touch(): void
+  /** Start the request's load deadline. Called where a load's download phase ends. */
+  startLoadDeadline(): void
 }
 
 /**
@@ -118,6 +132,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
+  })
+  // BridgeDepth runs one job at a time per model. Queue here so a cancelled
+  // waiting request never reaches the addon. Shallower than the other lanes
+  // because each waiting request holds both views as base64. A max-size raw
+  // RGB pair is about 134 MB, so 8 waiting requests hold about 1.1 GB.
+  r.policy({
+    kind: 'stereoDepth',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 8
   })
   // Laya owns one active job per model. Wait in the registry so cancelling a
   // queued request never reaches the addon or interrupts the active job.

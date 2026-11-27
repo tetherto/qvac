@@ -36,7 +36,7 @@ type RecordedCall = {
 
 type ToolDef = Tool
 
-type HistoryEntry = { role: string; content: string; attachments: never[] }
+type HistoryEntry = { role: string; content: string }
 
 function makeTool(name: string): ToolDef {
   return {
@@ -70,15 +70,15 @@ function shape(call: RecordedCall): (string | undefined)[] {
 }
 
 function user(content: string): HistoryEntry {
-  return { role: 'user', content, attachments: [] }
+  return { role: 'user', content }
 }
 
 function assistant(content: string): HistoryEntry {
-  return { role: 'assistant', content, attachments: [] }
+  return { role: 'assistant', content }
 }
 
 function system(content: string): HistoryEntry {
-  return { role: 'system', content, attachments: [] }
+  return { role: 'system', content }
 }
 
 async function setIsolatedHome(): Promise<void> {
@@ -431,7 +431,6 @@ test('completion: past tool calls reach the model as tool_calls and tool_call_id
       {
         role: 'assistant',
         content: '',
-        attachments: [],
         toolCalls: [
           { id: 'call_1', name: 'calculate_triangle_area', arguments: { base: 10, height: 5 } }
         ]
@@ -439,7 +438,6 @@ test('completion: past tool calls reach the model as tool_calls and tool_call_id
       {
         role: 'tool',
         content: '25',
-        attachments: [],
         toolCallId: 'call_1',
         toolName: 'calculate_triangle_area'
       }
@@ -798,14 +796,15 @@ function registerSecondTurnThrowingModel(
   modelId: string,
   calls: RecordedCall[],
   cachePaths: string[],
-  thrown: Error,
+  thrown: Error | ((cacheKey: string | undefined) => Error),
   throwOnRun = 2
-): void {
+): ReturnType<typeof heldConversations> {
   let runCount = 0
   const conversations = heldConversations()
   registerModel(modelId, {
     model: {
       saveCache: conversations.saveCache,
+      discardCache: conversations.discardCache,
       run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
@@ -814,7 +813,9 @@ function registerSecondTurnThrowingModel(
         if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         if (!opts?.prefill) {
           runCount += 1
-          if (runCount === throwOnRun) throw thrown
+          if (runCount === throwOnRun) {
+            throw typeof thrown === 'function' ? thrown(opts?.cacheKey) : thrown
+          }
         }
         conversations.hold(opts?.cacheKey)
         return {
@@ -830,6 +831,7 @@ function registerSecondTurnThrowingModel(
     config: {},
     modelType: ModelType.llamacppCompletion
   })
+  return conversations
 }
 
 // Turn one commits, turn two fails or stops early, turn three retries the same
@@ -1060,6 +1062,69 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
   t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
   assertRetryReusesCache(t, turnCalls, cachePaths)
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A file the addon cannot load fails every request that loads it, so the
+// failed turn removes it and the retry starts cold on the same key.
+test('completion: kv-cache drops a cache file the addon cannot load', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-unloadable-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) => new Error(`TextLlmContext::loadCache: failed to load cache '${cacheKey}'`)
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'unloadable-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && /failed to load cache/.test(refusal.message), 'turn two fails')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache drops a cache file over the slot limit as a context overflow', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-over-limit-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    (cacheKey) =>
+      new Error(
+        `TextLlmContext::loadCache: cache '${cacheKey}' exceeds the context limit of 8192 tokens`
+      )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'over-limit-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the failed turn removes the cache file')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  t.alike(conversations.discarded, [cachePaths[1]], 'rollback discards the held conversation')
+  t.is((refusal as { ctxSize?: number }).ctxSize, 8192, 'the limit is the slot limit')
+  t.is(turnCalls.length, 3, 'the retry reaches the model')
+  t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the retry saves a new cache file')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -1417,15 +1482,15 @@ test('completion: kv-cache drops the file a first turn saved before the engine t
 
 // A missing attachment is caller input the SDK rejects before the addon
 // runs, so the committed cache must survive and the retry reuses it.
-test('completion: kv-cache survives a missing-attachment rejection between turns', async (t) => {
+test('completion: kv-cache survives a missing-media rejection between turns', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
-  const modelId = `kvcache-attachment-preserves-${Date.now()}`
+  const modelId = `kvcache-media-preserves-${Date.now()}`
   const calls: RecordedCall[] = []
   const cachePaths: string[] = []
   registerRecordingModel(modelId, calls, { tools: true }, cachePaths)
-  const complete = completer(modelId, 'attachment-preserves-key')
+  const complete = completer(modelId, 'media-preserves-key')
   const first = user('Area of a triangle, base 10 height 5?')
   await complete([first])
 
@@ -1434,13 +1499,15 @@ test('completion: kv-cache survives a missing-attachment rejection between turns
     assistant('25.'),
     {
       role: 'user',
-      content: 'see attachment',
-      attachments: [{ path: '/nonexistent/attachment.png' }]
+      content: [
+        { type: 'media', path: '/nonexistent/diagram.png' },
+        { type: 'text', text: 'see this diagram' }
+      ]
     }
   ]
   let refusal: unknown
   try {
-    await complete(badTurn as HistoryEntry[])
+    await complete(badTurn as unknown as HistoryEntry[])
   } catch (error) {
     refusal = error
   }
@@ -1459,36 +1526,42 @@ test('completion: kv-cache survives a missing-attachment rejection between turns
   clearRegistry()
 })
 
-// Every turn re-sends the full history, attachments included, so one deleted
+// Every turn re-sends the full history, media included, so an image deleted
 // after an earlier turn fails the next turn as it would without a cache.
-test('completion: kv-cache rejects a turn whose earlier attachment vanished from disk', async (t) => {
+test('completion: kv-cache rejects a turn whose earlier media vanished from disk', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
   const fs = await import('bare-fs')
   const os = await import('bare-os')
   const path = await import('bare-path')
-  const attachmentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-attachment-'))
-  const attachmentPath = path.join(attachmentDir, 'diagram.png')
-  fs.writeFileSync(attachmentPath, 'image-bytes')
+  const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-media-'))
+  const mediaPath = path.join(mediaDir, 'diagram.png')
+  fs.writeFileSync(mediaPath, 'image-bytes')
 
-  const modelId = `kvcache-attachment-vanishes-${Date.now()}`
+  const modelId = `kvcache-media-vanishes-${Date.now()}`
   try {
     const calls: RecordedCall[] = []
     const cachePaths: string[] = []
     registerRecordingModel(modelId, calls, { tools: true }, cachePaths)
-    const complete = completer(modelId, 'attachment-vanishes-key')
+    const complete = completer(modelId, 'media-vanishes-key')
     const first = {
       role: 'user',
-      content: 'Area of the triangle in the attachment?',
-      attachments: [{ path: attachmentPath }]
+      content: [
+        { type: 'media', path: mediaPath },
+        { type: 'text', text: 'Area of the triangle in this diagram?' }
+      ]
     }
-    await complete([first] as HistoryEntry[])
+    await complete([first] as unknown as HistoryEntry[])
 
-    fs.unlinkSync(attachmentPath)
+    fs.unlinkSync(mediaPath)
     let refusal: unknown
     try {
-      await complete([first, assistant('25.'), user('And base 4 height 3?')] as HistoryEntry[])
+      await complete([
+        first,
+        assistant('25.'),
+        user('And base 4 height 3?')
+      ] as unknown as HistoryEntry[])
     } catch (error) {
       refusal = error
     }
@@ -1498,7 +1571,7 @@ test('completion: kv-cache rejects a turn whose earlier attachment vanished from
     t.is(turnCalls.length, 1, 'the rejected turn never reached the model')
     t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the committed cache file survives')
   } finally {
-    fs.rmSync(attachmentDir, { recursive: true, force: true })
+    fs.rmSync(mediaDir, { recursive: true, force: true })
     unregisterModel(modelId)
     clearRegistry()
   }
@@ -1683,8 +1756,8 @@ test('completion: loading a deferred tool declares it and keeps the grammar on',
   await complete(
     [
       ...history,
-      { role: 'assistant', content: '<call tool_search>', attachments: [] },
-      { role: 'tool', content: loaded, attachments: [] }
+      { role: 'assistant', content: '<call tool_search>' },
+      { role: 'tool', content: loaded }
     ],
     tools
   )
@@ -1692,8 +1765,8 @@ test('completion: loading a deferred tool declares it and keeps the grammar on',
   await complete(
     [
       ...history,
-      { role: 'assistant', content: '<call tool_search>', attachments: [] },
-      { role: 'tool', content: loaded, attachments: [] }
+      { role: 'assistant', content: '<call tool_search>' },
+      { role: 'tool', content: loaded }
     ],
     tools,
     { tool_choice: 'auto' }

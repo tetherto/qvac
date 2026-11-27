@@ -105,6 +105,16 @@ export function getSingleFileCachePath(registryPath: string): string {
   )
 }
 
+/** Whether `path` is a file of `expectedSize` bytes. Reads the size only, never the content. */
+export async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
+  if (expectedSize <= 0) return false
+  try {
+    return (await fsPromises.stat(path)).size === expectedSize
+  } catch {
+    return false
+  }
+}
+
 /**
  * Get full path to specific shard file
  * Returns: cache/sharded/<hyperdriveKey>/<shardFilename>

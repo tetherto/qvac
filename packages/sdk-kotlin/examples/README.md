@@ -98,13 +98,13 @@ database drivers to those two examples only. `Finetune` trains on
 | `Ocr.kt` | `packages/sdk/examples/ocr-fasttext.ts` |
 | `Plugins.kt` | `packages/sdk/examples/plugins.ts` |
 | `Quickstart.kt` | `packages/sdk/examples/quickstart.ts` |
-| `RagManaged.kt` | `packages/sdk/examples/rag/rag-hyperdb/ingest.ts` |
 | `RagMongodb.kt` | `packages/sdk/examples/rag/rag-mongodb.ts` |
 | `RagSqlite.kt` | `packages/sdk/examples/rag/rag-sqlite.ts` |
 | `RagTurbovec.kt` | `packages/sdk/examples/rag/rag-turbovec.ts` |
 | `RagTurbovecIvf.kt` | `packages/sdk/examples/rag/rag-turbovec-ivf.ts` |
 | `RegistryQuery.kt` | `packages/sdk/examples/registry-query.ts` |
 | `Rerank.kt` | `packages/sdk/examples/rerank.ts` |
+| `RuntimeCapabilities.kt` | `packages/sdk/examples/runtime-capabilities.ts` |
 | `Sessions.kt` | `packages/sdk/examples/sessions.ts` |
 | `ShardedModels.kt` | `packages/sdk/examples/llamacpp-sharded.ts` |
 | `SuspendResume.kt` | `packages/sdk/examples/suspend-resume.ts` |

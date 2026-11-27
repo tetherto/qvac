@@ -94,19 +94,6 @@ bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
   return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
-/// Partition the whole-context KV pool uniformly across slots. Mirrors
-/// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
-/// n_parallel` as the per-sequence hard ceiling.
-unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
-  bool valid = ctxTotalTokens > 0 && batchSize > 0;
-  if (!valid) {
-    throw std::invalid_argument(
-        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
-        ">= 1");
-  }
-  return ctxTotalTokens / static_cast<unsigned>(batchSize);
-}
-
 /// Terminal reason a driver should record for a scheduler-imposed stop.
 /// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
 /// driver rolls back the current request.
@@ -147,6 +134,16 @@ bool generationBudgetExceeded(
   const auto budgetSize = std::max(promptSize, promptKvSize);
   return nPredict > 0 &&
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
+}
+
+unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
+  bool valid = ctxTotalTokens > 0 && batchSize > 0;
+  if (!valid) {
+    throw std::invalid_argument(
+        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
+        ">= 1");
+  }
+  return ctxTotalTokens / static_cast<unsigned>(batchSize);
 }
 
 TimedDecodeResult timeDecodeStep(
@@ -270,10 +267,16 @@ BatchResult ContinuousBatchScheduler::processBatch(
   if (group->error) {
     std::rethrow_exception(group->error);
   }
+  const double prefillSeconds =
+      std::chrono::duration<double>(group->prefillDuration).count();
   return {
       .outputs = std::move(group->outputs),
       .stats = group->stats,
-      .requestStats = std::move(group->requestStats)};
+      .requestStats = std::move(group->requestStats),
+      .prefillTps =
+          prefillSeconds > 0.0
+              ? static_cast<double>(group->prefillTokens) / prefillSeconds
+              : 0.0};
 }
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
@@ -886,23 +889,22 @@ ContinuousBatchScheduler::prefillCompleteFn() {
   // `failGroupLocked` -> `cancelSlotLocked(Skip)`. The last known-good cache
   // remains untouched.
   // path.
-  return
-      [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
-        auto& slot = slots_[seqId];
-        if (!slot.has_value() || !slot->driver) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_errors::general_error::toString(
-                  qvac_errors::general_error::InternalError),
-              "ContinuousBatchScheduler::step: missing sequence driver for "
-              "prefill-complete seqId " +
-                  std::to_string(seqId));
-        }
-        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
-        if (slot->prefillOnly) {
-          batcher_.markFinished(seqId);
-        }
-      };
+  return [this](uint32_t seqId, llama_pos currentPos, size_t prefillKvCells) {
+    auto& slot = slots_[seqId];
+    if (!slot.has_value() || !slot->driver) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "ContinuousBatchScheduler::step: missing sequence driver for "
+          "prefill-complete seqId " +
+              std::to_string(seqId));
+    }
+    slot->driver->onPrefillComplete(currentPos, prefillKvCells);
+    if (slot->prefillOnly) {
+      batcher_.markFinished(seqId);
+    }
+  };
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
@@ -982,7 +984,7 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   SequenceDriver& driver = *slot->driver;
   llama_pos newPos = awaiting->currentPos;
   std::exception_ptr error;
-  std::chrono::steady_clock::duration evalDuration{};
+  std::chrono::nanoseconds evalDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
     const auto evalStart = std::chrono::steady_clock::now();
@@ -1009,7 +1011,8 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
             nullptr);
       }
     }
-    evalDuration = std::chrono::steady_clock::now() - evalStart;
+    evalDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - evalStart);
   }
 
   if (error) {
@@ -1020,13 +1023,13 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   assert(
       newPos >= awaiting->currentPos &&
       "media segment must not move the sequence position backwards");
-  const auto mediaPositions =
-      static_cast<uint64_t>(newPos - awaiting->currentPos);
-  stats_.recordDecodeStep(
-      numActiveLocked(),
-      mediaPositions,
-      0,
-      std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
+  const auto mediaTokens =
+      static_cast<uint64_t>(std::max<llama_pos>(0, awaiting->nKvTokens));
+  stats_.recordDecodeStep(numActiveLocked(), mediaTokens, 0, evalDuration);
+  if (slot->group && mediaTokens > 0) {
+    slot->group->prefillTokens += mediaTokens;
+    slot->group->prefillDuration += evalDuration;
+  }
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
   // Only now does the slot's cursor include the segment, so a teardown
   // recorded during the eval sees the memory it actually has.
@@ -1136,7 +1139,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   int decodeRc = 0;
   bool speculativeFailed = false;
-  std::chrono::steady_clock::duration decodeDuration{};
+  std::chrono::nanoseconds decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
     const TimedDecodeResult decodeTiming =
@@ -1184,9 +1187,23 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       fillResult.numActiveSequences,
       fillResult.prefillTokens,
       fillResult.decodeTokens,
-      std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
+      decodeDuration);
 
-  batcher_.advance(prefillCompleteFn());
+  ++decodeStep_;
+  batcher_.advance(
+      prefillCompleteFn(),
+      [this, &decodeDuration](uint32_t seqId, unsigned tokens) {
+        const auto& slot = slots_[seqId];
+        if (slot && slot->group) {
+          auto& group = *slot->group;
+          group.prefillTokens += tokens;
+          // Sibling slots in the same decode share one wall-clock interval.
+          if (std::exchange(group.lastPrefillDecodeStep, decodeStep_) !=
+              decodeStep_) {
+            group.prefillDuration += decodeDuration;
+          }
+        }
+      });
   // Verified before any deferred teardown, so a slot torn down below is
   // synced to memory that already dropped its rejected draft tail. A slot
   // with a pending teardown streams nothing from its verified run.
@@ -1455,18 +1472,18 @@ void RuntimeStatsSnapshot::recordSpeculativeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t toolsDropped, const Request& req) {
-  cacheTokens += nPast;
+    int64_t kvCells, int64_t toolsDropped, const Request& req) {
+  cacheTokens += kvCells;
   toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
   // once prefill completes, prefillFedCount is reset to 0, so the full prompt
-  // is read from prefillTokenCount; a request cancelled mid/pre-prefill instead
+  // is read from prefillKvCells; a request cancelled mid/pre-prefill instead
   // reports the partial prefillFedCount (0 if no step ever ran). This keeps the
   // `cacheTokens ~= promptTokens + generatedTokens` invariant honest on the
   // cancel path.
   promptTokens += req.isPrefillComplete()
-                      ? static_cast<int64_t>(req.prefillTokenCount)
+                      ? static_cast<int64_t>(req.prefillKvCells)
                       : static_cast<int64_t>(req.prefillFedCount);
 }
 
@@ -2483,7 +2500,7 @@ ObservedRequestStats computeObservedStats(
   // Mirror accumulateSlot: full prompt once prefill completed, the partial
   // fed count for a request cancelled mid/pre-prefill.
   observed.promptTokens = req.isPrefillComplete()
-                              ? static_cast<int64_t>(req.prefillTokenCount)
+                              ? static_cast<int64_t>(req.prefillKvCells)
                               : static_cast<int64_t>(req.prefillFedCount);
   if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
@@ -2520,6 +2537,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    agg.cacheTokens += stats.cacheTokens;
     // Summed like the token counts rather than averaged: a multi-item group's
     // caller asked one question, and "two of my renders dropped their tools"
     // is the honest answer to it.
@@ -2556,7 +2574,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
-  int64_t nPast = 0;
+  int64_t kvCells = 0;
   int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
@@ -2567,12 +2585,12 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // during prefill or failed is rolled back to the admission cursor, so
     // `CacheTokens` matches the live driver cursor either way. Work performed
     // is still reported via `promptTokens` / `generatedTokens`.
-    nPast = static_cast<int64_t>(slot.driver->getNPast());
+    kvCells = static_cast<int64_t>(slot.driver->getKvCellsUsed());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, toolsDropped, req);
+  stats_.accumulateSlot(kvCells, toolsDropped, req);
   if (slot.driver) {
     stats_.speculative.add(slot.driver->speculativeStats());
   }
@@ -2587,6 +2605,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // which only this function holds. The same two values also go into the
     // scheduler-wide accumulator above — that copy stays, for the whole-model
     // `runtimeStats()` read.
+    observed.cacheTokens = kvCells;
     observed.toolDefinitionsDropped = toolsDropped;
     if (slot.driver) {
       const auto speculativeStats = slot.driver->speculativeStats();

@@ -1,14 +1,17 @@
 import type { ServeExtension } from '@/serve/core/extensions'
 import { routes } from '@/serve/extensions/default/routes'
+import { BCI_FIELD_CODES } from '@/serve/extensions/default/schemas/bci'
 import { CHAT_BATCH_FIELD_CODES } from '@/serve/extensions/default/schemas/chat-batch'
 import { CLASSIFICATIONS_FIELD_CODES } from '@/serve/extensions/default/schemas/classifications'
 import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
 import { MUSIC_FIELD_CODES } from '@/serve/extensions/default/schemas/music'
 import { OCR_FIELD_CODES } from '@/serve/extensions/default/schemas/ocr'
+import { PLUGINS_FIELD_CODES } from '@/serve/extensions/default/schemas/plugins'
 import { REGISTRY_FIELD_CODES } from '@/serve/extensions/default/schemas/registry'
 import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
 import { TRANSLATE_FIELD_CODES } from '@/serve/extensions/default/schemas/translate'
 import { UPSCALE_FIELD_CODES } from '@/serve/extensions/default/schemas/upscale'
+import { VLA_FIELD_CODES } from '@/serve/extensions/default/schemas/vla'
 import { WORLD_FIELD_CODES } from '@/serve/extensions/default/schemas/world'
 import { TAG_DESCRIPTIONS } from '@/serve/extensions/default/tags'
 import { tearDownMusicJob } from '@/serve/extensions/default/routes/music'
@@ -32,7 +35,10 @@ const defaultExtension: ServeExtension = {
     ...REGISTRY_FIELD_CODES,
     ...UPSCALE_FIELD_CODES,
     ...MUSIC_FIELD_CODES,
-    ...WORLD_FIELD_CODES
+    ...WORLD_FIELD_CODES,
+    ...VLA_FIELD_CODES,
+    ...BCI_FIELD_CODES,
+    ...PLUGINS_FIELD_CODES
   },
   // lunte-disable-next-line require-await
   setup: async (ctx) => createDefaultState(ctx, tearDownMusicJob),

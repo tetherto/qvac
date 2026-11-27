@@ -12,7 +12,7 @@ import {
   validatePlan
 } from './entries.mjs'
 
-// A13: only main saves. pull_request_target also runs on refs/heads/main, hence the event check.
+// A13: only main saves. workflow_run and pull_request_target PR builds also run on refs/heads/main, hence the event check.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
 
@@ -37,8 +37,15 @@ async function restoreEntry(entry, lookupOnly) {
   if (lookupOnly) return exists(entry)
   const key = cacheKey(entry)
   if (!(await cache.restoreCache(cachePaths(entry), key, [], {}, true))) return false
-  if (isComplete(entry)) return true
-  core.warning(`Restored ${label(entry)} is incomplete; if this repeats: gh cache delete ${key}`)
+  if (!isComplete(entry)) {
+    core.warning(`Restored ${label(entry)} is incomplete; if this repeats: gh cache delete ${key}`)
+    return false
+  }
+  // A test leg restores after pull request code ran on the runner.
+  const mismatch = await firstChecksumMismatch(entry)
+  if (!mismatch) return true
+  core.warning(`Restored ${mismatch} fails its registry checksum; if this repeats: gh cache delete ${key}`)
+  for (const file of entry.files) fs.rmSync(file.path, { force: true })
   return false
 }
 

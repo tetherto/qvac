@@ -1,9 +1,18 @@
 ---
 title: RAG
 icon: ScanSearch
-description: Out-of-the-box retrieval-augmented generation workflow.
+description: Retrieval-augmented generation with embeddings and a vector index.
 schemaType: HowTo
 ---
+
+<Callout type="info">
+  The SDK no longer manages documents for RAG. This page builds retrieval from
+  `embed()` and the vector index. For a managed document store with chunking,
+  ingestion and search, use the standalone
+  [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package. Coming from
+  the `rag*` functions of SDK 0.24 and earlier? See [Migrate from the SDK RAG
+  API](/resources/rag-migration).
+</Callout>
 
 ## Overview
 
@@ -19,16 +28,7 @@ Compared to generating text embeddings only, the key differences are:
 
 1. [`loadModel()`](/sdk/reference/api#loadmodel) (with `modelType: "embeddings"`)
 2. [`embed()`](/sdk/reference/api#embed) — generate vectors
-3. Use any combination of the RAG functions below as needed:
-   - [`ragChunk()`](/sdk/reference/api#ragchunk) — chunk documents
-   - [`ragIngest()`](/sdk/reference/api#ragingest) — embed and store (requires model)
-   - [`ragSaveEmbeddings()`](/sdk/reference/api#ragsaveembeddings) — save pre-computed vectors
-   - [`ragSearch()`](/sdk/reference/api#ragsearch) — query similar documents (requires model)
-   - [`ragReindex()`](/sdk/reference/api#ragreindex) — optimize search index
-   - [`ragDeleteEmbeddings()`](/sdk/reference/api#ragdeleteembeddings) — remove documents
-   - [`ragListWorkspaces()`](/sdk/reference/api#raglistworkspaces) — list workspaces
-   - [`ragCloseWorkspace()`](/sdk/reference/api#ragcloseworkspace) — release resources
-   - [`ragDeleteWorkspace()`](/sdk/reference/api#ragdeleteworkspace) — delete workspace and data
+3. Optionally, index the vectors on-device:
    - [`createVectorIndex()`](/sdk/reference/api#createvectorindex) — build a TurboVec index over your own documents
    - [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex) — reopen a saved TurboVec index
 4. [`unloadModel()`](/sdk/reference/api#unloadmodel)
@@ -43,13 +43,6 @@ Regarding vector storage, you may use:
 
 - **External vector DB:** use [`embed()`](/sdk/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 - **Built-in TurboVec index with your own document store:** use [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
-- **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/sdk/reference/api#ragingest), [`ragSearch()`](/sdk/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
-
-<Callout type="warn">
-  **Built-in vector store is not production grade** and is intended for
-  prototypes only. For production workloads, use one of the external vector DB
-  paths shown below (MongoDB, SQLite, LanceDB, Chroma, etc.).
-</Callout>
 
 <Callout type="info">
   **Important:** when using an external vector DB, make sure its schema matches
@@ -58,61 +51,6 @@ Regarding vector storage, you may use:
 </Callout>
 
 ## Examples
-
-### Built-in vector store
-
-<Callout type="warn">
-  **Prototype only** — for production, prefer an external vector DB (below).
-</Callout>
-
-The following script shows how to ingest documents into a built-in RAG workspace with `ragIngest()` and query them with `ragSearch()`, without setting up an external vector DB:
-
-<Tabs>
-<Tab value="js" label="JavaScript" default>
-<WrapCode>
-
-```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-hyperdb/ingest.js title="rag-managed.js" lineNumbers
-
-```
-
-</WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<WrapCode>
-
-```ts file=<rootDir>/packages/sdk/examples/rag/rag-hyperdb/ingest.ts title="rag-managed.ts" lineNumbers
-
-```
-
-</WrapCode>
-</Tab>
-
-<Tab value="python" label="Python">
-<WrapCode>
-
-```python file=<rootDir>/packages/sdk-python/examples/rag_managed.py title="rag_managed.py" lineNumbers
-
-```
-
-</WrapCode>
-</Tab>
-
-<Tab value="kotlin" label="Kotlin">
-<WrapCode>
-
-```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagManaged.kt title="RagManaged.kt" lineNumbers
-```
-</WrapCode>
-</Tab>
-</Tabs>
-
-<Callout type="info">
-  **Swap the backend:** to store the vectors in a TurboVec index instead of the
-  default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API
-  is the same. See [Configuration › `ragTurbovec`](/sdk/configuration#options)
-  for details.
-</Callout>
 
 ### TurboVec index with your own document store
 
@@ -173,7 +111,7 @@ Staged search is off for every new or loaded index. Use `await index.setStagedSe
 
 IVF (Inverted File Index) search groups the vectors into lists and scans only the lists closest to each query. Turn it on with `await index.setIvf({ nLists, nProbe })`, where `nLists` is the number of lists to build and `nProbe` is the number each search scans. Pass `null` to turn it off. IVF is off on every new or loaded index, and snapshots don't save the setting.
 
-IVF trades recall for speed. A higher `nProbe` finds more of the true nearest vectors but searches slower. The speedup depends on the storage. A large `F32` index can search many times faster. The `TURBOVEC_Q4` and `TURBOVEC_Q2` storage formats already score vectors in blocks, so IVF saves little there and can be slower than a full scan. Measure it on your data.
+IVF trades recall for speed. A higher `nProbe` finds more of the true nearest vectors but searches slower. The speedup depends on the storage. A large `F32` index can search many times faster. On `TURBOVEC_Q4` and `TURBOVEC_Q2` storage the gain varies with the index. Measure it on your data.
 
 Building the lists blocks the SDK worker until it finishes. An `add()` or `remove()` makes the lists stale and sets `index.ivf.built` to `false`. Searches then scan every vector until you call `setIvf()` again.
 
@@ -220,6 +158,14 @@ The following script turns IVF on for a small `F32` index, compares a probed sea
 </Tabs>
 
 External index providers may not support these controls. Their `calibrated`, `stagedSearch` and `ivf` properties are then `undefined`, and `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError`. The Python and Kotlin SDKs report a missing `ivf` as `null`, the same value as IVF turned off. In those SDKs, the only way to tell that a provider doesn't support IVF is that `setIvf()` rejects.
+
+#### Cancelling vector index calls
+
+In the JavaScript and TypeScript SDK, pass the pending operation's `requestId` to `cancel({ requestId })`. A call cancelled while it waits behind other calls on the same index skips the native operation. A `dispose()` runs even when it is cancelled, so the index is always released.
+
+With the built-in TurboVec provider, a search, `contains()` or snapshot load that is already running rejects with `InferenceCancelledError` at once, and its result is discarded. Later calls on the same index wait for that native work to finish. External providers without active cancellation support may wait for the current call to finish.
+
+An add, remove, write, `setStagedSearch()` or `setIvf()` that has already started can't be undone part-way. It runs to the end and returns its result, even after a cancel. So a cancelled call that rejects with `InferenceCancelledError` never changed the index. A change counts as started once the calls before it have returned, even if it then waits for the native work of a cancelled search.
 
 ### External vector DB
 

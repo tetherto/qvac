@@ -115,8 +115,8 @@ def subscribe_server_logs(
     transport: Transport, handler: Callable[[LoggingStreamResponse], None]
 ) -> Callable[[], None]:
     """Subscribe to every server-side log through the reserved
-    `SDK_ALL_LOG_ID` fan-in stream: SDK server logs, per-model addon logs for
-    all loaded models, RAG logs. Each log keeps its origin in `log.id`.
+    `SDK_ALL_LOG_ID` fan-in stream: SDK server logs and per-model addon logs
+    for all loaded models. Each log keeps its origin in `log.id`.
     Returns an unsubscribe function. Mirrors JS's `subscribeServerLogs()`."""
 
     async def pump() -> None:

@@ -403,21 +403,21 @@ function normalizeFinetuneParams(opts: FinetuneOptions): FinetuneParamsPayload {
 }
 
 /**
- * Validates the single disk path. For a sharded GGUF, pass only the first
+ * Validates the single model path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 function validateModelPath(files: string[]): string {
   if (!Array.isArray(files) || files.length === 0) {
-    throw new TypeError("files.model must contain one absolute disk path");
+    throw new TypeError("files.model must contain one absolute model path");
   }
   if (files.length !== 1) {
     throw new TypeError(
-      "Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+      "Weight streaming is no longer supported. Pass only one path in files.model; " +
         "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.",
     );
   }
   if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
-    throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+    throw new TypeError("files.model[0] must be an absolute path string; weight buffers are not supported");
   }
   if (files[0].endsWith(".tensors.txt")) {
     throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
@@ -452,7 +452,7 @@ function sanitizePromptForLog(prompt: Message[]): unknown {
 // An interface rather than the class type, so private fields stay out of the
 // generated declarations.
 interface LlmLlamacpp {
-  /** The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only. */
+  /** The engine interface, or `null` before `load()` and after `unload()`. Advanced/test access only. */
   addon: LlmLlamacpp.Addon | null;
   opts: { stats?: boolean };
   logger: QvacLogger;
@@ -519,12 +519,12 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
   new (args: LlmLlamacppArgs): LlmLlamacpp;
   readonly prototype: LlmLlamacpp;
-  /** Validates and returns the single absolute disk path; split models require the first shard. */
+  /** Validates and returns the single absolute model path; split models require the first shard. */
   readonly validateModelPath: typeof validateModelPath;
   readonly assessFit: typeof assessFitImpl;
 }
 
-/** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
+/** LLM client wrapping LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   static readonly validateModelPath = validateModelPath;
   static readonly assessFit = assessFitImpl;
@@ -545,6 +545,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   private readonly _rejectWhenBusy: boolean;
   private readonly _jobSinks: Map<number, JobSink>;
   private readonly _batchHandler: BatchHandler;
+  private readonly _pendingCleanup: Set<LlamaInterface>;
   private _checkpointSaveDir: string | null;
 
   constructor({ files, config, logger = null, opts = {} }: LlmLlamacppArgs) {
@@ -570,6 +571,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() });
     this._run = exclusiveRunQueue() as RunExclusive;
     this.addon = null;
+    this._pendingCleanup = new Set();
     this._checkpointSaveDir = null;
     // Concurrency is the caller's configured `parallel` (n_seq_max); values
     // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
@@ -637,10 +639,13 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
       this.logger.error("Error during model load:", loadError);
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
+      const partialAddon = this.addon;
       try {
-        await this.addon?.unload?.();
-      } catch {}
-      this.addon = null;
+        await partialAddon?.unload?.();
+      } catch {
+        if (partialAddon) this._pendingCleanup.add(partialAddon);
+      }
+      if (this.addon === partialAddon) this.addon = null;
       throw loadError;
     }
     this.logger.info("Model load completed successfully");
@@ -967,7 +972,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error, jobId);
   }
 
-  /** Instantiate the native addon with the given parameters. */
+  /** Instantiate the selected engine binding with the given parameters. */
   private _createAddon(
     configurationParams: AddonModule.AddonConfigurationParams,
   ): LlamaInterface {
@@ -1051,13 +1056,28 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
         // Native cleanup is unconditional: whatever settlement does, the
         // addon must be released and the instance left cleanly unloaded.
         this._jobSinks.clear();
-        if (this.addon) {
-          await this.addon.unload();
-          // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-          // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-          this.addon = null;
+        const currentAddon = this.addon;
+        const cleanup = new Set(this._pendingCleanup);
+        if (currentAddon) cleanup.add(currentAddon);
+        this._pendingCleanup.clear();
+        let cleanupError: Error | null = null;
+        try {
+          for (const addon of cleanup) {
+            try {
+              await addon.unload();
+            } catch (error) {
+              this._pendingCleanup.add(addon);
+              cleanupError ??= error instanceof Error ? error : new Error(String(error));
+            }
+          }
+        } finally {
+          // Reset JavaScript state even when native cleanup reports an error.
+          // A later load must create a new addon instead of reusing a disposed
+          // or partially destroyed handle.
+          if (this.addon === currentAddon) this.addon = null;
+          this.state.configLoaded = false;
         }
-        this.state.configLoaded = false;
+        if (cleanupError) throw cleanupError;
       }
     });
   }
@@ -1182,8 +1202,8 @@ namespace LlmLlamacpp {
   export type AddonMediaMessage = AddonModule.AddonMediaMessage;
   export type AddonRunJobMessage = AddonModule.AddonRunJobMessage;
   /**
-   * Discriminated admission result: the native binding only sets `id` when the
-   * scheduler minted one, so a job id exists exactly when the job was accepted.
+   * Discriminated admission result: the binding only sets `id` when a job was
+   * accepted.
    */
   export type AdmissionResult = AddonModule.AdmissionResult;
   export type AddonRunJobResult = AddonModule.AddonRunJobResult;
@@ -1198,14 +1218,14 @@ namespace LlmLlamacpp {
 
   export interface Addon {
     activate(): Promise<void>;
-    /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
+    /** Single-request admission: resolves the accepted flag plus the binding-assigned job id. */
     runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
     /** Batch admission: resolves the accepted flag plus the assigned sequence ids. */
     runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
     cancel(): Promise<void>;
-    /** Cancel a single job by its native-assigned id, leaving other concurrent jobs running. */
+    /** Cancel a single job by its binding-assigned id, leaving other jobs running. */
     cancelJob(id: number): Promise<void>;
-    /** Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count. */
+    /** Active jobs (in-flight + queued) reported by the selected binding. */
     activeJobs(): number;
     /**
      * Requests occupying or waiting for a continuous-batching slot
@@ -1233,7 +1253,7 @@ namespace LlmLlamacpp {
     device?: string;
     /**
      * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
-     * Accepted names: cuda, vulkan, metal, opencl, plus
+     * Accepted names: cuda, vulkan, metal, opencl, webgpu, plus
      * `auto` for no preference. An unrecognised name is rejected; a recognised
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
      * Use `device: 'npu'` for the AMD XDNA NPU.
@@ -1392,9 +1412,11 @@ namespace LlmLlamacpp {
      * server is ready to serve at full concurrency with no warm-up. It sizes
      * the native scheduler's worker pool one-to-one — that many OS threads are
      * created at load and held for the model's lifetime, idle or not — and the
-     * KV cache is split evenly across the slots (each gets `ctx_size /
-     * parallel` tokens). Size it to the concurrency you actually intend to
-     * serve, not to a generous upper bound.
+     * slots share one KV cache, each limited to `ctx_size / parallel` tokens.
+     * On MiniMax-M3, `parallel >= 2` turns sparse attention off; DeepSeek V4
+     * and long-RoPE models have known issues with it
+     * (docs/continuous-batching.md). Size it to the concurrency you actually
+     * intend to serve, not to a generous upper bound.
      *
      * Range `1..256`. The upper bound is the engine's own sequence limit
      * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
@@ -1509,8 +1531,8 @@ namespace LlmLlamacpp {
      */
     spec_draft_model?: string;
     /**
-     * Longest draft per step (default 3, maximum 64), as
-     * `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
+     * Longest draft per step (default 3, or 5 for `draft-dflash`; maximum 64),
+     * as `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
      * `spec-draft-n-max`.
      */
     spec_draft_n_max?: NumericLike;
@@ -1533,7 +1555,7 @@ namespace LlmLlamacpp {
   }
 
   export interface LlmLlamacppArgs {
-    /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
+    /** One absolute model path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
     files: { model: [string]; projectionModel?: string };
     config: LlamaConfig;
     logger?: QvacLogger | Console | null;

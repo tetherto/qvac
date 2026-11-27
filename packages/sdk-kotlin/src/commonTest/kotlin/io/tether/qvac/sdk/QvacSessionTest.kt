@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.test.Test
@@ -47,6 +48,25 @@ class QvacSessionTest {
         for (request in transport.requests) {
             assertEquals(session.sessionId, request["sessionId"]?.jsonPrimitive?.content, request.type())
         }
+    }
+
+    @Test
+    fun theGrantRidesOnTheOpenAndStaysOnTheHandle() = runTest {
+        val transport = SessionRecordingTransport()
+        val client = QvacClient(transport)
+        val restricted = client.openSession(grant = listOf("transcription/transcribe", "runtime/loadModel"))
+        restricted.heartbeat()
+        val unrestricted = client.openSession()
+        unrestricted.heartbeat()
+
+        assertEquals(listOf("transcription/transcribe", "runtime/loadModel"), restricted.grant)
+        assertEquals(null, unrestricted.grant)
+        val opens = transport.requests.filter { it.type() == "openSession" }
+        assertEquals(
+            listOf("transcription/transcribe", "runtime/loadModel"),
+            opens[0]["grant"]?.jsonArray?.map { it.jsonPrimitive.content },
+        )
+        assertEquals(null, opens[1]["grant"])
     }
 
     @Test

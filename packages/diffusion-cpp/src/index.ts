@@ -84,6 +84,7 @@ export type ScheduleType =
   | 'kl_optimal'
   | 'bong_tangent'
   | 'ltx2'
+  | 'flux'
 
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
 
@@ -149,7 +150,7 @@ export interface DiffusionFiles {
   vae?: string
   /** Replaces the full VAE for all encoding and decoding (SD/SDXL). */
   taesd?: string
-  /** Apple Core ML SD 1.x/2.x UNet sidecar (.mlmodelc directory). */
+  /** Apple Core ML SD 1.x/2.x or SDXL UNet sidecar (.mlmodelc directory, or a folder of UNet chunks). */
   coremlUnet?: string
   /** Apple Core ML tiny decoder sidecar; requires SDXS or taesd weights. */
   coremlTaeDecoder?: string

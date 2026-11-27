@@ -5,7 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.17.1] - 2026-11-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.33.0` -> `^0.34.0`, which carries
+  `qvac-fabric` `12032.0.1` -> `12032.2.0`
+  ([#6016](https://github.com/tetherto/qvac/pull/6016)): Inkling 2 and
+  Inkling 2 Mini with the DSpark and DFlash2 speculative drafters, qwen4exp
+  sparse attention over per-token K/V rows, and Vulkan fusions and RDNA3 and
+  RDNA4 matmul tuning. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.34.0` with it.
+- `@qvac/fabric` 0.34 changes the RPC protocol from 118 to 119 and the
+  `common.h` structs, so it is not ABI-compatible with 0.33.x. Every addon
+  loaded in one process must resolve the same `@qvac/fabric` minor.
+  This is a patch release, so existing caret ranges pick it up: mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.34.0` together.
+- This package needed no code change for the new fabric.
+- The speech engine moves from `qvac-fabric-speech.cpp` `fa21dbb` to
+  `931b63be7` ([#5962](https://github.com/tetherto/qvac/pull/5962), [#5963](https://github.com/tetherto/qvac/pull/5963),
+  [#6015](https://github.com/tetherto/qvac/pull/6015)). Whisper fit reports
+  `coreml-memory-estimate-unavailable` when a Core ML encoder is active
+  ([qvac-fabric-speech.cpp#467](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/467)). This
+  package does not map that reason yet, so on Apple a fit for such a model
+  throws `InternalError` instead of returning an unsized result.
+
+## [0.17.0] - 2026-11-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.31.0` -> `^0.33.0`, which carries
+  `qvac-fabric` `11739.5.0` -> `12032.0.0`
+  ([#5923](https://github.com/tetherto/qvac/pull/5923)): fabric rebased onto
+  upstream b12032, faster few-row CUDA and Vulkan mat-muls, CUTLASS FP4 matmuls
+  for compute capability 12.x GPUs, and WebGPU fixes. It also brings 0.32's
+  Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)), which installs CUDA
+  automatically. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.33.0` with it.
+- `@qvac/fabric` 0.33 changes the RPC protocol from 117 to 118 and the
+  `common.h` and `mtmd` structs, so it is not ABI-compatible with 0.31.x or
+  0.32.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.33.0` together.
+- This package needed no code change for the new fabric.
+
+
+### Fixed
+
+- The `addon.test.js` integration tests that run on CPU-only lanes
+  (`NO_GPU=true`) now request `use_gpu: false`, and the batch test checks that
+  the CPU backend decoded. They had kept whisper's `use_gpu: true` default, so
+  on the darwin-x64 runner they decoded on the VM's Metal "Apple Paravirtual
+  device", where the `@qvac/fabric` runtime returns no transcription.
 
 ## [0.16.0] - 2026-11-18
 

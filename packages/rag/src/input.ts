@@ -2,7 +2,13 @@ import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
-import type { DeleteDocumentsParams, IngestOptions } from './types.js'
+import { hasProtoKey, metadataProblem, name, optionalJson, rowSizeProblem, text } from './limits.js'
+import type {
+  DeleteDocumentsParams,
+  ImportOptions,
+  IngestOptions,
+  VectorEncoding
+} from './types.js'
 
 export interface ValidChunk {
   id: string
@@ -15,6 +21,8 @@ export interface ValidChunk {
 export interface ValidDocument {
   id: string
   metadata?: Record<string, unknown>
+  // The space a document without chunks was written for, when known.
+  spaceId?: string
   chunks: ValidChunk[]
 }
 
@@ -41,10 +49,10 @@ const vectorSchema = z.union([z.instanceof(Float32Array), z.array(z.number())])
 
 const chunkSchema = z
   .object({
-    id: z.string().min(1).optional(),
-    content: z.string(),
+    id: name.optional(),
+    content: text,
     // The encoding stores '' as absent, so it could not be read back.
-    metadataJson: z.string().min(1).optional(),
+    metadataJson: optionalJson,
     embedding: vectorSchema,
     spaceId: z.string().min(1).optional()
   })
@@ -54,26 +62,26 @@ const metadataSchema = z.record(z.string(), z.unknown()).optional()
 
 const documentSchema = z
   .object({
-    id: z.string().min(1),
+    id: name,
     metadata: metadataSchema,
     spaceId: z.string().min(1).optional(),
-    chunks: z.array(chunkSchema).min(1)
+    chunks: z.array(chunkSchema)
   })
   .strict()
 
 const textDocumentSchema = z
   .object({
-    id: z.string().min(1),
-    text: z.string(),
+    id: name,
+    text,
     metadata: metadataSchema
   })
   .strict()
 
 const textChunkSchema = z
   .object({
-    id: z.string().min(1).optional(),
-    content: z.string(),
-    metadataJson: z.string().min(1).optional(),
+    id: name.optional(),
+    content: text,
+    metadataJson: optionalJson,
     // Carried by `rag-extract` chunks; not stored.
     tokenCount: z.number().optional()
   })
@@ -81,23 +89,27 @@ const textChunkSchema = z
 
 const chunkedDocumentSchema = z
   .object({
-    id: z.string().min(1),
+    id: name,
     metadata: metadataSchema,
-    chunks: z.array(textChunkSchema).min(1)
+    chunks: z.array(textChunkSchema)
   })
   .strict()
 
 const ingestSchema = z
   .object({
-    namespace: z.string().min(1),
+    namespace: name,
     documents: z.array(z.unknown()).min(1)
   })
   .strict()
 
-const signalSchema = z.custom<AbortSignal>(
-  (value) => typeof (value as { aborted?: unknown } | null)?.aborted === 'boolean',
-  'signal must be an AbortSignal'
-)
+const signalSchema = z.custom<AbortSignal>((value) => {
+  const signal = value as Partial<AbortSignal> | null
+  return (
+    typeof signal?.aborted === 'boolean' &&
+    typeof signal.addEventListener === 'function' &&
+    typeof signal.removeEventListener === 'function'
+  )
+}, 'signal must be an AbortSignal')
 
 const ingestOptionsSchema = z
   .object({
@@ -113,8 +125,8 @@ const ingestOptionsSchema = z
 
 const deleteSchema = z
   .object({
-    namespace: z.string().min(1),
-    documentIds: z.array(z.string().min(1))
+    namespace: name,
+    documentIds: z.array(name)
   })
   .strict()
 
@@ -124,6 +136,8 @@ const searchSchema = z
     vector: vectorSchema,
     spaceId: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -133,6 +147,8 @@ const textSearchSchema = z
     scope: z.unknown(),
     query: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -165,14 +181,40 @@ function toJsonMetadata(
   metadata: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
   if (metadata === undefined) return undefined
+  let json: Record<string, unknown>
   try {
-    return JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
+    json = JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
   } catch (error) {
     throw new QvacErrorRAG({
       code: ERR_CODES.INVALID_INPUT,
       adds: `document '${id}' metadata is not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`
     })
   }
+  const problem = metadataProblem(json)
+  if (problem) {
+    throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `document '${id}' ${problem}` })
+  }
+  return json
+}
+
+// Text documents' chunks are checked once chunked.
+function checkParsedRows(namespace: string, parsed: ParsedDocument): void {
+  const { id, metadata } = parsed.document
+  const chunks = parsed.kind === 'text' ? [] : parsed.document.chunks
+  const dimensions =
+    parsed.kind === 'embedded' ? (parsed.document.chunks[0]?.embedding.length ?? 0) : 0
+  checkRows(namespace, id, metadata, chunks, dimensions)
+}
+
+export function checkRows(
+  namespace: string,
+  documentId: string,
+  metadata: Record<string, unknown> | undefined,
+  chunks: ValidTextChunk[],
+  dimensions: number
+): void {
+  const problem = rowSizeProblem(namespace, documentId, metadata, chunks, dimensions)
+  if (problem) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: problem })
 }
 
 export function parseIngest(params: unknown): {
@@ -185,6 +227,7 @@ export function parseIngest(params: unknown): {
   const seen = new Set<string>()
   const documents = parsed.data.documents.map((input, index) => {
     const document = parseDocument(input, `documents.${index}`)
+    checkParsedRows(parsed.data.namespace, document)
     if (seen.has(document.document.id)) {
       throw new QvacErrorRAG({ code: ERR_CODES.DUPLICATE_DOCUMENT_ID, adds: document.document.id })
     }
@@ -200,6 +243,13 @@ function parseDocument(input: unknown, path: string): ParsedDocument {
   const record = (typeof input === 'object' && input !== null ? input : {}) as {
     text?: unknown
     chunks?: unknown
+    metadata?: unknown
+  }
+  if (hasProtoKey(record.metadata)) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: `${path}.metadata has a '__proto__' key`
+    })
   }
   if ('text' in record) {
     const doc = parseWith(textDocumentSchema, input, path)
@@ -248,6 +298,7 @@ function parseDocument(input: unknown, path: string): ParsedDocument {
     document: {
       id: doc.id,
       metadata: toJsonMetadata(doc.id, doc.metadata),
+      spaceId: doc.spaceId,
       chunks: doc.chunks.map((chunk, ordinal) => {
         const spaceId = chunk.spaceId ?? doc.spaceId
         if (spaceId === undefined) {
@@ -311,6 +362,8 @@ export function parseDelete(params: unknown): DeleteDocumentsParams {
 export type ValidSearch = {
   scope: unknown
   k: number
+  perDocument?: number
+  minScore?: number
   signal?: AbortSignal
 } & ({ vector: Float32Array; spaceId: string; query?: undefined } | { query: string })
 
@@ -318,8 +371,8 @@ export function parseSearch(params: unknown): ValidSearch {
   if (hasKey(params, 'query')) {
     const parsed = textSearchSchema.safeParse(params)
     if (!parsed.success) throw invalidInput(parsed.error)
-    const { scope, query, k, signal } = parsed.data
-    return { scope, query, k, signal }
+    const { scope, query, k, perDocument, minScore, signal } = parsed.data
+    return { scope, query, k, perDocument, minScore, signal }
   }
   const parsed = searchSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
@@ -328,6 +381,8 @@ export function parseSearch(params: unknown): ValidSearch {
     vector: toVector(parsed.data.vector, 'vector'),
     spaceId: parsed.data.spaceId,
     k: parsed.data.k,
+    perDocument: parsed.data.perDocument,
+    minScore: parsed.data.minScore,
     signal: parsed.data.signal
   }
 }
@@ -335,19 +390,19 @@ export function parseSearch(params: unknown): ValidSearch {
 const MAX_PAGE = 1024
 
 const readFields = {
-  documentId: z.string().min(1),
+  documentId: name,
   generation: z.number().int().positive().optional(),
   fromOrdinal: z.number().int().nonnegative().optional(),
   limit: z.number().int().positive().max(MAX_PAGE).optional()
 }
-const readSchema = z.object({ namespace: z.string().min(1), ...readFields }).strict()
+const readSchema = z.object({ namespace: name, ...readFields }).strict()
 const scopedReadSchema = z.object(readFields).strict()
 
 const listFields = {
-  after: z.string().min(1).optional(),
+  after: name.optional(),
   limit: z.number().int().positive().max(MAX_PAGE).optional()
 }
-const listSchema = z.object({ namespace: z.string().min(1), ...listFields }).strict()
+const listSchema = z.object({ namespace: name, ...listFields }).strict()
 const scopedListSchema = z.object(listFields).strict().optional()
 
 export interface ValidRead {
@@ -401,8 +456,101 @@ export function parseScopedListDocuments(params: unknown): ValidList {
   return { after: parsed.data?.after, limit: parsed.data?.limit ?? 100 }
 }
 
-export function parseNamespaceName(name: unknown): string {
-  const parsed = z.string().min(1).safeParse(name)
+const exportSchema = z
+  .object({
+    namespace: name,
+    documentIds: z.array(name).optional()
+  })
+  .strict()
+
+const exportOptionsSchema = z.object({ signal: signalSchema.optional() }).strict().optional()
+
+const importSchema = z
+  .object({
+    namespace: name,
+    source: z.custom<AsyncIterable<Uint8Array>>(
+      (value) =>
+        typeof (value as { [Symbol.asyncIterator]?: unknown } | null)?.[Symbol.asyncIterator] ===
+        'function',
+      'source must be an AsyncIterable of Uint8Array'
+    ),
+    index: z.unknown().optional()
+  })
+  .strict()
+
+const importOptionsSchema = z
+  .object({
+    signal: signalSchema.optional(),
+    onProgress: z.custom<NonNullable<ImportOptions['onProgress']>>(
+      (value) => typeof value === 'function',
+      'onProgress must be a function'
+    )
+  })
+  .partial()
+  .strict()
+  .optional()
+
+const dropSchema = z.object({ name }).strict()
+
+export function parseExport(
+  params: unknown,
+  options: unknown
+): { namespace: string; documentIds?: string[]; signal?: AbortSignal } {
+  const parsed = exportSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
+  const parsedOptions = exportOptionsSchema.safeParse(options)
+  if (!parsedOptions.success) throw invalidInput(parsedOptions.error)
+  const { namespace, documentIds } = parsed.data
+  return {
+    namespace,
+    documentIds: documentIds && Array.from(new Set(documentIds)),
+    signal: parsedOptions.data?.signal
+  }
+}
+
+export function parseImport(
+  params: unknown,
+  options: unknown
+): {
+  namespace: string
+  source: AsyncIterable<Uint8Array>
+  index: unknown
+  options: ImportOptions
+} {
+  const parsed = importSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  const parsedOptions = importOptionsSchema.safeParse(options)
+  if (!parsedOptions.success) throw invalidInput(parsedOptions.error)
+  return {
+    namespace: parsed.data.namespace,
+    source: parsed.data.source,
+    index: parsed.data.index,
+    options: { signal: parsedOptions.data?.signal, onProgress: parsedOptions.data?.onProgress }
+  }
+}
+
+const indexStatusSchema = z.object({ namespace: name }).strict()
+
+export function parseIndexStatus(params: unknown): string {
+  const parsed = indexStatusSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data.namespace
+}
+
+export function parseDropNamespace(params: unknown): string {
+  const parsed = dropSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data.name
+}
+
+export function parseNamespaceName(value: unknown): string {
+  const parsed = name.safeParse(value)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data
+}
+
+export function parseVectorEncoding(value: unknown): VectorEncoding | undefined {
+  const parsed = z.enum(['f32', 'f16']).optional().safeParse(value)
+  if (!parsed.success) throw fromZodError(ERR_CODES.INVALID_INPUT, parsed.error, 'vectorEncoding')
   return parsed.data
 }

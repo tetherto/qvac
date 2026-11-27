@@ -406,7 +406,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  // The slot limit, not n_ctx_seq, which is the whole pool when unified.
+  const uint32_t nCtxSeq =
+      batching::perSeqCeiling(llama_n_ctx(ctx), llama_n_seq_max(ctx));
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -976,7 +978,7 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   // counts summed (see aggregateObservedStats).
   if (!result.requestStats.empty()) {
     qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
-        result.stats, batching::aggregateObservedStats(result.requestStats));
+        result, batching::aggregateObservedStats(result.requestStats));
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
@@ -1081,7 +1083,7 @@ std::string LlamaModel::processConcurrent(
   // throwing job never gets a jobEnded, so nothing is stored on that path.
   if (!result.requestStats.empty()) {
     qvac_lib_inference_addon_cpp::RuntimeStats terminal =
-        jobTerminalStats(result.stats, result.requestStats.front());
+        jobTerminalStats(result, result.requestStats.front());
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
@@ -1093,7 +1095,7 @@ std::string LlamaModel::processConcurrent(
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
-    const batching::RuntimeStatsSnapshot& stats,
+    const batching::BatchResult& result,
     const batching::ObservedRequestStats& observed) const {
   // batchRuntimeStatsLocked's key set with the job's own observed figures in
   // place of the aggregate values. Composed purely from the run's returned
@@ -1103,8 +1105,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
   qvac_lib_inference_addon_cpp::RuntimeStats terminal = {
       {"TTFT", observed.ttftMs},
       {"TPS", observed.genTps},
-      {"ppTPS", stats.prefillTokensPerSecond()},
-      {"CacheTokens", stats.cacheTokens},
+      {"ppTPS", result.prefillTps},
+      {"CacheTokens", observed.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
       // This comes from `observed`, not the aggregate: the aggregate is
@@ -1118,7 +1120,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
       // Unlike the two above, those have no per-slot source to move to.
-      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"avgConcurrentSeq", result.stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would
@@ -1337,14 +1339,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
         "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
-        resolved.tools.empty()
-            ? state_->llmContext_->evalMessage(
-                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-            : state_->llmContext_->evalMessageWithTools(
-                  resolved.chatMsgs,
-                  resolved.tools,
-                  resolved.isCacheLoaded,
-                  prompt.prefill);
+        resolved.tools.empty() ? state_->llmContext_->evalMessage(
+                                     resolved.chatMsgs,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested)
+                               : state_->llmContext_->evalMessageWithTools(
+                                     resolved.chatMsgs,
+                                     resolved.tools,
+                                     resolved.isCacheLoaded,
+                                     prompt.prefill,
+                                     prompt.cancelRequested);
     // Eval owns the media from here: `tokenizeChat` has drained it, or has
     // thrown past this line and left the guard to.
     mediaGuard.dismiss();

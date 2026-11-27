@@ -22,12 +22,21 @@ import {
   waitForDownloadLocksHere
 } from '@/handlers/load-model/download-lock'
 import { getLegacyCompanionSetPaths } from '@/handlers/load-model/registry-companion-set'
+import { acceptsLegacyFlatCache } from '@/utils/cache/layout'
 import {
   findLocallyCachedCoremlCompanionSet,
   getCoremlSetKey,
   getCoremlSidecarSpec
 } from '@/handlers/load-model/coreml-sidecars'
 import { findModelShards } from '@/handlers/load-model/registry'
+import {
+  findCatalogCoremlBundleSet,
+  findRegistryCoremlBundleSet,
+  getCoremlBundle,
+  getCoremlBundleSetKey,
+  readCachedCoremlBundleSet,
+  type CoremlBundle
+} from '@/handlers/load-model/coreml-bundle'
 import {
   createRegistryCacheKey,
   hasActiveTransfer,
@@ -61,9 +70,13 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
     await using _lock = await lockOutOtherProcesses(modelSrc, [cacheKey])
     const entry = getModelByPath(registryPath)
     const catalogued = entry?.registrySource === registrySource ? entry : undefined
-    const plan = catalogued
-      ? await planCatalogued(catalogued)
-      : await planUncatalogued(registryPath, registrySource)
+    // Checked first, as downloadModelFromRegistry does.
+    const coremlBundle = getCoremlBundle(registrySource, registryPath)
+    const plan = coremlBundle
+      ? await planCoremlBundle(coremlBundle)
+      : catalogued
+        ? await planCatalogued(catalogued)
+        : await planUncatalogued(registryPath, registrySource)
 
     // Companion files are shared: clearing one would erase another model's download.
     const sharedKeys = getModelsSharingFiles(plan.registryPaths)
@@ -157,7 +170,7 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
     return {
       targets: [
         getCompanionSetCacheDir(entry.companionSet.setKey),
-        ...getLegacyCompanionSetPaths(entry.companionSet, entry.addon === 'nmt')
+        ...getLegacyCompanionSetPaths(entry.companionSet, acceptsLegacyFlatCache(entry.addon))
       ],
       bindings: entry.companionSet.files.map(buildBlobBinding),
       registryPaths: entry.companionSet.files.map((file) => file.registryPath)
@@ -184,6 +197,29 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
     }
   }
   return plan
+}
+
+// Mirrors downloadCoremlBundleFromRegistry: the components sit in the bundle's
+// own set directory beside the listing they were staged from. A download that
+// never finished saved no listing, so the live registry names its blocks.
+async function planCoremlBundle(bundle: CoremlBundle): Promise<DeletePlan> {
+  const set =
+    findCatalogCoremlBundleSet(bundle) ??
+    (await readCachedCoremlBundleSet(bundle)) ??
+    (await findLiveCoremlBundleSet(bundle))
+  const files = set?.files ?? []
+  return {
+    targets: [validateAndJoinPath(getModelsCacheDir(), 'sets', getCoremlBundleSetKey(bundle))],
+    bindings: files.filter((file) => file.blobCoreKey).map(buildBlobBinding),
+    registryPaths: files.map((file) => file.registryPath)
+  }
+}
+
+async function findLiveCoremlBundleSet(
+  bundle: CoremlBundle
+): ReturnType<typeof findRegistryCoremlBundleSet> {
+  await using lease = await acquireRegistryClient({ wait: 'query' })
+  return await findRegistryCoremlBundleSet(lease.client, bundle)
 }
 
 async function planUncatalogued(registryPath: string, registrySource: string): Promise<DeletePlan> {

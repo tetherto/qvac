@@ -12,7 +12,9 @@
 #include <llama.h>
 
 #include "CacheCheckpointFile.hpp"
+#include "CacheFileIndex.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "GenerationParamsApply.hpp"
 #include "RequestRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -80,9 +82,11 @@ TextLlmContext::~TextLlmContext() {
 }
 
 llama_pos TextLlmContext::ctxCeiling() const {
-  return perSeqCtxCeiling_ > 0
-             ? perSeqCtxCeiling_
-             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  // The slot's even share of the pool, so slots cannot overbook it.
+  return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
+                               : static_cast<llama_pos>(batching::perSeqCeiling(
+                                     llama_n_ctx(modelCtx_.lctx),
+                                     llama_n_seq_max(modelCtx_.lctx)));
 }
 
 void TextLlmContext::initializeCommonState() {
@@ -132,7 +136,9 @@ void TextLlmContext::initializeCommonState() {
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          llama_n_ctx_seq(modelCtx_.lctx));
+          std::min(
+              llama_n_ctx_seq(modelCtx_.lctx),
+              static_cast<uint32_t>(ctxCeiling())));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -523,14 +529,15 @@ size_t TextLlmContext::countChatTokens(
 
 LlmContext::EvalMessageResult TextLlmContext::evalMessage(
     const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-    bool prefill) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
+    bool prefill, const CancelRequested& cancelRequested) {
+  return evalMessageWithTools(
+      chatMsgs, {}, isCacheLoaded, prefill, cancelRequested);
 }
 
 LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-    bool prefill) {
+    bool prefill, const CancelRequested& cancelRequested) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();
@@ -578,7 +585,10 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   const auto prefillStart = std::chrono::steady_clock::now();
   llama_pos count = nPast_;
   llama_pos tokenIndex = 0;
-  while (tokenIndex < nTokens) {
+  while (tokenIndex < nTokens || stopGeneration_.load()) {
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     if (stopGeneration_.load()) {
       if (cacheRequestActive_) {
         // Cached request cancelled before it produced anything: restore the
@@ -666,6 +676,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
 
     nPast_ += textBatch->n_tokens;
     lastPromptTokenCount_ += textBatch->n_tokens;
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
     if (checkpointAt.has_value() && tokenIndex == *checkpointAt) {
       captureHistoryCheckpoint(nPast_);
@@ -797,7 +810,7 @@ void TextLlmContext::syncPosition(llama_pos currentPos) {
 }
 
 void TextLlmContext::onPrefillComplete(
-    llama_pos currentPos, size_t prefillTokenCount) {
+    llama_pos currentPos, size_t prefillKvCells) {
   nPast_ = currentPos;
   prefillComplete_ = true;
   // The prompt is decoded: a new generation starts (llama-server's
@@ -1943,12 +1956,13 @@ void TextLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
   const llama_pos metadataNPast = nPast_;
-  if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+  if (metadataNPast > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),
         "TextLlmContext::loadCache: cache '" + cacheKey +
-            "' exceeds current context size");
+            "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+            " tokens");
   }
 
   auto* mem = llama_get_memory(modelCtx_.lctx);
@@ -2044,6 +2058,16 @@ bool TextLlmContext::loadCache(
       stateTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
+    // A file over the slot limit fails to load when the other slots leave too
+    // few free cells; report it as the check after a load does.
+    if (cache::CacheFileIndex::ledgerExceeds(cacheKey, ctxCeiling())) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          "TextLlmContext::loadCache: cache '" + cacheKey +
+              "' exceeds the context limit of " + std::to_string(ctxCeiling()) +
+              " tokens");
+    }
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),

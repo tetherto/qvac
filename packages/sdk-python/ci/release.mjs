@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// publish-pypi.yml's checks around a tetherto-qvac-sdk release at @qvac/sdk's version: version [tag] (SDK_VERSION
-// matches the SDK and the sdk-v<version> tag), wait-npm (npm serves @qvac/sdk at it) and wait-release <tag> (the GitHub
+// publish-pypi.yml's checks around a tetherto-qvac-sdk release, which takes @qvac/sdk's version: version [tag] (that
+// version matches the sdk-v<version> tag), wait-npm (npm serves @qvac/sdk at it) and wait-release <tag> (the GitHub
 // release exists), the last two being what publish-npm.yml does first.
 
 import { readFileSync } from 'node:fs'
@@ -8,24 +8,14 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
-const read = (path) => readFileSync(`${root}${path}`, 'utf8')
-const sdkVersion = () => JSON.parse(read('packages/sdk/package.json')).version
-const pyVersion = () =>
-  read('packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py').match(
-    /^SDK_VERSION = "(.*)"$/m
-  )?.[1]
+const sdkVersion = () =>
+  JSON.parse(readFileSync(`${root}packages/sdk/package.json`, 'utf8')).version
 
 function version([tag]) {
-  const py = pyVersion()
   const sdk = sdkVersion()
-  if (!py) throw new Error('could not parse SDK_VERSION from sdk_version.py')
-  if (py !== sdk)
-    throw new Error(
-      `tetherto-qvac-sdk@${py} vs @qvac/sdk@${sdk}: run packages/sdk-python/scripts/generate.py before release`
-    )
-  if (tag && tag.replace(/^sdk-v/, '') !== py)
-    throw new Error(`tetherto-qvac-sdk ${py} does not match the tag ${tag}`)
-  console.log(`tetherto-qvac-sdk and @qvac/sdk both at ${py}${tag ? `, matching ${tag}` : ''}`)
+  if (tag && tag.replace(/^sdk-v/, '') !== sdk)
+    throw new Error(`tetherto-qvac-sdk ${sdk} does not match the tag ${tag}`)
+  console.log(`tetherto-qvac-sdk at @qvac/sdk's ${sdk}${tag ? `, matching ${tag}` : ''}`)
 }
 
 // 30 minutes, every 30 seconds: the two publishes start from the same push.
