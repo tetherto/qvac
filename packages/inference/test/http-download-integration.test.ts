@@ -313,7 +313,7 @@ test('downloadModelFromHttp: an empty file with a 0 marker is not used offline',
   await t.exception(() => downloadModelFromHttp(url))
 })
 
-test('downloadModelFromHttp: a 416 for a file longer than the server has is not marked', async (t) => {
+test('downloadModelFromHttp: a partial longer than the remote file is downloaded again', async (t) => {
   const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })
   const server = await startServer()
@@ -322,15 +322,25 @@ test('downloadModelFromHttp: a 416 for a file longer than the server has is not 
     fs.rmSync(cacheDir, { recursive: true, force: true })
   })
 
-  const url = `${server.base}/ggml-long.bin`
+  const url = `${server.base}/longer-partial-model.gguf`
   const modelPath = await downloadModelFromHttp(url)
   fs.rmSync(modelPath)
-  fs.rmSync(completeMarkerPath(modelPath))
-  fs.writeFileSync(partialDownloadPath(modelPath), Buffer.concat([CONTENT, Buffer.alloc(10)]))
+  fs.rmSync(completeMarkerPath(modelPath), { force: true })
+  // A partial of an older, larger file at the same URL: the resume Range starts
+  // past the end, and the server answers 416 with the real size.
+  fs.writeFileSync(partialDownloadPath(modelPath), Buffer.alloc(CONTENT.length + 1000, 9))
 
-  await downloadModelFromHttp(url)
+  const reloadedPath = await downloadModelFromHttp(url)
   t.ok(server.served416(), 'the server answered 416')
-  t.absent(fs.existsSync(completeMarkerPath(modelPath)), 'no marker for a size the server denies')
+  t.ok(
+    bytesEqual(fs.readFileSync(reloadedPath) as Buffer, CONTENT),
+    'the partial is replaced with the remote content'
+  )
+  t.is(
+    fs.readFileSync(completeMarkerPath(modelPath), 'utf8'),
+    String(CONTENT.length),
+    "the marker holds the remote file's size"
+  )
 })
 
 test('unloadModel: clearStorage removes the complete marker with the model', async (t) => {
