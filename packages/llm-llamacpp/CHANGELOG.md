@@ -112,6 +112,17 @@ Loads with `parallel >= 2` change as follows:
 
 ## [0.72.1] - 2026-11-23
 
+### Added
+
+- Runtime stats report `backendName`, the lowercase backend family that holds
+  the primary model's weights after backend selection and fitting, such as
+  `cpu`, `cuda`, `vulkan` or `metal`. CPU is left out whenever an accelerator
+  holds any weights, so a partial offload reports only the accelerator
+  families. A model split across accelerator families reports them sorted and
+  comma-separated, such as `cuda,vulkan`. The stat is absent
+  when the family cannot be identified
+  ([#5500](https://github.com/tetherto/qvac/pull/5500)).
+
 ### Changed
 
 - `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it

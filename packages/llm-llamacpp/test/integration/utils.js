@@ -689,6 +689,22 @@ function makeOutputCollector(t, logger = console) {
   }
 }
 
+function getExpectedLinuxGpuBackend() {
+  if (os.platform() !== 'linux' || os.arch() !== 'x64') return
+  if (process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1') {
+    return 'vulkan'
+  }
+  if (process.env.QVAC_EXPECT_GPU === '1') return 'cuda'
+
+  // Detect NVIDIA outside the addon so a local CUDA host also rejects a Vulkan fallback.
+  try {
+    if (fs.readdirSync('/dev').some((device) => /^nvidia\d+$/.test(device))) return 'cuda'
+  } catch {
+    // Continue to the WSL driver check if /dev cannot be listed.
+  }
+  if (fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1')) return 'cuda'
+}
+
 function getDefaultTextModel() {
   return {
     modelName: process.env.TEXT_MODEL_NAME || 'small-test-model.gguf',
@@ -1128,5 +1144,6 @@ module.exports = {
   waitForProgress,
   runLoraInference,
   safeTest,
-  downloadFileWithRetries
+  downloadFileWithRetries,
+  getExpectedLinuxGpuBackend
 }

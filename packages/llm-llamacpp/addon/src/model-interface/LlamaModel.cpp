@@ -44,6 +44,7 @@
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/JsonDepth.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -345,6 +346,11 @@ void LlamaModel::init(bool acquireLock) {
 
   if (!snap.promoteToWrite()) {
     return;
+  }
+
+  if (llamaInit && llamaInit->context() != nullptr) {
+    snap->backendName_ = qvac_lib_inference_addon_llama::backend_reporting::
+        runtimeModelBackendName(llamaInit->context());
   }
 
   std::unique_ptr<
@@ -1122,6 +1128,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", result.stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
+  qvac_lib_inference_addon_llama::backend_reporting::appendBackendName(
+      terminal, state_->backendName_);
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would
   // otherwise silently lose the stat the sequential path emits. Present only
@@ -1728,6 +1736,8 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
+  qvac_lib_inference_addon_llama::backend_reporting::appendBackendName(
+      result, state_->backendName_);
   appendSpeculativeStats(
       result,
       state_->llmContext_->getSpeculative() != nullptr,
@@ -1791,6 +1801,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
+  qvac_lib_inference_addon_llama::backend_reporting::appendBackendName(
+      stats, state_->backendName_);
   appendSpeculativeStats(
       stats,
       state_->llmContext_->getSpeculative() != nullptr,

@@ -189,6 +189,7 @@ async function loadAndRun(modelName, extraConfig, { projection = null, prompt = 
       output: chunks.join('').trim(),
       kvTypes: parseKvCacheTypes(specLogger.logs),
       backendDevice: response.stats?.backendDevice,
+      backendName: response.stats?.backendName,
       logText
     }
   } finally {
@@ -197,9 +198,10 @@ async function loadAndRun(modelName, extraConfig, { projection = null, prompt = 
   }
 }
 
-function assertRanOnNpu(t, { output, kvTypes, backendDevice, logText }) {
+function assertRanOnNpu(t, { output, kvTypes, backendDevice, backendName, logText }) {
   const processText = processLogs.join('\n')
   t.is(backendDevice, 'npu', 'stats report the NPU device class')
+  t.is(backendName, 'xdna', 'stats name the NPU backend that holds the weights')
   t.ok(KERNELS_FOUND_RE.test(processText), 'fabric found its NPU GEMM kernels')
   t.absent(KERNELS_MISSING_RE.test(processText), 'NPU kernel artifacts are present and current')
   t.absent(FUSED_REFUSAL_RE.test(logText), 'fused decode layer accepted the model weights')

@@ -11,12 +11,10 @@
 
 const test = require('brittle')
 const path = require('bare-path')
-const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, getExpectedLinuxGpuBackend } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
-const process = require('bare-process')
 
 const platform = os.platform()
 const isDarwin = platform === 'darwin'
@@ -38,23 +36,6 @@ const isAndroid = platform === 'android'
 // comparison below meaningful on both backends.
 const isLinuxX64 = platform === 'linux' && os.arch() === 'x64'
 const pinTbqPqToVulkan = (platform === 'linux' || platform === 'win32') && os.arch() === 'x64'
-
-// Which of the two same-runner legs are we on. The -vulkan leg hides the CUDA
-// devices, and CUDA_VISIBLE_DEVICES is the mechanism rather than a label, so it
-// is the signal to trust. FORCE_VULKAN is checked too because llm sets it at
-// job level, while embed only exports the CUDA_VISIBLE_DEVICES it turns into.
-const forceVulkanLeg =
-  process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
-
-// Expect CUDA only with an NVIDIA driver present, detected outside the addon
-// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia<N>
-// (a container may get only /dev/nvidia1); WSL2 exposes only /dev/dxg, with
-// libcuda under /usr/lib/wsl/lib.
-const hasNvidiaGpu =
-  isLinuxX64 &&
-  (fs.readdirSync('/dev').some((d) => /^nvidia\d+$/.test(d)) ||
-    fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
-const expectCuda = hasNvidiaGpu && !forceVulkanLeg
 
 const skipReason =
   isDarwin || isIos
@@ -220,6 +201,7 @@ async function runBenchmark(cfg, modelInfo) {
 
 async function runHeadDimSmoke(t, modelInfo, label) {
   const results = []
+  const expectedLinuxBackend = getExpectedLinuxGpuBackend()
   let tbqpqSkipped = false
 
   for (const cfg of CACHE_CONFIGS) {
@@ -239,9 +221,9 @@ async function runHeadDimSmoke(t, modelInfo, label) {
         // did. Without it a silent fallback is invisible: both integration legs
         // pass either way, and the pinned rows above only prove the override
         // path. The two legs expect opposite answers.
-        if (expectCuda) {
+        if (expectedLinuxBackend === 'cuda') {
           t.ok(result.choseCuda, `${cfg.label}: CUDA is preferred on linux x64 and was chosen`)
-        } else if (forceVulkanLeg) {
+        } else if (expectedLinuxBackend === 'vulkan') {
           t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
         } else {
           t.absent(result.choseCuda, `${cfg.label}: no NVIDIA device, so CUDA was not chosen`)

@@ -227,6 +227,8 @@ const stats: LlmLlamacpp.RuntimeStats = {
   draftAcceptedTokens: 6,
 };
 void stats;
+const namedStats: LlmLlamacpp.RuntimeStats = { ...stats, backendName: "cuda,vulkan" };
+void namedStats;
 const numericLike: LlmLlamacpp.NumericLike = "42";
 void numericLike;
 

@@ -1848,6 +1848,14 @@ namespace LlmLlamacpp {
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu" | "npu";
     /**
+     * Lowercase backend family that holds the primary model's weights, such as
+     * `cpu` or `cuda`. CPU is left out whenever an accelerator holds any
+     * weights, so a partial offload reports only the accelerator families.
+     * Mixed accelerator families are distinct, sorted, and comma-separated.
+     * Older addons omit it.
+     */
+    backendName?: string;
+    /**
      * Draft tokens proposed by speculative decoding, and how many of them
      * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
      * Present only when the model was loaded with `spec_type`.

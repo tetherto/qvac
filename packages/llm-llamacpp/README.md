@@ -67,7 +67,7 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined
   with `backend`, `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning; only the
   defaults `backend: "auto"`, `devices: ""` and `split-mode: "none"` are accepted with it.
-  Runtime stats report `backendDevice: "npu"`.
+  Runtime stats report `backendDevice: "npu"` and `backendName: "xdna"`.
 - `device: "gpu"` with `devices: "XDNA0"` also runs on the NPU alone and reports
   `backendDevice: "npu"`; a mixed list such as `XDNA0,Vulkan0` is a GPU load. Finetuning is
   rejected for any load with `XDNA0` in `devices`, alone or in a mixed split. `backend` takes
@@ -353,7 +353,9 @@ try {
 }
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"`, `"gpu"` or `"npu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, `backendDevice` (`"cpu"`, `"gpu"` or `"npu"`), and `backendName`. `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+`backendName` is the lowercase backend family that holds the primary model's weights after backend selection and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It reports `"cpu"` when no layers are offloaded. A GPU load with `gpu_layers: 0` therefore reports `backendDevice` `"gpu"` and `backendName` `"cpu"`. The weights stay on the CPU, and the GPU can still run matrix multiplications for large prompt batches. CPU is left out whenever an accelerator holds any weights, so a partial offload reports only the accelerator families, the same as a full offload. A model split across different accelerator families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. Separately configured projector or draft models do not add names. Older native addons omit `backendName`. Both single and batch responses expose it through the terminal stats and the `stats` event.
 
 #### Tool calling
 

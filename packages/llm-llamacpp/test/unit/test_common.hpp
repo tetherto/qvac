@@ -37,6 +37,20 @@ inline double getStatValue(
   return 0.0;
 }
 
+inline std::optional<std::string> getStatString(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& stat : stats) {
+    if (stat.first == key) {
+      if (const auto* value = std::get_if<std::string>(&stat.second)) {
+        return *value;
+      }
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
 /**
  * Get the appropriate device string for the current platform.
  * Uses CPU on Darwin x64 (Intel Mac) to avoid GPU initialization issues.
