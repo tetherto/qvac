@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.25.0
 
-QVAC SDK 0.25.0 makes a shared runtime safer to hand to several callers: it reports the capability contracts it serves, limits a session to the permissions it was granted, and enforces deadlines on requests. It adds stereo depth, IVF search on vector indexes, Core ML paths for Stable Diffusion, Qwen3.5 and TranscribePsy EU, and new translation packs. The RAG API is removed in favor of the standalone `@qvac/rag` package, and every addon moves to the fabric 0.33 set. The Python and Kotlin clients ship at the same version and their changes are listed under their own headings.
+QVAC SDK 0.25.0 makes a shared runtime safer to hand to several callers: it reports the capability contracts it serves, limits a session to the permissions it was granted, and enforces deadlines on requests. It adds stereo depth, IVF search on vector indexes, Core ML paths for Stable Diffusion, Qwen3.5 and TranscribePsy EU, and new translation packs. The RAG API is removed in favor of the standalone `@qvac/rag` package, and every addon moves to the fabric 0.34 set. The Python and Kotlin clients ship at the same version and their changes are listed under their own headings.
 
 ## Breaking Changes
 
@@ -90,25 +90,25 @@ These are removed with the functions:
 
 The vector index API (`createVectorIndex`, `loadVectorIndex`) stays.
 
-### Every addon runs on fabric 0.33
+### Every addon runs on fabric 0.34
 
-0.24.0 shipped the fabric 0.28 addon set. This release moves every addon to `@qvac/fabric` `^0.33.0`. The speech addons (`@qvac/asr-ggml`, `@qvac/tts-ggml`, `@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`) no longer ship their own ggml build and load their backends from the shared fabric runtime too. Every addon in one process must resolve the same fabric minor, so upgrade the addons together.
+0.24.0 shipped the fabric 0.28 addon set. This release moves every addon to `@qvac/fabric` `^0.34.0`. The speech addons (`@qvac/asr-ggml`, `@qvac/tts-ggml`, `@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`) no longer ship their own ggml build and load their backends from the shared fabric runtime too. Every addon in one process must resolve the same fabric minor, so upgrade the addons together. RPC is on protocol 119: a remote `@qvac/ggml-rpc-server` host must run 0.12.1 or newer to serve this client.
 
 | Addon                       | 0.24.0    | 0.25.0    |
 | --------------------------- | --------- | --------- |
-| `@qvac/asr-ggml`            | `^0.12.0` | `^0.14.0` |
-| `@qvac/audiogen-ggml`       | `^0.10.1` | `^0.12.0` |
-| `@qvac/bci-whispercpp`      | `^0.15.0` | `^0.17.0` |
-| `@qvac/classification-ggml` | `^0.36.0` | `^0.43.0` |
+| `@qvac/asr-ggml`            | `^0.12.0` | `^0.14.1` |
+| `@qvac/audiogen-ggml`       | `^0.10.1` | `^0.12.1` |
+| `@qvac/bci-whispercpp`      | `^0.15.0` | `^0.17.1` |
+| `@qvac/classification-ggml` | `^0.36.0` | `^0.43.1` |
 | `@qvac/diffusion-cpp`       | `^0.35.0` | `^0.38.0` |
-| `@qvac/embed-llamacpp`      | `^0.56.0` | `^0.59.0` |
-| `@qvac/ggml-rpc-server`     | `^0.9.0`  | `^0.12.0` |
-| `@qvac/llm-llamacpp`        | `^0.70.0` | `^0.73.0` |
-| `@qvac/ocr-ggml`            | `^0.33.0` | `^0.36.0` |
-| `@qvac/translation-nmtcpp`  | `^0.25.0` | `^0.28.0` |
-| `@qvac/tts-ggml`            | `^0.15.0` | `^0.17.0` |
-| `@qvac/turbovec-ggml`       | `^0.5.0`  | `^0.8.0`  |
-| `@qvac/vla-ggml`            | `^0.36.0` | `^0.39.0` |
+| `@qvac/embed-llamacpp`      | `^0.56.0` | `^0.59.1` |
+| `@qvac/ggml-rpc-server`     | `^0.9.0`  | `^0.12.1` |
+| `@qvac/llm-llamacpp`        | `^0.70.0` | `^0.73.1` |
+| `@qvac/ocr-ggml`            | `^0.33.0` | `^0.36.1` |
+| `@qvac/translation-nmtcpp`  | `^0.25.0` | `^0.28.1` |
+| `@qvac/tts-ggml`            | `^0.15.0` | `^0.17.2` |
+| `@qvac/turbovec-ggml`       | `^0.5.0`  | `^0.8.1`  |
+| `@qvac/vla-ggml`            | `^0.36.0` | `^0.39.1` |
 
 Mobile apps pin the fabric platform packages to the same version, and an app that only uses speech now needs them as well.
 
@@ -125,8 +125,8 @@ Mobile apps pin the fabric platform packages to the same version, and an app tha
 
 ```json
 {
-  "@qvac/fabric-android-arm64": "0.33.0",
-  "@qvac/fabric-ios": "0.33.0"
+  "@qvac/fabric-android-arm64": "0.34.0",
+  "@qvac/fabric-ios": "0.34.0"
 }
 ```
 
