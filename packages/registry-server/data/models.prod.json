@@ -10677,6 +10677,39 @@
     "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
   },
   {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-Q2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2.5 27B Q2_0 model",
+    "quantization": "q2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Ternary weights in llama.cpp's standard 2-bit type. Pair with the Q8_0 mmproj entry for image input. Requires @qvac/llm-llamacpp >= 0.70.1 (@qvac/fabric >= 0.29.2).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2.5 27B Q2_0 model with MTP head",
+    "quantization": "q2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "ternary-bonsai", "instruct"],
+    "notes": "Same model as the Q2_0 entry plus a multi-token-prediction (MTP) draft head, so it can load with spec_type draft-mtp for speculative decoding. Pair with the Q8_0 mmproj entry for image input. Requires @qvac/llm-llamacpp >= 0.70.1 (@qvac/fabric >= 0.29.2).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/28a7093cc25bc151cc2b284c5570f12ce343fdcf/Ternary-Bonsai-2.5-27B-mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Ternary Bonsai 2.5 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Required for image input. Requires @qvac/llm-llamacpp >= 0.70.1 (@qvac/fabric >= 0.29.2).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-f16.gguf",
     "engine": "@qvac/audiogen-ggml",
     "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",

@@ -366,6 +366,101 @@ TEST_F(ConcurrentProcessByIdTest, ConcurrentJobsReportTheirOwnCacheTokens) {
       << "the whole-model figure must be the jobs' own slots summed";
 }
 
+TEST_F(ConcurrentProcessByIdTest, PrefillRateCountsEachJobsOwnWork) {
+  REQUIRE_MODEL(model_);
+  config_["batch_size"] = "32";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  const ScopedCacheFile orbitCache("qvac-prefill-rate-orbit.bin");
+  const ScopedCacheFile leafCache("qvac-prefill-rate-leaf.bin");
+  const ScopedCacheFile peerCache("qvac-prefill-rate-peer.bin");
+  auto prefill = [](const std::string& text, const ScopedCacheFile& cache) {
+    auto prompt = makePrompt(text);
+    prompt.prefill = true;
+    prompt.cacheKey = cache.key();
+    return prompt;
+  };
+  const std::vector<LlamaModel::Prompt> batch{
+      prefill(repeatWord("orbit", 95), orbitCache),
+      prefill(repeatWord("leaf", 85), leafCache)};
+  const auto peer = prefill("Name a moon.", peerCache);
+
+  constexpr auto timeout = std::chrono::seconds(30);
+  std::promise<void> firstDecodeStarted;
+  std::promise<void> releaseFirstDecode;
+  auto started = firstDecodeStarted.get_future();
+  const auto released = releaseFirstDecode.get_future();
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [&firstDecodeStarted, &released, timeout, first = true](
+          llama_context* ctx, llama_batch& step) mutable {
+        if (first) {
+          first = false;
+          firstDecodeStarted.set_value();
+          if (released.wait_for(timeout) != std::future_status::ready) {
+            return -1;
+          }
+        }
+        return llama_decode(ctx, step);
+      });
+  auto batchJob = std::async(std::launch::async, [&] {
+    return model->process(std::any(batch), JobId{1});
+  });
+  const auto startedStatus = started.wait_for(timeout);
+  std::future<std::any> peerJob;
+  bool peerQueued = false;
+  if (startedStatus == std::future_status::ready) {
+    peerJob = std::async(std::launch::async, [&] {
+      return model->process(std::any(peer), JobId{2});
+    });
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do {
+      peerQueued =
+          ContinuousBatchSchedulerTestPeer::queuedRequests(*scheduler) == 1;
+      if (!peerQueued) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    } while (!peerQueued && std::chrono::steady_clock::now() < deadline);
+  }
+  releaseFirstDecode.set_value();
+  ASSERT_EQ(startedStatus, std::future_status::ready);
+  ASSERT_TRUE(peerQueued);
+  static_cast<void>(batchJob.get());
+  static_cast<void>(peerJob.get());
+
+  const auto modelStats = model->runtimeStats();
+  const auto batchStats = model->consumeJobStats(JobId{1});
+  const auto peerStats = model->consumeJobStats(JobId{2});
+  using test_common::getStatValue;
+  const double modelMs = getStatValue(modelStats, "TTFT");
+  const double batchTokens = getStatValue(batchStats, "promptTokens");
+  const double peerTokens = getStatValue(peerStats, "promptTokens");
+  const double peerRate = getStatValue(peerStats, "ppTPS");
+  ASSERT_GT(modelMs, 0.0);
+  ASSERT_GT(batchTokens, 0.0);
+  ASSERT_GT(peerTokens, 0.0);
+  ASSERT_GT(peerRate, 0.0);
+  EXPECT_GT(getStatValue(modelStats, "avgConcurrentSeq"), 2.0);
+  // The long batch participates in every step. Its siblings share the time
+  // of each step, and its rate counts only the two prompts it submitted.
+  EXPECT_NEAR(
+      getStatValue(batchStats, "ppTPS") * modelMs / 1000.0, batchTokens, 1e-6);
+  EXPECT_NEAR(
+      getStatValue(modelStats, "ppTPS") * modelMs / 1000.0,
+      batchTokens + peerTokens,
+      1e-6);
+  EXPECT_LT(1000.0 * peerTokens / peerRate, modelMs);
+
+  // A warm prefill-only request does not need even the final logits token.
+  static_cast<void>(model->process(std::any(peer), JobId{3}));
+  const auto warmStats = model->consumeJobStats(JobId{3});
+  ASSERT_FALSE(warmStats.empty());
+  EXPECT_DOUBLE_EQ(getStatValue(warmStats, "promptTokens"), 0.0);
+  EXPECT_DOUBLE_EQ(getStatValue(warmStats, "ppTPS"), 0.0);
+}
+
 /// Consuming a finished tagged job's stats is a pure hand-over of the
 /// terminal snapshot built when that run finished: it must not read - and
 /// above all must not reset - the live llama_context perf counters. A peer
@@ -546,6 +641,67 @@ TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
       static_cast<int64_t>(test_common::getStatValue(generic, "promptTokens")));
   EXPECT_GT(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0)
       << "full-width admission must actually decode in parallel";
+}
+
+TEST_F(ConcurrentProcessByIdTest, PrefillRateIncludesTheFullMixedStep) {
+  REQUIRE_MODEL(model_);
+  config_["batch_size"] = "32";
+  config_["n_predict"] = "4";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  const ScopedCacheFile cache("qvac-mixed-prefill-rate.bin");
+  auto longPrompt = makePrompt(repeatWord("orbit", 170));
+  longPrompt.prefill = true;
+  longPrompt.cacheKey = cache.key();
+
+  auto shortPrompt = makePrompt("Say red.");
+  shortPrompt.generationParams.grammar = R"(root ::= "red red red red")";
+  bool shortPromptIsGenerating = false;
+  shortPrompt.outputCallback = [&shortPromptIsGenerating](const std::string&) {
+    shortPromptIsGenerating = true;
+  };
+
+  // The long prefill starts in slot 0 and outlasts the short reply in slot 1.
+  // Count the generation share of the steps that carry both slots.
+  unsigned decodeTokens = 0;
+  bool generationOnlyStepRan = false;
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&](llama_context* ctx, llama_batch& step) {
+        if (shortPromptIsGenerating) {
+          int32_t shortTokens = 0;
+          for (int32_t i = 0; i < step.n_tokens; ++i) {
+            if (step.seq_id[i][0] == 1) {
+              ++shortTokens;
+            }
+          }
+          decodeTokens += static_cast<unsigned>(shortTokens);
+          generationOnlyStepRan |= shortTokens == step.n_tokens;
+        }
+        return llama_decode(ctx, step);
+      });
+  const std::vector<LlamaModel::Prompt> batch{longPrompt, shortPrompt};
+  constexpr JobId jobId = 1;
+  static_cast<void>(model->process(std::any(batch), jobId));
+
+  ASSERT_GT(decodeTokens, 0u);
+  ASSERT_FALSE(generationOnlyStepRan);
+  const auto modelStats = model->runtimeStats();
+  const auto jobStats = model->consumeJobStats(jobId);
+  using test_common::getStatValue;
+  const double modelPrefillMs = getStatValue(modelStats, "TTFT");
+  const double modelDecodeRate = getStatValue(modelStats, "TPS");
+  const double jobPrefillRate = getStatValue(jobStats, "ppTPS");
+  ASSERT_GT(modelPrefillMs, 0.0);
+  ASSERT_GT(modelDecodeRate, 0.0);
+  ASSERT_GT(jobPrefillRate, 0.0);
+  const double jobPrefillMs =
+      1000.0 * getStatValue(jobStats, "promptTokens") / jobPrefillRate;
+  EXPECT_NEAR(
+      jobPrefillMs,
+      modelPrefillMs + 1000.0 * decodeTokens / modelDecodeRate,
+      1e-6);
 }
 
 /// cancelById(id) must cancel only the targeted job: the cancelled job stops

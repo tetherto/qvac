@@ -281,6 +281,7 @@ struct BatchResult {
   RuntimeStatsSnapshot stats;
   /// Per-request observed figures, in input order (parallel to `outputs`).
   std::vector<ObservedRequestStats> requestStats;
+  double prefillTps = 0.0;
 };
 
 /// Builds the per-slot `SequenceDriver` at admission time. The model layer
@@ -571,6 +572,9 @@ private:
     std::vector<std::string> outputs;
     std::vector<ObservedRequestStats> requestStats;
     RuntimeStatsSnapshot stats;
+    uint64_t prefillTokens = 0;
+    std::chrono::nanoseconds prefillDuration{};
+    uint64_t lastPrefillDecodeStep = 0;
     size_t completedCount = 0;
     size_t totalCount = 0;
     /// Requests of this group that have reached a slot. `< totalCount` means
@@ -902,6 +906,7 @@ private:
   /// `K_UNKNOWN_ADMISSION_ID` so the sentinel never matches a live slot.
   uint64_t nextAdmissionId_ = K_UNKNOWN_ADMISSION_ID + 1;
   RuntimeStatsSnapshot stats_;
+  uint64_t decodeStep_ = 0;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; a test
   /// stub can be injected via

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2] - 2026-11-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.33.0` -> `^0.34.0`, which carries
+  `qvac-fabric` `12032.0.1` -> `12032.2.0`
+  ([#6016](https://github.com/tetherto/qvac/pull/6016)): Inkling 2 and
+  Inkling 2 Mini with the DSpark and DFlash2 speculative drafters, qwen4exp
+  sparse attention over per-token K/V rows, and Vulkan fusions and RDNA3 and
+  RDNA4 matmul tuning. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.34.0` with it.
+- `@qvac/fabric` 0.34 changes the RPC protocol from 118 to 119 and the
+  `common.h` structs, so it is not ABI-compatible with 0.33.x. Every addon
+  loaded in one process must resolve the same `@qvac/fabric` minor.
+  This is a patch release, so existing caret ranges pick it up: mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.34.0` together.
+- This package needed no code change for the new fabric.
+- The speech engine moves from `qvac-fabric-speech.cpp` `350031d` to
+  `931b63be7` ([#5963](https://github.com/tetherto/qvac/pull/5963), [#6015](https://github.com/tetherto/qvac/pull/6015)).
+  Chatterbox's Core ML sidecars load in the background, and a sentence runs a
+  stage on Core ML only if it was ready when the sentence started
+  ([qvac-fabric-speech.cpp#443](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/443)).
+  Chatterbox multilingual voice cloning reuses one reference encoder and frees
+  it after voice preparation
+  ([qvac-fabric-speech.cpp#468](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/468)).
+  Supertonic clears cancellation at the start of each request
+  ([qvac-fabric-speech.cpp#463](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/463)), uploads
+  its weights one tensor at a time and caps the default BLAS workers
+  ([qvac-fabric-speech.cpp#465](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/465)).
+- Audio8, Supertonic, MOSS TTS and MOSS SoundEffect fit report
+  `coreml-memory-estimate-unavailable` when a Core ML sidecar is active
+  ([qvac-fabric-speech.cpp#467](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/467)), which
+  this package returns as an unsized fit.
+
 ## [0.17.1] - 2026-11-25
 
 ### Fixed
