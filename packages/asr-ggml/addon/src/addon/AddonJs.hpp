@@ -750,7 +750,8 @@ inline FitResult toFitResult(const EngineFit& fit) {
 // request or model file the fitter refuses rejects as an invalid argument, and
 // any other failure as an internal one.
 inline FitResult unsizedOrThrow(const std::string& reason) {
-  if (reason == "measurement-failed" ||
+  if (reason == "coreml-memory-estimate-unavailable" ||
+      reason == "measurement-failed" ||
       reason == "memory-capacity-unavailable" ||
       reason == "backend-memory-unavailable") {
     return FitResult{"unknown", {}};

@@ -57,6 +57,12 @@ function op(driver: Driver, name: string, params: Record<string, unknown>, as?: 
     : { call: { method: 'ragLocal', params: { op: name, params }, ...(as && { as }) } }
 }
 
+/** `op`, started without waiting, so a later `settle` can bound how long it takes. */
+function startOp(driver: Driver, name: string, params: Record<string, unknown>, as: string): Step {
+  const { call } = op(driver, name, params) as { call: { method: string; params: unknown } }
+  return { start: { method: call.method, params: call.params, as } } as Step
+}
+
 /** Loads the models and opens a fresh store named `main` with the `docs` namespace. */
 function setup(driver: Driver): Step[] {
   return [
@@ -97,6 +103,27 @@ function rejects(
   ]
 }
 
+const other = (driver: Driver): Driver => (driver === 'bare' ? 'node' : 'bare')
+
+const QUERY = { query: 'lava eruption', k: 4 }
+
+/** Searches `half` in `store` and checks it returns `against` in order, scores within `tolerance`. */
+function sameHits(
+  driver: Driver,
+  store: string,
+  against: string,
+  tolerance: number,
+  as: string
+): Step[] {
+  return [
+    op(driver, 'searchDelta', { store, scope: { namespace: 'half' }, ...QUERY, against }, as),
+    project(`$${as}`, 'result.sameOrder', `${as}Order`),
+    named(`$${as}Order`, 'isTrue'),
+    project(`$${as}`, 'result.maxScoreDelta', `${as}Delta`),
+    named(`$${as}Delta`, 'numbersInRange', { min: 0, max: tolerance })
+  ]
+}
+
 interface Case {
   id: string
   /** What the case shows, for the report. */
@@ -108,6 +135,8 @@ interface Case {
   expectation?: TestDefinition['expectation']
   smoke?: Driver[]
   durationMs?: number
+  /** Uses both runtimes: it starts on the driver and ends on the other one. */
+  crossRuntime?: boolean
 }
 
 // Cases whose checks are all named assertions still need an expectation; nothing applies it.
@@ -387,6 +416,69 @@ const CASES: Case[] = [
     steps: (d) => [
       ...setup(d),
       ...rejects(d, 'ingest', { store: 'main', namespace: NS, documents: [] }, 'INVALID_INPUT')
+    ]
+  },
+  {
+    id: 'ingest-no-chunks',
+    about:
+      'documents with nothing to chunk are listed with chunkCount 0 and never returned by search',
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      op(
+        d,
+        'ingest',
+        {
+          store: 'main',
+          namespace: NS,
+          documents: [
+            { id: 'blank', text: '   ' },
+            { id: 'empty', chunks: [], metadata: { kind: 'binary' } }
+          ]
+        },
+        'ingested'
+      ),
+      project('$ingested', 'result.documents[0]', 'blank'),
+      named('$blank', 'fieldsMatch', {
+        fields: ['id', 'chunkCount', 'status'],
+        expected: { id: 'blank', chunkCount: 0, status: 'created' }
+      }),
+      project('$ingested', 'result.documents[1]', 'empty'),
+      named('$empty', 'fieldsMatch', {
+        fields: ['id', 'chunkCount', 'status'],
+        expected: { id: 'empty', chunkCount: 0, status: 'created' }
+      }),
+      // Listed in document ID order: blank, cats, chess, empty, tax, volcanoes.
+      op(d, 'listDocuments', { store: 'main', namespace: NS }, 'listed'),
+      project('$listed', 'result.documents', 'stored'),
+      named('$stored', 'lengthIs', { length: 6 }),
+      project('$listed', 'result.documents[3]', 'listedEmpty'),
+      named('$listedEmpty', 'fieldsMatch', {
+        fields: ['documentId', 'chunkCount'],
+        expected: { documentId: 'empty', chunkCount: 0 }
+      }),
+      op(d, 'listNamespaces', { store: 'main' }, 'namespaces'),
+      project('$namespaces', 'result.namespaces[0]', 'docs'),
+      named('$docs', 'fieldsMatch', {
+        fields: ['documentCount', 'chunkCount'],
+        expected: { documentCount: 6, chunkCount: 4 }
+      }),
+      op(d, 'search', { store: 'main', scope: { namespace: NS }, query: 'anything', k: 10 }, 'all'),
+      project('$all', 'result.hits', 'allHits'),
+      named('$allHits', 'lengthIs', { length: 4 }),
+      op(
+        d,
+        'search',
+        {
+          store: 'main',
+          scope: { namespace: NS, documentIds: ['blank', 'empty'] },
+          query: 'anything',
+          k: 10
+        },
+        'scoped'
+      ),
+      project('$scoped', 'result.hits', 'scopedHits'),
+      named('$scopedHits', 'lengthIs', { length: 0 })
     ]
   },
   {
@@ -767,6 +859,57 @@ const CASES: Case[] = [
     ]
   },
 
+  // --- float16 vectors ---------------------------------------------------------------------
+  {
+    id: 'float16-roundtrip',
+    about:
+      'an f16 namespace ranks like f32, and its export imports on the other runtime as f16 with the same hits',
+    crossRuntime: true,
+    expectation: { validation: 'contains-all', contains: ['volcanoes'] },
+    durationMs: 60000,
+    steps: (d) => [
+      { useModel: { deps: ['embeddings'], as: 'embed' } },
+      { useModel: { deps: ['rag-e2e'], as: 'rag' } },
+      op(d, 'open', { store: 'main', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'main', name: 'half', vectorEncoding: 'f16' }),
+      op(d, 'createNamespace', { store: 'main', name: 'full' }),
+      op(d, 'ingest', { store: 'main', namespace: 'half', documents: '$params.corpus' }),
+      op(d, 'ingest', { store: 'main', namespace: 'full', documents: '$params.corpus' }),
+      op(d, 'search', { store: 'main', scope: { namespace: 'full' }, ...QUERY }, 'full'),
+      project('$full', 'result.hits', 'fullHits'),
+      ...sameHits(d, 'main', '$fullHits', 1e-3, 'vsFull'),
+      op(d, 'search', { store: 'main', scope: { namespace: 'half' }, ...QUERY }, 'half'),
+      project('$half', 'result.hits', 'halfHits'),
+      project('$half', 'result.hits[0].documentId', 'top'),
+      { assert: { on: '$top', use: 'expectation' } },
+      op(d, 'exportHex', { store: 'main', namespace: 'half' }, 'exported'),
+      project('$exported', 'result.hex', 'hex'),
+      op(other(d), 'open', { store: 'copy', embedModelId: '$embed', fresh: true }),
+      op(other(d), 'importHex', { store: 'copy', namespace: 'half', hex: '$hex' }),
+      op(other(d), 'listNamespaces', { store: 'copy' }, 'listed'),
+      project('$listed', 'result.namespaces[0]', 'copied'),
+      named('$copied', 'fieldsMatch', {
+        fields: ['name', 'vectorEncoding', 'documentCount'],
+        expected: { name: 'half', vectorEncoding: 'f16', documentCount: 4 }
+      }),
+      ...sameHits(other(d), 'copy', '$halfHits', 1e-4, 'vsSource')
+    ]
+  },
+  {
+    id: 'float16-encoding-mismatch',
+    about: 'an f16 export does not import into an existing f32 namespace',
+    steps: (d) => [
+      { useModel: { deps: ['embeddings'], as: 'embed' } },
+      ...(d === 'bare' ? [{ useModel: { deps: ['rag-e2e'], as: 'rag' } } as Step] : []),
+      op(d, 'open', { store: 'main', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'main', name: 'half', vectorEncoding: 'f16' }),
+      op(d, 'ingest', { store: 'main', namespace: 'half', documents: '$params.corpus' }),
+      op(d, 'open', { store: 'copy', embedModelId: '$embed', fresh: true }),
+      op(d, 'createNamespace', { store: 'copy', name: 'half' }),
+      ...rejects(d, 'transfer', { from: 'main', to: 'copy', namespace: 'half' }, 'NAMESPACE_EXISTS')
+    ]
+  },
+
   // --- lifecycle --------------------------------------------------------------------------
   {
     id: 'reopen-persists',
@@ -791,10 +934,37 @@ const CASES: Case[] = [
     ]
   },
   {
-    id: 'index-snapshot',
+    id: 'index-status',
     about:
-      'on Bare, closing writes a snapshot of the TurboVec index a search loaded, and a reopen uses it',
-    drivers: ['bare'],
+      'after a search, the namespace is searched by its index: TurboVec in the worker on Bare, the SDK vector index as provider on Node',
+    expectation: { validation: 'contains-all', contains: ['volcanoes'] },
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      op(d, 'indexStatus', { store: 'main', namespace: NS }, 'before'),
+      project('$before', 'result', 'unopened'),
+      named('$unopened', 'fieldsMatch', { fields: ['mode'], expected: { mode: 'unopened' } }),
+      op(
+        d,
+        'search',
+        { store: 'main', scope: { namespace: NS }, query: 'lava eruption', k: 1 },
+        'found'
+      ),
+      project('$found', 'result.hits[0].documentId', 'top'),
+      { assert: { on: '$top', use: 'expectation' } },
+      op(d, 'indexStatus', { store: 'main', namespace: NS }, 'after'),
+      project('$after', 'result', 'status'),
+      // Four commits; a snapshot directory is configured, and nothing is written below snapshotEvery.
+      named('$status', 'fieldsMatch', {
+        fields: ['mode', 'revision', 'snapshot'],
+        expected: { mode: 'index', revision: 4, snapshot: 'none' }
+      }),
+      ...rejects(d, 'indexStatus', { store: 'main', namespace: 'missing' }, 'NAMESPACE_NOT_FOUND')
+    ]
+  },
+  {
+    id: 'index-snapshot',
+    about: 'closing writes a snapshot of the index a search loaded, and a reopen uses it',
     expectation: { validation: 'contains-all', contains: ['volcanoes'] },
     steps: (d) => [
       ...setup(d),
@@ -818,6 +988,37 @@ const CASES: Case[] = [
       project('$found', 'result.hits[0].documentId', 'top'),
       { assert: { on: '$top', use: 'expectation' } }
     ]
+  },
+  {
+    id: 'close-after-store-close',
+    about:
+      'with the Corestore closed first, a write fails typed, close() settles, and the SDK still shuts down',
+    steps: (d) => [
+      ...setup(d),
+      ingestCorpus(d),
+      // Load the index, then commit once more so close() has a snapshot and pruning to do.
+      op(d, 'search', { store: 'main', scope: { namespace: NS }, query: 'cats', k: 1 }),
+      op(d, 'ingest', {
+        store: 'main',
+        namespace: NS,
+        documents: [{ id: 'late', text: 'A commit after the index loaded.' }]
+      }),
+      startOp(d, 'closeStoreFirst', { store: 'main', namespace: NS }, 'closing'),
+      { settle: { of: '$closing', expect: 'resolve', withinMs: 15000, as: 'closed' } },
+      project('$closed', 'result.writeError', 'writeError'),
+      named('$writeError', 'fieldsMatch', {
+        fields: ['name'],
+        expected: { name: 'DB_OPERATION_FAILED' }
+      }),
+      project('$closed', 'result', 'outcome'),
+      named('$outcome', 'fieldsMatch', { fields: ['close'], expected: { close: 'settled' } }),
+      // Delete the store's files while this worker still runs, then stop the worker.
+      op(d, 'reset', {}),
+      { start: { method: 'close', as: 'shutdown' } },
+      { settle: { of: '$shutdown', expect: 'resolve', withinMs: 30000 } },
+      // A worker for the teardown's reset.
+      ...(d === 'bare' ? [{ useModel: { deps: ['rag-e2e'], as: 'rag' } } as Step] : [])
+    ]
   }
 ]
 
@@ -828,10 +1029,12 @@ function define(c: Case, driver: Driver): TestDefinition {
     expectation: c.expectation ?? UNUSED,
     ...(c.smoke?.includes(driver) && { suites: ['smoke'] }),
     steps: c.steps(driver),
-    finally: [op(driver, 'reset', {})],
+    finally: c.crossRuntime
+      ? [op(driver, 'reset', {}), op(other(driver), 'reset', {})]
+      : [op(driver, 'reset', {})],
     metadata: {
       category: 'qvac-rag',
-      dependency: driver === 'bare' ? 'embeddings+rag-e2e' : 'embeddings',
+      dependency: driver === 'bare' || c.crossRuntime ? 'embeddings+rag-e2e' : 'embeddings',
       estimatedDurationMs: c.durationMs ?? 30000
     }
   }

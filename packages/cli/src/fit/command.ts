@@ -1,6 +1,7 @@
 import type { Command } from 'commander'
 import { collect } from '@/cli/options'
 import { handleError } from '@/errors'
+import { fitRejectionHint } from '@/fit/format'
 
 export function registerFitCommand(program: Command): void {
   program
@@ -43,6 +44,8 @@ Examples:
           })
         } catch (error: unknown) {
           handleError(error)
+          const hint = fitRejectionHint(error)
+          if (hint !== undefined) console.error(`${hint}\n`)
           process.exit(1)
         }
       }

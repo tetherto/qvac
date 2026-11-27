@@ -2,8 +2,9 @@ import test from 'brittle'
 import tmp from 'test-tmp'
 import Corestore from 'corestore'
 
-import { createRag, computeSpaceId, ERR_CODES } from '../../src/index.js'
-import { SPACE, doc, openRag, rejectsWithCode } from './helpers.js'
+import { createRag, computeSpaceId, ERR_CODES, QvacErrorRAG } from '../../src/index.js'
+import type { Rag } from '../../src/types.js'
+import { SPACE, doc, openRag, rejectsWithCode, settles } from './helpers.js'
 
 test('createRag rejects a missing corestore', async (t) => {
   await rejectsWithCode(t, () => createRag({} as never), ERR_CODES.INVALID_INPUT, 'no corestore')
@@ -343,4 +344,53 @@ test('data survives close and reopen', async (t) => {
   t.is(hits.length, 1)
   t.is(hits[0].content, 'hello')
   await second.close()
+})
+
+test('writes after the host closes the corestore fail typed and close() still settles', async (t) => {
+  const writes: Record<string, (rag: Rag, spaceId: string) => Promise<unknown>> = {
+    ingest: (rag: Rag, spaceId: string) =>
+      rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] }),
+    deleteDocuments: (rag: Rag) => rag.deleteDocuments({ namespace: 'ns', documentIds: ['a'] }),
+    createNamespace: (rag: Rag) => rag.createNamespace({ name: 'other', space: SPACE }),
+    dropNamespace: (rag: Rag) => rag.dropNamespace({ name: 'ns' })
+  }
+  for (const [name, write] of Object.entries(writes)) {
+    const store = new Corestore(await tmp(t))
+    const rag = createRag({ corestore: store })
+    await rag.ready()
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+    await store.close()
+
+    for (const attempt of ['first', 'second']) {
+      await rejectsWithCode(
+        t,
+        settles(write(rag, spaceId), name),
+        ERR_CODES.DB_OPERATION_FAILED,
+        `${name}, ${attempt} call`
+      )
+    }
+    await settles(rag.close(), `close after ${name}`)
+  }
+})
+
+test('writes queued when the host closes the corestore all settle', async (t) => {
+  const store = new Corestore(await tmp(t))
+  const rag = createRag({ corestore: store })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+
+  const pending = ['a', 'b', 'c'].map((id) =>
+    rag.ingest({ namespace: 'ns', documents: [doc(id, spaceId, [[id, [1, 0, 0]]])] })
+  )
+  const closing = store.close()
+  const results = await settles(Promise.allSettled(pending), 'queued writes')
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      t.ok(result.reason instanceof QvacErrorRAG, 'a failed write is a QvacErrorRAG')
+    }
+  }
+  await closing
+  await settles(rag.close(), 'close')
+  t.pass('close settled')
 })

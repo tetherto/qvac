@@ -978,7 +978,7 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   // counts summed (see aggregateObservedStats).
   if (!result.requestStats.empty()) {
     qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
-        result.stats, batching::aggregateObservedStats(result.requestStats));
+        result, batching::aggregateObservedStats(result.requestStats));
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
@@ -1083,7 +1083,7 @@ std::string LlamaModel::processConcurrent(
   // throwing job never gets a jobEnded, so nothing is stored on that path.
   if (!result.requestStats.empty()) {
     qvac_lib_inference_addon_cpp::RuntimeStats terminal =
-        jobTerminalStats(result.stats, result.requestStats.front());
+        jobTerminalStats(result, result.requestStats.front());
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
@@ -1095,7 +1095,7 @@ std::string LlamaModel::processConcurrent(
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
-    const batching::RuntimeStatsSnapshot& stats,
+    const batching::BatchResult& result,
     const batching::ObservedRequestStats& observed) const {
   // batchRuntimeStatsLocked's key set with the job's own observed figures in
   // place of the aggregate values. Composed purely from the run's returned
@@ -1105,8 +1105,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
   qvac_lib_inference_addon_cpp::RuntimeStats terminal = {
       {"TTFT", observed.ttftMs},
       {"TPS", observed.genTps},
-      {"ppTPS", stats.prefillTokensPerSecond()},
-      {"CacheTokens", stats.cacheTokens},
+      {"ppTPS", result.prefillTps},
+      {"CacheTokens", observed.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
       // This comes from `observed`, not the aggregate: the aggregate is
@@ -1120,7 +1120,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
       // Unlike the two above, those have no per-slot source to move to.
-      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"avgConcurrentSeq", result.stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would

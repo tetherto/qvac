@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <any>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -1877,9 +1878,8 @@ public:
   void captureHistoryCheckpoint(llama_pos pos) override {
     inner_->captureHistoryCheckpoint(pos);
   }
-  void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override {
-    inner_->onPrefillComplete(currentPos, prefillTokenCount);
+  void onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) override {
+    inner_->onPrefillComplete(currentPos, prefillKvCells);
   }
   void syncPosition(llama_pos currentPos) override {
     inner_->syncPosition(currentPos);
@@ -2544,6 +2544,75 @@ std::vector<uint8_t> readElephantImage() {
 
 } // namespace
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    ImagePromptCountsKvCellsLikeTheSinglePromptPath) {
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  const auto loadVlm = [&](const std::string& parallel) {
+    std::string path = vlmPath;
+    std::string projection = mmprojPath;
+    auto cfg = config_;
+    cfg["ctx_size"] = "16384";
+    cfg["parallel"] = parallel;
+    cfg["n_predict"] = "8";
+    auto model = std::make_unique<LlamaModel>(
+        std::move(path), std::move(projection), std::move(cfg));
+    model->waitForLoadInitialization();
+    return model;
+  };
+  const auto imagePrompt = [&image] {
+    LlamaModel::Prompt prompt;
+    prompt.input = R"([{"role":"user","type":"media","content":""},)"
+                   R"({"role":"user","content":"What animal is this?"}])";
+    prompt.media.push_back(image);
+    prompt.generationParams.reasoning_budget = 0;
+    return prompt;
+  };
+  const auto stat = [](const auto& stats, const char* key) {
+    return test_common::getStatValue(stats, key);
+  };
+
+  auto single = loadVlm("1");
+  ASSERT_TRUE(single->isLoaded());
+  single->processPrompt(imagePrompt());
+  const auto singleStats = single->runtimeStats();
+  single.reset();
+
+  auto parallel = loadVlm("2");
+  ASSERT_TRUE(parallel->isLoaded());
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*parallel), nullptr);
+  const qvac_lib_inference_addon_cpp::JobId job{1};
+  parallel->process(std::any(imagePrompt()), job);
+  const auto jobStats = parallel->consumeJobStats(job);
+  ASSERT_FALSE(jobStats.empty());
+
+  EXPECT_NEAR(
+      stat(singleStats, "CacheTokens") - stat(singleStats, "generatedTokens"),
+      stat(singleStats, "promptTokens"),
+      1.0);
+  EXPECT_NEAR(
+      stat(jobStats, "CacheTokens") - stat(jobStats, "generatedTokens"),
+      stat(jobStats, "promptTokens"),
+      1.0)
+      << "promptTokens and CacheTokens must count the image the same way";
+  EXPECT_NEAR(
+      stat(jobStats, "promptTokens"), stat(singleStats, "promptTokens"), 1.0)
+      << "the parallel path must count the image like the single-prompt path";
+  EXPECT_DOUBLE_EQ(
+      stat(parallel->runtimeStats(), "CacheTokens"),
+      stat(jobStats, "CacheTokens"))
+      << "the whole-model figure must count KV cells like the job does";
+}
+
 /// A media-segment eval that throws mid-batch must fail only its own
 /// request and leave the scheduler servicing everything else.
 /// serviceNextMediaSegmentLocked wraps evalMediaSegment in try/catch and
@@ -2734,7 +2803,29 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   bool saveThrew = false;
   std::string saveErr;
   try {
-    saveModel->processPromptBatch(savePrompts);
+    constexpr qvac_lib_inference_addon_cpp::JobId jobId = 1;
+    static_cast<void>(saveModel->process(std::any(savePrompts), jobId));
+    const auto jobStats = saveModel->consumeJobStats(jobId);
+    const auto modelStats = saveModel->runtimeStats();
+    const auto parked =
+        LlamaModelTestPeer::scheduler(*saveModel)->parkedSeqIds();
+    ASSERT_EQ(parked.size(), 1u);
+    const auto cells = llama_memory_seq_token_count(
+        llama_get_memory(saveModel->getContext()),
+        static_cast<llama_seq_id>(parked.front()));
+    ASSERT_GT(cells, 0);
+    const double prefillMs = test_common::getStatValue(modelStats, "TTFT");
+    ASSERT_GT(prefillMs, 0.0);
+    // This isolated prefill has the same timed steps as runtimeStats().
+    // Its terminal rate counts the M-RoPE media tokens fed into the cache.
+    EXPECT_NEAR(
+        test_common::getStatValue(jobStats, "ppTPS") * prefillMs / 1000.0,
+        static_cast<double>(cells),
+        1e-6);
+    EXPECT_NEAR(
+        test_common::getStatValue(modelStats, "ppTPS") * prefillMs / 1000.0,
+        static_cast<double>(cells),
+        1e-6);
     saveModel->saveCache(cachePath.string());
   } catch (const std::exception& e) {
     saveThrew = true;

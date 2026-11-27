@@ -19,6 +19,7 @@ import {
   publishedElsewhere,
   rangeErrors,
   readRepoJson,
+  repackMismatches,
   repoRoot,
   satisfies,
   shasumMismatches,
@@ -399,5 +400,26 @@ test('reports workspace links to packages outside the train, once each', () => {
   }
   assert.deepEqual(linkedOutsideTrain(['@qvac/inference', '@qvac/sdk'], (name) => deps[name] ?? []), [
     { name: '@qvac/rag', dependents: ['@qvac/inference', '@qvac/sdk'] },
+  ])
+})
+
+test('repackMismatches passes a package that packs to the built tarball', () => {
+  const projects = [{ name: '@qvac/sdk', version: '0.24.2' }]
+  assert.deepEqual(repackMismatches(projects, () => 'aaa', () => 'aaa'), [])
+})
+
+test('repackMismatches reports a package that packs to other bytes', () => {
+  const projects = [{ name: '@qvac/inference', version: '0.24.2' }, { name: '@qvac/sdk', version: '0.24.2' }]
+  const packed = { '@qvac/inference': 'aaa', '@qvac/sdk': 'bbb' }
+  assert.deepEqual(repackMismatches(projects, (project) => packed[project.name], () => 'aaa'), [
+    '@qvac/sdk@0.24.2 packs to sha1 bbb in this job; the built tarball has aaa',
+  ])
+})
+
+test('repackMismatches reports a package that cannot be packed, such as one with no dist', () => {
+  const projects = [{ name: '@qvac/sdk', version: '0.24.2' }]
+  const noDist = () => { throw new Error('packages/sdk/dist is empty; build it first') }
+  assert.deepEqual(repackMismatches(projects, noDist, () => 'aaa'), [
+    '@qvac/sdk@0.24.2: packages/sdk/dist is empty; build it first',
   ])
 })
