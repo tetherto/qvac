@@ -9,7 +9,11 @@ import { unregisterAddonLogger, getEngineLogger } from '@/logging/index'
 import { type UnloadModelParams, unloadModelParamsSchema } from '@/schemas/index'
 import { ModelNotLoadedError } from '@/errors/index'
 import { detectShardedModel, generateShardFilenames } from '@/utils/index'
-import { getClearStorageTarget, getShardedClearStorageTargets } from '@/utils/cache/paths'
+import {
+  completeMarkerPath,
+  getClearStorageTarget,
+  getShardedClearStorageTargets
+} from '@/utils/cache/paths'
 import { withModelWorkLock } from '@/runtime/model-work-lock'
 
 const logger = getEngineLogger()
@@ -93,6 +97,9 @@ async function unloadModelLocked(params: UnloadModelParams): Promise<UnloadModel
           recursive: target.kind === 'directory',
           force: true
         })
+        if (target.kind === 'file') {
+          await fsPromises.rm(completeMarkerPath(target.path), { force: true })
+        }
         logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
       }
     }
