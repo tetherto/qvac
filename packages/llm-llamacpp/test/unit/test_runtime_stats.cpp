@@ -198,7 +198,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   Request req(/*rid=*/0, std::move(prompt), maxTokens);
   // Admission fixed the planned prompt size, but no prefill step has fed any
   // token yet, so the request is not prefill-complete.
-  ASSERT_EQ(req.prefillTokenCount, 42U);
+  ASSERT_EQ(req.prefillKvCells, 42U);
   ASSERT_EQ(req.prefillFedCount, 0U);
   ASSERT_FALSE(req.isPrefillComplete());
 
@@ -214,7 +214,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
 // A request that completed prefill (normal completion, or a cancel after the
 // first generated token) must still report the full planned prompt: prefill
 // resets prefillFedCount to 0 once complete, so the honest count comes from
-// prefillTokenCount in that case.
+// prefillKvCells in that case.
 TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   constexpr unsigned maxTokens = 256;
   std::vector<llama_token> prompt(42, 1);
@@ -293,6 +293,14 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   EXPECT_DOUBLE_EQ(agg.genTps, 20.0);
   EXPECT_EQ(agg.generatedTokens, 42);
   EXPECT_EQ(agg.promptTokens, 35);
+}
+
+TEST(ObservedRequestStats, GroupAggregateSumsEachRequestsCacheTokens) {
+  const std::vector<ObservedRequestStats> group{
+      {.generatedTokens = 11, .promptTokens = 10, .cacheTokens = 900},
+      {.generatedTokens = 31, .promptTokens = 20, .cacheTokens = 300}};
+
+  EXPECT_EQ(aggregateObservedStats(group).cacheTokens, 1200);
 }
 
 // The per-slot tool counter sums like the token counts rather than averaging:

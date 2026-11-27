@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.74.0] - 2026-11-27
+
+### Fixed
+
+- On a load with `parallel >= 2`, a job's `CacheTokens` reports the KV cells of
+  its own slot (summed over its own requests for a batch). It reported every
+  slot that finished since the scheduler was last idle, so a request that
+  overlapped another one counted both, and it read positions where media on
+  M-RoPE models takes more cells than positions
+  ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+- On a load with `parallel >= 2`, `promptTokens`, the whole-model
+  `CacheTokens` and the prompt tokens behind `ppTPS` count an image by the KV
+  cells it fills, as the single-prompt path does. They counted its positions,
+  so a cold image prompt reported fewer prompt tokens than its cache held
+  ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+- On a load with `parallel >= 2`, a job's `ppTPS` reports how quickly its
+  prompt was processed. The measurement excludes queue wait and includes time
+  spent in shared batches that processed the job's prompt
+  ([#5998](https://github.com/tetherto/qvac/pull/5998)).
+
+## [0.73.1] - 2026-11-27
+
+### Added
+
+- The browser build loads multimodal projection models, LoRA adapters,
+  external speculative draft models, and sharded main and draft GGUF models
+  ([#5901](https://github.com/tetherto/qvac/pull/5901)). Media input in
+  the browser is not supported yet.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.33.0` -> `^0.34.0`, which carries
+  `qvac-fabric` `12032.0.1` -> `12032.2.0`
+  ([#6016](https://github.com/tetherto/qvac/pull/6016)): Inkling 2 and
+  Inkling 2 Mini with the DSpark and DFlash2 speculative drafters, qwen4exp
+  sparse attention over per-token K/V rows, and Vulkan fusions and RDNA3 and
+  RDNA4 matmul tuning. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.34.0` with it.
+- `@qvac/fabric` 0.34 changes the RPC protocol from 118 to 119 and the
+  `common.h` structs, so it is not ABI-compatible with 0.33.x. Every addon
+  loaded in one process must resolve the same `@qvac/fabric` minor.
+  A 118 and a 119 RPC peer cannot connect, so `@qvac/llm-llamacpp` and
+  `@qvac/ggml-rpc-server` must move together.
+  This is a patch release, so existing caret ranges pick it up: mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.34.0` together.
+- This package needed no code change for the new fabric.
+
 ## [0.73.0] - 2026-11-23
 
 ### Breaking

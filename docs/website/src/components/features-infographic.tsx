@@ -152,7 +152,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Consistent developer experience across hardware, operating systems, and JavaScript runtimes — write code once, run it everywhere.',
     angle: 90,
-    href: '/sdk/system-requirements',
+    href: '/sdk/platform-support',
   },
   {
     id: 'pluggable',

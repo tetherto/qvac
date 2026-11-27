@@ -319,8 +319,7 @@ public:
 
   llama_pos evalMediaSegment(size_t mediaIndex, llama_pos pos) override;
 
-  void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
+  void onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) override;
 
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,

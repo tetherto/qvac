@@ -35,7 +35,7 @@ import {
   type SnapshotStore
 } from './snapshots.js'
 import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from '../db/db-types.js'
-import type { IndexStatus, IndexStorage, VectorEncoding } from '../types.js'
+import type { IndexStatus, IndexStorage, SnapshotErrorEvent, VectorEncoding } from '../types.js'
 
 // Rows decoded per native add while rebuilding; memory stays bounded by this.
 export const REBUILD_BATCH_SIZE = 1024
@@ -57,7 +57,7 @@ export interface IndexConfig {
   snapshotEvery: number
   // Replaces TurboVec.
   provider?: NativeIndexModule
-  // Replaces bare-fs.
+  // Replaces the runtime file system.
   fs?: FileSystem
 }
 
@@ -114,12 +114,18 @@ interface Entry {
   failure: { reason: 'rebuild-failed' | 'search-failed'; error: unknown } | null
   // The last snapshot read or write failure; the index stays in memory.
   snapshotError: { error: unknown } | null
+  // The `onSnapshotError` callbacks of the RAGs that claimed the directory.
+  listeners: Set<SnapshotErrorListener> | null
+  // The listeners already told about the current `snapshotError`.
+  heard: Set<SnapshotErrorListener>
   // Set once a snapshot was loaded or written.
   snapshotSaved: boolean
   // The last snapshot write; writes share a sidecar temp file, so they chain.
   persisting: Promise<void>
   needsPrepare: boolean
 }
+
+export type SnapshotErrorListener = (event: SnapshotErrorEvent) => void
 
 export interface IndexRegistry {
   open(namespace: string, config: IndexConfig, runtime: IndexRuntime): Promise<OpenIndex | null>
@@ -142,8 +148,13 @@ export interface IndexRegistry {
   drop(namespace: string, createdAt: number): Promise<void>
   // Reserves the snapshot directory for this provider and file system until
   // the returned release runs; another pair on the same core is refused. The
-  // last release snapshots and forgets the directory's indexes.
-  claim(config: IndexConfig, runtime: IndexRuntime): () => Promise<void>
+  // last release snapshots and forgets the directory's indexes. `listener`
+  // hears the directory's snapshot failures until its release resolves.
+  claim(
+    config: IndexConfig,
+    runtime: IndexRuntime,
+    listener?: SnapshotErrorListener
+  ): () => Promise<void>
   close(): Promise<void>
 }
 
@@ -177,13 +188,22 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // the same files.
   const claims = new Map<
     string,
-    { provider: NativeIndexModule; files: FileSystem | null; refs: number }
+    {
+      provider: NativeIndexModule
+      files: FileSystem | null
+      refs: number
+      listeners: Set<SnapshotErrorListener>
+    }
   >()
   // Every snapshot directory claimed on this core, with the fs it was last
   // claimed with, so a drop still finds snapshots after their RAG closed.
   const snapshotDirs = new Map<string, FileSystem>()
 
-  function claim(config: IndexConfig, runtime: IndexRuntime): () => Promise<void> {
+  function claim(
+    config: IndexConfig,
+    runtime: IndexRuntime,
+    listener?: SnapshotErrorListener
+  ): () => Promise<void> {
     const { dir } = config
     const provider = runtime.native.module
     if (dir === undefined || !provider?.load) return () => Promise.resolve()
@@ -195,17 +215,37 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       })
     }
     if (!held) {
-      held = { provider, files: runtime.files, refs: 0 }
+      held = { provider, files: runtime.files, refs: 0, listeners: new Set() }
       claims.set(dir, held)
     }
     if (runtime.files) snapshotDirs.set(dir, runtime.files)
     const claimed = held
     claimed.refs++
+    // A Set keeps one entry per function; wrap so two RAGs passing the same
+    // callback each keep theirs until their own release.
+    const own: SnapshotErrorListener | null = listener ? (event) => listener(event) : null
+    if (own) {
+      claimed.listeners.add(own)
+      // A RAG joining indexes that are already failing hears it now.
+      for (const entry of entries.values()) {
+        if (entry.listeners === claimed.listeners) tellListeners(entry)
+      }
+    }
+    function unlisten(list: Iterable<Entry>): void {
+      if (!own) return
+      claimed.listeners.delete(own)
+      for (const entry of list) {
+        if (entry.listeners === claimed.listeners) entry.heard.delete(own)
+      }
+    }
     let released = false
     return async () => {
       if (released) return
       released = true
-      if (--claimed.refs > 0 || claims.get(dir) !== claimed) return
+      if (--claimed.refs > 0 || claims.get(dir) !== claimed) {
+        unlisten(entries.values())
+        return
+      }
       claims.delete(dir)
       // Entries leave the map before any await, so the next claim of the
       // directory, with any fs, starts from fresh ones.
@@ -215,7 +255,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         entries.delete(key)
         detached.push(entry)
       }
-      await retireEntries(detached)
+      try {
+        await retireEntries(detached)
+      } finally {
+        unlisten(detached)
+      }
     }
   }
 
@@ -257,14 +301,35 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         tombstones: 0,
         syncing: null,
         failure: null,
-        snapshotError: snapshots && !files ? { error: runtime.filesError } : null,
+        snapshotError: null,
+        listeners: config.dir === undefined ? null : (claims.get(config.dir)?.listeners ?? null),
+        heard: new Set(),
         snapshotSaved: false,
         persisting: Promise.resolve(),
         needsPrepare: true
       }
       entries.set(key, entry)
+      if (snapshots && !files) snapshotFailed(entry, runtime.filesError)
     }
     return entry
+  }
+
+  // Each listener hears a run of failures once; a write that succeeds re-arms it.
+  function snapshotFailed(entry: Entry, error: unknown): void {
+    entry.snapshotError = { error }
+    tellListeners(entry)
+  }
+
+  function tellListeners(entry: Entry): void {
+    if (!entry.snapshotError || !entry.listeners) return
+    const { error } = entry.snapshotError
+    for (const listener of entry.listeners) {
+      if (entry.heard.has(listener)) continue
+      entry.heard.add(listener)
+      try {
+        listener({ namespace: entry.namespace, error })
+      } catch {}
+    }
   }
 
   async function open(
@@ -443,7 +508,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         return await store.read(identity)
       })
     } catch (error) {
-      entry.snapshotError = { error }
+      snapshotFailed(entry, error)
       return
     }
     // A snapshot ahead of the database belongs to a state this store never
@@ -454,7 +519,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       if (!module.load) return
       native = await module.load(stored.path)
     } catch (error) {
-      entry.snapshotError = { error }
+      snapshotFailed(entry, error)
       return
     }
     const bitWidth = native.bitWidth ?? BIT_WIDTHS[identity.storage]
@@ -581,10 +646,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       (wrote) => {
         if (!wrote) return
         entry.snapshotError = null
+        entry.heard.clear()
         entry.snapshotSaved = true
       },
       (error: unknown) => {
-        entry.snapshotError = { error }
+        snapshotFailed(entry, error)
       }
     )
     return next

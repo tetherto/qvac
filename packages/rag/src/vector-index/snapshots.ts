@@ -168,7 +168,7 @@ let loadingFs: Promise<FileSystem> | null = null
 
 // Cached like the index module, and loaded by `ready()` for the same reason.
 export function loadSnapshotFileSystem(): Promise<FileSystem> {
-  if (!loadingFs) loadingFs = importBareFs()
+  if (!loadingFs) loadingFs = importFs()
   return loadingFs
 }
 
@@ -176,7 +176,8 @@ export function forgetSnapshotFileSystem(): void {
   loadingFs = null
 }
 
-async function importBareFs(): Promise<FileSystem> {
-  const module = (await importers.bareFs()) as { promises: FileSystem }
+// `#fs` is `bare-fs` on Bare and `fs` on Node.
+async function importFs(): Promise<FileSystem> {
+  const module = (await importers.fs()) as { promises: FileSystem }
   return module.promises
 }

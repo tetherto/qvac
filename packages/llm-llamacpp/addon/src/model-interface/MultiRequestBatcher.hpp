@@ -43,7 +43,7 @@ struct Request {
   /// the driver (`PrefillPlan::checkpointAtTextTokens`); cleared by
   /// `completeCheckpointStop`.
   std::optional<size_t> pendingCheckpointAt;
-  size_t prefillTokenCount = 0;
+  size_t prefillKvCells = 0;
   size_t prefillFedCount = 0;
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
@@ -207,7 +207,8 @@ public:
   /// skips the call (tests may pass a recording lambda instead).
   using KvClearFn = std::function<void(uint32_t seqId)>;
   using PrefillCompleteFn = std::function<void(
-      uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
+      uint32_t seqId, llama_pos currentPos, size_t prefillKvCells)>;
+  using PrefillChunkFn = std::function<void(uint32_t seqId, unsigned tokens)>;
 
   struct FillResult {
     /// Tokens placed in the batch across every slot. 0 means nothing was
@@ -243,7 +244,9 @@ public:
   /// are refreshed by every fillBatch(). Committing is one-shot — a second
   /// advance() with no fillBatch() between is a no-op, so a slot's position
   /// can never run ahead of the KV cache by replaying a budget.
-  void advance(const PrefillCompleteFn& onPrefillComplete = {});
+  void advance(
+      const PrefillCompleteFn& onPrefillComplete = {},
+      const PrefillChunkFn& onPrefillChunk = {});
 
   /// A slot blocked on its head media barrier, ready for the scheduler
   /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.
@@ -251,6 +254,7 @@ public:
     uint32_t seqId;
     size_t mediaIndex;
     llama_pos currentPos;
+    llama_pos nKvTokens;
   };
 
   /// First slot (lowest seqId) whose prefill is blocked on a media

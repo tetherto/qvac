@@ -2194,7 +2194,7 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
 }
 
 void MtmdLlmContext::onPrefillComplete(
-    llama_pos currentPos, size_t prefillTokenCount) {
+    llama_pos currentPos, size_t prefillKvCells) {
   // Trailing text advances positions and KV cells 1:1; media cells were
   // already accounted by evalMediaSegment.
   advanceTextSpan(currentPos);

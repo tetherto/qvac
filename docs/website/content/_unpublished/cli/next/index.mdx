@@ -95,7 +95,7 @@ The `qvac doctor` command validates that the current host can run `@qvac/sdk` an
 
 The `qvac` CLI itself runs on desktops only. The SDK additionally targets Android and iOS via Expo/BareKit; those appear in the report as **deploy targets** with host-toolchain checks (`adb`, `xcodebuild`) but never cause a non-zero exit.
 
-See [`qvac doctor`](#qvac-doctor) for every check, the exit codes, and the JSON schema. For what QVAC requires from each platform, see [Platform support](/sdk/system-requirements).
+See [`qvac doctor`](#qvac-doctor) for every check, the exit codes, and the JSON schema. For what QVAC requires from each platform, see [Platform support](/sdk/platform-support).
 
 ## Model fit check
 
@@ -232,7 +232,7 @@ Run a preflight check of host system requirements.
 | Requirement | Notes |
 | --- | --- |
 | Node.js `^22.21.0 \|\| >=24.9.0` | Bundling (`qvac bundle sdk`) needs Node 22.21+ on the 22 line or 24.9+. Matches `engines.node` of `@qvac/cli`. |
-| Supported CLI host | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. `darwin-x64` passes this check, but QVAC no longer supports Intel Macs; see [Platform support](/sdk/system-requirements). The CLI cannot run on mobile; those are deploy targets only. |
+| Supported CLI host | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. `darwin-x64` passes this check, but QVAC no longer supports Intel Macs; see [Platform support](/sdk/platform-support). The CLI cannot run on mobile; those are deploy targets only. |
 | Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load. |
 
 #### Recommended checks
