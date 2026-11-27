@@ -835,7 +835,8 @@ TEST_F(DecisionContextModelTest, AnImageOverTheLimitIsRejectedBeforeDecoding) {
   const auto outcome = runOutcome(context, request.dump(), kNeverStop);
   EXPECT_EQ(outcome.first, "[ Decision :: InvalidRequest ]") << outcome.second;
   EXPECT_NE(
-      outcome.second.find("image is larger than the media size limit"),
+      outcome.second.find(
+          "image is larger than the media size limit of 1000000 pixels"),
       std::string::npos)
       << outcome.second;
 }

@@ -221,7 +221,10 @@ safeTest(
         questions: { colorful: { type: 'noul', instructions: 'Is the image colorful?' } }
       }).catch((err) => err)
       t.is(huge.code, DECISION_INVALID_REQUEST, `100 MP image rejected: ${huge.message}`)
-      t.ok(/image is larger than the media size limit/.test(huge.message), huge.message)
+      t.ok(
+        /image is larger than the media size limit of 50000000 pixels/.test(huge.message),
+        huge.message
+      )
     })
   }
 )
@@ -249,7 +252,10 @@ safeTest(
         questions: question
       }).catch((err) => err)
       t.is(over.code, DECISION_INVALID_REQUEST, `4 MP image rejected: ${over.message}`)
-      t.ok(/image is larger than the media size limit/.test(over.message), over.message)
+      t.ok(
+        /image is larger than the media size limit of 1000000 pixels/.test(over.message),
+        over.message
+      )
     })
   }
 )

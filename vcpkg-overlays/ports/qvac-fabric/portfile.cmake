@@ -1,11 +1,12 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
-  # QVAC-26667: tetherto/qvac-fabric-llm.cpp#497 (temp-12032 + QVAC_FABRIC_SERVER_CONTEXT, and
-  # common_json_error's out-of-line destructor), until a qvac-fabric port release ships them.
+  # QVAC-26667: temp-12032 with tetherto/qvac-fabric-llm.cpp#497 (QVAC_FABRIC_SERVER_CONTEXT, the
+  # media limit hook and common_json_error's out-of-line destructor) and #615 (the limit named in
+  # media limit errors), until a qvac-fabric port release ships them.
   # packages/fabric builds its runtime from it too, as the destructor must come from the runtime.
-  REF 5cce236f1316fdae0645d6503f230e1cf72b652c
-  SHA512 e6b2996a3509f104d825c77408ab96da3420d564972b30a45e91b95ec8c754b310ecb6efe63719807c7e25b6a62f7436633acb2ef0ef70249f9fb680edb82e51
+  REF b65fd2973ce1cbfab99526677d037b201438a403
+  SHA512 eed5ea82435023f4eaa970e137ba1ec561b77bf620115ab954f12a29076191732871b1df0959c19db89a014e94b39ee1d69f101bbee81af2df1b9ee998abaca4
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
