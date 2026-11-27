@@ -810,7 +810,7 @@ void TextLlmContext::syncPosition(llama_pos currentPos) {
 }
 
 void TextLlmContext::onPrefillComplete(
-    llama_pos currentPos, size_t prefillTokenCount) {
+    llama_pos currentPos, size_t prefillKvCells) {
   nPast_ = currentPos;
   prefillComplete_ = true;
   // The prompt is decoded: a new generation starts (llama-server's

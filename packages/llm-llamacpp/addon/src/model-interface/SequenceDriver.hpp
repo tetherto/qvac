@@ -327,10 +327,11 @@ public:
   /// checkpoints ignore it.
   virtual void captureHistoryCheckpoint(llama_pos pos) { (void)pos; }
 
-  /// Notify the driver that the scheduler has finished prefill-decoding
-  /// `prefillTokenCount` tokens up to absolute position `currentPos`.
+  /// Notify the driver that the scheduler has finished prefill-decoding the
+  /// prompt up to absolute position `currentPos`, filling `prefillKvCells`
+  /// KV cells; on M-RoPE media that exceeds the positions it advanced.
   virtual void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) = 0;
+  onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) = 0;
 
   /// Reconcile the driver's KV position with the batcher's authoritative
   /// per-request position. Called by the scheduler before every
