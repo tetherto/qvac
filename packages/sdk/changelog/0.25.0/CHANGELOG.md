@@ -40,6 +40,7 @@ Release Date: 2026-11-25
 - Pass image-max-megapixels to llm-llamacpp's fitter. (see PR [#5940](https://github.com/tetherto/qvac/pull/5940))
 - Show why qvac serve re-downloads a cached model. (see PR [#5959](https://github.com/tetherto/qvac/pull/5959))
 - Drop a KV cache file the addon cannot load. (see PR [#5968](https://github.com/tetherto/qvac/pull/5968))
+- Pin bare-stow-target-react-native to 0.3.0 so npm installs resolve. (see PR [#6020](https://github.com/tetherto/qvac/pull/6020))
 
 ## 📦 Models
 
@@ -47,6 +48,8 @@ Release Date: 2026-11-25
   Added: MOSS_IMAGE_SFT_5B_BF16, MOSS_IMAGE_VAE, MOSS_IMAGE_SFT_TOKENIZER, BOTPSY_0_8B_TOOL_CALLING_BF16, BOTPSY_0_8B_TOOL_CALLING_Q4_K_M (and 4 more)
 - Prefix QVAC-trained model constants with QVAC_ and regenerate the catalogs. (see PR [#5941](https://github.com/tetherto/qvac/pull/5941)) - See [model changes](./models.md)
   Added: QVAC_QWEN3_5_9B_TOOL_CALLING_Q4_K_M, TAESDXL_VAE, TAESD_VAE
+- Add Inkling 2 Mini and Ternary Bonsai 2.5 27B model constants. (see PR [#6023](https://github.com/tetherto/qvac/pull/6023)) - See [model changes](./models.md)
+  Added: INKLING2_MINI_26B_A3B_MULTIMODAL_UD_Q4_K_M, MMPROJ_INKLING2_MINI_26B_A3B_MULTIMODAL_F16, INKLING2_MINI_26B_A3B_DSPARK_Q8_0, INKLING2_MINI_26B_A3B_DFLASH2_Q8_0, TERNARY_BONSAI_2_5_27B_MULTIMODAL_Q2_0 (and 1 more)
 
 ## 📘 Docs
 
@@ -64,6 +67,7 @@ Release Date: 2026-11-25
 - Drop the Kotlin e2e runner unit tests and stop adding tests for test code. (see PR [#5749](https://github.com/tetherto/qvac/pull/5749))
 - Fix the lint and bare-major failures on main. (see PR [#5794](https://github.com/tetherto/qvac/pull/5794))
 - Move the SDK onto the fabric 0.33 addon set. (see PR [#5942](https://github.com/tetherto/qvac/pull/5942)) - See [breaking changes](./breaking.md)
+- Use caret ranges for unpinned sdk, inference and cli dependencies. (see PR [#6009](https://github.com/tetherto/qvac/pull/6009))
 
 ## ⚙️ Infrastructure
 

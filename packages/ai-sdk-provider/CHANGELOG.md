@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.13.0
 
-This release adds twelve model constants, including the first with the new `QVAC_` prefix for models QVAC trained, and moves the provider onto `@qvac/cli` 0.21. No constant was removed or renamed, and provider behavior is unchanged.
+This release adds eighteen model constants, including the first with the new `QVAC_` prefix for models QVAC trained, and moves the provider onto `@qvac/cli` 0.21. No constant was removed or renamed, and provider behavior is unchanged.
 
 ## Model Changes
 
@@ -29,6 +29,12 @@ Chat models:
 - `DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0`
 - `DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD`
 - `MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16`
+- `INKLING2_MINI_26B_A3B_MULTIMODAL_UD_Q4_K_M`
+- `MMPROJ_INKLING2_MINI_26B_A3B_MULTIMODAL_F16`
+- `INKLING2_MINI_26B_A3B_DSPARK_Q8_0` (DSpark draft model)
+- `INKLING2_MINI_26B_A3B_DFLASH2_Q8_0` (DFlash2 draft model)
+- `TERNARY_BONSAI_2_5_27B_MULTIMODAL_Q2_0` (pairs with the existing `MMPROJ_TERNARY_BONSAI_2_27B_MULTIMODAL_Q8_0`)
+- `TERNARY_BONSAI_2_5_27B_MTP_Q2_0` (external MTP head)
 
 Image models and their companion files:
 
