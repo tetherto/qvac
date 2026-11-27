@@ -1106,7 +1106,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"TTFT", observed.ttftMs},
       {"TPS", observed.genTps},
       {"ppTPS", result.prefillTps},
-      {"CacheTokens", result.stats.cacheTokens},
+      {"CacheTokens", observed.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
       // This comes from `observed`, not the aggregate: the aggregate is

@@ -889,23 +889,22 @@ ContinuousBatchScheduler::prefillCompleteFn() {
   // `failGroupLocked` -> `cancelSlotLocked(Skip)`. The last known-good cache
   // remains untouched.
   // path.
-  return
-      [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
-        auto& slot = slots_[seqId];
-        if (!slot.has_value() || !slot->driver) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_errors::general_error::toString(
-                  qvac_errors::general_error::InternalError),
-              "ContinuousBatchScheduler::step: missing sequence driver for "
-              "prefill-complete seqId " +
-                  std::to_string(seqId));
-        }
-        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
-        if (slot->prefillOnly) {
-          batcher_.markFinished(seqId);
-        }
-      };
+  return [this](uint32_t seqId, llama_pos currentPos, size_t prefillKvCells) {
+    auto& slot = slots_[seqId];
+    if (!slot.has_value() || !slot->driver) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "ContinuousBatchScheduler::step: missing sequence driver for "
+          "prefill-complete seqId " +
+              std::to_string(seqId));
+    }
+    slot->driver->onPrefillComplete(currentPos, prefillKvCells);
+    if (slot->prefillOnly) {
+      batcher_.markFinished(seqId);
+    }
+  };
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
@@ -1473,18 +1472,18 @@ void RuntimeStatsSnapshot::recordSpeculativeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t toolsDropped, const Request& req) {
-  cacheTokens += nPast;
+    int64_t kvCells, int64_t toolsDropped, const Request& req) {
+  cacheTokens += kvCells;
   toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
   // once prefill completes, prefillFedCount is reset to 0, so the full prompt
-  // is read from prefillTokenCount; a request cancelled mid/pre-prefill instead
+  // is read from prefillKvCells; a request cancelled mid/pre-prefill instead
   // reports the partial prefillFedCount (0 if no step ever ran). This keeps the
   // `cacheTokens ~= promptTokens + generatedTokens` invariant honest on the
   // cancel path.
   promptTokens += req.isPrefillComplete()
-                      ? static_cast<int64_t>(req.prefillTokenCount)
+                      ? static_cast<int64_t>(req.prefillKvCells)
                       : static_cast<int64_t>(req.prefillFedCount);
 }
 
@@ -2501,7 +2500,7 @@ ObservedRequestStats computeObservedStats(
   // Mirror accumulateSlot: full prompt once prefill completed, the partial
   // fed count for a request cancelled mid/pre-prefill.
   observed.promptTokens = req.isPrefillComplete()
-                              ? static_cast<int64_t>(req.prefillTokenCount)
+                              ? static_cast<int64_t>(req.prefillKvCells)
                               : static_cast<int64_t>(req.prefillFedCount);
   if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
@@ -2538,6 +2537,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    agg.cacheTokens += stats.cacheTokens;
     // Summed like the token counts rather than averaged: a multi-item group's
     // caller asked one question, and "two of my renders dropped their tools"
     // is the honest answer to it.
@@ -2574,7 +2574,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
-  int64_t nPast = 0;
+  int64_t kvCells = 0;
   int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
@@ -2585,12 +2585,12 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // during prefill or failed is rolled back to the admission cursor, so
     // `CacheTokens` matches the live driver cursor either way. Work performed
     // is still reported via `promptTokens` / `generatedTokens`.
-    nPast = static_cast<int64_t>(slot.driver->getNPast());
+    kvCells = static_cast<int64_t>(slot.driver->getKvCellsUsed());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, toolsDropped, req);
+  stats_.accumulateSlot(kvCells, toolsDropped, req);
   if (slot.driver) {
     stats_.speculative.add(slot.driver->speculativeStats());
   }
@@ -2605,6 +2605,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // which only this function holds. The same two values also go into the
     // scheduler-wide accumulator above — that copy stays, for the whole-model
     // `runtimeStats()` read.
+    observed.cacheTokens = kvCells;
     observed.toolDefinitionsDropped = toolsDropped;
     if (slot.driver) {
       const auto speculativeStats = slot.driver->speculativeStats();

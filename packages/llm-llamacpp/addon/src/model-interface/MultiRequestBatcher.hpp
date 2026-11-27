@@ -43,7 +43,7 @@ struct Request {
   /// the driver (`PrefillPlan::checkpointAtTextTokens`); cleared by
   /// `completeCheckpointStop`.
   std::optional<size_t> pendingCheckpointAt;
-  size_t prefillTokenCount = 0;
+  size_t prefillKvCells = 0;
   size_t prefillFedCount = 0;
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
@@ -207,7 +207,7 @@ public:
   /// skips the call (tests may pass a recording lambda instead).
   using KvClearFn = std::function<void(uint32_t seqId)>;
   using PrefillCompleteFn = std::function<void(
-      uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
+      uint32_t seqId, llama_pos currentPos, size_t prefillKvCells)>;
   using PrefillChunkFn = std::function<void(uint32_t seqId, unsigned tokens)>;
 
   struct FillResult {

@@ -539,9 +539,9 @@ whether a per-job stats source exists for that id:
   differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`, `ppTPS`,
-  `generatedTokens` and `promptTokens` are overridden with the job's OWN
-  observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
-  the model decodes speculatively (`spec-type`; see the README's
+  `generatedTokens`, `promptTokens`, and `CacheTokens` are overridden with
+  the job's observed figures, as are `draftTokens` / `draftAcceptedTokens`
+  when the model decodes speculatively (`spec-type`; see the README's
   speculative decoding section). `avgConcurrentSeq` and `backendDevice`
   report model-level information.
 
@@ -564,6 +564,9 @@ engine per request):
   experienced while sharing the GPU, not isolated compute speed (which is
   unmeasurable under fused batch decode).
 - `generatedTokens` / `promptTokens` — the request's own token counts.
+- `CacheTokens` — the KV cells the request's slot holds when it ends. An
+  image counts the cells it fills, as `promptTokens` does, so on an M-RoPE
+  model it counts more than the positions it advances.
 
 ### 1. Single request, no batching (`parallel = 1`)
 
@@ -600,15 +603,15 @@ a multimodal one fills them in.)
 
 Each request is its own tagged job; the scheduler batches whatever overlaps.
 Every job gets its own `JobEnded`, routed to its own response sink by job id,
-with `TTFT` / `TPS` / `ppTPS` / `generatedTokens` / `promptTokens` overridden
-by that job's observed figures:
+with `TTFT` / `TPS` / `ppTPS` / `generatedTokens` / `promptTokens` /
+`CacheTokens` overridden by that job's observed figures:
 
 ```json
 {
   "TTFT": 121.7,
   "TPS": 33.2,
   "ppTPS": 1450.0,
-  "CacheTokens": 840,
+  "CacheTokens": 201,
   "generatedTokens": 174,
   "promptTokens": 28,
   "stopReason": "eos",
@@ -619,8 +622,9 @@ by that job's observed figures:
 
 Here `TPS` (33.2) is this job's observed rate while `avgConcurrentSeq` (2.9)
 tells you the model was shared; the aggregate decode rate is roughly
-`TPS * avgConcurrentSeq`. `sum(generatedTokens)` over an epoch's jobs equals
-the generic snapshot's `generatedTokens`.
+`TPS * avgConcurrentSeq`. `sum(generatedTokens)` and `sum(CacheTokens)` over
+an epoch's jobs equal the generic snapshot's `generatedTokens` and
+`CacheTokens`.
 
 `ppTPS` measures the prompt tokens processed for the job during its prefill
 steps. Queue wait is outside that measurement. Sharing a step with other
@@ -647,8 +651,8 @@ the group collapses its OWN prompts into one figure set:
   drag the averages down). Averaged, not summed, because the group's prompts
   run simultaneously — summing rates would double-count wall-clock. The
   average answers "what did one of my prompts typically experience".
-- `generatedTokens`, `promptTokens` — summed over the group (tokens are
-  additive).
+- `generatedTokens`, `promptTokens`, `CacheTokens` — summed over the group
+  (tokens are additive; `CacheTokens` is the cells the group's slots hold).
 - `ppTPS` — newly evaluated prompt tokens divided by the elapsed time of
   steps that processed them. A shared decode step contributes its full time
   once per participating job, even if several of its slots fed prompt tokens.
@@ -674,7 +678,7 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
   "TTFT": 110.3,
   "TPS": 31.8,
   "ppTPS": 1450.0,
-  "CacheTokens": 840,
+  "CacheTokens": 415,
   "generatedTokens": 355,
   "promptTokens": 61,
   "avgConcurrentSeq": 3.4,

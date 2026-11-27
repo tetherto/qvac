@@ -85,6 +85,7 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  int64_t cacheTokens = 0;
   /// Renders where this request's own chat template dropped the tool
   /// definitions. Read off the slot driver at drain rather than off the
   /// scheduler-wide accumulator: that
@@ -210,7 +211,8 @@ struct RuntimeStatsSnapshot {
   /// Fold one completed slot's contribution into the running totals. Every
   /// counter is required: a defaulted one would let a future caller drop a
   /// stat silently, with no compile error.
-  void accumulateSlot(int64_t nPast, int64_t toolsDropped, const Request& req);
+  void
+  accumulateSlot(int64_t kvCells, int64_t toolsDropped, const Request& req);
 
   /// Speculative steps feed the sample plus a draft but stream only the
   /// accepted tokens, and spend time drafting outside `llama_decode`.

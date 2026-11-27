@@ -13,9 +13,9 @@ Request::Request(
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
       pendingCheckpointAt(plan.checkpointAtTextTokens), currentPos(initialPos),
       maxTokensPerSequence(maxTokens) {
-  prefillTokenCount = pendingPrefillTokens.size();
+  prefillKvCells = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
-    prefillTokenCount += static_cast<size_t>(barrier.nPos);
+    prefillKvCells += static_cast<size_t>(barrier.nKvTokens);
   }
 }
 
@@ -403,7 +403,7 @@ void finishPrefillIfComplete(
     return;
   }
   if (onPrefillComplete) {
-    onPrefillComplete(req.seqId, req.currentPos, req.prefillTokenCount);
+    onPrefillComplete(req.seqId, req.currentPos, req.prefillKvCells);
   }
   req.pendingPrefillTokens.clear();
   req.pendingPrefillTokens.shrink_to_fit();
