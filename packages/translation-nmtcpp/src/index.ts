@@ -563,19 +563,22 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
   }
 
   /**
-   * Creates a response with output post-processing for language prefixes
+   * Creates a response that strips an echoed `>>xxx<<` target-language token
+   * as output arrives, so onUpdate(), iterate(), getLatest() and await() all
+   * see the same text.
    */
   private _createStandardResponse(): QvacResponse<string> {
     const response = new QvacResponse<string>({
       cancelHandler: () => this.addon!.cancel(),
     });
 
-    const originalOnUpdate = response.onUpdate.bind(response);
-    response.onUpdate = function (callback: (data: string) => void) {
-      return originalOnUpdate((data) => {
-        const cleanedData = data.replace(/^>>[a-z]+\s*<<\s*/i, "");
-        return callback(cleanedData);
-      });
+    const originalUpdateOutput = response.updateOutput.bind(response);
+    response.updateOutput = function (output: string) {
+      originalUpdateOutput(
+        typeof output === "string"
+          ? output.replace(/^>>[a-z]+\s*<<\s*/i, "")
+          : output,
+      );
     };
 
     return response;
