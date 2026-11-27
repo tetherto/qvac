@@ -78,7 +78,7 @@ await loadModel({
 });
 ```
 
-On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming Sortformer v2.1. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
+On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, and streaming Sortformer v2.1. EOU 120M v1 downloads its GGUF alone and uses the GGUF encoder, because the registry's EOU bundle is compiled for one fixed 11 s input that its default streaming windows never match. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
 
 For standard Parakeet TDT batch and push-stream transcription, the native engine falls back to ggml when the Core ML sidecar cannot safely handle the encoder input. A loaded sidecar does not guarantee that every request uses Core ML; check `encoderUsedCoreml` in the terminal statistics for actual use.
 
