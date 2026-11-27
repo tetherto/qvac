@@ -1,7 +1,7 @@
 {
   "name": "@qvac/model-fit",
   "version": "0.16.1",
-  "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
+  "description": "Memory-fit preflight addon for QVAC \u2014 wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
@@ -67,8 +67,8 @@
     "llvm-runtime": "^23.1.0",
     "nasm-runtime": "^3.2.0",
     "ninja-runtime": "^1.13.1",
-    "@qvac/fabric-android-arm64": "^0.33.0",
-    "@qvac/fabric-ios": "^0.33.0",
+    "@qvac/fabric-android-arm64": "^0.34.0",
+    "@qvac/fabric-ios": "^0.34.0",
     "@types/node": "^24.2.1",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
@@ -86,22 +86,22 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.33.0",
+    "@qvac/fabric": "^0.34.0",
     "bare-fs": "^4.5.1",
     "bare-https": "^4.0.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.5.1"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.33.0",
-    "@qvac/fabric-linux-arm64": "^0.33.0",
-    "@qvac/fabric-darwin-arm64": "^0.33.0",
-    "@qvac/fabric-darwin-x64": "^0.33.0",
-    "@qvac/fabric-win32-x64": "^0.33.0"
+    "@qvac/fabric-linux-x64": "^0.34.0",
+    "@qvac/fabric-linux-arm64": "^0.34.0",
+    "@qvac/fabric-darwin-arm64": "^0.34.0",
+    "@qvac/fabric-darwin-x64": "^0.34.0",
+    "@qvac/fabric-win32-x64": "^0.34.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.33.0",
-    "@qvac/fabric-ios": "^0.33.0"
+    "@qvac/fabric-android-arm64": "^0.34.0",
+    "@qvac/fabric-ios": "^0.34.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

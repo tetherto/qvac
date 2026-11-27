@@ -404,10 +404,11 @@ consumers for cross-DLL C++ ownership.
 When developing `qvac-fabric` on a test branch in `qvac-fabric-llm.cpp`, open a qvac PR
 that includes:
 
-1. A vcpkg overlay port at `vcpkg-overlays/ports/qvac-fabric/` pointing at that branch
-   or SHA, plus the `vcpkg-configuration.json` edit that registers that directory as an
-   overlay for each package meant to build against it. The port on its own changes no
-   build; registering it is what swaps the registry version for the branch under test.
+1. A vcpkg overlay port at `vcpkg-overlays/ports/qvac-fabric/` pinned to that branch's
+   commit. Register the directory in `VCPKG_OVERLAY_PORTS` before `project()` in
+   each consuming CMake build, and pass `--overlay-ports` to direct vcpkg commands
+   such as native boundary tests. The port on its own changes no build. Keep
+   registry baselines unchanged.
 2. Updates to `packages/fabric` (and any direct vcpkg consumers that need coordinated
    bumps).
 3. Optional consumer addon changes that call new fabric APIs.
@@ -415,9 +416,8 @@ that includes:
 CI runs automatically on PR open/sync:
 
 - **Direct vcpkg consumers** — every package whose `vcpkg.json` still lists the
-  `qvac-fabric` port — pick up the overlay at compile time when the PR updates
-  that package's `vcpkg-configuration.json` (covered by the existing
-  `packages/<pkg>/**` path filters).
+  `qvac-fabric` port — pick up the overlay when their CMake build registers
+  `VCPKG_OVERLAY_PORTS` (covered by the existing `packages/<pkg>/**` path filters).
 - **`packages/fabric`** is a provider on the CI contract: a run that builds any
   package depending on its `link:platform` builds fabric first, once per
   configuration, and uploads `prebuild-fabric-<configuration>`.

@@ -63,7 +63,10 @@ function installDependencies(manifestRoot, required) {
   const installed = new Set();
   while (pending.length) {
     const { from, names } = pending.shift();
-    for (const name of names) {
+    // Fabric resolves its platform package from its own directory first.
+    // Visit that closure before a consumer-side optional copy of the same name.
+    if (names.length > 1) pending.unshift({ from, names: names.slice(1) });
+    for (const name of names.slice(0, 1)) {
       if (installed.has(name)) continue;
       const source = findPackage(name, from);
       if (!source) continue;
@@ -90,7 +93,7 @@ function installDependencies(manifestRoot, required) {
           });
         }
       }
-      pending.push({
+      pending.unshift({
         from: source,
         names: [
           ...Object.keys(pkg.dependencies || {}),

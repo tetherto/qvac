@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveFabricBinary } from '../lib/resolve-fabric-binary.mjs'
+import { resolveFabricCore } from '../lib/resolve-fabric-binary.mjs'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'fabric-resolution-'))
@@ -23,18 +23,18 @@ function install(base, name) {
 
 function binary(base, host) {
   const dir = install(base, `@qvac/fabric-${host}`)
-  const prebuilds = join(dir, 'prebuilds', host)
+  const prebuilds = join(dir, 'prebuilds', host, `qvac__fabric-${host}`)
   mkdirSync(prebuilds, { recursive: true })
-  const path = join(prebuilds, `qvac__fabric-${host}.bare`)
+  const path = join(prebuilds, 'libqvac-ggml-base-1.so')
   writeFileSync(path, '')
   return path
 }
 
-test('resolves the published Fabric platform beside the consumer', (t) => {
+test('resolves the published shared core beside the consumer', (t) => {
   const root = fixture(t)
   install(root, '@qvac/fabric')
   const expected = binary(root, 'linux-arm64')
-  assert.equal(resolveFabricBinary(root, 'linux-arm64'), expected)
+  assert.equal(resolveFabricCore(root, 'linux-arm64'), expected)
 })
 
 test('prefers the platform linked by workspace Fabric over an older consumer platform', (t) => {
@@ -44,7 +44,7 @@ test('prefers the platform linked by workspace Fabric over an older consumer pla
   const expected = binary(fabric, 'linux-x64')
   binary(consumer, 'linux-x64')
   symlinkSync(fabric, join(consumer, 'node_modules/@qvac/fabric'), 'junction')
-  assert.equal(resolveFabricBinary(consumer, 'linux-x64'), expected)
+  assert.equal(resolveFabricCore(consumer, 'linux-x64'), expected)
 })
 
 test('falls back to the consumer platform when workspace Fabric has none', (t) => {
@@ -53,13 +53,15 @@ test('falls back to the consumer platform when workspace Fabric has none', (t) =
   const fabric = install(join(root, 'workspace'), '@qvac/fabric')
   const expected = binary(consumer, 'linux-x64')
   symlinkSync(fabric, join(consumer, 'node_modules/@qvac/fabric'), 'junction')
-  assert.equal(resolveFabricBinary(consumer, 'linux-x64'), expected)
+  assert.equal(resolveFabricCore(consumer, 'linux-x64'), expected)
 })
 
 test('fails closed for a missing provider binary and invalid target', (t) => {
   const root = fixture(t)
   install(root, '@qvac/fabric')
-  install(root, '@qvac/fabric-linux-x64')
-  assert.throws(() => resolveFabricBinary(root, 'linux-x64'), /ENOENT/)
-  assert.throws(() => resolveFabricBinary(root, '../linux-x64'), /requires linux/)
+  const old = install(root, '@qvac/fabric-linux-x64')
+  mkdirSync(join(old, 'prebuilds/linux-x64'), { recursive: true })
+  writeFileSync(join(old, 'prebuilds/linux-x64/qvac__fabric-linux-x64.bare'), '')
+  assert.throws(() => resolveFabricCore(root, 'linux-x64'), /ENOENT/)
+  assert.throws(() => resolveFabricCore(root, '../linux-x64'), /requires linux/)
 })

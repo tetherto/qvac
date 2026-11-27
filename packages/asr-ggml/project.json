@@ -106,7 +106,7 @@
         "parallel": false,
         "commands": [
           {
-            "command": "npm install --ignore-scripts --no-audit --no-fund",
+            "command": "npm install --ignore-scripts --no-audit --no-fund && node ci/link-fabric.mjs",
             "forwardAllArgs": false
           },
           {
@@ -135,7 +135,7 @@
           },
           "commands": [
             {
-              "command": "npm install --ignore-scripts --no-audit --no-fund",
+              "command": "npm install --ignore-scripts --no-audit --no-fund && node ci/link-fabric.mjs",
               "forwardAllArgs": false
             },
             {
@@ -167,7 +167,7 @@
           },
           "commands": [
             {
-              "command": "npm install --ignore-scripts --no-audit --no-fund",
+              "command": "npm install --ignore-scripts --no-audit --no-fund && node ci/link-fabric.mjs",
               "forwardAllArgs": false
             },
             {
@@ -260,7 +260,7 @@
         "parallel": false,
         "commands": [
           {
-            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"npm install --ignore-scripts --no-audit --no-fund && npx --no-install bare-make generate\"",
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"npm install --ignore-scripts --no-audit --no-fund && node ci/link-fabric.mjs && npx --no-install bare-make generate\"",
             "forwardAllArgs": false
           }
         ]
@@ -298,7 +298,7 @@
           "VCPKG_MAX_CONCURRENCY": "2"
         },
         "commands": [
-          "npm install --ignore-scripts --no-audit --no-fund",
+          "npm install --ignore-scripts --no-audit --no-fund && node ci/link-fabric.mjs",
           "npm run coverage:cpp:build"
         ]
       },

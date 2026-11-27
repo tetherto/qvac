@@ -7,7 +7,7 @@
  * C++ runtime symbol left undefined, makes a module load only in some
  * processes, and a GPU backend that fails to load falls back to CPU silently.
  *
- * Fabric consumers instead require versioned imports exported by their provider.
+ * Fabric consumers instead require versioned imports exported by their shared ggml-base.
  *
  * The standalone rule runs in qvac-registry-vcpkg's qvac-fabric port
  * (qvac-check-cxx-runtime.cmake); keep the two in step.
@@ -35,7 +35,7 @@ export const FORBIDDEN_SYMBOLS = [
   /^_Zd[la]/,
   /^__cxa_/,
   /^__gxx_personality_/,
-  /^__dynamic_cast$/,
+  /^__dynamic_cast$/
 ]
 
 /** NEEDED entries from `readelf -d` (GNU or LLVM). */
@@ -59,7 +59,7 @@ export function isForbiddenSymbol(symbol) {
 export function cxxRuntimeViolations({ needed, undefinedSymbols }) {
   return {
     needed: needed.filter((lib) => FORBIDDEN_NEEDED.test(lib)),
-    symbols: undefinedSymbols.filter(isForbiddenSymbol),
+    symbols: undefinedSymbols.filter(isForbiddenSymbol)
   }
 }
 
@@ -103,14 +103,14 @@ export function fabricRuntimeViolations({ needed, undefinedSymbols, definedSymbo
   return {
     needed: [
       ...needed.filter((lib) => FORBIDDEN_NEEDED.test(lib)),
-      ...(!fabric.soname || !needed.includes(fabric.soname) ? ['missing Fabric DT_NEEDED'] : [])
+      ...(!fabric.soname || !needed.includes(fabric.soname) ? ['missing ggml-base DT_NEEDED'] : [])
     ],
     symbols: [
       ...imports.filter((symbol) => !symbol.includes('@') || !exports.has(symbol)),
       ...embedded.map((symbol) => `embedded C++ runtime: ${symbol}`),
       ...(!imports.length ? ['no shared C++ runtime imports'] : []),
       ...(!fabric.symbols.some((symbol) => /^__cxa_throw@@[^@]+$/.test(symbol))
-        ? ['Fabric has no versioned C++ runtime']
+        ? ['ggml-base has no versioned C++ runtime']
         : [])
     ]
   }

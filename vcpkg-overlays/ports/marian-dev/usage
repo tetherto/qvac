@@ -1,0 +1,7 @@
+marian-dev provides CMake targets:
+
+find_package(marian-dev CONFIG REQUIRED)
+target_link_libraries(main PRIVATE marian-dev::marian-dev)
+
+This temporary overlay lets CMake select the MSVC runtime from the triplet,
+including shared CRT builds. It does not change Marian library linkage.

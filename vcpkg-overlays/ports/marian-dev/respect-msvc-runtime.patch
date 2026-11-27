@@ -1,0 +1,27 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.12.4)
++cmake_minimum_required(VERSION 3.15)
+ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+ if (POLICY CMP0074)
+@@ -330,14 +330,14 @@
+   # Silence C++17 deprecation warnings for clang-cl
+   add_compile_definitions(_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
+   add_compile_definitions(_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
+-  set(CMAKE_CXX_FLAGS_RELEASE          "${CMAKE_CXX_FLAGS} /MT /O2 ${INTRINSICS} /DNDEBUG")
++  set(CMAKE_CXX_FLAGS_RELEASE          "${CMAKE_CXX_FLAGS} /O2 ${INTRINSICS} /DNDEBUG")
+   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO   "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+-  set(CMAKE_CXX_FLAGS_DEBUG            "${CMAKE_CXX_FLAGS} /MTd /Od /Ob0 ${INTRINSICS} /RTC1 /Zi /D_DEBUG /bigobj")
++  set(CMAKE_CXX_FLAGS_DEBUG            "${CMAKE_CXX_FLAGS} /Od /Ob0 ${INTRINSICS} /RTC1 /Zi /D_DEBUG /bigobj")
+
+   # ignores warning LNK4049: locally defined symbol free imported - this comes from zlib
+   set(CMAKE_EXE_LINKER_FLAGS         "${CMAKE_EXE_LINKER_FLAGS} /DEBUG /INCREMENTAL:NO /ignore:4049")
+-  set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRT")
+-  set(CMAKE_EXE_LINKER_FLAGS_DEBUG   "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRTD")
++  set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS}")
++  set(CMAKE_EXE_LINKER_FLAGS_DEBUG   "${CMAKE_EXE_LINKER_FLAGS}")
+   set(CMAKE_STATIC_LINKER_FLAGS      "${CMAKE_STATIC_LINKER_FLAGS} ")
+
+   find_library(SHLWAPI Shlwapi.lib)

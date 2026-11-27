@@ -5,6 +5,7 @@
 //
 //   node ci/integration.mjs [--no-gpu] [--whisper-gpu] [--cuda-lib <dir>] [--vulkan-smoke] [--set NAME=value]...
 
+import { linkFabric } from './link-fabric.mjs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -54,6 +55,7 @@ const must = (status) => {
 // npm install restores the published platform package over the local link, so link again after it.
 export function install() {
   must(run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund']))
+  linkFabric()
   must(run('npm', ['run', 'link:platform']))
 }
 
@@ -78,11 +80,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       INTEGRATION_TEST_TIMEOUT: WIN ? '1800' : '600'
     })
   )
-  if (o['vulkan-smoke'])
+  if (o['vulkan-smoke']) {
     must(
       run('npm', ['run', 'test:stand-alone:gpu'], {
         ...base,
         LD_LIBRARY_PATH: libEnv().LD_LIBRARY_PATH
       })
     )
+  }
 }

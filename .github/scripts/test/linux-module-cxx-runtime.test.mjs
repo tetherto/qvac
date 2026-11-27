@@ -14,7 +14,7 @@ import {
   formatViolations,
   isForbiddenSymbol,
   parseNeeded,
-  parseUndefined,
+  parseUndefined
 } from '../lib/linux-module-cxx-runtime.mjs'
 
 const GNU_READELF = `
@@ -45,9 +45,14 @@ test('undefined symbols lose their version suffix', () => {
     '__cxa_atexit@GLIBC_2.2.5 U ',
     'cudaMalloc U',
     '_Unwind_Resume@@GCC_3.0 U',
-    '',
+    ''
   ].join('\n')
-  assert.deepEqual(parseUndefined(nm), ['_ZSt15__once_callable', '__cxa_atexit', 'cudaMalloc', '_Unwind_Resume'])
+  assert.deepEqual(parseUndefined(nm), [
+    '_ZSt15__once_callable',
+    '__cxa_atexit',
+    'cudaMalloc',
+    '_Unwind_Resume'
+  ])
 })
 
 test('libstdc++ and libc++ symbols are forbidden', () => {
@@ -67,7 +72,7 @@ test('libstdc++ and libc++ symbols are forbidden', () => {
     '__cxa_guard_acquire',
     '__cxa_throw',
     '__gxx_personality_v0',
-    '__dynamic_cast',
+    '__dynamic_cast'
   ]) {
     assert.equal(isForbiddenSymbol(symbol), true, symbol)
   }
@@ -84,7 +89,7 @@ test('glibc, libgcc_s and non-std symbols are allowed', () => {
     'ggml_backend_dev_get',
     'pthread_once',
     '_ZN4ggml6detail3fooEv',
-    '_ZTI9my_struct',
+    '_ZTI9my_struct'
   ]) {
     assert.equal(isForbiddenSymbol(symbol), false, symbol)
   }
@@ -94,16 +99,16 @@ test('a module passes only without a C++ runtime in NEEDED or undefined', () => 
   assert.deepEqual(
     cxxRuntimeViolations({
       needed: ['libm.so.6', 'libgcc_s.so.1', 'libc.so.6'],
-      undefinedSymbols: ['__cxa_atexit', '_Unwind_Resume', 'cudaMalloc'],
+      undefinedSymbols: ['__cxa_atexit', '_Unwind_Resume', 'cudaMalloc']
     }),
-    { needed: [], symbols: [] },
+    { needed: [], symbols: [] }
   )
   assert.deepEqual(
     cxxRuntimeViolations({
       needed: ['libstdc++.so.6', 'libc++abi.so.1', 'libc.so.6'],
-      undefinedSymbols: ['_ZSt15__once_callable', '__cxa_atexit'],
+      undefinedSymbols: ['_ZSt15__once_callable', '__cxa_atexit']
     }),
-    { needed: ['libstdc++.so.6', 'libc++abi.so.1'], symbols: ['_ZSt15__once_callable'] },
+    { needed: ['libstdc++.so.6', 'libc++abi.so.1'], symbols: ['_ZSt15__once_callable'] }
   )
 })
 
@@ -111,7 +116,7 @@ test('the report names the file, the NEEDED entries and the first symbols', () =
   const report = formatViolations(
     'prebuilds/linux-x64/libqvac-ggml-cuda.so',
     { needed: ['libstdc++.so.6'], symbols: ['_ZSt9terminatev', '_Znwm', '_ZdlPv'] },
-    2,
+    2
   )
   assert.equal(
     report,
@@ -120,8 +125,8 @@ test('the report names the file, the NEEDED entries and the first symbols', () =
       '  NEEDED: libstdc++.so.6',
       '  3 undefined C++ runtime symbols, first:',
       '    _ZSt9terminatev',
-      '    _Znwm',
-    ].join('\n'),
+      '    _Znwm'
+    ].join('\n')
   )
 })
 
@@ -162,17 +167,20 @@ test('the CLI permits only the explicitly requested XDNA module to use the XRT A
   const readelf = join(root, 'readelf')
   const nm = join(root, 'nm')
   const cli = fileURLToPath(new URL('../check-linux-module-cxx-runtime.mjs', import.meta.url))
-  const run = (...args) => spawnSync(process.execPath, [cli, root, ...args], {
-    encoding: 'utf8', env: { ...process.env, NM: nm, READELF: readelf },
-  })
+  const run = (...args) =>
+    spawnSync(process.execPath, [cli, root, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, NM: nm, READELF: readelf }
+    })
   // Only the simulated XDNA and CUDA modules use the system runtime.
   for (const tool of [readelf, nm]) {
-    const source = tool === readelf
-      ? `#!/usr/bin/env node
+    const source =
+      tool === readelf
+        ? `#!/usr/bin/env node
 const file = process.argv.at(-1).split('/').at(-1)
 if (/xdna|cuda/.test(file)) { console.log('(NEEDED) Shared library: [libstdc++.so.6]'); console.log('(NEEDED) Shared library: [libxrt_coreutil.so.2]') }
 `
-      : `#!/usr/bin/env node
+        : `#!/usr/bin/env node
 if (/xdna|cuda/.test(process.argv.at(-1).split('/').at(-1))) console.log('_ZSt9terminatev U')
 `
     writeFileSync(tool, source, { mode: 0o755 })
@@ -190,22 +198,22 @@ if (/xdna|cuda/.test(process.argv.at(-1).split('/').at(-1))) console.log('_ZSt9t
 })
 
 const SHARED_RUNTIME = {
-  needed: ['qvac__fabric-linux-x64@0.bare', 'libc.so.6'],
+  needed: ['libqvac-ggml-base-1.so', 'libc.so.6'],
   undefinedSymbols: [
-    '__cxa_throw@QVAC_FABRIC_0',
-    '_Znwm@QVAC_FABRIC_0',
+    '__cxa_throw@QVAC_GGML_BASE_ABI_1',
+    '_Znwm@QVAC_GGML_BASE_ABI_1',
     '__cxa_atexit@GLIBC_2.2.5'
   ],
   definedSymbols: ['bare_register'],
   fabric: {
-    soname: 'qvac__fabric-linux-x64@0.bare',
-    symbols: ['__cxa_throw@@QVAC_FABRIC_0', '_Znwm@@QVAC_FABRIC_0']
+    soname: 'libqvac-ggml-base-1.so',
+    symbols: ['__cxa_throw@@QVAC_GGML_BASE_ABI_1', '_Znwm@@QVAC_GGML_BASE_ABI_1']
   }
 }
 
 test('shared Fabric validation accepts only versioned imports exported by the required provider', () => {
   assert.deepEqual(fabricRuntimeViolations(SHARED_RUNTIME), { needed: [], symbols: [] })
-  for (const symbol of ['_Znwm', '_Znwm@OTHER', '_ZdlPv@QVAC_FABRIC_0']) {
+  for (const symbol of ['_Znwm', '_Znwm@OTHER', '_ZdlPv@QVAC_GGML_BASE_ABI_1']) {
     assert.deepEqual(
       fabricRuntimeViolations({ ...SHARED_RUNTIME, undefinedSymbols: [symbol] }).symbols,
       [symbol]
@@ -235,12 +243,14 @@ test('shared Fabric validation rejects missing providers, private runtimes and e
 
 test('versioned symbols retain import and export versions', () => {
   assert.deepEqual(
-    parseVersionedSymbols('__cxa_throw@@QVAC_FABRIC_0 T 123 10\n_Znwm@QVAC_FABRIC_0 U\n'),
-    ['__cxa_throw@@QVAC_FABRIC_0', '_Znwm@QVAC_FABRIC_0']
+    parseVersionedSymbols(
+      '__cxa_throw@@QVAC_GGML_BASE_ABI_1 T 123 10\n_Znwm@QVAC_GGML_BASE_ABI_1 U\n'
+    ),
+    ['__cxa_throw@@QVAC_GGML_BASE_ABI_1', '_Znwm@QVAC_GGML_BASE_ABI_1']
   )
 })
 
-test('CLI verifies a real versioned Fabric provider and rejects an unresolved runtime import', (t) => {
+test('CLI verifies a real versioned shared core and rejects an unresolved runtime import', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'fabric-runtime-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const compile = (args) => {
@@ -248,12 +258,41 @@ test('CLI verifies a real versioned Fabric provider and rejects an unresolved ru
     assert.equal(result.status, 0, result.stderr)
   }
   writeFileSync(join(dir, 'provider.c'), 'void __cxa_throw(void) {}')
-  writeFileSync(join(dir, 'provider.map'), 'QVAC_FABRIC_0 { global: __cxa_throw; local: *; };')
-  compile(['-shared', '-nostdlib', '-fPIC', 'provider.c', '-Wl,-soname,fabric.bare', '-Wl,--version-script=provider.map', '-o', 'fabric.bare'])
-  writeFileSync(join(dir, 'addon.c'), 'extern void __cxa_throw(void); void addon(void) { __cxa_throw(); }')
-  compile(['-shared', '-nostdlib', '-fPIC', 'addon.c', '-L.', '-l:fabric.bare', '-o', 'addon.bare'])
+  writeFileSync(
+    join(dir, 'provider.map'),
+    'QVAC_GGML_BASE_ABI_1 { global: __cxa_throw; local: *; };'
+  )
+  compile([
+    '-shared',
+    '-nostdlib',
+    '-fPIC',
+    'provider.c',
+    '-Wl,-soname,libqvac-ggml-base-1.so',
+    '-Wl,--version-script=provider.map',
+    '-o',
+    'libqvac-ggml-base-1.so'
+  ])
+  writeFileSync(
+    join(dir, 'addon.c'),
+    'extern void __cxa_throw(void); void addon(void) { __cxa_throw(); }'
+  )
+  compile([
+    '-shared',
+    '-nostdlib',
+    '-fPIC',
+    'addon.c',
+    '-L.',
+    '-l:libqvac-ggml-base-1.so',
+    '-o',
+    'addon.bare'
+  ])
   const checker = fileURLToPath(new URL('../check-linux-module-cxx-runtime.mjs', import.meta.url))
-  const check = () => spawnSync(process.execPath, [checker, '--fabric', join(dir, 'fabric.bare'), join(dir, 'consumer')], { encoding: 'utf8' })
+  const check = () =>
+    spawnSync(
+      process.execPath,
+      [checker, '--fabric', join(dir, 'libqvac-ggml-base-1.so'), join(dir, 'consumer')],
+      { encoding: 'utf8' }
+    )
   mkdirSync(join(dir, 'consumer'))
   renameSync(join(dir, 'addon.bare'), join(dir, 'consumer', 'addon.bare'))
   let result = check()
@@ -261,17 +300,25 @@ test('CLI verifies a real versioned Fabric provider and rejects an unresolved ru
   const meta = join(dir, 'node_modules/@qvac/fabric')
   const platform = join(dir, 'node_modules/@qvac/fabric-linux-x64')
   mkdirSync(meta, { recursive: true })
-  mkdirSync(join(platform, 'prebuilds/linux-x64'), { recursive: true })
+  mkdirSync(join(platform, 'prebuilds/linux-x64/qvac__fabric-linux-x64'), { recursive: true })
   const manifest = JSON.stringify({ exports: { './package': './package.json' } })
   writeFileSync(join(meta, 'package.json'), manifest)
   writeFileSync(join(platform, 'package.json'), manifest)
-  copyFileSync(join(dir, 'fabric.bare'), join(platform, 'prebuilds/linux-x64/qvac__fabric-linux-x64.bare'))
-  const installed = spawnSync(process.execPath, [checker, '--fabric-host', 'linux-x64', 'consumer'], {
-    cwd: dir, encoding: 'utf8'
-  })
+  copyFileSync(
+    join(dir, 'libqvac-ggml-base-1.so'),
+    join(platform, 'prebuilds/linux-x64/qvac__fabric-linux-x64/libqvac-ggml-base-1.so')
+  )
+  const installed = spawnSync(
+    process.execPath,
+    [checker, '--fabric-host', 'linux-x64', 'consumer'],
+    {
+      cwd: dir,
+      encoding: 'utf8'
+    }
+  )
   assert.equal(installed.status, 0, installed.stdout + installed.stderr)
   compile(['-shared', '-nostdlib', '-fPIC', 'addon.c', '-o', 'consumer/addon.bare'])
   result = check()
   assert.equal(result.status, 1, result.stdout + result.stderr)
-  assert.match(result.stdout, /missing Fabric DT_NEEDED/)
+  assert.match(result.stdout, /missing ggml-base DT_NEEDED/)
 })
