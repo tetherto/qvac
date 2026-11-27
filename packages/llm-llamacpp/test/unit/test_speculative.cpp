@@ -447,7 +447,8 @@ TEST(SpeculativeConfigTest, FitCountsTheMtpContextLikeTheLoad) {
   const common_fit_extra_model* extra = fit->extra();
   // The MTP context runs on the target's own weights.
   EXPECT_TRUE(extra->shares_model);
-  EXPECT_STREQ(extra->path_model, "/models/target.gguf");
+  ASSERT_EQ(extra->paths_model.size(), 1u);
+  EXPECT_EQ(extra->paths_model[0], "/models/target.gguf");
   EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
 }
@@ -480,7 +481,8 @@ TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
   const common_fit_extra_model* extra = fit->extra();
   // The draft model has weights of its own and a plain context.
   EXPECT_FALSE(extra->shares_model);
-  EXPECT_STREQ(extra->path_model, "/models/dflash.gguf");
+  ASSERT_EQ(extra->paths_model.size(), 1u);
+  EXPECT_EQ(extra->paths_model[0], "/models/dflash.gguf");
   EXPECT_NE(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_FALSE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
@@ -503,7 +505,8 @@ TEST(SpeculativeConfigTest, FitCountsTheDsparkModelOnItsOwn) {
   ASSERT_NE(fit, nullptr);
   const common_fit_extra_model* extra = fit->extra();
   EXPECT_FALSE(extra->shares_model);
-  EXPECT_STREQ(extra->path_model, "/models/dspark.gguf");
+  ASSERT_EQ(extra->paths_model.size(), 1u);
+  EXPECT_EQ(extra->paths_model[0], "/models/dspark.gguf");
   EXPECT_FALSE(fit->isMtp());
 }
 
@@ -524,7 +527,8 @@ TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {
   const common_fit_extra_model* extra = fit->extra();
   // An MTP context on the head's own weights, as fabric's load fits it.
   EXPECT_FALSE(extra->shares_model);
-  EXPECT_STREQ(extra->path_model, "/models/mtp-head.gguf");
+  ASSERT_EQ(extra->paths_model.size(), 1u);
+  EXPECT_EQ(extra->paths_model[0], "/models/mtp-head.gguf");
   EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_TRUE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);

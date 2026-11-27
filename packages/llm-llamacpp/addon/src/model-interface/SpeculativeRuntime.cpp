@@ -308,7 +308,7 @@ SpeculativeFitModel::create(const common_params& params) {
   }
   model->cparams_.n_rs_seq = 0;
   model->extra_ = {
-      /*.path_model   =*/model->params_.model.path.c_str(),
+      /*.paths_model  =*/{model->params_.model.path},
       /*.mparams      =*/&model->mparams_,
       /*.cparams      =*/&model->cparams_,
       // an MTP context runs on the target's weights, a draft model on its own
@@ -327,17 +327,19 @@ bool SpeculativeFitModel::addMemory(
   }
   std::vector<ggml_backend_dev_t> draftDevices;
   uint32_t nLayer = 0;
+  uint32_t nLayerSkip = 0;
   uint32_t nCtxTrain = 0;
   uint32_t nExpert = 0;
   common_device_memory_data_vec measured;
   try {
     measured = common_get_extra_device_memory_data(
         &extra_,
-        pathTarget,
+        std::vector<std::string>{pathTarget},
         &mparamsTarget,
         &cparamsTarget,
         draftDevices,
         nLayer,
+        nLayerSkip,
         nCtxTrain,
         nExpert,
         GGML_LOG_LEVEL_INFO);

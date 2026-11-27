@@ -50,14 +50,16 @@ void captureProjection(
   try {
     std::vector<ggml_backend_dev_t> devs;
     uint32_t hpNgl = 0;
+    uint32_t hpNglSkip = 0;
     uint32_t hpNctTrain = 0;
     uint32_t hpNexpert = 0;
     const common_device_memory_data_vec rows = common_get_device_memory_data(
-        modelPath.c_str(),
+        std::vector<std::string>{modelPath},
         &mparams,
         &cparams,
         devs,
         hpNgl,
+        hpNglSkip,
         hpNctTrain,
         hpNexpert,
         GGML_LOG_LEVEL_INFO);
@@ -433,7 +435,7 @@ FitResult runFit(const FitRequest& req) {
       maxDevices, static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
   const common_params_fit_status status = common_fit_params(
-      req.modelPath.c_str(),
+      std::vector<std::string>{req.modelPath},
       &mparams,
       &cparams,
       tensorSplit.data(),
@@ -609,7 +611,7 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
                bool prefetchWeightsAuto,
                ggml_log_level logLevel) {
               return common_fit_params(
-                  path,
+                  std::vector<std::string>{path},
                   modelParams,
                   contextParams,
                   split,
