@@ -67,6 +67,7 @@ Release Date: 2026-11-25
 - Drop the Kotlin e2e runner unit tests and stop adding tests for test code. (see PR [#5749](https://github.com/tetherto/qvac/pull/5749))
 - Fix the lint and bare-major failures on main. (see PR [#5794](https://github.com/tetherto/qvac/pull/5794))
 - Move the SDK onto the fabric 0.33 addon set. (see PR [#5942](https://github.com/tetherto/qvac/pull/5942)) - See [breaking changes](./breaking.md)
+- Move the SDK onto the fabric 0.34 addon set. (see PR [#6024](https://github.com/tetherto/qvac/pull/6024)) - See [breaking changes](./breaking.md)
 - Use caret ranges for unpinned sdk, inference and cli dependencies. (see PR [#6009](https://github.com/tetherto/qvac/pull/6009))
 
 ## ⚙️ Infrastructure

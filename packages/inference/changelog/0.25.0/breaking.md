@@ -188,7 +188,7 @@ Every addon now loads its backends from the shared `@qvac/fabric` runtime, the s
 
 PR: [#5942](https://github.com/tetherto/qvac/pull/5942)
 
-Addon ranges in this release, all on `@qvac/fabric` `^0.33.0` (0.24.0 shipped the fabric 0.28 set):
+Addon ranges after this change, all on `@qvac/fabric` `^0.33.0` (0.24.0 shipped the fabric 0.28 set). The next section moves them on to fabric 0.34:
 
 | Addon                       | 0.24.0    | 0.25.0    |
 | --------------------------- | --------- | --------- |
@@ -241,5 +241,48 @@ await loadModel({ modelSrc, modelType: 'llm', modelConfig: { parallel: 4, ctx_si
 ```
 
 Cache files saved with `parallel >= 2` by this version can't be restored by older ones. A MegaLoc load with an explicit OpenCL `backend` now fails, so omit `backend` or pick another device. `spec_type: 'draft-dflash'` now drafts 5 tokens per step instead of 3 when `spec_draft_n_max` is unset, as llama-server does on fabric 0.33. Set `spec_draft_n_max: 3` to keep the old default. `'draft-mtp'` still defaults to 3.
+
+---
+
+## Move the SDK onto the fabric 0.34 addon set
+
+PR: [#6024](https://github.com/tetherto/qvac/pull/6024)
+
+Every fabric addon moves to its patch release on `@qvac/fabric` `^0.34.0`. Fabric 0.34 is not ABI-compatible with 0.33, and every addon in one process must resolve the same fabric minor, so upgrade the addons together. RPC moves to protocol 119: a remote `@qvac/ggml-rpc-server` 0.12.0 host (protocol 118) can't serve this client and must move to 0.12.1.
+
+| Addon                       | Fabric 0.33 | 0.25.0    |
+| --------------------------- | ----------- | --------- |
+| `@qvac/asr-ggml`            | `^0.14.0`   | `^0.14.1` |
+| `@qvac/audiogen-ggml`       | `^0.12.0`   | `^0.12.1` |
+| `@qvac/bci-whispercpp`      | `^0.17.0`   | `^0.17.1` |
+| `@qvac/classification-ggml` | `^0.43.0`   | `^0.43.1` |
+| `@qvac/embed-llamacpp`      | `^0.59.0`   | `^0.59.1` |
+| `@qvac/ggml-rpc-server`     | `^0.12.0`   | `^0.12.1` |
+| `@qvac/llm-llamacpp`        | `^0.73.0`   | `^0.73.1` |
+| `@qvac/ocr-ggml`            | `^0.36.0`   | `^0.36.1` |
+| `@qvac/translation-nmtcpp`  | `^0.28.0`   | `^0.28.1` |
+| `@qvac/tts-ggml`            | `^0.17.0`   | `^0.17.2` |
+| `@qvac/turbovec-ggml`       | `^0.8.0`    | `^0.8.1`  |
+| `@qvac/vla-ggml`            | `^0.39.0`   | `^0.39.1` |
+
+Mobile apps move the fabric platform packages with it.
+
+**BEFORE:**
+
+```json
+{
+  "@qvac/fabric-android-arm64": "0.33.0",
+  "@qvac/fabric-ios": "0.33.0"
+}
+```
+
+**AFTER:**
+
+```json
+{
+  "@qvac/fabric-android-arm64": "0.34.0",
+  "@qvac/fabric-ios": "0.34.0"
+}
+```
 
 ---

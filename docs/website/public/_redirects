@@ -205,6 +205,16 @@
 # <<< END generated
 
 # ======================================================================
+# RENAMED PAGES
+# ----------------------------------------------------------------------
+# A page that changed its name between two documentation lines. The old
+# URL sends readers to the page that replaced it; the line that still
+# holds the old page keeps it at its versioned path.
+# ======================================================================
+/sdk/system-requirements/                       /sdk/platform-support/                              301
+/sdk/system-requirements.md                     /sdk/platform-support.md                            301
+
+# ======================================================================
 # RETIRED PATCH-SERIES ARCHIVES
 # ----------------------------------------------------------------------
 # The API summary and the release notes used to keep one page per minor
@@ -319,6 +329,9 @@
 # one, it would not reach the bare form anyway, and a literal line makes a
 # cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
 # the line a cut preserves.
+/sdk/v0.24/        /sdk/v0.24/index.html        200
+/sdk/v0.24         /sdk/v0.24/                  301
+/sdk/v0.24/*       /sdk/v0.24/:splat/index.html 200
 /sdk/v0.23/        /sdk/v0.23/index.html        200
 /sdk/v0.23         /sdk/v0.23/                  301
 /sdk/v0.23/*       /sdk/v0.23/:splat/index.html 200
@@ -328,6 +341,9 @@
 /sdk/v0.21/        /sdk/v0.21/index.html        200
 /sdk/v0.21         /sdk/v0.21/                  301
 /sdk/v0.21/*       /sdk/v0.21/:splat/index.html 200
+/cli/v0.20/        /cli/v0.20/index.html        200
+/cli/v0.20         /cli/v0.20/                  301
+/cli/v0.20/*       /cli/v0.20/:splat/index.html 200
 /cli/v0.19/        /cli/v0.19/index.html        200
 /cli/v0.19         /cli/v0.19/                  301
 /cli/v0.19/*       /cli/v0.19/:splat/index.html 200

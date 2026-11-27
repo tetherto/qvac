@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.24.x (latest)
+title: API Summary — v0.25.x (latest)
 sidebarTitle: API
 icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 56 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 57 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -27,7 +27,10 @@ without downloading them.
 
 Each model's engine fitter runs against the registry's weightless description
 of the model, or the model itself when it is on disk. The memory each load
-takes is summed per device and compared against what is free.
+takes is summed per memory pool and compared against what is free. Each
+model's status is its verdict alone, which counts its rows that share one
+pool, such as a Metal GPU and the CPU, together. A single model's verdict is
+its status; a set does not fit when any model does not fit alone.
 
 `unknown` is the answer for a load that would start but cannot be sized: an
 engine with no fitter, a load the fitter cannot project, a model with no
@@ -43,8 +46,11 @@ function assessModelFit(input: AssessModelFitInput, options?: RPCOptions): Promi
 **Throws**:
 
 - The error `loadModel` would throw for a load it refuses: no plugin
-  for the model type, a config the plugin refuses, or a model the fitter
-  cannot read.
+  for the model type, or a config the plugin refuses.
+- `QvacErrorBase` — With code `MODEL_FIT_REJECTED` when the engine
+  fitter cannot assess the load, such as a model it cannot read or an engine
+  that fails to run it. A companion file, such as a projector, VAE or codec,
+  does not load on its own: assess the model that loads it.
 
 ---
 
@@ -860,6 +866,52 @@ function embedBatch(params: EmbedBatchClientParams, options?: RPCOptions): Embed
 
 ---
 
+### `estimateDisparity`
+
+Estimates the disparity of the left view from a rectified stereo pair with a
+loaded `ggml-stereo-depth` (BridgeDepth) model.
+
+Both views are JPEG/PNG bytes, or packed RGB bytes with one shared `width`,
+`height` and `channels: 3`. They must have the same size, each side from 32
+to 4096 pixels. The model runs on at most 1280x720 (720x1280 in portrait)
+and scales a larger pair down to fit. The map always comes back at the input
+size, in input pixels. A larger pair adds no detail and only makes the reply
+bigger, so scale both views to fit 1280x720 first unless you need a value
+for every input pixel.
+
+Depth is `focalPx * baseline / disparity` with the rig's calibration.
+
+**Signature**:
+
+```ts
+function estimateDisparity(params: EstimateDisparityClientParams, options?: RPCOptions): Promise<DisparityMap> & { requestId: string };
+```
+
+**Throws**:
+
+- `RequestValidationFailedError` — If the request is invalid.
+- `ModelNotFoundError` — If `modelId` is not loaded.
+- `ModelOperationNotSupportedError` — If the loaded model is not a stereo depth model.
+- `RequestRejectedByPolicyError` — If this model's stereo depth queue is full.
+- `InvalidResponseError` — If the worker returns a malformed result.
+
+**Example**:
+```ts
+const modelId = await loadModel({
+  modelSrc: "/models/bridgedepth-vits-f32.gguf",
+  modelType: "ggml-stereo-depth",
+});
+const { width, height, disparity } = await estimateDisparity({
+  modelId,
+  left: fs.readFileSync("left.png"),
+  right: fs.readFileSync("right.png"),
+});
+const centre = disparity[(height >> 1) * width + (width >> 1)];
+await unloadModel({ modelId });
+```
+
+---
+
 ### `finetune`
 
 Has 2 overloads.
@@ -942,8 +994,7 @@ The report reads plugin registration only. It loads no model, and it does
 not check addons, model files, resources or permissions, so a listed
 operation can still fail for a given model. An operation in
 `partialOperations` is implemented by only some of the contract's plugins,
-and a call uses the plugin of the model it names. The list is empty when no
-registered plugin declares a contract.
+and a call uses the plugin of the model it names.
 
 **Signature**:
 
@@ -954,7 +1005,8 @@ function getRuntimeCapabilities(options?: RPCOptions): Promise<RuntimeCapability
 **Throws**:
 
 - `InvalidResponseError` — If the worker returns a different response type.
-- `Error` — If the RPC request fails, including on a worker released before this request existed.
+- `Error` — If the RPC request fails, including on a worker released
+before this request existed.
 
 **Example**:
 ```ts
@@ -2463,6 +2515,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported (…). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel(\{ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" \})). |
 | `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS modelConfig fields are no longer supported (…). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel(\{ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: \{ ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX \} \})). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual. |
 | `MODEL_FIT_REFUSED` | 52212 | …: the engine fitter projects this load will not fit (…)$\{ detail ? |
+| `MODEL_FIT_REJECTED` | 52213 | …: the engine fitter could not assess this load (…) |
 | `RPC_SERVER_OPERATION_FAILED` | 52423 | …: … |
 | `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
 | `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
@@ -2488,6 +2541,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `CONTEXT_OVERFLOW` | 52421 | for model "…" |
 | `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
 | `AUDIO_ENCODE_FAILED` | 52424 | Failed to encode audio as …… |
+| `DEADLINE_EXCEEDED` | 52425 | Request "…" exceeded its … deadline of …ms |
 | `VECTOR_INDEX_PROVIDER_UNAVAILABLE` | 52850 | Vector index provider unavailable |
 | `VECTOR_INDEX_NOT_FOUND` | 52851 | Vector index '…' is not open. It was disposed or the worker restarted; create a new index or load a snapshot |
 | `VECTOR_INDEX_INVALID_VECTORS` | 52852 | Invalid vector input: … |
@@ -2543,6 +2597,8 @@ and read `error.code` / `error.cause`. Code ranges:
 | `MODEL_LEASED` | 53622 | Model "…" is held by … other session(s); it cannot be reconfigured while another session uses it |
 | `OWNER_ONLY` | 53623 | Operation "…" is reserved for the runtime owner; session "…" cannot call it |
 | `MODEL_RECONFIGURED` | 53624 | Model "…" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded |
+| `CAPABILITY_NOT_GRANTED` | 53625 | Session "…" may not call "…": … |
+| `SESSION_GRANT_INVALID` | 53626 | Session "…" was not opened: its grant is invalid: … |
 | `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | QVAC model registry query failed… |
 | `QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND` | 53951 | QVAC model registry has no model at …/… |

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.74.0] - 2026-11-27
 
 ### Fixed
 
@@ -15,6 +15,10 @@
   cells it fills, as the single-prompt path does. They counted its positions,
   so a cold image prompt reported fewer prompt tokens than its cache held
   ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+- On a load with `parallel >= 2`, a job's `ppTPS` reports how quickly its
+  prompt was processed. The measurement excludes queue wait and includes time
+  spent in shared batches that processed the job's prompt
+  ([#5998](https://github.com/tetherto/qvac/pull/5998)).
 
 ## [0.73.1] - 2026-11-27
 
