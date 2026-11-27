@@ -2352,8 +2352,8 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/asr-ggml':
-        specifier: 0.8.1
-        version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: 0.14.0
+        version: 0.14.0(@qvac/fabric-android-arm64@0.33.0)(@qvac/fabric-ios@0.33.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/fabric-android-arm64':
         specifier: ^0.34.0
         version: 0.34.0
@@ -5283,10 +5283,6 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/asr-ggml@0.8.1':
-    resolution: {integrity: sha512-0z6FRBHpEsG4dSK+EhUuEA5YEKM2t5jGBooSH7dwoWeKR2KRHk/ChApoV+5Mjy5rLkoKNH1sJNiYmuT2bYKDXQ==}
-    engines: {bare: '>=1.20.0'}
-
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
 
@@ -5354,9 +5350,6 @@ packages:
 
   '@qvac/infer-base@0.4.2':
     resolution: {integrity: sha512-Vm5V/3a0oMBdxjfUpZxXrV+xRMLHeXrnKjKwOJSh+y85nRi7Ux+8Iakj4QAsfbrsERWkSTxUQM34KlE9Rb4PdA==}
-
-  '@qvac/infer-base@0.6.2':
-    resolution: {integrity: sha512-soUTI8227F0l2XYSeMHPEfwlZV1Cohe2rhZGiSYFMkm3Ak2N+JV4fufD5SBeNMFq0byrqgt8BWWlcbLSFCVqCw==}
 
   '@qvac/infer-base@0.8.0':
     resolution: {integrity: sha512-Z0dZXXQ56UsfgjXUFKCH6hU8Gs2BYCIXWB6q0cJkZ7MGXl3KX+Q/nIJ0OwfDf4m4z/ZgWItjVRnLYbpG0ssDNQ==}
@@ -15711,20 +15704,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/asr-ggml@0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/diagnostics@0.1.2':
     dependencies:
       bare-os: 3.9.3
@@ -15778,13 +15757,6 @@ snapshots:
       bare-path: 3.1.1
     optionalDependencies:
       '@qvac/diagnostics': 0.1.2
-    transitivePeerDependencies:
-      - bare-abort-controller
-
-  '@qvac/infer-base@0.6.2(bare-abort-controller@1.1.2)':
-    dependencies:
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-os: 3.9.3
     transitivePeerDependencies:
       - bare-abort-controller
 
