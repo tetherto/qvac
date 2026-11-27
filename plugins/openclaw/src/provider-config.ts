@@ -76,32 +76,7 @@ export interface OpenClawProvider {
   readonly models: OpenClawModel[]
 }
 
-export interface OpenClawConfigLike {
-  readonly agents?: {
-    readonly defaults?: {
-      readonly experimental?: Record<string, unknown>
-      readonly models?: Record<string, {}>
-    }
-  }
-  readonly models?: {
-    readonly mode?: OpenClawModelsMode
-    readonly providers?: Record<string, ModelProviderConfig>
-  }
-  readonly secrets?: {
-    readonly providers?: Record<string, SecretProviderConfig>
-    readonly defaults?: {
-      readonly env?: string
-      readonly file?: string
-      readonly exec?: string
-    }
-    readonly resolution?: {
-      readonly maxProviderConcurrency?: number
-      readonly maxRefsPerProvider?: number
-      readonly maxBatchBytes?: number
-    }
-    readonly [key: string]: unknown
-  }
-}
+export type OpenClawConfigLike = OpenClawConfig
 
 type OpenClawModelsMode = 'merge' | 'replace'
 

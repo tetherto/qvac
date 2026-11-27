@@ -14,7 +14,11 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { loadApiKey, stopQvacServe } from '../src/local-service.ts'
-import type { OpenClawProvider, QvacProviderAuthResult } from '../src/provider-config.ts'
+import type {
+  OpenClawConfigLike,
+  OpenClawProvider,
+  QvacProviderAuthResult
+} from '../src/provider-config.ts'
 import { fakeQvacSkip, makeFakeQvac, startSquatter } from './helpers/fake-qvac.ts'
 import {
   DEFAULT_OPTIONS,
@@ -321,37 +325,38 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
 test('applyQvacSetupConfig preserves existing OpenClaw settings', () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
   const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
-  const config = applyQvacSetupConfig(
-    {
-      agents: {
-        defaults: {
-          experimental: {
-            localModelLean: true,
-            futureOpenClawFlag: 'preserve-me'
-          }
-        }
-      },
-      secrets: {
-        providers: {
-          qvac: {
-            source: 'env',
-            allowlist: ['UNRELATED_QVAC_KEY']
-          }
-        },
-        defaults: {
-          env: 'default',
-          file: 'existing_file_provider'
-        },
-        resolution: {
-          maxProviderConcurrency: 2
-        },
-        futureSecretSetting: {
-          preserve: true
+  // The keys OpenClaw's config type does not declare stand in for settings from
+  // another OpenClaw version, which setup has to carry through untouched.
+  const existing = {
+    agents: {
+      defaults: {
+        experimental: {
+          localModelLean: true,
+          futureOpenClawFlag: 'preserve-me'
         }
       }
     },
-    { model: 'qwen3.5-4b', apiKeyFile: keyFile }
-  )
+    secrets: {
+      providers: {
+        qvac: {
+          source: 'env',
+          allowlist: ['UNRELATED_QVAC_KEY']
+        }
+      },
+      defaults: {
+        env: 'default',
+        file: 'existing_file_provider'
+      },
+      resolution: {
+        maxProviderConcurrency: 2
+      },
+      futureSecretSetting: {
+        preserve: true
+      }
+    }
+  } as OpenClawConfigLike
+  const config = applyQvacSetupConfig(existing, { model: 'qwen3.5-4b', apiKeyFile: keyFile })
+  const secrets = config.secrets as Record<string, unknown> | undefined
 
   assert.deepEqual(config.agents?.defaults?.models, { 'qvac/qwen3.5-4b': {} })
   assert.deepEqual(config.agents?.defaults?.experimental, {
@@ -376,10 +381,10 @@ test('applyQvacSetupConfig preserves existing OpenClaw settings', () => {
     env: 'default',
     file: 'existing_file_provider'
   })
-  assert.deepEqual(config.secrets?.resolution, {
+  assert.deepEqual(secrets?.['resolution'], {
     maxProviderConcurrency: 2
   })
-  assert.deepEqual(config.secrets?.['futureSecretSetting'], {
+  assert.deepEqual(secrets?.['futureSecretSetting'], {
     preserve: true
   })
   rmSync(stateDir, { recursive: true })
