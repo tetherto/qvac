@@ -267,10 +267,16 @@ BatchResult ContinuousBatchScheduler::processBatch(
   if (group->error) {
     std::rethrow_exception(group->error);
   }
+  const double prefillSeconds =
+      std::chrono::duration<double>(group->prefillDuration).count();
   return {
       .outputs = std::move(group->outputs),
       .stats = group->stats,
-      .requestStats = std::move(group->requestStats)};
+      .requestStats = std::move(group->requestStats),
+      .prefillTps =
+          prefillSeconds > 0.0
+              ? static_cast<double>(group->prefillTokens) / prefillSeconds
+              : 0.0};
 }
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
@@ -979,7 +985,7 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   SequenceDriver& driver = *slot->driver;
   llama_pos newPos = awaiting->currentPos;
   std::exception_ptr error;
-  std::chrono::steady_clock::duration evalDuration{};
+  std::chrono::nanoseconds evalDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
     const auto evalStart = std::chrono::steady_clock::now();
@@ -1006,7 +1012,8 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
             nullptr);
       }
     }
-    evalDuration = std::chrono::steady_clock::now() - evalStart;
+    evalDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - evalStart);
   }
 
   if (error) {
@@ -1017,13 +1024,13 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   assert(
       newPos >= awaiting->currentPos &&
       "media segment must not move the sequence position backwards");
-  const auto mediaPositions =
-      static_cast<uint64_t>(newPos - awaiting->currentPos);
-  stats_.recordDecodeStep(
-      numActiveLocked(),
-      mediaPositions,
-      0,
-      std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
+  const auto mediaTokens =
+      static_cast<uint64_t>(std::max<llama_pos>(0, awaiting->nKvTokens));
+  stats_.recordDecodeStep(numActiveLocked(), mediaTokens, 0, evalDuration);
+  if (slot->group && mediaTokens > 0) {
+    slot->group->prefillTokens += mediaTokens;
+    slot->group->prefillDuration += evalDuration;
+  }
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
   // Only now does the slot's cursor include the segment, so a teardown
   // recorded during the eval sees the memory it actually has.
@@ -1133,7 +1140,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   int decodeRc = 0;
   bool speculativeFailed = false;
-  std::chrono::steady_clock::duration decodeDuration{};
+  std::chrono::nanoseconds decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
     const TimedDecodeResult decodeTiming =
@@ -1181,9 +1188,23 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       fillResult.numActiveSequences,
       fillResult.prefillTokens,
       fillResult.decodeTokens,
-      std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
+      decodeDuration);
 
-  batcher_.advance(prefillCompleteFn());
+  ++decodeStep_;
+  batcher_.advance(
+      prefillCompleteFn(),
+      [this, &decodeDuration](uint32_t seqId, unsigned tokens) {
+        const auto& slot = slots_[seqId];
+        if (slot && slot->group) {
+          auto& group = *slot->group;
+          group.prefillTokens += tokens;
+          // Sibling slots in the same decode share one wall-clock interval.
+          if (std::exchange(group.lastPrefillDecodeStep, decodeStep_) !=
+              decodeStep_) {
+            group.prefillDuration += decodeDuration;
+          }
+        }
+      });
   // Verified before any deferred teardown, so a slot torn down below is
   // synced to memory that already dropped its rejected draft tail. A slot
   // with a pending teardown streams nothing from its verified run.
