@@ -1,6 +1,14 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
 /**
+ * Host OSes where an engine's fitter may answer `unknown` for this load. On
+ * Apple, `@qvac/tts-ggml` 0.17.2 and `@qvac/audiogen-ggml` 0.12.1 return an
+ * unsized fit (`coreml-memory-estimate-unavailable`) when a Core ML sidecar is
+ * active. A measured verdict still passes there.
+ */
+type UnsizedOn = ('darwin' | 'ios')[]
+
+/**
  * `assessModelFit` against the registry's weightless description of a load,
  * before any weights exist locally. Each case assesses the load the resource
  * manager would run for that dep, so the assessment and the load stay the same
@@ -12,10 +20,15 @@ import type { TestDefinition } from '@qvac/test-suite'
  * `dependency: 'none'` keeps these out of the bootstrap download set: a stub is
  * tens of KB, and nothing here loads a model.
  */
-function assessCase(family: string, dep: string, measured: boolean): TestDefinition {
+function assessCase(
+  family: string,
+  dep: string,
+  measured: boolean,
+  unsizedOn?: UnsizedOn
+): TestDefinition {
   return {
     testId: `model-fit-${family}`,
-    params: { dep, measured },
+    params: { dep, measured, ...(unsizedOn && { unsizedOn }) },
     expectation: { validation: 'type', expectedType: 'string' },
     suites: ['smoke'],
     // The stub comes off the registry, so one unresponsive peer decides the
@@ -41,10 +54,15 @@ function filesOnlyCase(family: string, dep: string): TestDefinition {
 }
 
 /** The fit check the load itself ran, read back off the resident model. */
-function probeCase(family: string, dep: string, measured: boolean): TestDefinition {
+function probeCase(
+  family: string,
+  dep: string,
+  measured: boolean,
+  unsizedOn?: UnsizedOn
+): TestDefinition {
   return {
     testId: `model-fit-probe-${family}`,
-    params: { dep, measured },
+    params: { dep, measured, ...(unsizedOn && { unsizedOn }) },
     expectation: { validation: 'type', expectedType: 'string' },
     metadata: { category: 'model-fit', dependency: dep, estimatedDurationMs: 15000 }
   }
@@ -53,7 +71,7 @@ function probeCase(family: string, dep: string, measured: boolean): TestDefiniti
 export const modelFitLlm = assessCase('llm', 'llm', true)
 export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', true)
 export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', true)
-export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', true)
+export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', true, ['darwin'])
 export const modelFitDiffusion = assessCase('diffusion', 'diffusion', true)
 export const modelFitOcr = assessCase('ocr', 'ocr', true)
 
@@ -64,7 +82,7 @@ export const modelFitOcr = assessCase('ocr', 'ocr', true)
 export const modelFitTtsChatterbox = assessCase('tts-chatterbox', 'tts-chatterbox', true)
 export const modelFitTtsParler = assessCase('tts-parler', 'tts-parler', true)
 export const modelFitTtsCosyvoice = assessCase('tts-cosyvoice3', 'tts-cosyvoice3', true)
-export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', true)
+export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', true, ['darwin', 'ios'])
 export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', true)
 
 export const modelFitWhisper = assessCase('whisper', 'whisper', true)
@@ -79,7 +97,7 @@ export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', true)
 export const modelFitProbeWhisper = probeCase('whisper', 'whisper', true)
 export const modelFitProbeBci = probeCase('bci', 'bci', true)
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', true)
-export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', true)
+export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', true, ['darwin'])
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', true)
 export const modelFitProbeDiffusionEsrgan = probeCase(
   'diffusion-esrgan',

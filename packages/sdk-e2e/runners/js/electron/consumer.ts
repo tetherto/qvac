@@ -177,7 +177,7 @@ export const executor = createExecutor({
     new EmbeddingExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
-    new ModelFitExecutor(resources),
+    new ModelFitExecutor(resources, false, process.platform),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new PathTraversalExecutor(),
