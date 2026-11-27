@@ -538,13 +538,12 @@ whether a per-job stats source exists for that id:
   contributes to the same aggregate, which is why a job's own figures can
   differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
-  snapshot starts from that same aggregate, then `TTFT`, `TPS`,
+  snapshot starts from that same aggregate, then `TTFT`, `TPS`, `ppTPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
   observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
   the model decodes speculatively (`spec-type`; see the README's
-  speculative decoding section). All other keys (`ppTPS`, `CacheTokens`,
-  `avgConcurrentSeq`, `backendDevice`) stay
-  model-level.
+  speculative decoding section). `avgConcurrentSeq` and `backendDevice`
+  report model-level information.
 
 Four variants:
 
@@ -601,8 +600,8 @@ a multimodal one fills them in.)
 
 Each request is its own tagged job; the scheduler batches whatever overlaps.
 Every job gets its own `JobEnded`, routed to its own response sink by job id,
-with `TTFT` / `TPS` / `generatedTokens` / `promptTokens` overridden by that
-job's observed figures:
+with `TTFT` / `TPS` / `ppTPS` / `generatedTokens` / `promptTokens` overridden
+by that job's observed figures:
 
 ```json
 {
@@ -622,6 +621,10 @@ Here `TPS` (33.2) is this job's observed rate while `avgConcurrentSeq` (2.9)
 tells you the model was shared; the aggregate decode rate is roughly
 `TPS * avgConcurrentSeq`. `sum(generatedTokens)` over an epoch's jobs equals
 the generic snapshot's `generatedTokens`.
+
+`ppTPS` measures the prompt tokens processed for the job during its prefill
+steps. Queue wait is outside that measurement. Sharing a step with other
+requests can lower the job's rate because they share the batch budget.
 
 ### 3. Multiple async batched runs (`parallel >= 2`, micro-batch < parallel)
 
@@ -646,6 +649,15 @@ the group collapses its OWN prompts into one figure set:
   average answers "what did one of my prompts typically experience".
 - `generatedTokens`, `promptTokens` — summed over the group (tokens are
   additive).
+- `ppTPS` — newly evaluated prompt tokens divided by the elapsed time of
+  steps that processed them. A shared decode step contributes its full time
+  once per participating job, even if several of its slots fed prompt tokens.
+  Media uses evaluated tokens and includes media encoding time. Queue wait
+  and generation-only steps are outside the measurement. A mixed step that
+  processes prompt and generation tokens contributes its full duration to the
+  job's elapsed prefill time. A job with no measured prefill reports zero.
+  The SDK exposes this as
+  `promptTokensPerSecond`.
 - `stopReason` — kept only if every prompt of the group stopped for the same
   reason; otherwise the key is absent rather than guessed. The sample below
   shows the mixed case (A hit EOS, B hit its prediction limit).
@@ -672,8 +684,11 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
 
 A single `run(batch)` call with nothing else in flight is still tagged with
 its own native group id, registered in `BatchHandler._groups` like any other
-job; it just has no concurrent traffic to diverge from, so its own figures
-happen to equal the generic aggregate snapshot.
+job. Its `generatedTokens` and `promptTokens` counts match the generic
+aggregate snapshot.
+Its `ppTPS` can differ when a step processes both prompt and generation
+tokens. The job includes the entire step, while `runtimeStats()` divides
+its time between prefill and generation in proportion to their token counts.
 
 ### 4. One batched run of exactly `parallel` prompts (full width)
 

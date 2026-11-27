@@ -2734,7 +2734,29 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   bool saveThrew = false;
   std::string saveErr;
   try {
-    saveModel->processPromptBatch(savePrompts);
+    constexpr qvac_lib_inference_addon_cpp::JobId jobId = 1;
+    static_cast<void>(saveModel->process(std::any(savePrompts), jobId));
+    const auto jobStats = saveModel->consumeJobStats(jobId);
+    const auto modelStats = saveModel->runtimeStats();
+    const auto parked =
+        LlamaModelTestPeer::scheduler(*saveModel)->parkedSeqIds();
+    ASSERT_EQ(parked.size(), 1u);
+    const auto cells = llama_memory_seq_token_count(
+        llama_get_memory(saveModel->getContext()),
+        static_cast<llama_seq_id>(parked.front()));
+    ASSERT_GT(cells, 0);
+    const double prefillMs = test_common::getStatValue(modelStats, "TTFT");
+    ASSERT_GT(prefillMs, 0.0);
+    // This isolated prefill has the same timed steps as runtimeStats().
+    // Its terminal rate counts the M-RoPE media tokens fed into the cache.
+    EXPECT_NEAR(
+        test_common::getStatValue(jobStats, "ppTPS") * prefillMs / 1000.0,
+        static_cast<double>(cells),
+        1e-6);
+    EXPECT_NEAR(
+        test_common::getStatValue(modelStats, "ppTPS") * prefillMs / 1000.0,
+        static_cast<double>(cells),
+        1e-6);
     saveModel->saveCache(cachePath.string());
   } catch (const std::exception& e) {
     saveThrew = true;
