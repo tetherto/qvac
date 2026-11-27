@@ -213,8 +213,7 @@ public:
       const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
       bool isPrefillOnlyRequest) override;
 
-  void
-  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
+  void onPrefillComplete(llama_pos currentPos, size_t prefillKvCells) override;
 
   void syncPosition(llama_pos currentPos) override;
 

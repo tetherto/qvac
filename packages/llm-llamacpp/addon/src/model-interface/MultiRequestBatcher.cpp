@@ -13,9 +13,9 @@ Request::Request(
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
       pendingCheckpointAt(plan.checkpointAtTextTokens), currentPos(initialPos),
       maxTokensPerSequence(maxTokens) {
-  prefillTokenCount = pendingPrefillTokens.size();
+  prefillKvCells = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
-    prefillTokenCount += static_cast<size_t>(barrier.nPos);
+    prefillKvCells += static_cast<size_t>(barrier.nKvTokens);
   }
 }
 
@@ -403,7 +403,7 @@ void finishPrefillIfComplete(
     return;
   }
   if (onPrefillComplete) {
-    onPrefillComplete(req.seqId, req.currentPos, req.prefillTokenCount);
+    onPrefillComplete(req.seqId, req.currentPos, req.prefillKvCells);
   }
   req.pendingPrefillTokens.clear();
   req.pendingPrefillTokens.shrink_to_fit();
@@ -418,7 +418,9 @@ void advanceReqPrefill(
 }
 } // namespace
 
-void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
+void MultiRequestBatcher::advance(
+    const PrefillCompleteFn& onPrefillComplete,
+    const PrefillChunkFn& onPrefillChunk) {
   // Committing is one-shot. Without this, a second advance() with no
   // fillBatch() between would re-apply the same budgets with nothing
   // decoded, running currentPos ahead of the KV cache — a desync that
@@ -432,16 +434,19 @@ void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
     Request& req = *slot;
     // Exactly what the last fillBatch() fed this slot. A slot that was
     // granted nothing (batch too small for the active set) is skipped.
-    const auto chunk = static_cast<llama_pos>(chunkSizes_[req.seqId]);
+    const unsigned chunk = chunkSizes_[req.seqId];
     if (chunk == 0) {
       continue;
     }
-    req.currentPos += chunk;
+    req.currentPos += static_cast<llama_pos>(chunk);
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
       req.stopReason = StopReason::ContextOverflow;
     }
     if (!req.isPrefillComplete()) {
-      advanceReqPrefill(req, chunk, onPrefillComplete);
+      if (onPrefillChunk) {
+        onPrefillChunk(req.seqId, chunk);
+      }
+      advanceReqPrefill(req, static_cast<llama_pos>(chunk), onPrefillComplete);
     } else {
       req.hasUnfedSample = false;
     }
@@ -451,10 +456,12 @@ void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
 std::optional<MultiRequestBatcher::AwaitingMedia>
 MultiRequestBatcher::nextAwaitingMedia() const {
   for (const auto& slot : slots_ | views::filter(Request::isOptAwaitingMedia)) {
+    const auto& barrier = slot->pendingMediaBarriers.front();
     return AwaitingMedia{
         .seqId = slot->seqId,
-        .mediaIndex = slot->pendingMediaBarriers.front().mediaIndex,
-        .currentPos = slot->currentPos};
+        .mediaIndex = barrier.mediaIndex,
+        .currentPos = slot->currentPos,
+        .nKvTokens = barrier.nKvTokens};
   }
   return std::nullopt;
 }
