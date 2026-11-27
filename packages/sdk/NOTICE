@@ -71,8 +71,12 @@ Third-Party Model Licenses
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  BotPsy-0.8B-GGUFs
+    https://huggingface.co/qvac/BotPsy-0.8B-GGUFs
   coremldata
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  coremldata
+    https://huggingface.co/qvac/TranscribePsy-250M-EU
   cosyvoice3-campplus-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-flow-bf16
@@ -165,6 +169,8 @@ Third-Party Model Licenses
     https://github.com/tetherto/qvac/tree/main/packages/classification-ggml
   model
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  model
+    https://huggingface.co/qvac/TranscribePsy-250M-EU
   moss-codec-decoder-f16
     https://huggingface.co/OpenMOSS-Team/MOSS-TTS
   moss-codec-encoder-f16
@@ -237,10 +243,14 @@ Third-Party Model Licenses
     https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF
   Qwen3.5-4B-MTP-GGUF
     https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF
+  Qwen3.5-9B-DFlash-GGUF
+    https://huggingface.co/AtomicChat/Qwen3.5-9B-DFlash-GGUF
   Qwen3.5-9B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
   Qwen3.5-9B-MTP-GGUF
     https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF
+  Qwen3.5-9B-toolcall-preview-GGUF
+    https://huggingface.co/am17an/Qwen3.5-9B-toolcall-preview-GGUF
   Qwen3.6-27B-GGUF
     https://huggingface.co/unsloth/Qwen3.6-27B-GGUF
   Qwen3.6-35B-A3B-GGUF
@@ -275,6 +285,8 @@ Third-Party Model Licenses
     https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml
   TranscribePsy-250M-EU-sub-gguf
     https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf
+  TranslatePsy-AfriNano
+    https://huggingface.co/qvac/TranslatePsy-AfriNano
   TranslatePsy-AfriSLM-0.8B-Q4-GGUF
     https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
   TranslatePsy-AfriSLM-0.8B-Q8-GGUF
@@ -287,6 +299,8 @@ Third-Party Model Licenses
     https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF
   TranslatePsy-AfriSLM-4B-Q8-GGUF
     https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF
+  TranslatePsy-EuroNano
+    https://huggingface.co/qvac/TranslatePsy-EuroNano
   umt5-xxl-enc-q8_0
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
   unlimited-ocr-gguf
@@ -317,6 +331,8 @@ Third-Party Model Licenses
     https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF
   weight
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  weight
+    https://huggingface.co/qvac/TranscribePsy-250M-EU
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
@@ -471,6 +487,10 @@ Third-Party Model Licenses
   coremldata
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   coremldata
+    https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF
+  coremldata
+    https://huggingface.co/madebyollin/taesdxl
+  coremldata
     https://huggingface.co/ACE-Step/Ace-Step1.5
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
@@ -478,6 +498,8 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF
   DeepSeek-V4.1-Flash-1017-GGUF
     https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF
+  DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008
+    https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017
   es-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-es
   ggml-indictrans2-en-indic-1B-f16
@@ -517,9 +539,17 @@ Third-Party Model Licenses
   model
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   model
+    https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF
+  model
+    https://huggingface.co/madebyollin/taesdxl
+  model
     https://huggingface.co/ACE-Step/Ace-Step1.5
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
+  taesd
+    https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
+  taesdxl
+    https://huggingface.co/madebyollin/taesdxl
   taew2_2_f16
     https://github.com/madebyollin/taehv
   tiny_acft_q8_0
@@ -530,6 +560,10 @@ Third-Party Model Licenses
     https://huggingface.co/ACE-Step/Ace-Step1.5
   weight
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+  weight
+    https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF
+  weight
+    https://huggingface.co/madebyollin/taesdxl
   weight
     https://huggingface.co/ACE-Step/Ace-Step1.5
   whisper-vad
@@ -813,9 +847,21 @@ Third-Party Model Licenses
 
 --- openrail++ ---
 
+  coremldata
+    https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
+  coremldata
+    https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF
+  model
+    https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
+  model
+    https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF
   stable-diffusion-v2-1-GGUF
     https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
   stable-diffusion-xl-base-1.0-GGUF
+    https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF
+  weight
+    https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
+  weight
     https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF
 
 --- qwen-community-1.0 ---

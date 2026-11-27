@@ -8,6 +8,15 @@
     },
     "checks": ["shared-runtime-libs", "sdk-python", "sdk-kotlin", "package-checks", "pear-e2e"]
   },
+  "engine": {
+    "groups": ["engine"],
+    "anchorGroup": "engine",
+    "githubRelease": {
+      "project": "@qvac/sdk",
+      "name": "QVAC SDK"
+    },
+    "checks": ["shared-runtime-libs", "sdk-python", "sdk-kotlin", "package-checks", "pear-e2e"]
+  },
   "cli": {
     "groups": ["agentstack"],
     "anchorProject": "@qvac/cli",

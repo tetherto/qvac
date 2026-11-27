@@ -12,6 +12,8 @@ import {
 interface FitParams {
   dep: string
   measured: boolean
+  /** Host OSes where the fitter may answer `unknown` (see the catalog). */
+  unsizedOn?: string[]
 }
 
 interface TogetherParams {
@@ -39,11 +41,18 @@ function pinnedToCpu(
 /**
  * Whether a verdict is what this engine owes: a measured engine reaches a
  * verdict unless the load runs on the CPU, and every other engine answers
- * `unknown`.
+ * `unknown`. A measured engine may also answer `unknown` on a host it cannot
+ * size there.
  */
-function verdictMatches(measured: boolean, cpu: boolean, verdict: string): boolean {
+function verdictMatches(
+  measured: boolean,
+  cpu: boolean,
+  verdict: string,
+  unsized = false
+): boolean {
   if (!measured) return verdict === 'unknown'
   if (cpu) return verdict === 'unknown'
+  if (unsized && verdict === 'unknown') return true
   return MEASURED_VERDICTS.includes(verdict)
 }
 
@@ -139,12 +148,19 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
   /**
    * @param hostLlamaOnCpu Whether the host's device defaults place llm and embedding loads on the
    * CPU, as the SDK does on Pixel phones.
+   * @param hostOs The host OS (`process.platform` or `Platform.OS`), matched against a case's
+   * `unsizedOn`.
    */
   constructor(
     resources: ResourceManager,
-    private readonly hostLlamaOnCpu = false
+    private readonly hostLlamaOnCpu = false,
+    private readonly hostOs?: string
   ) {
     super(resources)
+  }
+
+  private unsizedHere(p: FitParams): boolean {
+    return this.hostOs !== undefined && (p.unsizedOn?.includes(this.hostOs) ?? false)
   }
 
   override async setup(testId: string, context: unknown) {
@@ -184,7 +200,7 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
       const cpu = pinnedToCpu(load, this.hostLlamaOnCpu)
       const checks = {
         oneModelAssessed: result.models.length === 1,
-        verdictMatches: verdictMatches(p.measured, cpu, model.status),
+        verdictMatches: verdictMatches(p.measured, cpu, model.status, this.unsizedHere(p)),
         setFollowsTheModel: result.verdict === model.status || result.verdict === 'does-not-fit',
         rowsMatchStatus: rowsMatchStatus(model),
         poolsSumRows: poolsSumRows(result)
@@ -278,7 +294,8 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
       const model = fit.models[0]
       const checks = {
         oneModelChecked: fit.models.length === 1,
-        verdictMatches: model !== undefined && verdictMatches(p.measured, cpu, model.status),
+        verdictMatches:
+          model !== undefined && verdictMatches(p.measured, cpu, model.status, this.unsizedHere(p)),
         rowsMatchStatus: model !== undefined && rowsMatchStatus(model),
         poolsSumRows: poolsSumRows(fit)
       }
