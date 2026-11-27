@@ -15,9 +15,24 @@ note right of Download
 end note
 
 Download --> Handler : model path
-Handler -> Plugin : createModel(...)
-Plugin -> Plugin : load native addon
-Handler -> Handler : register model
+Handler -> Handler : take the model lock
+alt Model ID already loaded
+    break Model was reconfigured and caller has no lease
+        Handler --> Client : ModelReconfiguredError
+    end
+    Handler -> Handler : add caller's lease
+else First load of the resolved configuration
+    opt Fit check enabled and supported
+        Handler -> Plugin : assess fit using resolved files
+        Plugin --> Handler : fit verdict
+        break Policy refuses the load
+            Handler --> Client : model fit error
+        end
+    end
+    Handler -> Plugin : createModel(...)
+    Plugin -> Plugin : load native addon
+    Handler -> Handler : register model and caller lease
+end
 Handler --> Client : modelId
 
 @enduml

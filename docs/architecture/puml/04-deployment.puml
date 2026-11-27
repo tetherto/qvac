@@ -1,0 +1,57 @@
+@startuml
+!include <C4/C4_Deployment>
+HIDE_STEREOTYPE()
+
+title QVAC SDK Family - Deployment Diagram
+
+Deployment_Node(host_worker, "Separate worker process") {
+    Deployment_Node(host_proc, "Host process") {
+        Container(client, "Host Client", "TypeScript / Python")
+    }
+    Deployment_Node(worker_proc, "Worker process") {
+        Container(worker, "Worker + @qvac/inference", "TypeScript/C++")
+    }
+    ContainerDb(store_hw, "Local Storage", "Model cache and registry store")
+}
+
+Deployment_Node(embedded, "Embedded BareKit worker") {
+    Deployment_Node(embedded_app, "Host process") {
+        Container(embedded_client, "Host Client", "TypeScript / Kotlin")
+        Container(worklet, "Worker + @qvac/inference", "BareKit worklet")
+    }
+    ContainerDb(store_bk, "Local Storage", "Model cache and registry store")
+}
+
+Deployment_Node(android_service, "Android bound-service worker") {
+    Deployment_Node(android_app, "Application process") {
+        Container(android_client, "Host Client", "Kotlin", "Uses AndroidServiceTransport")
+    }
+    Deployment_Node(service_proc, "Service process (:qvac_worker)") {
+        Container(service, "QvacWorkerService", "Kotlin", "Terminates Binder and hosts the worklet")
+        Container(service_worklet, "Worker + @qvac/inference", "BareKit worklet")
+    }
+    ContainerDb(store_service, "Local Storage", "Model cache and registry store")
+}
+
+Deployment_Node(inproc, "In-process Bare") {
+    Deployment_Node(bare_app, "Bare Application") {
+        Container(engine, "@qvac/inference", "TypeScript/C++")
+    }
+    ContainerDb(store_ip, "Local Storage", "Model cache and registry store")
+}
+
+Rel_D(client, worker, "Calls worker", "bare-stow pipe")
+Rel_D(embedded_client, worklet, "Calls worker", "bare-stow over worklet IPC")
+Rel_D(android_client, service, "Binds and sends requests", "Android Binder")
+Rel_D(service, service_worklet, "Starts and calls worklet", "bare-stow over worklet IPC")
+Rel_D(worker, store_hw, "Reads/writes", "filesystem / Corestore")
+Rel_D(worklet, store_bk, "Reads/writes", "filesystem / Corestore")
+Rel_D(service_worklet, store_service, "Reads/writes", "filesystem / Corestore")
+Rel_D(engine, store_ip, "Reads/writes", "filesystem / Corestore")
+
+Lay_R(client, embedded_client)
+Lay_D(store_hw, android_client)
+Lay_D(store_bk, engine)
+Lay_R(android_client, engine)
+
+@enduml

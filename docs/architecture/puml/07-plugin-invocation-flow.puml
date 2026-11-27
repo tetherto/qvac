@@ -8,8 +8,11 @@ participant "Handler" as Handler
 
 Client -> Dispatch : invokePlugin({ modelId, handler, params })
 Dispatch -> PluginReg : resolve handler
-PluginReg -> Handler : validate request, execute
+PluginReg --> Dispatch : handler definition
+Dispatch -> Dispatch : validate input and register request in caller session
+Dispatch -> Handler : execute with session and abort signal
 Handler --> Dispatch : result
+Dispatch -> Dispatch : validate output
 Dispatch --> Client : result
 
 @enduml

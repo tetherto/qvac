@@ -1,40 +1,44 @@
 @startuml
 !include <C4/C4_Component>
 HIDE_STEREOTYPE()
+skinparam wrapWidth 160
 
 title QVAC SDK Family - Internal Components
 
 Container_Boundary(host_side, "Host") {
-    Component(api, "Public API", "TypeScript / Python", "loadModel, completion, transcribe, embed, translate, and other plugin operations")
-    Component(rpc_client, "RPC Adapter", "bare-rpc", "Socket, BareKit IPC, loopback TCP, or in-process")
+    Component(api, "Public API", "TypeScript / Python / Kotlin", "Model, inference, and vector index operations")
+    Component(rpc_client, "RPC Adapter", "bare-rpc / bare-stow host", "Connects over framed IPC")
 }
 
-Container_Boundary(engine_side, "Engine (@qvac/inference)") {
-    Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
-    Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
-    Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
-    Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
-    Component(model_registry, "Model Registry", "TypeScript", "Loaded local model instances")
-    Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
-    Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
+Container_Boundary(worker, "Bare Worker") {
+    Component(bridge, "Worker RPC Bridge", "bare-stow-runtime / bare-rpc", "Binds RPC to the worker IPC stream")
+
+    Boundary(engine_side, "Engine (@qvac/inference)") {
+        Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
+        Component(dispatch, "Dispatch", "TypeScript", "Validates, routes, and applies device defaults")
+        Component(request_state, "Caller and Request State", "TypeScript", "Tracks sessions and scopes cancellation")
+        Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
+        Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
+        Component(model_registry, "Model Registry", "TypeScript", "Loaded local model instances and caller leases")
+        Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
+        Component(vector_index, "Vector Indexes", "TypeScript / TurboVec", "Session-owned indexes and async vector search")
+    }
 }
 
-Rel_D(api, rpc_client, "Serializes calls")
-Rel_D(rpc_client, dispatch, "Sends requests", "bare-rpc")
-Rel_U(logging, rpc_client, "Streams logs", "bare-rpc")
+Rel_R(api, rpc_client, "Serializes calls")
+Rel_D(rpc_client, bridge, "RPC calls and replies", "bare-rpc over bare-stow IPC")
+Rel_D(bridge, dispatch, "Forwards calls and abort signals")
+Rel_L(dispatch, logging, "Routes log subscriptions")
+Rel_R(dispatch, request_state, "Tracks caller work")
 Rel_D(dispatch, plugin_registry, "Looks up handler")
 Rel_D(plugin_registry, plugins, "Invokes handler")
 Rel_D(dispatch, model_registry, "Registers models")
 Rel_D(dispatch, distribution, "Fetches models")
-Rel_D(dispatch, rag, "Searches vectors")
+Rel_D(dispatch, vector_index, "Routes index operations")
 
-Lay_D(api, rpc_client)
-Lay_D(rpc_client, dispatch)
-Lay_L(logging, dispatch)
-Lay_D(dispatch, plugin_registry)
 Lay_R(plugin_registry, model_registry)
 Lay_R(model_registry, distribution)
-Lay_R(distribution, rag)
 Lay_D(plugin_registry, plugins)
+Lay_R(distribution, vector_index)
 
 @enduml
