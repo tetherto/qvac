@@ -10,6 +10,8 @@ const {
   resolveRunStreamingOptions,
   splitSentenceChunks
 } = require('../../lib/sentenceStream.js')
+const { accumulateTextStream } = require('../../lib/textStreamAccumulator.js')
+const { QvacResponse } = require('@qvac/infer-base')
 
 global.process = process
 
@@ -314,4 +316,69 @@ test('sentence stream: a later Core ML success cannot hide a prior capacity fall
   t.is(stats.dacOnCoreml, 0)
   t.is(stats.decoderSidecarLoaded, 1)
   t.is(stats.dacSidecarLoaded, 1)
+})
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// An endless text source that counts pulls and records return().
+function trackedSource() {
+  const state = { pulled: 0, closed: false }
+  const iterable = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          await sleep(5)
+          state.pulled++
+          return { value: `Sentence ${state.pulled}.`, done: false }
+        },
+        return() {
+          state.closed = true
+          return Promise.resolve({ value: undefined, done: true })
+        }
+      }
+    }
+  }
+  return { iterable, state }
+}
+
+test('text accumulator: breaking out stops pulling the source and closes it', async (t) => {
+  const { iterable, state } = trackedSource()
+  for await (const chunk of accumulateTextStream(iterable, { flushAfterMs: 1000 })) {
+    t.ok(chunk.startsWith('Sentence'))
+    break
+  }
+  await sleep(50)
+  const settled = state.pulled
+  await sleep(100)
+  t.ok(state.closed, 'source.return() was called')
+  t.is(state.pulled, settled, 'the source is no longer pulled')
+})
+
+test('text accumulator: a failed streaming run stops pulling the source and closes it', async (t) => {
+  let response = null
+  const streamer = new SentenceStreamer({
+    startJob: () => (response = new QvacResponse({ cancelHandler: () => Promise.resolve() })),
+    dispatchJob: () => {
+      setTimeout(
+        () => streamer.onStats({ totalTime: 0.01, audioDurationMs: 10, totalSamples: 10 }),
+        2
+      )
+      return Promise.resolve()
+    },
+    endJob: () => response.ended(),
+    failJob: (e) => response.failed(e instanceof Error ? e : new Error(e)),
+    countsFrames: () => false
+  })
+  const { iterable, state } = trackedSource()
+  streamer.streamText(accumulateTextStream(iterable, { flushAfterMs: 500 }))
+  response.onError(() => {})
+  await sleep(60)
+  // What unload / reload do to a streaming run.
+  streamer.fail('Model was unloaded')
+  await response.await().catch(() => {})
+  await sleep(50)
+  const settled = state.pulled
+  await sleep(100)
+  t.is(state.pulled, settled, 'the source is no longer pulled')
+  t.ok(state.closed, 'source.return() was called')
 })
