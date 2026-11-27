@@ -2,7 +2,7 @@
 
 [Yuri Samarin](https://github.com/yuranich) · QVAC Team
 
-Last updated November 24, 2026
+Last updated November 27, 2026
 
 - [C4 Model Reference](https://c4model.com/)
 - [Agent Integrations](./AGENT-INTEGRATIONS.md)
@@ -74,9 +74,9 @@ The Pear client selects a `pear-runtime` bundle from the applicable directory lo
 
 ## Deployment Diagram
 
-![Deployment Diagram](puml/images/05-deployment.png)
+![Deployment Diagram](puml/images/04-deployment.png)
 
-[PlantUML source](puml/05-deployment.puml)
+[PlantUML source](puml/04-deployment.puml)
 
 *Process boundaries show where the host, Android service, and worker run. Arrows identify the IPC path for each deployment.*
 
@@ -95,15 +95,17 @@ TypeScript, Python, and Kotlin use their language's bare-rpc implementation for 
 
 ## RPC Communication Flow
 
-![Bare Worker Lifecycle and RPC](puml/images/07-rpc-communication-flow.png)
+![Bare Worker Lifecycle and RPC](puml/images/05-rpc-communication-flow.png)
 
-[PlantUML source](puml/07-rpc-communication-flow.puml)
+[PlantUML source](puml/05-rpc-communication-flow.puml)
 
 *The harness owns launch and channel lifetime. Control frames carry worker state. Data frames carry bare-rpc calls and replies.*
 
 The worker registers its plugins and binds the RPC endpoint before the harness reports `ready`. The host then sends `__init_config` with its runtime context and home directory, along with any custom configuration. Application calls start after the worker acknowledges initialization. Bare-stow frames both the RPC byte stream and the lifecycle signals, including `ready`, `error`, `exit`, and `terminate`. The SDK contract supports request/reply, server streaming, and duplex calls.
 
-A client timeout, cancellation, or early stream close can abort the corresponding request in the engine. During an orderly shutdown the harness sends `terminate`, and the worker closes the engine, draining work and releasing models, registry leases, and vector indexes. Host adapters supervise shutdown and stop an unresponsive worker.
+A client timeout, cancellation, or early stream close can abort the corresponding request in the engine. `deadlines.capabilities` configures opt-in queue, idle, and run deadlines by capability ID. The separate `deadlines.load.loadMs` limit starts after the download. A call can supply an unset limit or shorten a configured one.
+
+During an orderly shutdown the harness sends `terminate`, and the worker closes the engine, draining work and releasing models, registry leases, and vector indexes. Host adapters supervise shutdown and stop an unresponsive worker.
 
 ## Domain Model Diagram
 
@@ -113,13 +115,17 @@ A client timeout, cancellation, or early stream close can abort the correspondin
 
 *The relationships show model sources and plugins, inference inputs and outputs, and how sessions own requests and keep models loaded.*
 
-Calls without an explicit session run as the runtime owner. A caller session scopes requests by `(sessionId, requestId)`. Sessions loading the same configuration share one native model instance through leases. Releasing the last lease unloads the model. A reload requires sole ownership of the model's leases.
+Calls without an explicit session run as the runtime owner. A caller session scopes requests by `(sessionId, requestId)`. `openSession({ grant })` can restrict calls through that handle to permissions such as `transcription/transcribe` or `runtime/loadModel`. An operation that requires a permission outside the grant fails with `CapabilityNotGrantedError`.
+
+Sessions loading the same configuration share one native model instance through leases. Releasing the last lease unloads the model. A reload requires sole ownership of the model's leases.
 
 Closing a session cancels and drains its requests, disposes its vector indexes, and releases its model leases. The owner controls runtime-wide operations such as shutdown, suspend, cache deletion, and starting or stopping native RPC servers. The owner's model-wide cancel can reach work from all caller sessions. Session handles coordinate callers inside a trusted runtime.
 
 ## Plugin Architecture
 
 A `QvacPlugin` defines a canonical model type, addon metadata, a load-config schema, a model factory, and handlers. Plugins can also provide artifact resolution and memory-fit hooks. Handlers declare Zod request and response schemas for unary, streaming, and duplex operations. Direct Bare consumers register the plugins they need. The SDK default entry registers the built-in set, and a custom bundle registers its configured subset.
+
+The optional `provides` field declares the capability contracts a plugin implements. Built-in plugins declare their contracts through this field. `registerPlugin` rejects invalid declarations, including mismatched handler call shapes. `getRuntimeCapabilities()` reports the contracts and major versions available from registered plugins.
 
 | Plugin | Model type | Native addon |
 |---|---|---|
@@ -143,15 +149,15 @@ A `QvacPlugin` defines a canonical model type, addon metadata, a load-config sch
 
 Custom plugin packages expose their manifest through a `/plugin` subpath. Built-in model-type aliases normalize to the canonical types before dispatch.
 
-![Plugin Invocation Flow](puml/images/04-plugin-invocation-flow.png)
+![Plugin Invocation Flow](puml/images/07-plugin-invocation-flow.png)
 
-[PlantUML source](puml/04-plugin-invocation-flow.puml)
+[PlantUML source](puml/07-plugin-invocation-flow.puml)
 
 *The sequence follows one plugin invocation after dispatch receives it.*
 
 A plugin operation inherits the calling session and abort signal. The plugin can pass that context to nested engine operations so cancellation follows the whole request.
 
-`qvac serve` can also invoke registered custom handlers over HTTP through `/qvac/v1/plugins/:name/invoke`. The route requires `--enable-admin` and uses the worker's plugin invocation API. See [Plugin invoke](../website/content/_unpublished/cli/next/http-server/index.mdx#plugins-post-qvacv1pluginsnameinvoke).
+`qvac serve` can also invoke registered custom handlers over HTTP through `/qvac/v1/plugins/:name/invoke`. The route requires `--enable-admin` and uses the worker's plugin invocation API. See the [plugin invocation route](../../packages/cli/src/serve/extensions/default/routes/plugins.ts).
 
 ## Model Loading Flow
 
@@ -161,7 +167,7 @@ A plugin operation inherits the calling session and abort signal. The plugin can
 
 *The flow shows how the engine resolves artifacts and either reuses a loaded model or loads a new one.*
 
-The loader accepts local paths, source URIs, descriptors, and generated model constants shared across TypeScript, Python, and Kotlin. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes loads by model ID. A reload leaves that ID tied to the original configuration. While the model is reconfigured, a caller without a lease who requests the original configuration receives `ModelReconfiguredError`.
+The loader accepts local paths, source URIs, descriptors, and generated model constants shared across TypeScript, Python, and Kotlin. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes loads by model ID. Reloading can change the loaded configuration while preserving the ID. If the loaded configuration differs from the original, a caller without a lease who requests the original configuration receives `ModelReconfiguredError`.
 
 `assessModelFit` runs each supported addon's fitter in the engine process using a local file or a weightless registry description. It sums estimated allocations by memory pool, accounts for devices sharing memory even for a single model, and reports why a result is unknown. `qvac fit` and the HTTP model-fit endpoint use the same assessment. At load time the fitter uses the resolved files. `modelFitPolicy` can log the verdict, refuse an oversized load, or skip the check. See [Model Fit Assessment](../../packages/sdk/docs/assess-model-fit.md) and [Model Cache](../../packages/inference/docs/model-cache.md).
 
@@ -177,7 +183,7 @@ The engine owns the `@qvac/registry-client` integration. The SDK exposes catalog
 
 ## Native GGML RPC
 
-The engine can register an optional RPC server provider. In a worker bundle, select it through `rpcServerProvider`. The provider starts and stops native servers, and discovery uses a shared Hyperswarm topic to advertise and find candidate endpoints. The application passes selected endpoints and their device aliases to a supported model load. Native GGML RPC carries inference traffic over TCP or RDMA where supported. See [RPC Servers](../website/content/_unpublished/sdk/next/p2p-capabilities/rpc-servers.mdx).
+The engine can register an optional RPC server provider. In a worker bundle, select it through `rpcServerProvider`. The provider starts and stops native servers, and discovery uses a shared Hyperswarm topic to advertise and find candidate endpoints. The application passes selected endpoints and their device aliases to a supported model load. Native GGML RPC carries inference traffic over TCP or RDMA where supported. See the [SDK RPC server example](../../packages/sdk/examples/rpc-server.ts).
 
 ## Language Contract
 
@@ -209,6 +215,7 @@ The contract JSON and generated client sources are build outputs. The Python and
 | Download interrupted | Partial data remains available for HTTP range resumption or reuse of previously fetched P2P blocks |
 | Model fails to load | The engine preserves the cause and leaves the model unregistered |
 | Fit policy refuses the load | The engine rejects the load before the plugin allocates the model |
+| Worker deadline expires | The caller receives `DeadlineExceededError`. The engine aborts the request and holds any occupied slot until teardown finishes |
 | Worker crashes or is killed | The client rejects in-flight calls and invalidates runtime handles. A native fault in an embedded worker can terminate the app process |
 | Plugin absent from the worker | Dispatch reports a missing plugin or handler |
 | Reload attempted while another caller holds a lease | The engine rejects the reload and preserves the existing model |
