@@ -12,7 +12,6 @@ import {
   type Staged
 } from '@/commands/bundle/scratch'
 import { DEFAULT_IOS_ENGINE, type IosEngine } from '@/commands/bundle/ios-engine'
-import { commonJSStowOptions } from '@/commands/bundle/commonjs'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
@@ -111,11 +110,6 @@ export interface StageAddonsOptions {
   defer: string[]
   /** Defaults to `DEFAULT_IOS_ENGINE`. */
   iosEngine?: IosEngine | undefined
-  /**
-   * Link the graph with its ES modules converted to CommonJS, as the bundle
-   * holds it for JavaScriptCore, so both resolve the same modules.
-   */
-  commonJS?: boolean | undefined
   logger: Logger
 }
 
@@ -161,8 +155,7 @@ export async function stageAddons(
             ...(module.language === 'swift' && { targetOptions: { engine: iosEngine } }),
             hosts: platformHosts,
             ...(imports !== undefined && { imports }),
-            defer,
-            ...(options.commonJS === true && commonJSStowOptions())
+            defer
           }
         )) {
           const file = path.join(out, path.relative(scratch, fileURLToPath(url.href)))

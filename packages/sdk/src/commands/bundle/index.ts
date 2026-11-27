@@ -29,7 +29,6 @@ import {
   stageAddons,
   type IosEngine
 } from '@/commands/bundle/link'
-import { commonJSStowOptions } from '@/commands/bundle/commonjs'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
@@ -283,6 +282,23 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
   return result
 }
 
+/**
+ * The React Native target's options for a bundle that iOS runs on
+ * JavaScriptCore, which has no ES modules: bare-stow then converts every module
+ * to CommonJS. The phones share one bundle, so Android loads the converted
+ * modules as well. Undefined for every other bundle, which keeps its ES modules.
+ */
+export function reactNativeTargetOptions(
+  target: BundleTarget,
+  iosEngine: IosEngine | undefined,
+  hosts: string[]
+): stow.TargetOptions | undefined {
+  if (target !== 'react-native') return undefined
+  if ((iosEngine ?? DEFAULT_IOS_ENGINE) !== 'javascriptcore') return undefined
+  if (!hosts.some((host) => host.startsWith('ios-'))) return undefined
+  return { ios: { engine: 'javascriptcore' } }
+}
+
 function defaultHosts(target: BundleTarget): string[] {
   if (target === 'react-native') return DEFAULT_HOSTS.filter(isMobileHost)
   if (target === 'bare-kit') return DEFAULT_HOSTS.filter((host) => host.startsWith('android-'))
@@ -301,8 +317,7 @@ interface StowBundleOptions {
   hosts: string[]
   imports: ImportsMap
   deferModules: string[]
-  /** Convert the ES modules to CommonJS, for a worklet that JavaScriptCore runs. */
-  commonJS: boolean
+  targetOptions: stow.TargetOptions | undefined
 }
 
 /** Writes bare-stow's harness package for the target to `outputDir`, and returns the bundle's path. */
@@ -321,7 +336,7 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
     hosts,
     language,
     languageOptions: options.languageOptions,
-    ...(options.commonJS && commonJSStowOptions())
+    ...(options.targetOptions !== undefined && { targetOptions: options.targetOptions })
   }
 
   let bundlePath: string | undefined
@@ -542,12 +557,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   await removeStaleScratch(outputDir)
   await removeStaleScratch(scanOutputDir)
 
-  // Bare Kit runs iOS worklets with JavaScriptCore, which has no ES modules. The
-  // phones share one bundle, so Android loads the converted modules as well.
-  const commonJS =
-    target === 'react-native' &&
-    (options.iosEngine ?? DEFAULT_IOS_ENGINE) === 'javascriptcore' &&
-    hosts.some((host) => host.startsWith('ios-'))
+  const targetOptions = reactNativeTargetOptions(target, options.iosEngine, hosts)
 
   const stowOptions = {
     projectRoot,
@@ -559,7 +569,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     hosts,
     imports,
     deferModules,
-    commonJS
+    targetOptions
   }
 
   const addonsMissingPlatformPackages = () =>
@@ -670,7 +680,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         imports,
         defer: deferModules,
         iosEngine: options.iosEngine,
-        commonJS,
         logger
       })
       staged.push(...nativeModules.staged)
