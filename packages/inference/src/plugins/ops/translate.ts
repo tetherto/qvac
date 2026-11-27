@@ -10,7 +10,6 @@ import {
 } from '@/schemas/index'
 import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
 import type { GenerationParams } from '@qvac/llm-llamacpp'
-import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/utils/addon-responses'
@@ -64,7 +63,21 @@ const ADDITIONAL_LANGUAGE_NAMES = new Map([
   ['wol', 'Wolof']
 ])
 
-export function getLanguage(code: string | undefined): string {
+async function loadLangdetect() {
+  try {
+    return await import('@qvac/langdetect-text')
+  } catch (err) {
+    throw new Error(
+      'LLM translation requires the optional peer dependency @qvac/langdetect-text; install it to translate with an LLM',
+      { cause: err }
+    )
+  }
+}
+
+export function getLanguage(
+  code: string | undefined,
+  getLangName?: (code: string) => string | null
+): string {
   if (!code) return ''
   const languageCode = AFRICAN_LANGUAGE_ALIASES.get(code) ?? code
   if (AFRICAN_LANGUAGES_MAP.has(languageCode)) return AFRICAN_LANGUAGES_MAP.get(languageCode)!
@@ -72,7 +85,7 @@ export function getLanguage(code: string | undefined): string {
     if (scriptCode.split('_')[0] === languageCode) return name
   }
   const baseCode = languageCode.split('_')[0]!
-  const fullName = ADDITIONAL_LANGUAGE_NAMES.get(baseCode) ?? getLangName(baseCode)
+  const fullName = ADDITIONAL_LANGUAGE_NAMES.get(baseCode) ?? getLangName?.(baseCode)
   return fullName ?? code.toUpperCase()
 }
 
@@ -136,14 +149,16 @@ export async function* translate(
 
   translateServerParamsSchema.parse(params)
 
+  const langdetect = isLlm ? await loadLangdetect() : undefined
+
   // Auto-detect the source language when the caller didn't pass `from` (LLM
   // only). This used to run in each client; moving it here gives every
   // language binding one detector instead of each shipping its own (lingua in
   // Python vs langdetect-text in JS drifted on the same input). Store the
   // detected code — not the language name — so the explicit-`from` and
   // detected paths feed getLanguage() identically.
-  if (isLlm && !from) {
-    const detected = detectOne(text as string)
+  if (langdetect && !from) {
+    const detected = langdetect.detectOne(text as string)
     if (detected.code === 'und' || detected.language === 'Undetermined') {
       throw new TranslationFailedError(
         "Could not detect the source language. Please specify the 'from' parameter explicitly."
@@ -162,8 +177,8 @@ export async function* translate(
       : undefined
   const nmtInput = (input: string) => (nmtTargetTag ? withTargetTag(input, nmtTargetTag) : input)
 
-  const fromLanguage = getLanguage(from)
-  const toLanguage = getLanguage(to)
+  const fromLanguage = getLanguage(from, langdetect?.getLangName)
+  const toLanguage = getLanguage(to, langdetect?.getLangName)
 
   // Open a request-scoped lifecycle for both engine branches. The LLM
   // path cancels only its own run response (wired below), so a peer

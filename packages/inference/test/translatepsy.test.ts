@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { getLangName } from '@qvac/langdetect-text'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getLanguage, translate } from '@/plugins/ops/translate'
 import { isTranslatePsyModel } from '@/plugins/ops/translatepsy-utils'
@@ -223,8 +224,8 @@ test('translate: adding language names does not expand Afrique prompt selection'
         { path: '/models/other.gguf' },
         { from, to, context: 'Use a formal tone' }
       )
-      const fromLanguage = getLanguage(from)
-      const toLanguage = getLanguage(to)
+      const fromLanguage = getLanguage(from, getLangName)
+      const toLanguage = getLanguage(to, getLangName)
       const afrique = legacyAfriqueCodes.has(code)
       t.alike(
         result.calls[0]?.[0],
@@ -312,9 +313,9 @@ test('translate: resolves full language names from ISO and script-qualified code
     ['Zulu', 'zu', 'zul', 'zul_Latn']
   ]
   for (const [name, ...codes] of languages) {
-    for (const code of codes) t.is(getLanguage(code), name, code)
+    for (const code of codes) t.is(getLanguage(code, getLangName), name, code)
   }
-  t.is(getLanguage('es'), 'Spanish')
-  t.is(getLanguage('unknown'), 'UNKNOWN')
-  t.is(getLanguage(undefined), '')
+  t.is(getLanguage('es', getLangName), 'Spanish')
+  t.is(getLanguage('unknown', getLangName), 'UNKNOWN')
+  t.is(getLanguage(undefined, getLangName), '')
 })

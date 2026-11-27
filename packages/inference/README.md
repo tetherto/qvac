@@ -78,6 +78,9 @@ shows explicit registration and cleanup with `@qvac/ggml-rpc-server`.
 | `@qvac/inference/ggml-vla/plugin`                     | `@qvac/vla-ggml`                 |
 | `@qvac/inference/ggml-classification/plugin`          | `@qvac/classification-ggml`      |
 
+Translating with a completion model also needs `@qvac/langdetect-text`, which
+resolves language names and detects the source language when `from` is omitted.
+
 ## MOSS engines and memory fit
 
 `@qvac/tts-ggml` carries two desktop batch engines for `textToSpeech`.
