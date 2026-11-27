@@ -707,7 +707,7 @@ Engine-specific segment fields:
 
 `assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
-`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read, or an invalid request, rejects with the engine's reason as an `InvalidArgument` error. `status` is `unknown`, with no rows, for a load the fitter cannot measure, such as one whose device memory it cannot read.
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read, or an invalid request, rejects with the engine's reason as an `InvalidArgument` error. `status` is `unknown`, with no rows, for a load the fitter cannot measure, including one with an active Core ML sidecar whose memory cannot be estimated.
 
 ```js
 const ASRGgml = require('@qvac/asr-ggml')

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.74.0] - 2026-11-27
+
+### Fixed
+
+- On a load with `parallel >= 2`, a job's `CacheTokens` reports the KV cells of
+  its own slot (summed over its own requests for a batch). It reported every
+  slot that finished since the scheduler was last idle, so a request that
+  overlapped another one counted both, and it read positions where media on
+  M-RoPE models takes more cells than positions
+  ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+- On a load with `parallel >= 2`, `promptTokens`, the whole-model
+  `CacheTokens` and the prompt tokens behind `ppTPS` count an image by the KV
+  cells it fills, as the single-prompt path does. They counted its positions,
+  so a cold image prompt reported fewer prompt tokens than its cache held
+  ([#5986](https://github.com/tetherto/qvac/pull/5986)).
+- On a load with `parallel >= 2`, a job's `ppTPS` reports how quickly its
+  prompt was processed. The measurement excludes queue wait and includes time
+  spent in shared batches that processed the job's prompt
+  ([#5998](https://github.com/tetherto/qvac/pull/5998)).
+
 ## [0.73.1] - 2026-11-27
 
 ### Added

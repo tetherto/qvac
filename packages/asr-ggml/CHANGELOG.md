@@ -12,6 +12,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Map `coreml-memory-estimate-unavailable` to an `unknown` fit result with no
+  device rows instead of throwing `InternalError` on Apple.
+
 ## [0.14.1] - 2026-11-27
 
 ### Changed

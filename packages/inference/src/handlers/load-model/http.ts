@@ -19,6 +19,7 @@ import {
   hasValidGGUFHeader
 } from '@/utils/index'
 import { safeFetch } from '@/handlers/load-model/safe-fetch'
+import { completeMarkerPath } from '@/utils/cache/paths'
 import {
   shouldEnforceSecureTransport,
   verifyHttpModelFile
@@ -91,8 +92,29 @@ function extractFilenameFromUrl(url: string): string {
   return sanitizePathComponent(cleanFilename)
 }
 
+// The marker holds the size of a verified download. Offline it is the only proof
+// a non-GGUF file (a whisper.cpp .bin, say) is whole.
+async function markDownloadComplete(modelPath: string, size: number): Promise<void> {
+  if (size <= 0) return
+  try {
+    await fsPromises.writeFile(completeMarkerPath(modelPath), String(size))
+  } catch (error) {
+    logger.warn('Failed to write download complete marker', { path: modelPath, error })
+  }
+}
+
+async function isMarkedComplete(modelPath: string, size: number): Promise<boolean> {
+  if (size <= 0) return false
+  try {
+    const marker = await fsPromises.readFile(completeMarkerPath(modelPath), 'utf8')
+    return String(marker).trim() === String(size)
+  } catch {
+    return false
+  }
+}
+
 // A cache hit is served after a freshness check only — size against the server,
-// or a GGUF-header check when offline — and is not re-hashed (that would cost a
+// or, offline, a complete marker or GGUF header — and is not re-hashed (that would cost a
 // full-file SHA-256 on every load). Verification happens at download time, so a
 // cache entry from before this shipped, or one written down the warn-and-proceed
 // path, is served as-is: tightening requireHttpChecksum does not retroactively
@@ -128,13 +150,19 @@ async function validateCachedFile(
         ...(signal && { signal })
       })
       response.body.resume()
-      expectedSize = parseInt(String(response.headers['content-length'] ?? '0') || '0')
+      const ok = response.status >= 200 && response.status <= 299
+      expectedSize = ok ? parseInt(String(response.headers['content-length'] ?? '0') || '0') : 0
     } catch (headError) {
       // A refused insecure Hugging Face hop is terminal, not an offline fallback.
       if (headError instanceof InsecureModelSourceError) throw headError
       logger.warn(
         `⚠️ HEAD request failed: ${headError instanceof Error ? headError.message : String(headError)}`
       )
+      if (await isMarkedComplete(modelPath, localSize)) {
+        logger.info(`✅ Offline - download marked complete, using cached file: ${modelPath}`)
+        return modelPath
+      }
+
       logger.info(`📴 Falling back to GGUF header validation...`)
 
       const hasValidHeader = await hasValidGGUFHeader(modelPath)
@@ -154,6 +182,12 @@ async function validateCachedFile(
       return null
     }
 
+    // Without a size from the server an empty file would match, so let the Range request decide.
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) {
+      logger.info(`📥 Server gave no size for the cached file. Checking it with a Range request...`)
+      return null
+    }
+
     if (localSize !== expectedSize) {
       logger.info(
         `📥 Cached file size mismatch. Expected: ${expectedSize}, Found: ${localSize}. Re-downloading...`
@@ -161,6 +195,10 @@ async function validateCachedFile(
       return null
     }
 
+    // Also marks files cached before the marker existed, so they load offline next time.
+    if (!(await isMarkedComplete(modelPath, localSize))) {
+      await markDownloadComplete(modelPath, localSize)
+    }
     logger.info(`✅ Using cached HTTP model: ${modelPath}`)
     return modelPath
   } catch (error) {
@@ -205,6 +243,8 @@ async function assertPartialCanResume(
 
 interface HttpDownloadMeta {
   hubSha256?: string | undefined
+  // The size the server announced, when it did.
+  totalBytes?: number | undefined
 }
 
 async function performHttpDownload(
@@ -279,6 +319,11 @@ async function performHttpDownload(
     if (response.status === 416 && startOffset > 0) {
       response.body.destroy()
       logger.info(`✅ File already completely downloaded`)
+      // A partial longer than the file also gets a 416, so only trust a size the server confirms.
+      const unsatisfied = /^bytes \*\/(\d+)$/.exec(String(response.headers['content-range'] ?? ''))
+      if (unsatisfied?.[1] !== undefined && parseInt(unsatisfied[1]) === startOffset) {
+        meta.totalBytes = startOffset
+      }
       // Send 100% progress for already complete file
       if (progressCallback) {
         progressCallback({
@@ -331,6 +376,7 @@ async function performHttpDownload(
   }
 
   logger.info(`📏 Total size: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`)
+  if (totalBytes > 0) meta.totalBytes = totalBytes
 
   // Create write stream (append if resuming)
   const writeStreamOptions =
@@ -563,6 +609,7 @@ async function downloadVerifyAndPublish(
   hooks?: DownloadHooks
 ): Promise<void> {
   const partialPath = partialDownloadPath(finalPath)
+  await fsPromises.unlink(completeMarkerPath(finalPath)).catch(() => {})
   const meta = await performHttpDownloadWithResume(
     url,
     partialPath,
@@ -572,7 +619,10 @@ async function downloadVerifyAndPublish(
     signal
   )
   await verifyHttpModelFile(url, partialPath, meta.hubSha256, requireChecksum, hooks)
+  // Unchecked sources can end early without an error, so the size must match too.
+  const { size } = await fsPromises.stat(partialPath)
   await publishDownload(finalPath)
+  if (size === meta.totalBytes) await markDownloadComplete(finalPath, size)
 }
 
 export async function downloadModelFromHttp(

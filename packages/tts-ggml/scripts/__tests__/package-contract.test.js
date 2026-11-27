@@ -31,6 +31,8 @@ const runtimeProbes = [
   'bare-url'
 ]
 const developmentOnlyModules = ['@qvac/asr-ggml', 'bare-subprocess', 'brittle']
+const werAsrPackage = '@qvac/asr-ggml'
+const caretRangePattern = /^\^\d+\.\d+\.\d+$/
 const lazilyLoadedDevDependencies = new Set(['@qvac/registry-client'])
 const lazilyLoadedDevDependenciesByFile = new Map([
   ['examples/pcm-chunk-player.js', new Set(['bare-subprocess'])]
@@ -171,11 +173,20 @@ test('enhanced examples have package scripts', () => {
 test('WER helper uses asr-ggml as a development dependency', () => {
   assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
   assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
-  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '0.8.1')
+  assert.match(packageJson.devDependencies[werAsrPackage], caretRangePattern)
   const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
   assert.match(source, /@qvac\/asr-ggml/)
   assert.doesNotMatch(source, /transcription-whispercpp/)
   assert.match(source, /function loadAsrGgml/)
+})
+
+test('WER asr-ggml binding links in a mobile app: it loads through #host-addon alone', () => {
+  const binding = fs.readFileSync(
+    path.join(packageRoot, 'node_modules', werAsrPackage, 'binding.js'),
+    'utf8'
+  )
+  assert.match(binding, /require\('#host-addon'\)/)
+  assert.doesNotMatch(binding, /require\.addon\s*\(/)
 })
 
 test('bare-subprocess and brittle are development dependencies', () => {
