@@ -12,6 +12,53 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Map `coreml-memory-estimate-unavailable` to an `unknown` fit result with no
+  device rows instead of throwing `InternalError` on Apple.
+
+## [0.14.1] - 2026-11-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.33.0` -> `^0.34.0`, which carries
+  `qvac-fabric` `12032.0.1` -> `12032.2.0`
+  ([#6016](https://github.com/tetherto/qvac/pull/6016)): Inkling 2 and
+  Inkling 2 Mini with the DSpark and DFlash2 speculative drafters, qwen4exp
+  sparse attention over per-token K/V rows, and Vulkan fusions and RDNA3 and
+  RDNA4 matmul tuning. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.34.0` with it.
+- `@qvac/fabric` 0.34 changes the RPC protocol from 118 to 119 and the
+  `common.h` structs, so it is not ABI-compatible with 0.33.x. Every addon
+  loaded in one process must resolve the same `@qvac/fabric` minor.
+  This is a patch release, so existing caret ranges pick it up: mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.34.0` together.
+- This package needed no code change for the new fabric.
+- The speech engine moves from `qvac-fabric-speech.cpp` `fa21dbb` to
+  `931b63be7` ([#5962](https://github.com/tetherto/qvac/pull/5962), [#5963](https://github.com/tetherto/qvac/pull/5963),
+  [#6015](https://github.com/tetherto/qvac/pull/6015)). Parakeet's Core ML
+  encoder and diarizer sidecars load in the background: on macOS a call runs
+  on ggml until its sidecar is ready, on iOS it waits for it
+  ([qvac-fabric-speech.cpp#434](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/434)). With
+  `QVAC_COREML_CACHE_DIR` set, Nemotron 3 Diarization and Sortformer v2.1
+  build their Core ML diarizers from the GGUF
+  ([qvac-fabric-speech.cpp#445](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/445),
+  [qvac-fabric-speech.cpp#453](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/453)).
+- Whisper, Parakeet and MOSS Transcribe fit report
+  `coreml-memory-estimate-unavailable` when a Core ML sidecar is active
+  ([qvac-fabric-speech.cpp#467](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/467)). This
+  package does not map that reason yet, so on Apple a fit for such a model
+  throws `InternalError` instead of returning an unsized result.
+
+### Fixed
+
+- Fix Parakeet GPU transcription aborting on Android OpenCL and iOS Metal with
+  fabric `12032.2.0` by updating the native speech source to include the
+  channels-first depthwise convolution layout fix.
+
 ## [0.14.0] - 2026-11-23
 
 ### Changed

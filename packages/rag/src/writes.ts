@@ -3,6 +3,9 @@ import qvacCrypto from '#crypto'
 
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
 import {
+  DEFAULT_VECTOR_ENCODING,
+  encodingOf,
+  F16_MAX,
   MAX_NATIVE_ID,
   decodeNativeId,
   encodeNativeId,
@@ -26,7 +29,7 @@ import { DEFAULT_INDEX_STORAGE, type IndexRegistry } from './vector-index/regist
 import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type { ValidDocument } from './input.js'
 import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from './db/db-types.js'
-import type { IndexStorage } from './types.js'
+import type { IndexStorage, VectorEncoding } from './types.js'
 
 // Writes `document` as `generation`, replacing `previous` when there is one,
 // and commits the batch. Shared by ingest and import, so both keep native
@@ -41,6 +44,7 @@ export async function writeGeneration(
   previous: DocumentRecord | null
 ): Promise<{ revision: number; removedChunks: number }> {
   const namespace = ns.name
+  const encoding = encodingOf(ns)
   const removed = previous ? await deleteGeneration(tx, previous) : []
 
   let nextId = decodeNativeId(ns.nextNativeId)
@@ -63,7 +67,7 @@ export async function writeGeneration(
       content: chunk.content,
       metadataJson: chunk.metadataJson,
       nativeId,
-      vector: encodeVector(chunk.embedding)
+      vector: encodeVector(chunk.embedding, encoding)
     })
     await tx.insert(NATIVE_IDS, {
       namespace,
@@ -143,6 +147,15 @@ export async function appendMutation(
   return revision
 }
 
+let lastCreatedAt = 0
+
+// Strictly increasing in the process, so a namespace dropped and re-created
+// within one millisecond still gets a new `createdAt`, which ingest compares.
+export function newCreatedAt(): Date {
+  lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1)
+  return new Date(lastCreatedAt)
+}
+
 export function newLineageId(): Uint8Array {
   if (qvacCrypto.randomBytes) return qvacCrypto.randomBytes(16)
   if (qvacCrypto.getRandomValues) return qvacCrypto.getRandomValues(new Uint8Array(16))
@@ -163,6 +176,8 @@ export function storageOf(ns: NamespaceRecord): IndexStorage {
   return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
 }
 
+export { encodingOf }
+
 export function checkChunks(
   namespace: string,
   ns: NamespaceRecord,
@@ -170,6 +185,17 @@ export function checkChunks(
   document: ValidDocument
 ): void {
   const turbovec = storageOf(ns).startsWith('turbovec-')
+  if (
+    document.chunks.length === 0 &&
+    document.spaceId !== undefined &&
+    document.spaceId !== space.spaceId
+  ) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `document '${document.id}' is in space ${document.spaceId}, namespace '${namespace}' is in ${space.spaceId}`
+    })
+  }
+  const f16 = encodingOf(ns) === 'f16'
   for (const chunk of document.chunks) {
     if (chunk.spaceId !== space.spaceId) {
       throw new QvacErrorRAG({
@@ -187,6 +213,12 @@ export function checkChunks(
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
         adds: `chunk '${chunk.id}' has a component of magnitude 1e16 or more, which '${storageOf(ns)}' storage can't index`
+      })
+    }
+    if (f16 && chunk.embedding.some((value) => Math.abs(value) > F16_MAX)) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `chunk '${chunk.id}' has a component above ${F16_MAX} in magnitude, which 'f16' vectors can't hold`
       })
     }
   }
@@ -224,21 +256,6 @@ export async function withSnapshot<T>(
     throw toRagError(error)
   } finally {
     await snapshot.close()
-  }
-}
-
-// Unflushed writes are dropped when the transaction closes.
-export async function withTransaction<T>(
-  db: HyperDBInstance,
-  operation: (tx: HyperDBTransaction) => Promise<T>
-): Promise<T> {
-  const tx = await db.exclusiveTransaction()
-  try {
-    return await operation(tx)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await tx.close()
   }
 }
 

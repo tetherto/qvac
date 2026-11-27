@@ -44,7 +44,8 @@ const bindings = new WeakMap<ServerResponse, CancelBinding>()
  * A route may bind several ids for one request. One `close` listener serves a
  * response however many ids it carries, and cancels all of them. `close` fires
  * once and is not replayed, so an id bound after it is cancelled on the spot
- * instead.
+ * instead, including the first id of a response whose client left while the
+ * route was still awaiting the SDK.
  *
  * Optional `cancelFn` override is for unit tests only — production callers
  * omit it and the bridge uses the SDK's `cancel` directly. The override
@@ -70,6 +71,11 @@ export function bindClientDisconnectCancel(
 
   const binding: CancelBinding = { requestIds: new Set([requestId]), cancelFn, clientGone: false }
   bindings.set(res, binding)
+  if (res.destroyed && !res.writableEnded) {
+    binding.clientGone = true
+    fireCancel(binding, requestId, logger)
+    return
+  }
 
   res.once('close', () => {
     if (res.writableEnded) {

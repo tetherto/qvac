@@ -22,6 +22,7 @@ export const SPACE = {
  * - `root`: a writable directory for stores
  * - `join(...parts)`, `removeDir(path)`, `listDir(path)`
  * - `embed(modelId, text)`: one vector as a number array
+ * - `indexProvider`, `fs`: optional; passed to `createRag({ index })`
  */
 export function createRagOps(host) {
   const stores = new Map()
@@ -95,7 +96,15 @@ export function createRagOps(host) {
         await host.removeDir(index)
       }
       const corestore = new Corestore(data)
-      const rag = createRag({ corestore, embeddings: port(embedModelId), index: { dir: index } })
+      const rag = createRag({
+        corestore,
+        embeddings: port(embedModelId),
+        index: {
+          dir: index,
+          ...(host.indexProvider && { provider: host.indexProvider }),
+          ...(host.fs && { fs: host.fs })
+        }
+      })
       await rag.ready()
       stores.set(store, { rag, corestore })
       return { store }
@@ -121,6 +130,37 @@ export function createRagOps(host) {
       return { hits: await rag.search(params) }
     },
 
+    // Closes the Corestore under an open RAG, as a host shutting down in the wrong order
+    // does, then tries a write and closes the RAG. Reports the write's error and whether
+    // close() settled within `closeWithinMs`, instead of hanging the worker.
+    async closeStoreFirst({ store, namespace, closeWithinMs = 5000 }) {
+      const { rag, corestore } = storeOf(store)
+      stores.delete(store)
+      await corestore.close()
+      let writeError = null
+      try {
+        await rag.ingest({ namespace, documents: [{ id: 'after-close', text: 'Too late.' }] })
+      } catch (err) {
+        writeError = {
+          name: err?.name ?? '',
+          code: err?.code === undefined ? '' : String(err.code)
+        }
+      }
+      let timer
+      const deadline = new Promise((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), closeWithinMs)
+      })
+      const close = await Promise.race([
+        rag.close().then(
+          () => 'settled',
+          () => 'rejected'
+        ),
+        deadline
+      ])
+      clearTimeout(timer)
+      return { writeError, close }
+    },
+
     // Snapshots live under `<index>/<core key>/`: a `.json` sidecar per namespace and the
     // `.tvec` file it names.
     async snapshotFiles({ store }) {
@@ -135,12 +175,13 @@ export function createRagOps(host) {
       }
     },
 
-    async createNamespace({ store, name, dimensions, storage }) {
+    async createNamespace({ store, name, dimensions, storage, vectorEncoding }) {
       const space = dimensions ? { ...SPACE, dimensions } : SPACE
       const info = await storeOf(store).rag.createNamespace({
         name,
         space,
-        ...(storage && { index: { storage } })
+        ...(storage && { index: { storage } }),
+        ...(vectorEncoding && { vectorEncoding })
       })
       return info
     },
@@ -204,6 +245,23 @@ export function createRagOps(host) {
       return await storeOf(store).rag.dropNamespace({ name })
     },
 
+    // Errors become their message, so the status crosses the transport as JSON.
+    async indexStatus({ store, namespace }) {
+      const status = await storeOf(store).rag.indexStatus({ namespace })
+      const message = (error) => (error instanceof Error ? error.message : String(error))
+      if (status.mode === 'scan') {
+        return {
+          mode: 'scan',
+          reason: status.reason,
+          ...(status.error !== undefined && { error: message(status.error) })
+        }
+      }
+      if (status.mode === 'index' && typeof status.snapshot === 'object') {
+        return { ...status, snapshot: 'error', error: message(status.snapshot.error) }
+      }
+      return status
+    },
+
     // Exports a namespace from one open store and imports it into another, optionally
     // aborting the import after `abortAfterChunks` chunks of the stream.
     async transfer({ from, to, namespace, documentIds, targetNamespace, abortAfterChunks }) {
@@ -224,6 +282,38 @@ export function createRagOps(host) {
         { namespace: targetNamespace ?? namespace, source: counted() },
         { signal: controller.signal }
       )
+    },
+
+    // An export as hex, so it can travel through a step to the other runtime.
+    async exportHex({ store, namespace }) {
+      let hex = ''
+      for await (const chunk of storeOf(store).rag.exportNamespace({ namespace })) {
+        for (const byte of chunk) hex += byte.toString(16).padStart(2, '0')
+      }
+      return { hex, bytes: hex.length / 2 }
+    },
+
+    async importHex({ store, namespace, hex }) {
+      const bytes = new Uint8Array(hex.length / 2)
+      for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+      async function* source() {
+        yield bytes
+      }
+      return await storeOf(store).rag.importNamespace({ namespace, source: source() })
+    },
+
+    // Searches and compares the hits with `against`, hits from another search: whether the
+    // same chunks come back in the same order, and the largest score difference between them.
+    async searchDelta({ store, against, ...params }) {
+      const hits = await storeOf(store).rag.search(params)
+      const key = (hit) => `${hit.documentId}:${hit.ordinal}`
+      const sameOrder =
+        hits.length === against.length && hits.every((hit, i) => key(hit) === key(against[i]))
+      let maxScoreDelta = 0
+      for (let i = 0; i < Math.min(hits.length, against.length); i++) {
+        maxScoreDelta = Math.max(maxScoreDelta, Math.abs(hits[i].score - against[i].score))
+      }
+      return { sameOrder, maxScoreDelta, hits: hits.length }
     },
 
     async importBytes({ store, namespace, text }) {
@@ -263,6 +353,7 @@ export const RAG_OPS = [
   'reset',
   'snapshotFiles',
   'searchAfterClose',
+  'closeStoreFirst',
   'createNamespace',
   'ingest',
   'deleteDocuments',
@@ -272,6 +363,10 @@ export const RAG_OPS = [
   'listDocuments',
   'listNamespaces',
   'dropNamespace',
+  'indexStatus',
   'transfer',
+  'exportHex',
+  'importHex',
+  'searchDelta',
   'importBytes'
 ]

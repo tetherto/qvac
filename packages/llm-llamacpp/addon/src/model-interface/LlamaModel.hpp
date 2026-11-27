@@ -367,7 +367,7 @@ private:
   /// scheduler or llama_context state, so a finishing job can never race a
   /// peer still decoding on the shared context.
   qvac_lib_inference_addon_cpp::RuntimeStats jobTerminalStats(
-      const batching::RuntimeStatsSnapshot& stats,
+      const batching::BatchResult& result,
       const batching::ObservedRequestStats& observed) const;
   /// Build the JS-facing `RuntimeStats` from `llama_perf_context` for
   /// single-prompt runs. Caller must hold `stateMtx_` shared.

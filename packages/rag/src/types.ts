@@ -33,12 +33,75 @@ export interface ChunkingOptions {
 // dimension; the TurboVec modes need dimensions divisible by 8 and at most 1,024.
 export type IndexStorage = 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
 
+// How chunk vectors are stored in the database and in exports. 'f16' halves
+// their size; scores are computed from the rounded values.
+export type VectorEncoding = 'f32' | 'f16'
+
 export interface IndexOptions {
   // Directory for index snapshots. Without it, indexes stay in memory and
   // are rebuilt from the database the first time each namespace is searched.
   dir?: string
   // Committed batches between snapshots. Defaults to 256.
   snapshotEvery?: number
+  // Replaces `@qvac/turbovec-ggml`.
+  provider?: IndexProvider
+  // Replaces the runtime file system (`bare-fs` or Node `fs`) for snapshots.
+  fs?: SnapshotFileSystem
+}
+
+// One row per query; ids past the last hit are 2^64 - 1.
+export interface IndexSearchResult {
+  scores: Float32Array
+  ids: BigUint64Array
+  k: number
+}
+
+// An index runs its calls in call order, and `length` counts finished calls only.
+export interface IndexHandle {
+  readonly length: number
+  readonly dim: number
+  // Checked against the namespace's storage when a snapshot loads.
+  readonly bitWidth?: number
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): Promise<void>
+  // Resolves whether the id was present.
+  remove(id: bigint): Promise<boolean>
+  contains(id: bigint): Promise<boolean>
+  // Best first, by dot product.
+  search(
+    queries: Float32Array,
+    k: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  // Without it, scoped searches over-fetch from `search` and filter.
+  searchFiltered?(
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array,
+    options?: { signal?: AbortSignal }
+  ): Promise<IndexSearchResult>
+  // Frees removed rows. Without it, they stay until the index is rebuilt.
+  compact?(): Promise<void>
+  // A hint to warm up before searches.
+  prepare?(): Promise<void>
+  // With the provider's `load`, enables snapshots.
+  write?(path: string): Promise<void>
+  dispose(): Promise<void>
+}
+
+export interface IndexProvider {
+  create(dim: number, storage: IndexStorage): IndexHandle | Promise<IndexHandle>
+  load?(path: string): Promise<IndexHandle>
+}
+
+// The subset of `fs.promises` snapshots use.
+export interface SnapshotFileSystem {
+  mkdir(path: string, options: { recursive: boolean }): Promise<unknown>
+  readFile(path: string, encoding: 'utf8'): Promise<string>
+  writeFile(path: string, data: string): Promise<unknown>
+  rename(from: string, to: string): Promise<unknown>
+  unlink(path: string): Promise<unknown>
+  // Without it, files the sidecar doesn't name are left behind.
+  readdir?(path: string): Promise<string[]>
 }
 
 export interface CreateRagOptions {
@@ -50,13 +113,45 @@ export interface CreateRagOptions {
   // Used only when `@qvac/turbovec-ggml` is installed; without it search
   // scans the database.
   index?: IndexOptions
+  // Called once per namespace each time its searches switch to the scan.
+  // A throw or a rejected promise from it is ignored.
+  onIndexFallback?: (event: IndexFallbackEvent) => void
+  // Called when a namespace's snapshot can't be read or written.
+  onSnapshotError?: (event: SnapshotErrorEvent) => void
 }
+
+// Why a namespace is searched by scan instead of its index.
+export type IndexFallbackReason =
+  'addon-missing' | 'addon-load-failed' | 'rebuild-failed' | 'search-failed'
+
+export interface IndexFallbackEvent {
+  namespace: string
+  reason: IndexFallbackReason
+  error?: unknown
+}
+
+// The index stays in memory and in index mode; only reopening is slower.
+export interface SnapshotErrorEvent {
+  namespace: string
+  error: unknown
+}
+
+export interface IndexStatusParams {
+  namespace: string
+}
+
+export type IndexStatus =
+  | { mode: 'index'; revision: number; snapshot: 'off' | 'none' | 'ok' | { error: unknown } }
+  | { mode: 'scan'; reason: IndexFallbackReason; error?: unknown }
+  | { mode: 'unopened' }
 
 export interface CreateNamespaceParams {
   name: string
   space: EmbeddingSpace
   // Fixed at creation. Defaults to `{ storage: 'q8' }`.
   index?: { storage?: IndexStorage }
+  // Fixed at creation. Defaults to 'f32'.
+  vectorEncoding?: VectorEncoding
 }
 
 export interface NamespaceInfo {
@@ -64,6 +159,7 @@ export interface NamespaceInfo {
   spaceId: string
   revision: number
   index: { storage: IndexStorage }
+  vectorEncoding: VectorEncoding
 }
 
 export interface EmbeddedChunkInput {
@@ -348,6 +444,7 @@ export interface NamespaceSummary {
   spaceId: string
   space: EmbeddingSpace
   index: { storage: IndexStorage }
+  vectorEncoding: VectorEncoding
   revision: number
   documentCount: number
   chunkCount: number
@@ -382,5 +479,6 @@ export interface Rag {
   importNamespace(params: ImportNamespaceParams, options?: ImportOptions): Promise<ImportResult>
   listNamespaces(): Promise<NamespaceSummary[]>
   dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult>
+  indexStatus(params: IndexStatusParams): Promise<IndexStatus>
   scoped(scope: SearchScope): ScopedRag
 }
