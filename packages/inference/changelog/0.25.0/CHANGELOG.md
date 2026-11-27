@@ -59,6 +59,7 @@ Release Date: 2026-11-25
 ## 🧹 Chores
 
 - Move the SDK onto the fabric 0.33 addon set. (see PR [#5942](https://github.com/tetherto/qvac/pull/5942)) - See [breaking changes](./breaking.md)
+- Use caret ranges for unpinned sdk, inference and cli dependencies. (see PR [#6009](https://github.com/tetherto/qvac/pull/6009))
 
 ## ⚙️ Infrastructure
 

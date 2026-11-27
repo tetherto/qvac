@@ -22,6 +22,10 @@ Release Date: 2026-11-25
 - Report full prompt usage and standard statuses to coding agents. (see PR [#5931](https://github.com/tetherto/qvac/pull/5931)) - See [breaking changes](./breaking.md)
 - Show why qvac serve re-downloads a cached model. (see PR [#5959](https://github.com/tetherto/qvac/pull/5959))
 
+## 🧹 Chores
+
+- Use caret ranges for unpinned sdk, inference and cli dependencies. (see PR [#6009](https://github.com/tetherto/qvac/pull/6009))
+
 ## Compatibility
 
 - Released with the SDK train. Depends on `@qvac/sdk@^0.25.0`.
