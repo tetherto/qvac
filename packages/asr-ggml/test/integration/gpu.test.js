@@ -14,9 +14,9 @@
 //
 //
 // CI runners without a real GPU export NO_GPU=true to skip the GPU half; the CPU
-// half always runs. QVAC_WHISPER_GPU_RELAX=1 downgrades the GPU assertion to a
-// warning for hosts where the GPU is genuinely unavailable (emulated /
-// Paravirtual / low-tier mobile GPU).
+// half always runs. QVAC_WHISPER_GPU_RELAX=1 downgrades GPU backend and
+// transcript assertions to warnings for hosts with an unusable GPU (emulated /
+// Paravirtual / low-tier mobile GPU). CPU assertions remain strict.
 
 const fs = require('bare-fs')
 const os = require('bare-os')
@@ -212,10 +212,15 @@ async function runCase(t, { useGpu, label }) {
   const result = await loadAndTranscribe({ modelPath, samplePath, useGpu })
   console.log(`[${label}] segments=${result.segments.length}`)
   assertStatsShape(t, label, result.stats)
-  t.ok(
-    result.segments.length > 0,
-    `${label}: must produce at least 1 segment (got ${result.segments.length})`
-  )
+  if (useGpu && RELAX && result.segments.length === 0) {
+    t.comment(`${label}: GPU produced no segments on this host (relaxed)`)
+    t.pass(`${label}: transcript assertion relaxed for unusable GPU`)
+  } else {
+    t.ok(
+      result.segments.length > 0,
+      `${label}: must produce at least 1 segment (got ${result.segments.length})`
+    )
+  }
   return result
 }
 
