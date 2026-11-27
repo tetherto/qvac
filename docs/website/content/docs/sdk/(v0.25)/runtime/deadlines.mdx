@@ -1,0 +1,170 @@
+---
+title: Deadlines
+icon: Timer
+description: Bound how long a request may wait for a model, load, run or go without progress, so one caller's stalled request cannot hold a shared runtime's model without limit.
+schemaType: HowTo
+---
+
+## Overview
+
+A runtime shared by several callers runs each model's requests through an admission slot. A request that stalls keeps its slot, and the requests queued behind it wait. A timeout set by the caller of the stalled request does not help the callers behind it, and a caller that sets no timeout bounds nothing.
+
+Deadlines are limits the runtime enforces itself. The runtime owner sets them in the [configuration](/sdk/configuration), a caller can shorten them for one call, and they apply to every client: JS/TS, Python and Kotlin.
+
+Nothing is bounded unless a deadline is set. A runtime with no `deadlines` configuration, called without a `deadline`, behaves as before.
+
+## Boundaries
+
+| Boundary | Enforced by | Setting | On expiry |
+| --- | --- | --- | --- |
+| Worker startup | Client | `rpcInitTimeoutMs` (default 60 s) | The client call fails; no worker is running. |
+| Client call | JS/TS client | `rpcOptions.timeout` | `OperationTimeoutError`; the request is cancelled on the worker. |
+| Download | Runtime | `httpConnectionTimeoutMs` (default 10 s), `registryStreamTimeoutMs` (default 60 s, retried `registryDownloadMaxRetries` times) | The download fails. |
+| Queue wait | Runtime | `queueMs` | `DeadlineExceededError` with `boundary: 'queue'`. The request never started, so it holds nothing. |
+| Model load | Runtime | `loadMs` | `DeadlineExceededError` with `boundary: 'load'`. |
+| Run | Runtime | `runMs` | `DeadlineExceededError` with `boundary: 'run'`. |
+| Stream idle | Runtime | `idleMs` | `DeadlineExceededError` with `boundary: 'idle'`. |
+
+The four runtime deadlines measure:
+
+- **`queueMs`**: the wait for an admission slot on the model.
+- **`loadMs`**: a model load, from the end of the download. It includes the wait for another load or unload of the same model to finish. Read only by `loadModel()`.
+- **`runMs`**: the request from the moment it is admitted to its end. The wait for a slot is not counted.
+- **`idleMs`**: the time since the request last made progress. A response sent to the caller counts as progress, and so does a native progress event the caller does not receive, such as a fine-tuning step, a transcription update that carries only silence, or a token or audio chunk of a call made with `stream: false`. For a call that returns a single reply, the idle deadline starts at the first progress event, so the time to that reply is bounded by `runMs` only.
+
+A completion that runs tools on the caller's side stops its `runMs` and `idleMs` while it waits for a tool result, and starts both afresh for the next model turn.
+
+`transcribeStream()` and `textToSpeechStream()` take their input from the caller during the call. Their `idleMs` stops while the runtime waits for the caller's next input and starts afresh when input arrives, so a caller that pauses does not fail the call. `runMs` keeps counting through those waits.
+
+<Callout type="warn">
+`idleMs` does not detect a stall in two of these sessions while the caller's input is open, because both take the next input before they have finished the input before it:
+
+- a Whisper `transcribeStream()` session, which takes each audio chunk as soon as it arrives;
+- a `textToSpeechStream()` session with `accumulateSentences`, the default for streamed text, which reads the next text while a sentence is being synthesized.
+
+Such a session is waiting for input, and its idle deadline is stopped, for nearly the whole time until the caller ends its input. Bound it with `runMs`.
+</Callout>
+
+Deadlines are measured in wall-clock time. A deadline that passes while the runtime is [suspended](/sdk/runtime/lifecycle) expires when the runtime resumes.
+
+`rpcOptions.timeout` keeps its meaning. It covers the case the runtime cannot report: a worker that does not answer at all.
+
+## What happens on expiry
+
+1. The caller's call fails with `DeadlineExceededError` at the moment the deadline passes. The runtime does not wait for the request's work to stop first.
+2. The runtime aborts the request, the same way [`cancel()`](/sdk/runtime/cancellation) does.
+3. The request keeps its admission slot and its locks until its native work has stopped. Only then is the next queued request admitted. Releasing the slot earlier would start the next request on a native context that is still running.
+
+A request in this state is _overdue_. A request queued behind an overdue request waits until its own `queueMs` passes, or without limit if it has none.
+
+Whether the native work stops promptly depends on the operation, as it does for `cancel()`: see the coverage notes in [Cancellation](/sdk/runtime/cancellation). `ocr()`, `classify()`, `vla()` and `invokePlugin()` have no admission slot. After a deadline aborts one of them, a new request on the same model starts at once, while the earlier native job may still be running.
+
+A model load cannot be stopped once the addon has started it. A `loadModel()` that fails on `loadMs` runs its native load to the end, and the runtime then unloads the model instead of registering it. A `loadModel()` of the same configuration issued in the meantime waits for that unload and loads the model again.
+
+A [custom plugin](/sdk/configuration/plugins/write-custom-plugin) handler called through a typed operation, such as `embed()`, fails at its deadline too. Such a handler receives no abort signal, so its work runs to its end after the call has failed.
+
+## Configuration
+
+```json
+{
+  "deadlines": {
+    "capabilities": {
+      "default": { "queueMs": 120000, "idleMs": 60000 },
+      "completion": { "idleMs": 300000 },
+      "image-generation": { "idleMs": 600000 },
+      "video-generation": { "idleMs": null },
+      "fine-tuning": { "idleMs": null }
+    },
+    "load": { "loadMs": 300000 }
+  }
+}
+```
+
+- `capabilities` is keyed by [capability contract](/sdk/runtime/capabilities) ID, without the major version. Each entry takes `queueMs`, `idleMs` and `runMs`.
+- `capabilities.default` applies to every capability.
+- An entry for one capability replaces `default` field by field. `null` removes a default for that capability.
+- `load.loadMs` bounds model loads. It takes nothing from `capabilities.default`, and it is not set per capability: one loaded model can serve several capabilities.
+
+A request uses the entry of the contract that lists its operation: `diffusion()` uses `image-generation`, `video()` uses `video-generation`. [`invokePlugin()`](/sdk/reference/api#invokeplugin) uses the contract in which the model's plugin lists the invoked handler, which is how a third-party contract such as `acme.diarization` is configured. A handler that no contract lists uses `capabilities.default` alone.
+
+The configuration is checked for ID format when it is loaded. At startup the runtime logs a warning for each configured ID that no registered plugin provides.
+
+Downloads and vector index operations take none of these deadlines. Downloads, including the download phase of `loadModel()`, stay bounded by `httpConnectionTimeoutMs` and `registryStreamTimeoutMs`.
+
+## Per-call deadlines
+
+A call passes its own deadlines in `rpcOptions.deadline`:
+
+```ts
+const run = completion({
+  modelId,
+  history,
+  stream: true,
+  rpcOptions: {
+    deadline: { queueMs: 10_000, idleMs: 90_000, runMs: 600_000 },
+    timeout: 120_000
+  }
+})
+```
+
+For each field the runtime uses the smaller of the configured value and the call's value. A field set in neither is unbounded. A call can therefore shorten a configured deadline, or add one the configuration leaves out, and cannot lengthen or remove one the owner configured.
+
+With the configuration above, this call resolves to a queue deadline of 10 s, an idle deadline of 90 s and a run deadline of 600 s. The same call asking for `idleMs: 900_000` gets 300 s. A `video()` call with no `deadline` has a queue deadline of 120 s and no idle deadline.
+
+<Tabs>
+<Tab value="python" label="Python" default>
+
+`with_deadline()` wraps a transport. Every request sent through the wrapper carries the deadline:
+
+```python
+from tetherto.qvac_sdk import completion, with_deadline
+
+bounded = with_deadline(client.transport, queue_ms=10_000, idle_ms=90_000)
+run = completion(bounded, model_id=model_id, history=history)
+```
+
+</Tab>
+<Tab value="kotlin" label="Kotlin">
+
+Each request type that registers work takes a `deadline`:
+
+```kotlin
+val request = CompletionStreamRequest(
+    modelId = modelId,
+    history = history,
+    deadline = RequestDeadline(queueMs = 10_000, idleMs = 90_000),
+)
+```
+
+</Tab>
+</Tabs>
+
+## Sizing the idle and queue deadlines
+
+`idleMs` expires on a real stall: native decoding stops mid-stream, a native step never returns, or a handler waits for something that never arrives. It also expires on work that is slow and reports nothing, so size it above the longest silent stretch on the hardware you run on:
+
+| Capability | Progress the runtime sees | Stretches with no progress |
+| --- | --- | --- |
+| `completion` | Each token | Prompt processing before the first token; restoring a KV cache |
+| `text-to-speech`, `transcription` | Each audio chunk or segment | One long sentence or segment. `idleMs` does not bound a Whisper `transcribeStream()` session or a `textToSpeechStream()` session: see [Boundaries](#boundaries) |
+| `image-generation` | Each denoising step | Text encoding and the first step; decoding and upscaling after the last step |
+| `video-generation` | Each denoising step | Text encoding and the first step; decoding after the last step |
+| `image-upscaling` | None | The whole run |
+| `world-simulation` | Each block, after its frames are decoded | A whole block |
+| `fine-tuning` | Each training `stats` event | Between `stats` events |
+
+Image and video generation and fine-tuning can run for many minutes. Bound them with `idleMs` rather than `runMs`, or leave them unbounded as in the example configuration.
+
+`queueMs` expires when the model stays busy for longer than the deadline. That happens behind an overdue request, and also behind legitimate long work:
+
+- a running `finetune()`, which holds the model's completion queue for itself;
+- completions on a model loaded with `parallel: 1`;
+- a batch of `textToSpeech()` calls on one model;
+- another session's long transcription.
+
+`diffusion()`, `video()`, `upscale()`, the world operations and `embed()` on a llama.cpp model refuse a second request at once with `RequestRejectedByPolicyError` instead of queueing, so `queueMs` never expires for them.
+
+## Errors
+
+- `DeadlineExceededError` (code `52425`): a runtime deadline passed. Carries `requestId`, `boundary` (`queue`, `load`, `run` or `idle`), `timeoutMs`, and, when known, `capability` and `modelId`. `capability` is absent for `loadModel()` and for a plugin handler outside every contract.
+- `OperationTimeoutError`: the JS/TS client's own `rpcOptions.timeout` passed. See [Per-call timeouts](/sdk/runtime/cancellation#per-call-timeouts).
