@@ -1993,7 +1993,7 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-stow-target-react-native:
-        specifier: ^0.3.0
+        specifier: 0.3.0
         version: 0.3.0(bare-stow@0.3.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6))
       bare-stream:
         specifier: 2.13.3
