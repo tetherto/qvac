@@ -1,0 +1,11 @@
+{
+  "title": "RAG",
+  "description": "Embedded ingestion and retrieval with @qvac/rag",
+  "root": true,
+  "pages": [
+    "index",
+    "migration",
+    "api-reference",
+    "built-in-vector-store"
+  ]
+}

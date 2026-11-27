@@ -1,0 +1,326 @@
+---
+title: API reference
+icon: FileCode
+description: Every function exported by @qvac/rag.
+schemaType: TechArticle
+tocMaxDepth: 3
+---
+
+## `createRag(options)`
+
+Create a RAG instance.
+
+| Option | Type | Description |
+|---|---|---|
+| `corestore` | `Corestore` | The Corestore that backs this instance. One store per folder per process. |
+| `embeddings` | `EmbeddingsPort` | Optional. Provides `embedDocuments` and `embedQuery` for text-based ingest and search. Without it, supply precomputed vectors. |
+| `index` | `IndexOptions` | Optional. Configures the index, used only when `@qvac/turbovec-ggml` is installed or `index.provider` is given. |
+| `chunking` | `ChunkingOptions` | Optional. Controls automatic text chunking on `ingest()`. |
+| `onIndexFallback` | `(event: IndexFallbackEvent) => void` | Optional. Called once per namespace each time its searches switch to the scan. A throw or a rejected promise is ignored. |
+| `onSnapshotError` | `(event: SnapshotErrorEvent) => void` | Optional. Called when a namespace's snapshot cannot be read or written. The index stays in memory and in index mode; only reopening is slower. |
+
+`index` accepts:
+
+- `dir` — directory for index snapshots. Without it, each namespace's index is built from the database the first time it is searched after `ready()`, and kept in memory only.
+- `snapshotEvery` — committed batches between snapshots, default 256. A snapshot is also written on `close()`.
+- `provider` — an `IndexProvider` to use in place of `@qvac/turbovec-ggml`, for hosts that supply their own index.
+- `fs` — a `SnapshotFileSystem` to use in place of the runtime's own. Defaults to `bare-fs` on Bare and `fs` on Node.
+
+`IndexFallbackEvent` is `{ namespace, reason, error? }`, where `reason` is `addon-missing`, `addon-load-failed`, `rebuild-failed`, or `search-failed`. `SnapshotErrorEvent` is `{ namespace, error }`.
+
+Returns a `Rag` handle. Call `await rag.ready()` before any other method.
+
+---
+
+## `rag.createNamespace(options)`
+
+Create a namespace tied to one embedding space.
+
+| Option | Type | Description |
+|---|---|---|
+| `name` | `string` | Namespace identifier. |
+| `space` | `EmbeddingSpace` | The embedding space: model, revision, dimensions, metric, and preprocessing. |
+| `index` | `{ storage?: IndexStorage }` | Optional. How the namespace's index stores vectors, fixed at creation. |
+| `vectorEncoding` | `VectorEncoding` | Optional. How chunk vectors are stored in the database and in exports: `f32` (default) or `f16`. Fixed at creation. |
+
+`index.storage` options:
+
+| Storage | Dimensions | Notes |
+|---|---|---|
+| `q8` (default) | any | 8-bit quantized |
+| `f32` | any | Full precision |
+| `turbovec-q4` | divisible by 8, at most 1,024 | TurboVec 4-bit |
+| `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 2-bit |
+
+`index.storage` is how the index holds vectors; `vectorEncoding` is how the database and exports hold them. `f16` halves stored vector size, and scores are then computed from the rounded values.
+
+Returns `{ name, spaceId, revision, index: { storage }, vectorEncoding }`. A namespace only accepts vectors from its space. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
+
+---
+
+## `rag.ingest(options[, control])`
+
+Ingest documents into a namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documents` | `DocumentInput[]` | Documents to ingest (see below). |
+
+Each document is one of:
+
+- **Text** `{ id, text, metadata? }` — chunked and embedded via the port.
+- **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }` — segmented by you, embedded via the port.
+- **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }` — no port needed. `spaceId` can sit on the document or on each chunk.
+
+The optional second argument accepts `onProgress({ stage, done, total })` and `signal` (abort).
+
+A document may carry no chunks — `chunks: []`, or text that is empty or only whitespace. It is stored with a `chunkCount` of 0 and matches no search.
+
+The whole call is checked before anything is written, and fails with `INVALID_INPUT`:
+
+- a string that is not well-formed UTF-16 (a lone surrogate, such as half an emoji left by cutting a string) in a name, ID, text, chunk content, metadata, or space field;
+- a stored row over 8 MiB — a chunk with its content, metadata, and vector, or a document with its metadata;
+- a `__proto__` key in `metadata`;
+- a `signal` that is not an `AbortSignal`.
+
+Documents then commit one at a time, in input order, each as soon as its chunks are embedded. So a failure part-way through leaves the documents before it saved, and the failing one at the generation it already had; an abort skips the rest. One failure is reached only here: a document already at generation 2^32 cannot be replaced, and raises `INVALID_INPUT` when its turn comes rather than up front, because the generation is read from the store.
+
+The two exits differ. An abort returns normally, with `cancelled` true and `documents` listing what committed before it. Every other failure throws, so there is no result to read even though the documents before it are saved — list the namespace to see what landed.
+
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced`, or `unchanged`.
+
+---
+
+## `rag.search(options)`
+
+Search for the most relevant chunks.
+
+| Option | Type | Description |
+|---|---|---|
+| `scope` | `{ namespace, documentIds? }` | Where to search. `documentIds` restricts the search to specific documents. |
+| `query` | `string` | Text query (requires a port with `embedQuery`). |
+| `vector` | `number[] \| Float32Array` | Pre-embedded query vector (use instead of `query`). |
+| `spaceId` | `string` | Required with `vector`. |
+| `k` | `number` | Maximum results. |
+| `perDocument` | `number` | Optional. Spread hits across documents: each document's best hit is taken first, then further hits round-robin up to `perDocument` each. |
+| `minScore` | `number` | Optional. Drop hits scoring below this before `perDocument` and `k` apply. |
+| `signal` | `AbortSignal` | Optional. |
+
+Returns an array of hits, each with:
+
+| Field | Type | Description |
+|---|---|---|
+| `namespace` | `string` | |
+| `documentId` | `string` | |
+| `chunkId` | `string` | |
+| `ordinal` | `number` | Chunk position within the document. |
+| `generation` | `number` | The document version the chunk belongs to. |
+| `chunkCount` | `number` | Chunks in that generation. |
+| `content` | `string` | |
+| `metadataJson` | `string?` | The chunk's metadata from ingest. |
+| `documentMetadata` | `object?` | The document's `metadata` from ingest. |
+| `citation` | `SearchCitation` | Holds `title`, `sourceUrl`, `sourcePath`, `mimeType` from document or chunk metadata, and `page` from chunk metadata. |
+| `score` | `number` | Dot product, or cosine similarity for `cosine` spaces. |
+
+---
+
+## `rag.deleteDocuments(options)`
+
+Remove documents and their chunks from a namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentIds` | `string[]` | Documents to delete. Unknown IDs are ignored. |
+
+Returns `{ deleted, revision }`.
+
+---
+
+## `rag.readDocument(options)`
+
+Read a document's chunks in ordinal order, one page at a time.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentId` | `string` | The document to read. |
+| `generation` | `number` | Optional. Pin to a generation; fails with `DOCUMENT_CHANGED` if the document was re-ingested or deleted since. |
+| `fromOrdinal` | `number` | Optional. Start reading from this ordinal (default 0). |
+| `limit` | `number` | Optional. Chunks per page (default 64, max 1,024). |
+
+Returns `{ namespace, documentId, generation, chunkCount, metadata?, chunks, nextOrdinal }`. Each chunk is `{ chunkId, ordinal, content, metadataJson? }`. `nextOrdinal` is the next page's `fromOrdinal`, or `null` after the last chunk.
+
+---
+
+## `rag.listDocuments(options)`
+
+List a namespace's documents in document ID order.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `after` | `string` | Optional. Cursor from a previous page's `next`. |
+| `limit` | `number` | Optional. Documents per page (default 100, max 1,024). |
+
+Returns `{ documents, next }`. Each entry is `{ documentId, generation, chunkCount, revision, metadata? }`. Pass `next` as `after` for the following page; it is `null` on the last one.
+
+---
+
+## `rag.exportNamespace(options[, control])`
+
+Export a namespace for transfer to another store.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Namespace to export. |
+| `documentIds` | `string[]` | Optional. Export only these documents. |
+
+The optional second argument accepts `signal` (abort).
+
+Returns an `AsyncIterable<Uint8Array>` in the `QVRAGX1` format. The stream reads one database snapshot and yields one chunk at a time, so memory stays flat.
+
+An `f16` namespace exports format 2, which `@qvac/rag` 0.11 cannot import; so does a format 1 export holding a document without chunks. Every other export imports into 0.11, and 0.11's exports import here.
+
+---
+
+## `rag.importNamespace(options[, control])`
+
+Import a previously exported namespace.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Name for the imported namespace. |
+| `source` | `AsyncIterable<Uint8Array>` | The exported stream. |
+| `index` | `{ storage?: IndexStorage }` | Optional. Sets the namespace's index storage when the import creates it. |
+
+The optional second argument accepts `signal` (abort) and `onProgress({ documents, deletes })`.
+
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` has `status` `created`, `replaced`, `unchanged`, or `deleted` (a delete record in the stream removed the target's document). Each entry in `skipped` has `reason` `superseded` (the target holds a newer generation), `deleted` (the target already deleted that generation or a later one), or `conflict` (the target holds the same generation with other content).
+
+---
+
+## `rag.listNamespaces()`
+
+List all namespaces. Returns an array of `{ name, spaceId, space, index: { storage }, vectorEncoding, revision, documentCount, chunkCount }`, by name.
+
+---
+
+## `rag.dropNamespace(options)`
+
+Delete a namespace and all its documents, chunks, and index data.
+
+| Option | Type | Description |
+|---|---|---|
+| `name` | `string` | Namespace to drop. |
+
+Returns `{ name, documentCount, chunkCount }`.
+
+---
+
+## `rag.indexStatus(options)`
+
+Report how a namespace is currently searched.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+
+Returns one of:
+
+- `{ mode: 'index', revision, snapshot }` — searched by the TurboVec index. `snapshot` is `off` (no `index.dir`), `none` (none written yet), `ok`, or `{ error }`.
+- `{ mode: 'scan', reason, error? }` — searched by scanning every chunk. `reason` is `addon-missing`, `addon-load-failed`, `rebuild-failed`, or `search-failed`.
+- `{ mode: 'unopened' }` — the namespace has not been searched since `ready()`, so no index has been opened.
+
+---
+
+## `rag.scoped(scope)`
+
+Create a scoped handle that restricts operations to a subset of documents.
+
+| Option | Type | Description |
+|---|---|---|
+| `namespace` | `string` | Target namespace. |
+| `documentIds` | `string[]` | Optional. Documents in scope. |
+
+The returned handle exposes `search`, `readDocument`, and `listDocuments`, each pre-scoped. A handle whose documents have been deleted returns no hits instead of an error.
+
+---
+
+## `rag.close()`
+
+Close the RAG instance. Waits for calls already in progress, then closes the underlying database but leaves the Corestore open. Close the Corestore separately after.
+
+---
+
+## `computeSpaceId(space)`
+
+Return the deterministic `spaceId` hash for an `EmbeddingSpace` without touching storage.
+
+| Param | Type | Description |
+|---|---|---|
+| `space` | `EmbeddingSpace` | The space to hash. |
+
+Returns a `string` — the same id that `createNamespace` and other methods derive internally.
+
+---
+
+## `EmbeddingsPort`
+
+The embeddings port you pass to `createRag()`.
+
+```typescript
+interface EmbeddingsPort {
+  space: EmbeddingSpace
+  embedDocuments(texts: string[], options?: { signal?: AbortSignal }): Promise<Float32Array>
+  embedQuery(text: string, options?: { signal?: AbortSignal }): Promise<Float32Array>
+}
+```
+
+`embedDocuments` returns a single flat `Float32Array` of `texts.length * space.dimensions` values — one complete vector per input text, in order.
+
+`space` identifies the vectors. A namespace only accepts vectors from its space. Change `space` when the vectors change (model, revision, pooling).
+
+---
+
+## `EmbeddingSpace`
+
+Describes one set of compatible vectors.
+
+```typescript
+interface EmbeddingSpace {
+  model: string
+  revision: string
+  dimensions: number
+  metric: 'cosine' | 'dot'
+  normalized: boolean
+  documentEncoding: string
+  queryEncoding: string
+  preprocessing: string
+}
+```
+
+---
+
+## Performance
+
+On Node, `@qvac/rag` scans all chunks on every search. At 100,000 chunks of 768 dimensions a scan takes about 1.3 s, against about 21 ms with the TurboVec index on Bare. Past that threshold, run on Bare.
+
+Benchmarks for one namespace of 100,000 chunks at 768 dimensions with `q8` storage, measured on an M-series Mac:
+
+| Path | Search p50 | Search p95 |
+|---|---|---|
+| Bare + TurboVec (cold open from snapshot) | ~21 ms | 26–29 ms |
+| Bare + TurboVec (rebuild from DB, no snapshot) | 21–23 ms | 24–31 ms |
+| Node (scan, no `@qvac/turbovec-ggml`) | ~1.3 s | 1.4–1.5 s |
+
+Pass `index.dir` so later opens load the snapshot instead of rebuilding.
+
+## Error handling
+
+Every error is a `QvacErrorRAG` with a code from `ERR_CODES`. Import them from `@qvac/rag` or `@qvac/rag/errors`:
+
+```typescript
+import { QvacErrorRAG, ERR_CODES } from '@qvac/rag/errors'
+```

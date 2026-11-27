@@ -1,0 +1,158 @@
+---
+title: Built-in vector store
+icon: Database
+description: Ingest documents and search with @qvac/rag, without an external database.
+schemaType: HowTo
+---
+
+## Overview
+
+`@qvac/rag` stores documents in a Corestore you provide. Ingest takes text or precomputed vectors, chunks and embeds automatically when a port is supplied, and search retrieves the most relevant chunks by vector similarity.
+
+<Callout type="info">
+  `@qvac/rag` is JavaScript and TypeScript only. For Python and Kotlin, use the
+  [CLI vector stores](/cli/http-server#vector-stores) or build retrieval from the
+  SDK — see the [TurboVec
+  index](/sdk/ai-capabilities/rag#turbovec-index-with-your-own-document-store)
+  and [external vector DB](/sdk/ai-capabilities/rag#external-vector-db)
+  examples.
+</Callout>
+
+## Ingest and search
+
+The following script creates a RAG instance with the SDK's GTE Large model as the embeddings port, ingests sample documents, and runs a similarity search:
+
+<WrapCode>
+
+```typescript title="rag-builtin.ts" lineNumbers
+import Corestore from 'corestore'
+import { createRag, type EmbeddingsPort } from '@qvac/rag'
+import { embed, embedBatch, loadModel, unloadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16 })
+
+const port: EmbeddingsPort = {
+  space: {
+    model: 'gte-large-fp16',
+    revision: '1',
+    dimensions: 1024,
+    metric: 'cosine',
+    normalized: false,
+    documentEncoding: '',
+    queryEncoding: '',
+    preprocessing: 'none'
+  },
+  async embedDocuments (texts) {
+    const { embedding } = await embedBatch({ modelId, inputs: texts })
+    return Float32Array.from(embedding.flat())
+  },
+  async embedQuery (text) {
+    const { embedding } = await embed({ modelId, input: text })
+    return Float32Array.from(embedding)
+  }
+}
+
+const corestore = new Corestore('./rag-store')
+const rag = createRag({ corestore, embeddings: port })
+await rag.ready()
+
+await rag.createNamespace({ name: 'articles', space: port.space })
+
+console.log('Ingesting documents...')
+await rag.ingest({
+  namespace: 'articles',
+  documents: [
+    { id: 'ml', text: 'Machine learning is a subset of artificial intelligence that focuses on algorithms that learn from data.' },
+    { id: 'dl', text: 'Deep learning uses neural networks with multiple layers to process complex data patterns.' },
+    { id: 'nlp', text: 'Natural language processing helps computers understand and generate human language.' },
+    { id: 'cv', text: 'Computer vision enables machines to interpret visual information from the world.' }
+  ]
+})
+
+console.log('Searching...')
+const hits = await rag.search({
+  scope: { namespace: 'articles' },
+  query: 'neural networks',
+  k: 3
+})
+
+for (const hit of hits) {
+  console.log(`${hit.documentId} (${hit.score.toFixed(3)}): ${hit.content}`)
+}
+
+await rag.close()
+await corestore.close()
+await unloadModel({ modelId })
+```
+
+</WrapCode>
+
+## Precomputed vectors
+
+Without an embeddings port, supply vectors directly. Pass `chunks` with `embedding` and `spaceId` instead of `text`, and search with `vector` instead of `query`:
+
+<WrapCode>
+
+```typescript title="rag-precomputed.ts" lineNumbers
+import Corestore from 'corestore'
+import { createRag, type EmbeddingSpace } from '@qvac/rag'
+
+const space: EmbeddingSpace = {
+  model: 'my-embedder',
+  revision: '1',
+  dimensions: 3,
+  metric: 'cosine',
+  normalized: false,
+  documentEncoding: '',
+  queryEncoding: '',
+  preprocessing: 'none'
+}
+
+const corestore = new Corestore('./rag-precomputed')
+const rag = createRag({ corestore })
+await rag.ready()
+
+const { spaceId } = await rag.createNamespace({ name: 'demo', space })
+
+await rag.ingest({
+  namespace: 'demo',
+  documents: [
+    {
+      id: 'cats',
+      chunks: [
+        { content: 'Cats sleep most of the day.', embedding: [0.9, 0.1, 0], spaceId },
+        { content: 'Cats groom themselves.', embedding: [0.8, 0.2, 0.1], spaceId }
+      ]
+    },
+    {
+      id: 'dogs',
+      chunks: [
+        { content: 'Dogs need daily walks.', embedding: [0.1, 0.9, 0], spaceId }
+      ]
+    }
+  ]
+})
+
+const hits = await rag.search({
+  scope: { namespace: 'demo' },
+  vector: [1, 0, 0],
+  spaceId,
+  k: 3
+})
+
+console.log(hits.map(h => `${h.documentId}: ${h.content}`))
+
+await rag.close()
+await corestore.close()
+```
+
+</WrapCode>
+
+## Scoped search
+
+Restrict a search to specific documents with `scoped()`:
+
+```typescript
+const subset = rag.scoped({ namespace: 'articles', documentIds: ['ml', 'dl'] })
+const hits = await subset.search({ query: 'neural networks', k: 2 })
+```

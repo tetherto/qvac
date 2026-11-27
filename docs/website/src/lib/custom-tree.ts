@@ -172,6 +172,7 @@ const ecosystemChildren: Node[] = [
   intoCollection('SDK', '/sdk/', 'Code'),
   intoCollection('CLI', '/cli/', 'Terminal'),
   intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
+  intoCollection('RAG', '/rag/', 'ScanSearch'),
   offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
   {
     type: 'separator',
@@ -264,12 +265,7 @@ const resourcesChildren: Node[] = [
     type: 'page',
     icon: resolveIcon('Bug'),
   },
-  {
-    name: 'Migrate from the SDK RAG API',
-    url: '/resources/rag-migration',
-    type: 'page',
-    icon: resolveIcon('ScanSearch'),
-  },
+  intoCollection('Migrate from the SDK RAG API', '/rag/migration/', 'ScanSearch'),
   offSite('Discord', 'https://discord.com/invite/tetherdev', 'MessageCircle'),
 ];
 
@@ -306,6 +302,11 @@ const COLLECTIONS: Collection[] = [
     name: 'CLI',
     description: 'Install the CLI and use every function of the tool',
     path: '/cli',
+  },
+  {
+    name: 'RAG',
+    description: 'Embedded ingestion and retrieval with @qvac/rag',
+    path: '/rag',
   },
   {
     name: 'Resources',

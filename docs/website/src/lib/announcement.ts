@@ -29,12 +29,12 @@ export type Announcement = {
 };
 
 export const announcement: Announcement | null = {
-  id: 'kotlin-sdk',
-  label: 'New:',
-  title: 'QVAC SDK now supports Kotlin.',
-  description: 'Build local AI into your JVM and Android apps.',
+  id: 'rag-package',
+  label: 'Migration:',
+  title: 'RAG moved from the SDK to @qvac/rag.',
+  description: 'A standalone package for ingestion and retrieval.',
   cta: {
-    text: 'Get started',
-    href: 'https://docs.qvac.tether.io/sdk/kotlin-sdk',
+    text: 'Migration guide',
+    href: 'https://docs.qvac.tether.io/rag/migration',
   },
 };
