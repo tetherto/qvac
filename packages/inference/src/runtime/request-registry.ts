@@ -374,13 +374,6 @@ interface NormalizedPolicy {
   exclusive: boolean
 }
 
-/**
- * One queued `begin(...)` awaiting an admission slot. `resolve(true)` hands
- * the waiter the freed slot (it inherits the in-flight count — see
- * `releaseSlot`); `resolve(false)` releases it without a slot (graceful
- * cancel-while-queued, where the request proceeds only to observe its
- * already-aborted signal); `reject(err)` fails the awaiting `begin(...)`.
- */
 /** A `begin(...)` between its start and its entry landing in `entries`. */
 interface PendingBegin {
   sessionId: string
@@ -389,6 +382,23 @@ interface PendingBegin {
   settle: () => void
 }
 
+/**
+ * How a queued waiter leaves the FIFO without failing: `granted` hands it the
+ * freed slot (it inherits the in-flight count — see `releaseSlot`);
+ * `granted: false` releases it without a slot and carries the cancel to its
+ * `begin(...)`, which resumes into an already-aborted context.
+ */
+type SlotOutcome = { granted: true } | { granted: false; cancel: QueuedCancel }
+
+/** The cancel a queued waiter carries to its `begin(...)`. */
+interface QueuedCancel {
+  reason?: string
+}
+
+/**
+ * One queued `begin(...)` awaiting an admission slot. `resolve(...)` settles
+ * it with a `SlotOutcome`; `reject(err)` fails the awaiting `begin(...)`.
+ */
 interface SlotWaiter {
   requestId: string
   sessionId: string
@@ -397,7 +407,7 @@ interface SlotWaiter {
   kind: RequestKind
   modelId: string
   enqueuedAt: number
-  resolve: (granted: boolean) => void
+  resolve: (outcome: SlotOutcome) => void
   reject: (err: unknown) => void
   /** `queueTimeoutMs` timer, cleared on resolve / reject / drain. */
   timer: ReturnType<typeof setTimeout> | undefined
@@ -640,8 +650,9 @@ export function createRequestRegistry(options?: {
    *
    * When the key is at capacity it either rejects (`onOverflow: "reject"`,
    * queue-depth cap, or `queueTimeoutMs`) or enqueues a FIFO waiter and
-   * awaits it. The releaser hands a freed slot to the oldest waiter
-   * (`resolve(true)`), so `active` is never decremented and re-incremented
+   * awaits it. A waiter cancelled while queued resolves with its cancel and no
+   * slot. The releaser hands a freed slot to the oldest waiter
+   * (`granted: true`), so `active` is never decremented and re-incremented
    * across a hand-off — that's what guarantees FIFO fairness with no
    * acquire/release race in the single-threaded event loop.
    */
@@ -650,7 +661,7 @@ export function createRequestRegistry(options?: {
     sessionId: string,
     registryKey: string,
     deadline: DeadlineClock | undefined
-  ): Promise<{ slotKey: string | undefined; exclusive: boolean }> {
+  ): Promise<{ slotKey: string | undefined; exclusive: boolean; cancel?: QueuedCancel }> {
     if (opts.modelId === undefined) return { slotKey: undefined, exclusive: false }
     const policy = policies.get(opts.kind)
     if (!policy) return { slotKey: undefined, exclusive: false }
@@ -728,9 +739,9 @@ export function createRequestRegistry(options?: {
     parent?.addEventListener('abort', onParentAbortWhileQueued, { once: true })
 
     const queue = st
-    let granted: boolean
+    let outcome: SlotOutcome
     try {
-      granted = await new Promise<boolean>((resolve, reject) => {
+      outcome = await new Promise<SlotOutcome>((resolve, reject) => {
         const waiter: SlotWaiter = {
           requestId: opts.requestId,
           sessionId,
@@ -770,7 +781,9 @@ export function createRequestRegistry(options?: {
       parent?.removeEventListener('abort', onParentAbortWhileQueued)
     }
 
-    return granted ? { slotKey: key, exclusive } : { slotKey: undefined, exclusive: false }
+    return outcome.granted
+      ? { slotKey: key, exclusive }
+      : { slotKey: undefined, exclusive: false, cancel: outcome.cancel }
   }
 
   /**
@@ -798,7 +811,7 @@ export function createRequestRegistry(options?: {
         clearTimeout(head.timer)
         head.timer = undefined
       }
-      head.resolve(true)
+      head.resolve({ granted: true })
     }
     if (st.active <= 0 && !st.exclusiveActive && st.waiters.length === 0) {
       keyStates.delete(key)
@@ -954,7 +967,7 @@ export function createRequestRegistry(options?: {
     // A request cancelled BEFORE begin must not queue for a slot on a saturated
     // lane: consume its marker first and skip admission, so it resolves at once
     // into an aborted context holding no slot instead of waiting for the holder.
-    let preCancel = consumeCancelBeforeBegin(registryKey)
+    let preCancel: QueuedCancel | undefined = consumeCancelBeforeBegin(registryKey)
 
     // Admission control runs before allocation so a rejected begin leaves no
     // controller / scope behind. This may await: a gated `(kind, modelId)` at
@@ -965,7 +978,7 @@ export function createRequestRegistry(options?: {
     if (!preCancel) {
       // Plain try/catch, not `.catch()`, so admission adds no extra microtask
       // and observers still see the request registered on the same tick.
-      let acquired: { slotKey: string | undefined; exclusive: boolean }
+      let acquired: Awaited<ReturnType<typeof acquireSlot>>
       try {
         acquired = await acquireSlot(opts, sessionId, registryKey, deadline)
       } catch (err) {
@@ -986,8 +999,11 @@ export function createRequestRegistry(options?: {
       }
 
       // A cancel that landed WHILE we were queued resolved acquireSlot with no
-      // slot and recorded a marker; consume it so the context starts aborted.
-      preCancel = consumeCancelBeforeBegin(registryKey)
+      // slot and carries the cancel itself. A cancel by id that landed after the
+      // waiter left the queue but before this resumed found no entry and set
+      // the tripwire; consume it either way so it can't abort a later reuse.
+      const lateCancel = consumeCancelBeforeBegin(registryKey)
+      preCancel = acquired.cancel ?? lateCancel
     }
 
     // A begin arriving while its model is being torn down starts aborted — no
@@ -1116,16 +1132,16 @@ export function createRequestRegistry(options?: {
   }
 
   /**
-   * Cancel a still-queued waiter the same way the Stop-button race is
-   * handled: record a cancel-before-begin so its `begin(...)` — which
-   * resumes the instant we `resolve(false)` (without a slot) — observes the
-   * cancel and returns an already-aborted context. The request thus ends in
-   * a clean `cancelled` state rather than throwing.
+   * Cancel a still-queued waiter: pull it from the FIFO and resolve its
+   * `begin(...)` without a slot, carrying the cancel so it returns an
+   * already-aborted context. The request thus ends in a clean `cancelled`
+   * state rather than throwing. The cancel travels with the waiter, not
+   * through the bounded cancel-before-begin set, so a sweep over more queued
+   * waiters than that set holds can't evict a cancel before it lands.
    */
   function cancelQueuedWaiterGracefully(key: string, waiter: SlotWaiter, reason?: string): void {
-    recordCancelBeforeBegin(waiter.key, reason)
     removeWaiter(key, waiter)
-    waiter.resolve(false)
+    waiter.resolve({ granted: false, cancel: reason !== undefined ? { reason } : {} })
   }
 
   function cancel(target: CancelTarget): number {
@@ -1138,8 +1154,8 @@ export function createRequestRegistry(options?: {
         return cancelled
       }
       // Queued (still waiting for an admission slot)? It has no controller
-      // yet, so cancel it through the cancel-before-begin tripwire: pull it
-      // from the FIFO and let its begin() resume into an aborted context.
+      // yet, so pull it from the FIFO and hand it the cancel directly; its
+      // begin() resumes into an aborted context.
       // Counted as one — unlike the pure race below, this targets a known
       // in-flight (queued) begin, so the Stop button feels responsive
       // instead of waiting for the slot to free first.
