@@ -8,6 +8,8 @@ const {
   ensureMessageCacheDirectories,
   ensureParentDirectory
 } = require('../../browser/cache-files.js')
+const { MOUNTED_FILES_KEY } = require('../../browser/model-files.js')
+const { prepareRunData } = require('../../browser/run-data.js')
 
 function instance(output = () => {}) {
   return binding.createInstance({}, {}, output)
@@ -33,6 +35,86 @@ function fakeEngine(onRun) {
       return 0
     }
   })
+}
+
+function cooperativeEngine(options) {
+  let nextHandle = 1
+  const handles = new Map()
+  return {
+    FS: { mkdirTree() {} },
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') {
+        const handle = nextHandle++
+        handles.set(handle, { jobs: new Map() })
+        return handle
+      }
+      if (name === 'qvac_web_submit') {
+        handles.get(args[0]).jobs.set(args[1], {
+          batch: args[2] !== 0,
+          input: JSON.parse(args[3]),
+          cancelled: false
+        })
+        return 0
+      }
+      if (name === 'qvac_web_step') {
+        const [id, job] = handles.get(args[0]).jobs.entries().next().value ?? []
+        if (id === undefined) return 0
+        if (job.cancelled) {
+          options.qvacEmit(
+            args[0],
+            id,
+            'Error',
+            JSON.stringify({ error: 'Job cancelled', code: 'CANCELLED' })
+          )
+        } else if (job.batch) {
+          for (const item of job.input) {
+            const stop = options.qvacEmit(
+              args[0],
+              id,
+              'BatchOutput',
+              JSON.stringify({ id: item.id, text: item.id })
+            )
+            if (stop) job.cancelled = true
+          }
+          if (job.cancelled) {
+            options.qvacEmit(
+              args[0],
+              id,
+              'Error',
+              JSON.stringify({ error: 'Job cancelled', code: 'CANCELLED' })
+            )
+          } else {
+            options.qvacEmit(
+              args[0],
+              id,
+              'BatchResult',
+              JSON.stringify(job.input.map((item) => ({ id: item.id, text: item.id })))
+            )
+            options.qvacEmit(args[0], id, 'JobEnded', '{}')
+          }
+        } else {
+          options.qvacEmit(args[0], id, 'Output', 'token')
+          options.qvacEmit(args[0], id, 'JobEnded', '{}')
+        }
+        handles.get(args[0]).jobs.delete(id)
+        return handles.get(args[0]).jobs.size
+      }
+      if (name === 'qvac_web_cancel_job') {
+        const job = handles.get(args[0]).jobs.get(args[1])
+        if (job) job.cancelled = true
+        return 0
+      }
+      if (name === 'qvac_web_active_slots') return handles.get(args[0]).jobs.size
+      if (name === 'qvac_web_cache_request') return 0
+      if (name === 'qvac_web_cache_poll') return 0
+      if (name === 'qvac_web_destroy') {
+        handles.delete(args[0])
+        return 0
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }
 }
 
 async function publicModel(isolated) {
@@ -139,14 +221,17 @@ test('browser binding validates inputs before admission', async (t) => {
 
 test('browser admission reserves worker capacity before validation', async (t) => {
   let runs = 0
+  let nextHandle = 1
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    async ccall(name, _returnType, _types, args) {
-      if (name === 'qvac_web_create') return 1
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return nextHandle++
       if (name === 'qvac_web_run') {
         runs++
-        await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return delay().then(() => {
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -165,6 +250,35 @@ test('browser admission reserves worker capacity before validation', async (t) =
     await first.unload()
     await second.unload()
   }
+})
+
+test('rejectWhenBusy false queues legacy browser requests', async (t) => {
+  let runs = 0
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        runs++
+        return delay().then(() => {
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+
+  const model = await publicModel(isolated)
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = await model.run([{ role: 'user', content: 'first' }])
+    const second = await model.run([{ role: 'user', content: 'second' }], { rejectWhenBusy: false })
+    await first.await()
+    await second.await()
+    t.is(runs, (iteration + 1) * 2, `iteration ${iteration + 1}`)
+  }
+  await model.unload()
 })
 
 test('failed browser validation releases its admission reservation', async (t) => {
@@ -272,11 +386,14 @@ test('browser binding exposes cancellation while a job has emitted no output', a
   const terminals = []
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    ccall: async (name, _returnType, _types, args) => {
+    ccall: (name, _returnType, _types, args) => {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_run') {
-        while (!options.qvacCancelled(args[0], args[1])) await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return (async () => {
+          while (!options.qvacCancelled(args[0], args[1])) await delay()
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })()
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -315,53 +432,272 @@ test('browser binding publishes job completion after releasing the engine queue'
     await delay()
     t.is(await tokenCounts[iteration], 3, `iteration ${iteration + 1}`)
   }
-})
-
-test('browser binding preserves invocation order after job admission', async (t) => {
-  const calls = []
-  const isolated = isolatedBinding((options) => ({
-    FS: { mkdirTree() {} },
-    async ccall(name, _returnType, _types, args) {
-      if (name === 'qvac_web_create') return 1
-      if (name === 'qvac_web_run') {
-        calls.push(JSON.parse(args[2])[0].input)
-        await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
-      }
-      if (name === 'qvac_web_save_cache') calls.push('save')
-      if (name === 'qvac_web_result') return '{}'
-      return 0
-    }
-  }))
-  const handle = isolated.createInstance({}, {}, () => {})
-  await isolated.activate(handle)
-
-  for (let iteration = 0; iteration < 20; iteration++) {
-    await isolated.runJob(handle, [{ type: 'text', input: 'run1' }])
-    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }])
-    const saved = isolated.saveCache(handle, '/cache/state.bin')
-    await second
-    await saved
-    t.alike(
-      calls.slice(iteration * 3, iteration * 3 + 3),
-      ['run1', 'run2', 'save'],
-      `iteration ${iteration + 1}`
-    )
-  }
   await isolated.destroyInstance(handle)
 })
 
-test('browser unload cancels a job waiting for admission', async (t) => {
+test('browser run data stages media bytes without JSON expansion', (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = new Uint8Array([0, 1, 127, 128, 254, 255])
+    const second = new Uint8Array([9, 8, 7])
+    const prepared = prepareRunData([
+      { type: 'media', content: first },
+      { type: 'media', content: second },
+      { type: 'text', input: '[{"role":"user","type":"media","content":""}]' }
+    ])
+
+    t.alike(JSON.parse(prepared.json), [
+      { type: 'text', input: '[{"role":"user","type":"media","content":""}]' }
+    ])
+    t.alike(prepared.media, [[first, second]], `iteration ${iteration + 1}`)
+    t.ok(prepared.json.length < first.byteLength + second.byteLength + 100)
+  }
+})
+
+test('browser run data owns bytes from Uint8Array subclasses', (t) => {
+  class SharedSliceArray extends Uint8Array {
+    slice() {
+      return this.subarray()
+    }
+  }
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const source = new SharedSliceArray([iteration, 2, 3])
+    const prepared = prepareRunData([{ type: 'media', content: source }])
+    source[0] = 255
+
+    t.alike(prepared.media[0][0], new Uint8Array([iteration, 2, 3]), `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser run data preserves media grouping for a batch', (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = new Uint8Array([1, 2])
+    const second = new Uint8Array([3, 4])
+    const prepared = prepareRunData([
+      {
+        id: 'a',
+        messages: [
+          { type: 'media', content: first },
+          { type: 'text', input: '[]' }
+        ]
+      },
+      {
+        id: 'b',
+        messages: [
+          { type: 'media', content: second },
+          { type: 'text', input: '[]' }
+        ]
+      }
+    ])
+
+    t.alike(JSON.parse(prepared.json), [
+      { id: 'a', messages: [{ type: 'text', input: '[]' }] },
+      { id: 'b', messages: [{ type: 'text', input: '[]' }] }
+    ])
+    t.alike(prepared.media, [[first], [second]], `iteration ${iteration + 1}`)
+    t.alike(prepared.ids, ['a', 'b'])
+  }
+})
+
+test('browser run data preserves empty media groups before media prompts', (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const image = new Uint8Array([1, 2, 3])
+    const prepared = prepareRunData([
+      { id: 'text', messages: [{ type: 'text', input: '[]' }] },
+      {
+        id: 'image',
+        messages: [
+          { type: 'media', content: image },
+          { type: 'text', input: '[]' }
+        ]
+      }
+    ])
+    t.alike(prepared.media, [[], [image]], `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser run data enforces native batch id rules', (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = prepareRunData([
+      { messages: [{ type: 'text', input: '[]' }] },
+      { id: `provided-${iteration}`, messages: [{ type: 'text', input: '[]' }] }
+    ])
+    const second = prepareRunData([{ messages: [{ type: 'text', input: '[]' }] }])
+    t.ok(/^batch-\d+$/.test(first.ids[0]))
+    t.is(first.ids[1], `provided-${iteration}`)
+    t.unlike(first.ids[0], second.ids[0])
+
+    const messages = []
+    for (const run of [
+      () =>
+        prepareRunData([
+          { id: 'same', messages: [] },
+          { id: 'same', messages: [] }
+        ]),
+      () => prepareRunData([{ id: '', messages: [] }]),
+      () => prepareRunData([{ id: `batch-${iteration}`, messages: [] }])
+    ]) {
+      try {
+        run()
+      } catch (error) {
+        messages.push(error.message)
+      }
+    }
+    t.alike(messages, [
+      'Duplicate batch prompt id: same',
+      'Batch prompt id must be a non-empty string when provided',
+      `Batch prompt id prefix 'batch-' is reserved for auto-minted ids: batch-${iteration}`
+    ])
+  }
+})
+
+test('cooperative browser batches preserve prompt ids and terminal order', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const events = []
+    const isolated = isolatedBinding(cooperativeEngine)
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, (...event) => {
+      events.push(event)
+    })
+    await isolated.activate(handle)
+    const admission = await isolated.runJob(handle, [
+      { id: 'first', messages: [{ type: 'text', input: '[]' }] },
+      { id: 'second', messages: [{ type: 'text', input: '[]' }] }
+    ])
+    while (isolated.activeJobs(handle) !== 0) await delay()
+
+    t.alike(admission.ids, ['first', 'second'], `ids, iteration ${iteration + 1}`)
+    t.alike(
+      events.map((event) => event[1]),
+      ['BatchOutput', 'BatchOutput', 'BatchResult', 'JobEnded'],
+      `event order, iteration ${iteration + 1}`
+    )
+    t.alike(
+      events.slice(0, 2).map((event) => event[2].id),
+      ['first', 'second'],
+      `stream routing, iteration ${iteration + 1}`
+    )
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('cooperative listener failure cancels only its job and releases it', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const terminals = []
+    const isolated = isolatedBinding(cooperativeEngine)
+    const handle = isolated.createInstance(
+      {},
+      { config: { parallel: 2 } },
+      (_owner, event, _data, error) => {
+        if (event === 'BatchOutput') throw new Error('listener failed')
+        terminals.push({ event, error })
+      }
+    )
+    await isolated.activate(handle)
+    await isolated.runJob(handle, [
+      { id: 'first', messages: [{ type: 'text', input: '[]' }] },
+      { id: 'second', messages: [{ type: 'text', input: '[]' }] }
+    ])
+    while (isolated.activeJobs(handle) !== 0) await delay()
+
+    t.is(terminals.length, 1, `one terminal, iteration ${iteration + 1}`)
+    t.is(terminals[0].event, 'Error', `terminal type, iteration ${iteration + 1}`)
+    t.is(terminals[0].error.message, 'listener failed', `error, iteration ${iteration + 1}`)
+    t.is(isolated.activeSlots(handle), 0, `slots released, iteration ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('a failed cooperative step does not end a job still waiting to submit', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const live = new Map()
+    let failNextStep = false
+    let stepFailing = null
+    const isolated = isolatedBinding((options) => ({
+      FS: { mkdirTree() {} },
+      ccall(name, _returnType, _types, args, ccallOptions) {
+        if (name === 'qvac_web_create') return 1
+        if (name === 'qvac_web_result') return JSON.stringify({ error: 'step failed' })
+        if (name === 'qvac_web_submit') live.set(args[1], 0)
+        if (name === 'qvac_web_active_slots') return live.size
+        if (name !== 'qvac_web_step') return 0
+        if (failNextStep) {
+          failNextStep = false
+          stepFailing()
+          return new Promise((resolve) =>
+            setTimeout(() => {
+              for (const id of [...live.keys()]) {
+                live.delete(id)
+                options.qvacEmit(args[0], id, 'Error', JSON.stringify({ error: 'step failed' }))
+              }
+              resolve(-1)
+            }, 20)
+          )
+        }
+        for (const [id, steps] of [...live]) {
+          if (steps < 3) {
+            live.set(id, steps + 1)
+          } else {
+            live.delete(id)
+            options.qvacEmit(args[0], id, 'JobEnded', '{}')
+          }
+        }
+        return ccallOptions?.async ? Promise.resolve(0) : 0
+      }
+    }))
+    const terminals = new Map()
+    const admitted = new Set()
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, (...event) => {
+      const [, type, , , id] = event
+      if (type !== 'JobEnded' && type !== 'Error') return
+      t.ok(admitted.has(id), `terminal after admission, iteration ${iteration + 1}`)
+      terminals.set(id, [...(terminals.get(id) ?? []), type])
+    })
+    await isolated.activate(handle)
+    failNextStep = true
+    const failing = new Promise((resolve) => {
+      stepFailing = resolve
+    })
+    const first = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    admitted.add(first.id)
+    await failing
+    const second = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    admitted.add(second.id)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+
+    t.alike(terminals.get(first.id), ['Error'], `failed job ends, iteration ${iteration + 1}`)
+    t.alike(terminals.get(second.id), ['JobEnded'], `queued job runs, iteration ${iteration + 1}`)
+    t.is(live.size, 0, `no native job left, iteration ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('cooperative cache operation does not wait for an unrelated live job', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const isolated = isolatedBinding(cooperativeEngine)
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    await isolated.saveCache(handle, `/cache/unrelated-${iteration}.bin`)
+    t.is(isolated.activeJobs(handle), 1, `job still live, iteration ${iteration + 1}`)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('browser unload cancels a legacy job waiting for admission', async (t) => {
   const runs = []
   const isolated = isolatedBinding((options) => ({
     FS: {},
-    async ccall(name, _returnType, _types, args) {
+    ccall(name, _returnType, _types, args) {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_run') {
         const input = JSON.parse(args[2])[0].input
         runs.push(input)
-        while (!options.qvacCancelled(args[0], args[1])) await delay()
-        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+        return (async () => {
+          while (!options.qvacCancelled(args[0], args[1])) await delay()
+          options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+          return 0
+        })()
       }
       if (name === 'qvac_web_result') return '{}'
       return 0
@@ -373,7 +709,7 @@ test('browser unload cancels a job waiting for admission', async (t) => {
     await isolated.activate(handle)
     await isolated.runJob(handle, [{ type: 'text', input: 'run1' }])
     await delay()
-    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }])
+    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }], false)
     const destroyed = isolated.destroyInstance(handle)
     await t.exception.all(() => second, /Job cancelled/)
     await destroyed
@@ -382,19 +718,29 @@ test('browser unload cancels a job waiting for admission', async (t) => {
   }
 })
 
-test('invalid parallel configuration does not retain or load an engine', async (t) => {
-  let loads = 0
-  const isolated = isolatedBinding(() => {
-    loads++
-    return {}
-  })
+test('browser active job counts remain scoped to each model', async (t) => {
+  const isolated = isolatedBinding(
+    fakeEngine(async (emit, [native, id]) => {
+      await delay()
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const first = isolated.createInstance({}, {}, () => {})
+  const second = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(first)
+  await isolated.activate(second)
 
   for (let iteration = 0; iteration < 20; iteration++) {
-    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
-    await t.exception.all(() => isolated.activate(handle), /parallel > 1 is not supported/)
-    await isolated.destroyInstance(handle)
-    t.is(loads, 0, `iteration ${iteration + 1}`)
+    const admission = await isolated.runJob(first, [{ type: 'text', input: '[]' }])
+    t.is(isolated.activeJobs(first), 1, `first model, iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(second), 0, `second model, iteration ${iteration + 1}`)
+    await isolated.cancelJob(first, admission.id)
+    await delay()
+    t.is(isolated.activeJobs(first), 0, `settled iteration ${iteration + 1}`)
   }
+  await isolated.destroyInstance(first)
+  await isolated.destroyInstance(second)
 })
 
 test('invalid browser load config does not load an engine', async (t) => {
@@ -430,6 +776,54 @@ test('invalid browser load config does not load an engine', async (t) => {
       await isolated.destroyInstance(handle)
     }
     t.is(loads, 0, `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser engine creation receives the mounted load asset paths', async (t) => {
+  globalThis[MOUNTED_FILES_KEY] = new Map([
+    ['/m/model.gguf', { name: 'model.gguf' }],
+    ['/m/mmproj.gguf', { name: 'mmproj.gguf' }],
+    ['/m/a,b.gguf', { name: 'a,b.gguf' }],
+    ['/m/draft.gguf', { name: 'draft.gguf' }]
+  ])
+  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  const created = []
+  const isolated = isolatedBinding(() => ({
+    FS: {
+      filesystems: { WORKERFS: { stream_ops: { read() {} } } },
+      mkdirTree() {},
+      mount() {},
+      unmount() {},
+      rmdir() {}
+    },
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') {
+        created.push(args)
+        return 1
+      }
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance(
+      {},
+      {
+        path: '/m/model.gguf',
+        projectionPath: '/m/mmproj.gguf',
+        config: { lora: '/m/a,b.gguf', spec_draft_model: '/m/draft.gguf', parallel: '2' }
+      },
+      () => {}
+    )
+    await isolated.activate(handle)
+    const [modelPath, projectionPath, configJson] = created.pop()
+    const config = JSON.parse(configJson)
+    t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
+    t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
+    t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
+    t.ok(/^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model), config.spec_draft_model)
+    t.is(config.parallel, '2')
+    await isolated.destroyInstance(handle)
   }
 })
 
@@ -592,7 +986,7 @@ test('poisoned engines suppress unsafe filesystem cleanup errors', async (t) => 
   }
 })
 
-test('fatal WebAssembly errors invalidate their engine generation', async (t) => {
+test('fatal WebAssembly errors invalidate only their engine generation', async (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     let loads = 0
     const terminal = []
@@ -619,7 +1013,6 @@ test('fatal WebAssembly errors invalidate their engine generation', async (t) =>
     await isolated.activate(failed)
     await isolated.runJob(failed, [{ type: 'text', input: '[]' }])
     await delay()
-
     t.is(terminal[0].event, 'Error', `fatal terminal, iteration ${iteration + 1}`)
     t.is(terminal[0].error.message, 'aborted')
     await t.exception.all(
@@ -638,55 +1031,6 @@ test('fatal WebAssembly errors invalidate their engine generation', async (t) =>
     t.is(terminal[1].event, 'JobEnded', `fresh terminal, iteration ${iteration + 1}`)
     t.is(loads, 2, `fresh engine created, iteration ${iteration + 1}`)
     await isolated.destroyInstance(recovered)
-  }
-})
-
-test('browser binding reports worker-wide jobs to every model', async (t) => {
-  const isolated = isolatedBinding(
-    fakeEngine((emit, [native, id]) => {
-      emit(native, id, 'JobEnded', '{}')
-      return 0
-    })
-  )
-  const first = isolated.createInstance({}, {}, () => {})
-  const second = isolated.createInstance({}, {}, () => {})
-  await isolated.activate(first)
-  await isolated.activate(second)
-
-  for (let iteration = 0; iteration < 20; iteration++) {
-    const admission = await isolated.runJob(first, [{ type: 'text', input: '[]' }])
-    t.is(isolated.activeJobs(second), 1, `iteration ${iteration + 1}`)
-    await isolated.cancelJob(first, admission.id)
-    await delay()
-    t.is(isolated.activeJobs(second), 0, `settled iteration ${iteration + 1}`)
-  }
-  await isolated.destroyInstance(first)
-  await isolated.destroyInstance(second)
-})
-
-test('browser binding rejects path and ordered-part media before admission', async (t) => {
-  const handle = instance()
-  const prompts = [
-    [{ role: 'user', type: 'media', content: '/image.png' }],
-    [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', content: 'Describe this' },
-          { type: 'media', content: '/image.png' }
-        ]
-      }
-    ]
-  ]
-
-  for (let iteration = 0; iteration < 20; iteration++) {
-    for (const prompt of prompts) {
-      await t.exception.all(
-        () => binding.runJob(handle, [{ type: 'text', input: JSON.stringify(prompt) }]),
-        /Media input is not supported/
-      )
-      t.is(binding.activeJobs(handle), 0)
-    }
   }
 })
 
@@ -715,4 +1059,180 @@ test('browser calcTokens fails fast while the engine queue is busy', async (t) =
   await delay()
   t.is(isolated.activeJobs(handle), 0)
   await isolated.destroyInstance(handle)
+})
+
+// Under Asyncify a sync ccall that suspends returns a Promise; these engines
+// suspend on every call to the named export.
+function suspendingEngine(suspending, log) {
+  return () => ({
+    FS: { mkdirTree() {}, unmount: () => log.push('unmount'), rmdir() {} },
+    ccall(name) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_result') return '{}'
+      if (name === suspending) {
+        log.push(`${name} started`)
+        return delay().then(() => {
+          log.push(`${name} finished`)
+          return 0
+        })
+      }
+      if (name === 'qvac_web_cache_poll') log.push('poll')
+      return 0
+    }
+  })
+}
+
+test('browser unload waits for a destroy that suspends 20x', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const log = []
+    const isolated = isolatedBinding(suspendingEngine('qvac_web_destroy', log))
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    handle.mounts.push({ mountpoint: `/qvac-files/suspend-${iteration}`, mounted: true })
+    await isolated.destroyInstance(handle)
+    t.alike(
+      log,
+      ['qvac_web_destroy started', 'qvac_web_destroy finished', 'unmount'],
+      `iteration ${iteration + 1}`
+    )
+  }
+})
+
+test('cooperative saveCache waits for a cache request that suspends 20x', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const log = []
+    const isolated = isolatedBinding(suspendingEngine('qvac_web_cache_request', log))
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    await isolated.saveCache(handle, `/cache/suspend-${iteration}.bin`)
+    t.alike(
+      log,
+      ['qvac_web_cache_request started', 'qvac_web_cache_request finished', 'poll'],
+      `iteration ${iteration + 1}`
+    )
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('a synchronous engine call that suspends retires the engine', async (t) => {
+  const isolated = isolatedBinding(suspendingEngine('qvac_web_active_slots', []))
+  const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+  await isolated.activate(handle)
+  await t.exception(
+    isolated.runJob(handle, [{ type: 'text', input: '[]' }]),
+    /qvac_web_active_slots suspended in a synchronous engine call/
+  )
+  await t.exception(
+    isolated.runJob(handle, [{ type: 'text', input: '[]' }]),
+    /must be loaded again/
+  )
+  await isolated.destroyInstance(handle)
+})
+
+test('browser run data rejects media paths and keeps byte markers', async (t) => {
+  const pathCases = [
+    [{ role: 'user', type: 'media', content: '/images/cat.png' }],
+    [{ role: 'user', content: [{ type: 'media', content: '/images/cat.png' }] }]
+  ]
+  const escapedInputs = [
+    '[{"role":"user","\\u0074ype":"\\u006dedia","content":"/x.png"}]',
+    '[{"role":"user","content":[{"type":"\\u006dedia","content":"/x.png"}]}]'
+  ]
+  for (const input of [
+    ...pathCases.map((messages) => JSON.stringify(messages)),
+    ...escapedInputs
+  ]) {
+    const item = { type: 'text', input }
+    await t.exception.all(() => prepareRunData([item]), /Media paths are not supported/)
+    await t.exception.all(
+      () => prepareRunData([{ messages: [item] }]),
+      /Media paths are not supported/
+    )
+  }
+  const markers = [
+    { role: 'user', type: 'media', content: '' },
+    { role: 'user', content: [{ type: 'media' }, { type: 'text', text: 'what is this?' }] },
+    { role: 'user', content: 'a "media" mention in text' }
+  ]
+  const prepared = prepareRunData([
+    { type: 'media', content: Uint8Array.of(1) },
+    { type: 'media', content: Uint8Array.of(2) },
+    { type: 'text', input: JSON.stringify(markers) }
+  ])
+  t.is(prepared.media[0].length, 2)
+})
+
+test('browser binding runJob queues by default like native 20x', async (t) => {
+  const isolated = isolatedBinding(
+    fakeEngine(async (emit, [native, id]) => {
+      await delay()
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const handle = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(handle)
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    const second = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    t.ok(first.accepted && second.accepted, `both admitted ${iteration + 1}`)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+  }
+  await t.exception(
+    (async () => {
+      await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+      await isolated.runJob(handle, [{ type: 'text', input: '[]' }], true)
+    })(),
+    /already set or being processed/
+  )
+  while (isolated.activeJobs(handle) !== 0) await delay()
+  await isolated.destroyInstance(handle)
+})
+
+test('a cancel that lands before submit survives an engine cancel that suspends 20x', async (t) => {
+  const isolated = isolatedBinding((options) => {
+    const engine = cooperativeEngine(options)
+    const ccall = engine.ccall
+    engine.ccall = function (name, returnType, types, args) {
+      if (name !== 'qvac_web_cancel_job') return ccall.call(this, name, returnType, types, args)
+      return delay().then(() => ccall.call(this, name, returnType, types, args))
+    }
+    return engine
+  })
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    const admission = isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    const id = [...handle.jobs.keys()].at(-1)
+    const cancelled = isolated.cancelJob(handle, id)
+    t.ok((await admission).accepted, `admitted ${iteration + 1}`)
+    await cancelled
+    t.is(handle.failure, null, `engine kept ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('cooperative cancel survives an engine cancel that suspends 20x', async (t) => {
+  const isolated = isolatedBinding((options) => {
+    const engine = cooperativeEngine(options)
+    const ccall = engine.ccall
+    engine.ccall = function (name, returnType, types, args) {
+      if (name === 'qvac_web_step')
+        return delay().then(() => ccall.call(this, name, returnType, types, args))
+      if (name !== 'qvac_web_cancel_job') return ccall.call(this, name, returnType, types, args)
+      return delay().then(() => ccall.call(this, name, returnType, types, args))
+    }
+    return engine
+  })
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
+    await isolated.activate(handle)
+    const admission = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    await isolated.cancelJob(handle, admission.id)
+    t.is(handle.failure, null, `engine kept ${iteration + 1}`)
+    const next = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    t.ok(next.accepted, `next run admitted ${iteration + 1}`)
+    while (isolated.activeJobs(handle) !== 0) await delay()
+    await isolated.destroyInstance(handle)
+  }
 })

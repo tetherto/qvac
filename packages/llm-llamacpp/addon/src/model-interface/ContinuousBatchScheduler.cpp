@@ -163,14 +163,14 @@ TimedDecodeResult timeDecodeStep(
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-    DriverFactory driverFactory)
+    DriverFactory driverFactory, const DriveMode driveMode)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       driverFactory_(std::move(driverFactory)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize), decodeFunc_(llama_decode),
+      slots_(batchSize), driveMode_(driveMode), decodeFunc_(llama_decode),
       synchronizeFunc_(llama_synchronize),
       evalMediaFunc_(
           [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
@@ -216,7 +216,9 @@ ContinuousBatchScheduler::~ContinuousBatchScheduler() {
     worker_.join();
   }
   std::scoped_lock lock(mutex_);
+  cancelPendingLocked();
   clearLocked();
+  failSaveJobsLocked();
 }
 
 BatchResult ContinuousBatchScheduler::processBatch(
@@ -253,13 +255,7 @@ BatchResult ContinuousBatchScheduler::processBatch(
     taggedGroups_.erase(groupTag);
   });
   ensureWorkerStartedLocked();
-  for (size_t i = 0; i < requests.size(); i++) {
-    pending_.enqueue(
-        QueuedRequest{
-            .request = std::move(requests[i]),
-            .group = group,
-            .outputIndex = i});
-  }
+  enqueueGroupLocked(group, std::move(requests));
   workCv_.notify_all();
   workCv_.wait(lock, [&group] { return group->done; });
   // Released before the guard re-locks it to erase the tag.
@@ -273,6 +269,108 @@ BatchResult ContinuousBatchScheduler::processBatch(
       .requestStats = std::move(group->requestStats)};
 }
 
+void ContinuousBatchScheduler::submitCooperative(
+    std::vector<SubmitRequest>&& requests, const uint64_t groupTag) {
+  if (groupTag == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: cooperative groups require a non-zero tag");
+  }
+
+  auto group = std::make_shared<BatchGroup>(requests.size());
+  group->totalCount = requests.size();
+  group->tag = groupTag;
+
+  std::scoped_lock lock(mutex_);
+  if (driveMode_ != DriveMode::Cooperative || workerStarted_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: cooperative driving cannot share a "
+        "scheduler with its worker thread");
+  }
+  if (taggedGroups_.contains(groupTag) ||
+      cooperativeGroups_.contains(groupTag)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: duplicate live group tag");
+  }
+  if (pending_.size_approx() == 0 && !hasWorkLocked()) {
+    stats_.reset();
+  }
+  cooperativeGroups_[groupTag] = group;
+  taggedGroups_[groupTag] = group;
+  if (requests.empty()) {
+    group->stats = stats_;
+    group->done = true;
+    return;
+  }
+  enqueueGroupLocked(group, std::move(requests));
+}
+
+void ContinuousBatchScheduler::enqueueGroupLocked(
+    const std::shared_ptr<BatchGroup>& group,
+    std::vector<SubmitRequest>&& requests) {
+  for (size_t i = 0; i < requests.size(); ++i) {
+    pending_.enqueue(
+        QueuedRequest{
+            .request = std::move(requests[i]),
+            .group = group,
+            .outputIndex = i});
+  }
+}
+
+bool ContinuousBatchScheduler::stepCooperative() {
+  std::unique_lock lock(mutex_);
+  if (driveMode_ != DriveMode::Cooperative || workerStarted_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: cooperative driving cannot share a "
+        "scheduler with its worker thread");
+  }
+  driverThreadId_.store(std::this_thread::get_id());
+  ScopeGuard driverGuard([this] { driverThreadId_.store(std::thread::id{}); });
+  driveOneLocked(lock);
+  return pending_.size_approx() > 0 || hasWorkLocked() ||
+         cancelRequested_.load() || hasPendingCancels() || clearRequested_;
+}
+
+std::optional<BatchResult>
+ContinuousBatchScheduler::takeCooperativeResult(const uint64_t groupTag) {
+  std::unique_lock lock(mutex_);
+  const auto found = cooperativeGroups_.find(groupTag);
+  if (found == cooperativeGroups_.end()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: unknown cooperative group tag");
+  }
+  const std::shared_ptr<BatchGroup> group = found->second;
+  if (!group->done) {
+    return std::nullopt;
+  }
+  const std::exception_ptr error = group->error;
+  BatchResult result{
+      .outputs = std::move(group->outputs),
+      .stats = group->stats,
+      .requestStats = std::move(group->requestStats)};
+  taggedGroups_.erase(groupTag);
+  cooperativeGroups_.erase(found);
+  lock.unlock();
+  if (error) {
+    std::rethrow_exception(error);
+  }
+  return result;
+}
+
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
   std::scoped_lock lock(mutex_);
   return submitLocked(
@@ -280,12 +378,20 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
 }
 
 void ContinuousBatchScheduler::ensureWorkerStartedLocked() {
+  if (driveMode_ == DriveMode::Cooperative) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler: blocking operation is unavailable in "
+        "cooperative mode");
+  }
   if (!workerStarted_) {
     workerStarted_ = true;
     worker_ = std::thread([this] { workerLoop(); });
     // Published while still holding mutex_: the worker's first action is to
     // acquire that mutex, so every callback it later runs observes the id.
-    workerThreadId_.store(worker_.get_id());
+    driverThreadId_.store(worker_.get_id());
   }
 }
 
@@ -300,66 +406,66 @@ void ContinuousBatchScheduler::workerLoop() {
     if (stopping_) {
       break;
     }
-    applyDeferredTeardownLocked();
-    // No decode is in flight here, and saves go before admission so a queued
-    // request on the same key cannot get between the caller's request and its
-    // save.
-    serviceSaveJobsLocked();
-    if (cancelRequested_.load() && !hasWorkLocked()) {
-      cancelPendingLocked();
-      cancelRequested_.store(false);
-      continue;
-    }
-    admitPendingIntoFreeSlotsLocked();
-    if (!hasWorkLocked()) {
-      continue;
-    }
-    try {
-      const bool stepOk = stepLocked(&lock);
-      (void)stepOk;
-    } catch (...) {
-      // Unexpected internal error: a throw mid-step can leave slot state
-      // inconsistent, so the only safe recovery is to fail all and clear.
-      const std::exception_ptr error = std::current_exception();
-      for (const auto& slot : slots_) {
-        if (slot.has_value() && slot->group) {
-          failGroupLocked(slot->group, error, SaveCachePolicy::Skip);
-        }
-      }
-      QueuedRequest queued;
-      while (pending_.try_dequeue(queued)) {
-        if (queued.group) {
-          failGroupLocked(queued.group, error, SaveCachePolicy::Skip);
-        }
-      }
-      // Parked conversations of other keys took no part in the failed step,
-      // so their state is what their last request committed: keep them the
-      // way an eviction does instead of letting `clearLocked` drop them.
-      for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
-        evictParkedLocked(seqId);
-      }
-      clearLocked();
-      cancelRequested_.store(false);
-    }
-    // A cancel-all observed during the step above already finished the
-    // active slots (stepLocked marks them Cancelled). It must NOT be
-    // followed by admitting `pending_`: those queued prompts belong to the
-    // cancelled work and would otherwise start running post-cancel. Drain
-    // them here instead so cancel-all atomically covers active + queued.
-    applyDeferredTeardownLocked();
-    if (cancelRequested_.exchange(false)) {
-      cancelPendingLocked();
-    } else {
-      // A request that finished in the step above freed its key: a save or
-      // discard waiting for it runs now, before the next request on that key
-      // is admitted and adopts the state.
-      serviceSaveJobsLocked();
-      admitPendingIntoFreeSlotsLocked();
-    }
+    driveOneLocked(lock);
   }
   cancelPendingLocked();
   clearLocked();
   failSaveJobsLocked();
+}
+
+void ContinuousBatchScheduler::driveOneLocked(
+    std::unique_lock<std::mutex>& lock) {
+  applyDeferredTeardownLocked();
+  // No decode is in flight here, and saves go before admission so a queued
+  // request on the same key cannot get between the caller's request and its
+  // save.
+  serviceSaveJobsLocked();
+  if (cancelRequested_.load() && !hasWorkLocked()) {
+    cancelPendingLocked();
+    cancelRequested_.store(false);
+    return;
+  }
+  admitPendingIntoFreeSlotsLocked();
+  if (!hasWorkLocked()) {
+    return;
+  }
+  try {
+    const bool stepOk = stepLocked(&lock);
+    (void)stepOk;
+  } catch (...) {
+    // Unexpected internal error: a throw mid-step can leave slot state
+    // inconsistent, so the only safe recovery is to fail all and clear.
+    const std::exception_ptr error = std::current_exception();
+    for (const auto& slot : slots_) {
+      if (slot.has_value() && slot->group) {
+        failGroupLocked(slot->group, error, SaveCachePolicy::Skip);
+      }
+    }
+    QueuedRequest queued;
+    while (pending_.try_dequeue(queued)) {
+      if (queued.group) {
+        failGroupLocked(queued.group, error, SaveCachePolicy::Skip);
+      }
+    }
+    // Parked conversations of other keys took no part in the failed step,
+    // so their state is what their last request committed: keep them the
+    // way an eviction does instead of letting `clearLocked` drop them.
+    for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+      evictParkedLocked(seqId);
+    }
+    clearLocked();
+    cancelRequested_.store(false);
+  }
+  // A cancel-all observed during the step above already finished the active
+  // slots (stepLocked marks them Cancelled). It must NOT be followed by
+  // admitting pending work from the same cancellation snapshot.
+  applyDeferredTeardownLocked();
+  if (cancelRequested_.exchange(false)) {
+    cancelPendingLocked();
+  } else {
+    serviceSaveJobsLocked();
+    admitPendingIntoFreeSlotsLocked();
+  }
 }
 
 void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
@@ -1502,7 +1608,7 @@ double RuntimeStatsSnapshot::prefillTokensPerSecond() const {
 }
 
 bool ContinuousBatchScheduler::cancel(uint32_t seqId, uint64_t admissionId) {
-  if (std::this_thread::get_id() == workerThreadId_.load()) {
+  if (std::this_thread::get_id() == driverThreadId_.load()) {
     // A streaming callback (onToken/onAdmitted/onDone) is cancelling from
     // the worker thread, which holds mutex_ while it streams: locking it
     // here would self-deadlock (the hazard whole-model cancel dodges via
@@ -1541,7 +1647,7 @@ bool ContinuousBatchScheduler::cancelGroupQueued(const uint64_t groupTag) {
   if (groupTag == 0) {
     return false;
   }
-  if (std::this_thread::get_id() == workerThreadId_.load()) {
+  if (std::this_thread::get_id() == driverThreadId_.load()) {
     // Worker thread (a streaming callback) holds mutex_ — record only, exactly
     // as cancel(seqId, admissionId) does. The worker reconciles deferred
     // teardown at its loop top before it can admit anything or sleep.
@@ -2252,6 +2358,11 @@ ContinuousBatchScheduler::enqueueSaveJob(
           std::string(discard ? "discardCache" : "saveCache") +
               ": the model is being unloaded");
     }
+    if (driveMode_ == DriveMode::Cooperative) {
+      saveJobs_.push_back(std::move(job));
+      serviceSaveJobsLocked();
+      return done;
+    }
     ensureWorkerStartedLocked();
     saveJobs_.push_back(std::move(job));
   }
@@ -2264,9 +2375,20 @@ ContinuousBatchScheduler::saveConversation(const std::string& cacheKey) {
   return enqueueSaveJob(cacheKey, /*discard=*/false).get();
 }
 
+std::future<SlotStateCache::SaveOutcome>
+ContinuousBatchScheduler::enqueueSaveConversation(const std::string& cacheKey) {
+  return enqueueSaveJob(cacheKey, /*discard=*/false);
+}
+
 void ContinuousBatchScheduler::discardConversation(
     const std::string& cacheKey) {
   (void)enqueueSaveJob(cacheKey, /*discard=*/true).get();
+}
+
+std::future<SlotStateCache::SaveOutcome>
+ContinuousBatchScheduler::enqueueDiscardConversation(
+    const std::string& cacheKey) {
+  return enqueueSaveJob(cacheKey, /*discard=*/true);
 }
 
 void ContinuousBatchScheduler::discardKeyLocked(

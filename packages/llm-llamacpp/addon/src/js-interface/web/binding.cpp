@@ -1,18 +1,22 @@
 // Browser (Emscripten) binding over the same LlamaModel the Bare binding
-// drives. The build has no threads, so there is no job scheduler: a job runs
-// on the caller's stack and Asyncify suspends it whenever WebGPU awaits the
-// GPU (or the token callback yields), which keeps the worker responsive to
-// cancel requests during WebGPU work and token generation. binding.browser.js
-// adapts these exports to the LlamaBinding surface `addon.js` expects.
+// drives. The build has no threads, so concurrent jobs use the model's
+// continuous-batching scheduler in cooperative mode: one decode quantum runs
+// per Asyncify call, then binding.browser.js returns to the worker event loop
+// before driving the next quantum. Single-slot models keep the direct path.
+// binding.browser.js adapts both paths to the LlamaBinding surface `addon.js`
+// expects.
 #include <any>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <future>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include <emscripten.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -61,6 +65,20 @@ using Clock = std::chrono::steady_clock;
 constexpr auto K_YIELD_INTERVAL = std::chrono::milliseconds(30);
 
 std::unordered_map<int, std::unique_ptr<LlamaModel>> instances;
+using StagedPromptMedia = std::vector<std::vector<uint8_t>>;
+using StagedJobMedia = std::vector<StagedPromptMedia>;
+std::unordered_map<int, std::unordered_map<int, StagedJobMedia>> stagedMedia;
+struct BrowserJob {
+  bool batch = false;
+};
+std::unordered_map<int, std::unordered_map<int, BrowserJob>> browserJobs;
+struct BrowserCacheJob {
+  std::string cacheKey;
+  bool discard = false;
+  std::future<LlamaModel::CooperativeCacheOutcome> done;
+};
+std::unordered_map<int, std::unordered_map<int, BrowserCacheJob>>
+    browserCacheJobs;
 int nextHandle = 1;
 std::string lastResult = "{}";
 
@@ -87,6 +105,20 @@ LlamaModel& instance(int handle) {
         qvac_errors::general_error::InvalidArgument, "Model is not loaded");
   }
   return *it->second;
+}
+
+StagedJobMedia takeStagedMedia(int handle, int jobId) {
+  auto handleIt = stagedMedia.find(handle);
+  if (handleIt == stagedMedia.end())
+    return {};
+  auto jobIt = handleIt->second.find(jobId);
+  if (jobIt == handleIt->second.end())
+    return {};
+  StagedJobMedia job = std::move(jobIt->second);
+  handleIt->second.erase(jobIt);
+  if (handleIt->second.empty())
+    stagedMedia.erase(handleIt);
+  return job;
 }
 
 [[noreturn]] void wrongType(const char* key, const char* expected) {
@@ -131,7 +163,8 @@ GenerationParamSource jsonSource(const json& obj) {
 
 // Same rules as parsePromptInputs in AddonJs.hpp; media arrives as a byte
 // array because JSON has no binary type.
-LlamaModel::Prompt parsePrompt(const json& messages) {
+LlamaModel::Prompt
+parsePrompt(const json& messages, bool hasExternalMedia = false) {
   using qvac_errors::StatusError;
   namespace general_error = qvac_errors::general_error;
   if (!messages.is_array()) {
@@ -164,7 +197,7 @@ LlamaModel::Prompt parsePrompt(const json& messages) {
           general_error::InvalidArgument, "Unknown input type: " + type);
     }
   }
-  if (prompt.input.empty() && prompt.media.empty()) {
+  if (prompt.input.empty() && prompt.media.empty() && !hasExternalMedia) {
     throw StatusError(
         general_error::InvalidArgument,
         "At least one of text or media input is required");
@@ -178,6 +211,58 @@ json statsJson(const qvac_lib_inference_addon_cpp::RuntimeStats& stats) {
     std::visit([&out, &key](auto number) { out[key] = number; }, value);
   }
   return out;
+}
+
+void prependMedia(
+    LlamaModel::Prompt& prompt, StagedPromptMedia&& stagedPromptMedia) {
+  prompt.media.insert(
+      prompt.media.begin(),
+      std::make_move_iterator(stagedPromptMedia.begin()),
+      std::make_move_iterator(stagedPromptMedia.end()));
+}
+
+std::function<void(const std::string&)> outputCallback(
+    int handle, int jobId, std::optional<std::string> promptId = std::nullopt) {
+  return
+      [handle, jobId, promptId = std::move(promptId)](const std::string& text) {
+        int stop = 0;
+        if (promptId.has_value()) {
+          const std::string payload = json{
+              {"type", "batch_output"},
+              {"id", *promptId},
+              {"output", text}}.dump();
+          stop = qvac_web_emit(
+              handle,
+              jobId,
+              "BatchOutput",
+              sizeof("BatchOutput") - 1,
+              payload.data(),
+              static_cast<int>(payload.size()));
+        } else {
+          stop = qvac_web_emit(
+              handle,
+              jobId,
+              "Output",
+              sizeof("Output") - 1,
+              text.data(),
+              static_cast<int>(text.size()));
+        }
+        if (stop != 0) {
+          instance(handle).cancelById(
+              static_cast<qvac_lib_inference_addon_cpp::JobId>(jobId));
+        }
+      };
+}
+
+void emitError(int handle, int jobId, const std::exception& error) {
+  const std::string payload = errorJson(error).dump();
+  qvac_web_emit(
+      handle,
+      jobId,
+      "Error",
+      sizeof("Error") - 1,
+      payload.data(),
+      static_cast<int>(payload.size()));
 }
 
 } // namespace
@@ -219,12 +304,50 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_activate(int handle) {
   }
 }
 
-EMSCRIPTEN_KEEPALIVE int qvac_web_validate(int handle, const char* messages) {
+EMSCRIPTEN_KEEPALIVE int
+qvac_web_validate(int handle, const char* messages, int hasMedia) {
   try {
     instance(handle);
-    parsePrompt(json::parse(messages));
+    parsePrompt(json::parse(messages), hasMedia != 0);
     return 0;
   } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_stage_media(
+    int handle, int jobId, int promptIndex, int mediaIndex,
+    const uint8_t* bytes, int size) {
+  try {
+    instance(handle);
+    if (jobId < 0 || promptIndex < 0 || mediaIndex < 0 || size < 0 ||
+        (size > 0 && bytes == nullptr)) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Invalid staged media coordinates or buffer");
+    }
+    StagedJobMedia& job = stagedMedia[handle][jobId];
+    const auto prompt = static_cast<size_t>(promptIndex);
+    const auto media = static_cast<size_t>(mediaIndex);
+    if (prompt >= job.size())
+      job.resize(prompt + 1);
+    if (media > job[prompt].size()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Staged media indices must be contiguous");
+    }
+    if (media == job[prompt].size())
+      job[prompt].emplace_back();
+    std::vector<uint8_t>& content = job[prompt][media];
+    if (size == 0) {
+      return 0;
+    }
+    content.insert(content.end(), bytes, bytes + size);
+    return 0;
+  } catch (const std::exception& error) {
+    stagedMedia[handle].erase(jobId);
+    if (stagedMedia[handle].empty())
+      stagedMedia.erase(handle);
     return fail(error);
   }
 }
@@ -235,7 +358,16 @@ EMSCRIPTEN_KEEPALIVE int
 qvac_web_run(int handle, int jobId, const char* messages) {
   try {
     LlamaModel& model = instance(handle);
-    LlamaModel::Prompt prompt = parsePrompt(json::parse(messages));
+    StagedJobMedia media = takeStagedMedia(handle, jobId);
+    LlamaModel::Prompt prompt = parsePrompt(
+        json::parse(messages), !media.empty() && !media.front().empty());
+    if (media.size() > 1) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Staged media contains an unknown prompt index");
+    }
+    if (!media.empty())
+      prependMedia(prompt, std::move(media.front()));
     auto lastYield = Clock::now();
     auto cancelRequested = [handle, jobId, &lastYield] {
       if (Clock::now() - lastYield >= K_YIELD_INTERVAL) {
@@ -278,6 +410,254 @@ qvac_web_run(int handle, int jobId, const char* messages) {
         sizeof("Error") - 1,
         payload.data(),
         static_cast<int>(payload.size()));
+    return fail(error);
+  }
+}
+
+// Admits one prompt or one explicit prompt batch without running inference.
+// qvac_web_step() later advances every admitted group through the shared
+// continuous-batching scheduler one decode quantum at a time.
+EMSCRIPTEN_KEEPALIVE int
+qvac_web_submit(int handle, int jobId, int isBatch, const char* data) {
+  try {
+    if (jobId <= 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Cooperative inference requires a positive job id");
+    }
+    LlamaModel& model = instance(handle);
+    if (!model.supportsBatching()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Concurrent browser inference requires parallel >= 2");
+    }
+
+    StagedJobMedia media = takeStagedMedia(handle, jobId);
+    const json parsed = json::parse(data);
+    std::vector<LlamaModel::Prompt> prompts;
+    BrowserJob job;
+    job.batch = isBatch != 0;
+    if (job.batch) {
+      if (!parsed.is_array() || parsed.empty()) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "Batch input must be a non-empty array");
+      }
+      prompts.reserve(parsed.size());
+      for (size_t index = 0; index < parsed.size(); ++index) {
+        const json& item = parsed[index];
+        if (!item.is_object() || !item.contains("messages") ||
+            !item.contains("id") || !item["id"].is_string()) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "Each batch item requires a string id and messages array");
+        }
+        std::string promptId = item["id"].get<std::string>();
+        LlamaModel::Prompt prompt = parsePrompt(
+            item["messages"], index < media.size() && !media[index].empty());
+        if (index < media.size())
+          prependMedia(prompt, std::move(media[index]));
+        prompt.outputCallback = outputCallback(handle, jobId, promptId);
+        prompts.push_back(std::move(prompt));
+      }
+    } else {
+      LlamaModel::Prompt prompt =
+          parsePrompt(parsed, !media.empty() && !media.front().empty());
+      if (!media.empty())
+        prependMedia(prompt, std::move(media.front()));
+      prompt.outputCallback = outputCallback(handle, jobId);
+      prompts.push_back(std::move(prompt));
+    }
+    if (media.size() > prompts.size()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Staged media contains an unknown prompt index");
+    }
+
+    auto& jobs = browserJobs[handle];
+    if (!jobs.emplace(jobId, std::move(job)).second) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Duplicate live browser job id");
+    }
+    try {
+      model.submitCooperative(
+          prompts, static_cast<qvac_lib_inference_addon_cpp::JobId>(jobId));
+    } catch (...) {
+      jobs.erase(jobId);
+      if (jobs.empty())
+        browserJobs.erase(handle);
+      throw;
+    }
+    return 0;
+  } catch (const std::exception& error) {
+    stagedMedia[handle].erase(jobId);
+    if (stagedMedia[handle].empty())
+      stagedMedia.erase(handle);
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_step(int handle) {
+  LlamaModel* model = nullptr;
+  try {
+    model = &instance(handle);
+    (void)model->stepCooperative();
+
+    auto handleIt = browserJobs.find(handle);
+    if (handleIt == browserJobs.end())
+      return 0;
+    std::vector<int> ids;
+    ids.reserve(handleIt->second.size());
+    for (const auto& [id, unused] : handleIt->second) {
+      (void)unused;
+      ids.push_back(id);
+    }
+    for (const int id : ids) {
+      auto jobIt = handleIt->second.find(id);
+      if (jobIt == handleIt->second.end())
+        continue;
+      try {
+        auto result = model->takeCooperative(
+            static_cast<qvac_lib_inference_addon_cpp::JobId>(id));
+        if (!result.has_value())
+          continue;
+        if (jobIt->second.batch) {
+          const std::string payload = json(*result).dump();
+          qvac_web_emit(
+              handle,
+              id,
+              "BatchResult",
+              sizeof("BatchResult") - 1,
+              payload.data(),
+              static_cast<int>(payload.size()));
+        }
+        const std::string stats =
+            statsJson(model->consumeJobStats(
+                          static_cast<qvac_lib_inference_addon_cpp::JobId>(id)))
+                .dump();
+        qvac_web_emit(
+            handle,
+            id,
+            "JobEnded",
+            sizeof("JobEnded") - 1,
+            stats.data(),
+            static_cast<int>(stats.size()));
+        handleIt->second.erase(jobIt);
+      } catch (const std::exception& error) {
+        emitError(handle, id, error);
+        handleIt->second.erase(jobIt);
+      }
+    }
+    if (handleIt->second.empty()) {
+      browserJobs.erase(handleIt);
+      return 0;
+    }
+    return 1;
+  } catch (const std::exception& error) {
+    auto jobs = browserJobs.find(handle);
+    if (model != nullptr && jobs != browserJobs.end()) {
+      std::vector<int> ids;
+      ids.reserve(jobs->second.size());
+      for (const auto& [id, unused] : jobs->second) {
+        (void)unused;
+        ids.push_back(id);
+        model->cancelById(static_cast<qvac_lib_inference_addon_cpp::JobId>(id));
+      }
+      try {
+        while (model->stepCooperative()) {
+        }
+      } catch (...) {
+      }
+      for (const int id : ids) {
+        try {
+          (void)model->takeCooperative(
+              static_cast<qvac_lib_inference_addon_cpp::JobId>(id));
+        } catch (...) {
+        }
+        emitError(handle, id, error);
+      }
+      browserJobs.erase(jobs);
+    }
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_cancel_job(int handle, int jobId) {
+  try {
+    instance(handle).cancelById(
+        static_cast<qvac_lib_inference_addon_cpp::JobId>(jobId));
+    return 0;
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_active_slots(int handle) {
+  try {
+    return static_cast<int>(instance(handle).activeSlots());
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_cache_request(
+    int handle, int operationId, const char* cacheKey, int discard) {
+  try {
+    auto& operations = browserCacheJobs[handle];
+    if (operationId <= 0 || operations.contains(operationId)) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Invalid or duplicate browser cache operation id");
+    }
+    const bool shouldDiscard = discard != 0;
+    std::string key(cacheKey);
+    auto done = instance(handle).enqueueCooperativeCache(key, shouldDiscard);
+    operations.emplace(
+        operationId,
+        BrowserCacheJob{
+            .cacheKey = std::move(key),
+            .discard = shouldDiscard,
+            .done = std::move(done)});
+    return 0;
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_cache_poll(int handle, int operationId) {
+  try {
+    auto handleIt = browserCacheJobs.find(handle);
+    if (handleIt == browserCacheJobs.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown browser cache operation id");
+    }
+    auto operationIt = handleIt->second.find(operationId);
+    if (operationIt == handleIt->second.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown browser cache operation id");
+    }
+    BrowserCacheJob& operation = operationIt->second;
+    if (operation.done.wait_for(std::chrono::seconds(0)) !=
+        std::future_status::ready) {
+      return 1;
+    }
+    const auto outcome = operation.done.get();
+    instance(handle).completeCooperativeCache(
+        operation.cacheKey, operation.discard, outcome);
+    handleIt->second.erase(operationIt);
+    if (handleIt->second.empty())
+      browserCacheJobs.erase(handleIt);
+    return 0;
+  } catch (const std::exception& error) {
+    auto handleIt = browserCacheJobs.find(handle);
+    if (handleIt != browserCacheJobs.end()) {
+      handleIt->second.erase(operationId);
+      if (handleIt->second.empty())
+        browserCacheJobs.erase(handleIt);
+    }
     return fail(error);
   }
 }
@@ -326,7 +706,20 @@ qvac_web_calc_tokens(int handle, const char* params) {
 }
 
 EMSCRIPTEN_KEEPALIVE int qvac_web_destroy(int handle) {
-  instances.erase(handle);
-  return 0;
+  try {
+    if (auto jobs = browserJobs.find(handle);
+        jobs != browserJobs.end() && !jobs->second.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Cannot destroy a model with live browser jobs");
+    }
+    stagedMedia.erase(handle);
+    browserJobs.erase(handle);
+    browserCacheJobs.erase(handle);
+    instances.erase(handle);
+    return 0;
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
 }
 }

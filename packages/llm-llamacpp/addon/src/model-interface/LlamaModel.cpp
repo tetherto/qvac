@@ -513,6 +513,13 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
   // load unmapped. Both traps are really a `parallel` misconfiguration, so
   // they are reported as InvalidArgument naming the knobs the caller sets.
   try {
+#ifdef __EMSCRIPTEN__
+    constexpr auto driveMode =
+        batching::ContinuousBatchScheduler::DriveMode::Cooperative;
+#else
+    constexpr auto driveMode =
+        batching::ContinuousBatchScheduler::DriveMode::BackgroundThread;
+#endif
     auto scheduler = std::make_unique<batching::ContinuousBatchScheduler>(
         shared,
         maxChunkSize,
@@ -525,7 +532,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_,
             state.cacheShareAcrossKeys_,
-            maxImagePixels_));
+            maxImagePixels_),
+        driveMode);
     scheduler->setRamTier(state.ramTier_);
     scheduler->setFileIndex(state.fileIndex_);
     return scheduler;
@@ -1506,10 +1514,195 @@ void LlamaModel::discardCache(const std::string& cacheKey) {
   }
 }
 
+std::future<LlamaModel::CooperativeCacheOutcome>
+LlamaModel::enqueueCooperativeCache(
+    const std::string& cacheKey, const bool discard) {
+  if (cacheKey.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        std::string(discard ? "discardCache" : "saveCache") +
+            ": cacheKey must be a non-empty string");
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        std::string(discard ? "discardCache" : "saveCache") +
+            ": cooperative scheduler is not loaded");
+  }
+  if (!discard && state_->fileIndex_) {
+    state_->fileIndex_->note(cacheKey);
+  }
+  return discard ? state_->batchScheduler_->enqueueDiscardConversation(cacheKey)
+                 : state_->batchScheduler_->enqueueSaveConversation(cacheKey);
+}
+
+void LlamaModel::completeCooperativeCache(
+    const std::string& cacheKey, const bool discard,
+    const CooperativeCacheOutcome outcome) const {
+  if (discard || outcome != CooperativeCacheOutcome::NotHere) {
+    return;
+  }
+  std::error_code ec;
+  if (std::filesystem::file_size(cacheKey, ec) > 0 && !ec) {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(qvac_errors::general_error::InvalidArgument),
+      "saveCache: no conversation is cached under '" + cacheKey + "'");
+}
+
 std::vector<std::string>
 LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
   std::shared_lock lock(stateMtx_);
   return processPromptBatchImpl(prompts).outputs;
+}
+
+void LlamaModel::submitCooperative(
+    const std::vector<Prompt>& prompts,
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  if (id == qvac_lib_inference_addon_cpp::kNoJobId || prompts.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Cooperative inference requires a job id and at least one prompt");
+  }
+
+  auto run = std::make_shared<CooperativeRunState>();
+  {
+    std::shared_lock stateLock(stateMtx_);
+    run->state = state_;
+  }
+  if (!run->state || !run->state->batchScheduler_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Cooperative inference requires parallel > 1");
+  }
+  {
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    if (cooperativeJobs_.contains(id)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "Duplicate cooperative job id");
+    }
+    cooperativeJobs_[id] = run;
+  }
+  ScopeGuard cleanup([this, id] {
+    liveJobs_.remove(id);
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    cooperativeJobs_.erase(id);
+  });
+
+  auto* scheduler = run->state->batchScheduler_.get();
+  const uint64_t groupTag = static_cast<uint64_t>(id);
+  const auto cancelGroup = [run, scheduler, groupTag] {
+    std::vector<std::pair<uint32_t, uint64_t>> slots;
+    {
+      std::scoped_lock slotsLock(run->slotsMtx);
+      run->cancelled = true;
+      slots.assign(run->slots.begin(), run->slots.end());
+      run->slots.clear();
+    }
+    for (const auto& [seqId, admissionId] : slots) {
+      scheduler->cancel(seqId, admissionId);
+    }
+    scheduler->cancelGroupQueued(groupTag);
+  };
+  if (liveJobs_.add(id, cancelGroup)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "Cooperative job was cancelled before submission");
+  }
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, run, cancelGroup](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::scoped_lock slotsLock(run->slotsMtx);
+          if (run->cancelled) {
+            return true;
+          }
+          run->slots[seqId] = admissionId;
+        }
+        if (liveJobs_.bind(id, cancelGroup)) {
+          std::scoped_lock slotsLock(run->slotsMtx);
+          run->cancelled = true;
+          run->slots.erase(seqId);
+          return true;
+        }
+        return false;
+      };
+  const SeqObserver onSeqDone = [run](size_t, uint32_t seqId) {
+    std::scoped_lock slotsLock(run->slotsMtx);
+    run->slots.erase(seqId);
+  };
+
+  run->batchGuard = enterBatchProcessing(*run->state);
+  std::vector<batching::SubmitRequest> requests =
+      prepareBatchRequests(*run->state, prompts, onSeqAssigned, onSeqDone);
+  scheduler->submitCooperative(std::move(requests), groupTag);
+  cleanup.dismiss();
+}
+
+bool LlamaModel::stepCooperative() {
+  std::shared_ptr<CooperativeRunState> run;
+  {
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    if (cooperativeJobs_.empty()) {
+      return false;
+    }
+    run = cooperativeJobs_.begin()->second;
+  }
+  return run->state->batchScheduler_->stepCooperative();
+}
+
+std::optional<std::vector<std::string>>
+LlamaModel::takeCooperative(const qvac_lib_inference_addon_cpp::JobId id) {
+  std::shared_ptr<CooperativeRunState> run;
+  {
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    const auto found = cooperativeJobs_.find(id);
+    if (found == cooperativeJobs_.end()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "Unknown cooperative job id");
+    }
+    run = found->second;
+  }
+
+  std::optional<batching::BatchResult> result;
+  try {
+    result = run->state->batchScheduler_->takeCooperativeResult(
+        static_cast<uint64_t>(id));
+  } catch (...) {
+    liveJobs_.remove(id);
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    cooperativeJobs_.erase(id);
+    throw;
+  }
+  if (!result.has_value()) {
+    return std::nullopt;
+  }
+  if (!result->requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
+        result->stats, batching::aggregateObservedStats(result->requestStats));
+    std::scoped_lock statsLock(jobStatsMtx_);
+    jobStats_[id] = std::move(terminal);
+  }
+  liveJobs_.remove(id);
+  {
+    std::scoped_lock jobsLock(cooperativeJobsMtx_);
+    cooperativeJobs_.erase(id);
+  }
+  return std::move(result->outputs);
 }
 
 bool LlamaModel::supportsBatching() const {
@@ -1529,59 +1722,7 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     const std::vector<Prompt>& prompts,
     const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone,
     const uint64_t groupTag) {
-  // `onSeqAssigned` (optional) fires once per request when the scheduler
-  // assigns its seqId. Serialize the entry section (prior-count check, cache
-  // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
-  // can see activeBatchJobs_ == 0 before the first increments it, skip the
-  // wipe, and reach scheduler.processBatch() while the first is still clearing
-  // KV — wiping the second caller's sequences. The lock is released before
-  // processBatch() so concurrent batch calls still overlap; jobGuard outlives
-  // it so its decrement spans the whole job.
-  std::optional<batching::BatchEntryGuard> jobGuard;
-  {
-    std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
-    jobGuard.emplace(
-        activeBatchJobs_, [this] { validateBitnetQuantization(); });
-    const unsigned priorBatchJobs = jobGuard->prior();
-    state_->lastRun_.store(
-        ReloadableState::LastRunInfo{.wasBatch = true},
-        std::memory_order_relaxed);
-
-    // Invalidate single-prompt cache state and clear any stale KV left by
-    // single-prompt runs so the batch scheduler starts on clean KV. Only the
-    // first batch job entering does this: while another batch job is already in
-    // flight the scheduler owns the live KV slots, and an unconditional wipe
-    // here would clear that active job's sequences before its own admission.
-    if (priorBatchJobs == 0) {
-      // An explicit saveCache may be reading the single-prompt session.
-      std::scoped_lock singleRunLock(singleRunMtx_);
-      if (state_->cacheManager_.has_value()) {
-        state_->cacheManager_->invalidate();
-      }
-      // The memory below is wiped, so the single-prompt context must not
-      // keep describing it: the next single prompt would reuse cells that
-      // are gone. Its sequence may hold a parked batch conversation, which
-      // the wipe keeps, so only the bookkeeping is reset here: positions and
-      // KV cells, which differ on multimodal contexts.
-      state_->llmContext_->clearCacheReconciliationState();
-      state_->llmContext_->setNPast(0);
-      state_->llmContext_->setCacheTokens(0);
-      // Conversations the scheduler parked for their next request on the same
-      // cacheKey are its own state, not single-prompt leftovers. No batch job
-      // is in flight, but the worker can still run a save or discard job, so
-      // the wipe and the perf counter reset run under the scheduler's lock.
-      // batchRuntimeStatsLocked() deliberately never resets the counters: it
-      // runs under a shared stateMtx_ while peers may be mid-decode.
-      if (state_->batchScheduler_) {
-        state_->batchScheduler_->clearUnparkedSequences();
-      } else if (llama_context* lctx = getContext(); lctx != nullptr) {
-        if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
-          llama_memory_seq_rm(mem, -1, -1, -1);
-        }
-        llama_perf_context_reset(lctx);
-      }
-    }
-  }
+  auto batchGuard = enterBatchProcessing(*state_);
 
   if (prompts.empty()) {
     return {};
@@ -1596,11 +1737,49 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
   }
   auto& scheduler = *state_->batchScheduler_;
 
+  std::vector<batching::SubmitRequest> requests =
+      prepareBatchRequests(*state_, prompts, onSeqAssigned, onSeqDone);
+  return scheduler.processBatch(std::move(requests), groupTag);
+}
+
+std::unique_ptr<batching::BatchEntryGuard>
+LlamaModel::enterBatchProcessing(ReloadableState& state) {
+  std::lock_guard<std::mutex> entryLock(state.batchEntryMutex_);
+  auto guard = std::make_unique<batching::BatchEntryGuard>(
+      activeBatchJobs_, [this] { validateBitnetQuantization(); });
+  state.lastRun_.store(
+      ReloadableState::LastRunInfo{.wasBatch = true},
+      std::memory_order_relaxed);
+  if (guard->prior() == 0) {
+    std::scoped_lock singleRunLock(singleRunMtx_);
+    if (state.cacheManager_.has_value()) {
+      state.cacheManager_->invalidate();
+    }
+    state.llmContext_->clearCacheReconciliationState();
+    state.llmContext_->setNPast(0);
+    state.llmContext_->setCacheTokens(0);
+    if (state.batchScheduler_) {
+      state.batchScheduler_->clearUnparkedSequences();
+    } else if (
+        llama_context* lctx = state.llmContext_->getCtx(); lctx != nullptr) {
+      if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
+        llama_memory_seq_rm(mem, -1, -1, -1);
+      }
+      llama_perf_context_reset(lctx);
+    }
+  }
+  return guard;
+}
+
+std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
+    ReloadableState& state, const std::vector<Prompt>& prompts,
+    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone) {
+
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
-    if (!prompt.media.empty() && state_->isTextLlm_) {
+    if (!prompt.media.empty() && state.isTextLlm_) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
@@ -1630,18 +1809,18 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           toString(EmptyPrompt),
           "processPromptBatch: prompt produced no chat messages");
     }
-    if (!parsed.mediaPaths.empty() && state_->isTextLlm_) {
+    if (!parsed.mediaPaths.empty() && state.isTextLlm_) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: media requires a multimodal model");
     }
-    if (!state_->isTextLlm_) {
+    if (!state.isTextLlm_) {
       preflightImagePixels(parsed, prompt.media, maxImagePixels_);
     }
     // The base key's file is a source like any file this model has used.
-    if (state_->fileIndex_) {
-      state_->fileIndex_->note(prompt.baseCacheKey);
+    if (state.fileIndex_) {
+      state.fileIndex_->note(prompt.baseCacheKey);
     }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
@@ -1686,7 +1865,7 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     requests.push_back(std::move(sr));
   }
 
-  return scheduler.processBatch(std::move(requests), groupTag);
+  return requests;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {

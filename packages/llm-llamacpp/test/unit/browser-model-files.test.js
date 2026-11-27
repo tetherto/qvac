@@ -525,6 +525,25 @@ test('browser read-ahead releases its window on unmount', (t) => {
   t.alike(fixture.calls.at(-1), { direct: true, bytes: 1024 }, 'window released')
 })
 
+test('browser read-ahead leaves nodes without a sliceable file to the original read', (t) => {
+  t.teardown(() => delete globalThis.FileReaderSync)
+  globalThis.FileReaderSync = class {
+    readAsArrayBuffer() {
+      throw new Error('read-ahead used')
+    }
+  }
+  const reads = []
+  const ops = {
+    read: (_stream, _buffer, _offset, length, position) => reads.push(position) && length
+  }
+  installReadAhead({ FS: { filesystems: { WORKERFS: { stream_ops: ops } } } })
+  const stream = { node: { contents: { bytes: new Uint8Array(1024 * 1024) }, size: 1024 * 1024 } }
+  for (let position = 0; position < 64 * 1024; position += 2048) {
+    t.is(ops.read(stream, new Int8Array(2048), 0, 2048, position), 2048)
+  }
+  t.is(reads.length, 32)
+})
+
 test('browser read-ahead installs once per engine module', (t) => {
   t.teardown(() => delete globalThis.FileReaderSync)
   const { module } = readAheadFixture([16])

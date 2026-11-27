@@ -478,7 +478,8 @@ interface LlmLlamacpp {
    * and queued, across all concurrent `run()` calls — plus any finetuning in
    * progress (its pause checkpoint is removed so the next `finetune()` starts
    * fresh). For cancelling a single request or batch group, use
-   * `response.cancel()` on that call's response instead.
+   * `response.cancel()` on that call's response instead. Resolves once the
+   * cancelled work has stopped, so a following `run()` is not refused as busy.
    */
   cancel(): Promise<void>;
   pause(): Promise<void>;
@@ -742,7 +743,8 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     // rejectWhenBusy gates only this fast-fail pre-check: true rejects the moment
     // the pool is full (never queues); false falls through to the scheduler's
     // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
-    if ((rejectWhenBusy ?? this._rejectWhenBusy) && this._atCapacity()) {
+    const effectiveRejectWhenBusy = rejectWhenBusy ?? this._rejectWhenBusy;
+    if (effectiveRejectWhenBusy && this._atCapacity()) {
       throw runBusyError();
     }
 
@@ -759,7 +761,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     /// registering the sink afterwards never races the first chunk.
     let admission: AddonModule.AddonRunJobResult;
     try {
-      admission = await this.addon.runJob(promptMessages);
+      admission = await this.addon.runJob(promptMessages, effectiveRejectWhenBusy);
     } catch (error) {
       response.failed(error as Error);
       throw error;
@@ -994,7 +996,8 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   /**
    * Cancel finetuning and remove the pause checkpoint so the next
    * `finetune()` call starts fresh instead of resuming. Also cancels
-   * any inference job in flight.
+   * any inference job in flight. Resolves once the cancelled work has
+   * stopped, so a following `run()` is not refused as busy.
    */
   async cancel(): Promise<void> {
     if (this.addon?.cancel) {
@@ -1409,18 +1412,19 @@ namespace LlmLlamacpp {
      * single response active at a time, batching disabled).
      *
      * Cost: `parallel` is a real resource commitment, sized upfront so a busy
-     * server is ready to serve at full concurrency with no warm-up. It sizes
-     * the native scheduler's worker pool one-to-one — that many OS threads are
-     * created at load and held for the model's lifetime, idle or not — and the
-     * slots share one KV cache, each limited to `ctx_size / parallel` tokens.
-     * On MiniMax-M3, `parallel >= 2` turns sparse attention off; DeepSeek V4
+     * server is ready to serve at full concurrency with no warm-up. The KV
+     * cache is split evenly across the slots (each gets `ctx_size / parallel`
+     * tokens). Native builds create an eager `parallel`-sized admission worker
+     * pool and a scheduler worker; the no-thread browser build advances the
+     * scheduler cooperatively between event-loop turns. On MiniMax-M3,
+     * `parallel >= 2` turns sparse attention off; DeepSeek V4
      * and long-RoPE models have known issues with it
      * (docs/continuous-batching.md). Size it to the concurrency you actually
      * intend to serve, not to a generous upper bound.
      *
      * Range `1..256`. The upper bound is the engine's own sequence limit
      * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
-     * spawning its whole thread pool and then failing the model load with a
+     * allocating an invalid slot layout and then failing the model load with a
      * generic error. `ctx_size / parallel` must also leave at least one token
      * per slot, so a `parallel` too large for the context is refused as an
      * `InvalidArgument` naming both knobs.

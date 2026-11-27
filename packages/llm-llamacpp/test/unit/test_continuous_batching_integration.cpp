@@ -215,6 +215,162 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
   EXPECT_NE(outputs[0], outputs[1]);
 }
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeDriveReturnsOrderedConcurrentResults) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+
+  std::vector<std::string> streamed(2);
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("What is the capital of France? Answer in one word."),
+      makePrompt(
+          "What is the natural satellite that orbits Earth? "
+          "Answer in one word.")};
+  for (size_t index = 0; index < prompts.size(); ++index) {
+    prompts[index].outputCallback = [&streamed,
+                                     index](const std::string& token) {
+      streamed[index].append(token);
+    };
+  }
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7001;
+  model->submitCooperative(prompts, kJobId);
+  std::optional<std::vector<std::string>> outputs;
+  for (size_t step = 0; step < 10000 && !outputs.has_value(); ++step) {
+    (void)model->stepCooperative();
+    outputs = model->takeCooperative(kJobId);
+  }
+
+  ASSERT_TRUE(outputs.has_value());
+  ASSERT_EQ(outputs->size(), 2u);
+  EXPECT_EQ(*outputs, streamed);
+  EXPECT_TRUE(containsCaseInsensitive((*outputs)[0], "Paris"));
+  EXPECT_TRUE(containsCaseInsensitive((*outputs)[1], "Moon"));
+  const auto stats = model->consumeJobStats(kJobId);
+  EXPECT_GT(test_common::getStatValue(stats, "avgConcurrentSeq"), 1.0);
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeDrivePropagatesDecodeFailureAndReleasesSlots) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [](llama_context*, llama_batch&) -> int { return 1; });
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7002;
+  model->submitCooperative(
+      {makePrompt("What is the capital of France? Answer in one word.")},
+      kJobId);
+  (void)model->stepCooperative();
+  EXPECT_THROW((void)model->takeCooperative(kJobId), qvac_errors::StatusError);
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeCallbackCanCancelItsOwnJobWithoutDeadlock) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "128";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kJobId = 7003;
+  size_t callbackCount = 0;
+  auto prompt =
+      makePrompt("Write a detailed essay about the history of mathematics.");
+  prompt.outputCallback = [&model, &callbackCount](const std::string&) {
+    ++callbackCount;
+    if (callbackCount == 1) {
+      model->cancelById(kJobId);
+    }
+  };
+  model->submitCooperative({std::move(prompt)}, kJobId);
+
+  std::optional<std::vector<std::string>> output;
+  size_t steps = 0;
+  for (; steps < 10000 && !output.has_value(); ++steps) {
+    (void)model->stepCooperative();
+    output = model->takeCooperative(kJobId);
+  }
+
+  ASSERT_EQ(callbackCount, 1u)
+      << "the cancellation callback must run exactly once";
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(output->size(), 1u);
+  EXPECT_LT(steps, 128u)
+      << "the job ran to its generation cap instead of applying cancellation";
+  EXPECT_EQ(model->activeSlots(), 0u);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CooperativeSaveRunsBeforeQueuedSuccessorOnSameKey) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  ContinuousBatchSchedulerTestPeer::useCooperativeDrive(*scheduler);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("cooperative-save-order-" + uniqueTestId() + ".bin");
+  auto first = makePrompt("Write a short sentence about oceans.");
+  first.cacheKey = cachePath.string();
+  auto second = makePrompt("Now write one about mountains.");
+  second.cacheKey = cachePath.string();
+
+  constexpr qvac_lib_inference_addon_cpp::JobId kFirstJob = 7101;
+  constexpr qvac_lib_inference_addon_cpp::JobId kSecondJob = 7102;
+  model->submitCooperative({std::move(first)}, kFirstJob);
+  (void)model->stepCooperative();
+  model->submitCooperative({std::move(second)}, kSecondJob);
+  auto saved = model->enqueueCooperativeCache(cachePath.string(), false);
+
+  std::optional<std::vector<std::string>> firstOutput;
+  std::optional<std::vector<std::string>> secondOutput;
+  bool saveCompletedBeforeSecond = false;
+  for (size_t step = 0; step < 10000 && !secondOutput.has_value(); ++step) {
+    (void)model->stepCooperative();
+    if (!firstOutput.has_value())
+      firstOutput = model->takeCooperative(kFirstJob);
+    if (!secondOutput.has_value())
+      secondOutput = model->takeCooperative(kSecondJob);
+    if (saved.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+      saveCompletedBeforeSecond = !secondOutput.has_value();
+      break;
+    }
+  }
+
+  ASSERT_TRUE(firstOutput.has_value());
+  ASSERT_TRUE(saveCompletedBeforeSecond)
+      << "saveCache was delayed behind the queued successor on the same key";
+  const auto outcome = saved.get();
+  model->completeCooperativeCache(cachePath.string(), false, outcome);
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  for (size_t step = 0; step < 10000 && !secondOutput.has_value(); ++step) {
+    (void)model->stepCooperative();
+    secondOutput = model->takeCooperative(kSecondJob);
+  }
+  ASSERT_TRUE(secondOutput.has_value());
+  EXPECT_EQ(model->activeSlots(), 0u);
+
+  std::error_code ec;
+  fs::remove(cachePath, ec);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "128";

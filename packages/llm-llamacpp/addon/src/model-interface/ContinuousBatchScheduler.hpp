@@ -293,9 +293,11 @@ using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
 /// to `llama_decode`, `common_sampler_*`, `common_token_to_piece`,
 /// `llama_vocab_is_eog` and `llama_memory_seq_rm`.
 ///
-/// Callers enqueue request groups and wait for their result. A scheduler-owned
-/// worker thread admits queued requests into free slots, runs decode chunks,
-/// and refills slots as soon as completed requests are drained.
+/// In background-thread mode callers enqueue request groups and wait while a
+/// scheduler-owned worker admits requests, decodes chunks and refills free
+/// slots. In cooperative mode the caller drives the same state machine with
+/// `stepCooperative()` and drains completed groups with
+/// `takeCooperativeResult()`.
 ///
 /// It is also where an admitted request looks for a conversation that serves
 /// more of its prompt than its own sequence (`cache::CacheSourceProvider`):
@@ -303,6 +305,7 @@ using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
 /// used.
 class ContinuousBatchScheduler {
 public:
+  enum class DriveMode { BackgroundThread, Cooperative };
   /// @param shared             Live llama handles. Must outlive `*this`.
   /// @param maxChunkSize       Tokens fed per slot per step (typically
   /// n_batch).
@@ -318,10 +321,12 @@ public:
   ///                            non-empty: the model layer owns the single
   ///                            text-vs-multimodal selection, so the scheduler
   ///                            never names a concrete driver type.
+  /// @param driveMode          Background worker or caller-driven execution.
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-      DriverFactory driverFactory);
+      DriverFactory driverFactory,
+      DriveMode driveMode = DriveMode::BackgroundThread);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -338,6 +343,26 @@ public:
   /// for an untargetable group.
   [[nodiscard]] BatchResult
   processBatch(std::vector<SubmitRequest>&& requests, uint64_t groupTag = 0);
+
+  /// Queue a tagged group without starting the scheduler thread. The caller
+  /// drives it with `stepCooperative()` and takes the terminal result with
+  /// `takeCooperativeResult()`. This is the no-pthread equivalent of
+  /// `processBatch`: it reuses the same slots, cancellation and statistics,
+  /// but returns to the host event loop between decode steps.
+  void
+  submitCooperative(std::vector<SubmitRequest>&& requests, uint64_t groupTag);
+
+  /// Drive at most one scheduler quantum without creating a worker thread.
+  /// Returns whether queued or active scheduler work remains. Completed
+  /// groups stay available to `takeCooperativeResult()` but do not keep the
+  /// pump spinning.
+  [[nodiscard]] bool stepCooperative();
+
+  /// Return and forget a completed cooperative group. `nullopt` means the
+  /// group is still live. Unknown tags are rejected so a caller cannot
+  /// mistake a consumed result for a pending one.
+  [[nodiscard]] std::optional<BatchResult>
+  takeCooperativeResult(uint64_t groupTag);
 
   /// Admit one request and return the assigned slot id (`seqId`).
   ///
@@ -447,11 +472,19 @@ public:
   /// `UnableToSaveSessionFile` and keeps the conversation, still unsaved.
   SlotStateCache::SaveOutcome saveConversation(const std::string& cacheKey);
 
+  /// No-thread equivalent used by browser cooperative driving. Queues the
+  /// operation and lets stepCooperative() service it before admitting a
+  /// queued request on the same key.
+  std::future<SlotStateCache::SaveOutcome>
+  enqueueSaveConversation(const std::string& cacheKey);
+
   /// The caller's explicit discard (`discardCache`): drops the conversation
   /// kept for `cacheKey` (parked sequence, RAM-tier entry, checkpoints)
   /// without writing it. Ordered like `saveConversation`: it waits for a
   /// request running on that key. Blocks until done.
   void discardConversation(const std::string& cacheKey);
+  std::future<SlotStateCache::SaveOutcome>
+  enqueueDiscardConversation(const std::string& cacheKey);
 
   /// Sequences that hold a parked conversation (a committed keyed request's
   /// state kept for the next request on its `cacheKey`).
@@ -620,6 +653,10 @@ private:
 
   void ensureWorkerStartedLocked();
   void workerLoop();
+  void driveOneLocked(std::unique_lock<std::mutex>& lock);
+  void enqueueGroupLocked(
+      const std::shared_ptr<BatchGroup>& group,
+      std::vector<SubmitRequest>&& requests);
   void admitPendingIntoFreeSlotsLocked();
   [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
   /// Drives one fillBatch + decode + advance + sample iteration.
@@ -815,11 +852,12 @@ private:
   std::thread worker_;
   bool workerStarted_ = false;
   bool stopping_ = false;
-  /// The worker's thread id, set once when it starts (under `mutex_`, so it
-  /// is visible to every streaming callback the worker later runs). Lets
+  DriveMode driveMode_ = DriveMode::BackgroundThread;
+  /// The current driver thread id: the permanent worker in native mode, or
+  /// the host thread for the duration of one cooperative step. Lets
   /// cancel() detect a call from the worker's own callbacks -- which hold
   /// `mutex_` -- and record instead of self-deadlocking on it.
-  std::atomic<std::thread::id> workerThreadId_{};
+  std::atomic<std::thread::id> driverThreadId_{};
   /// Guarded by `pendingCancelsMtx_`, NOT `mutex_`: worker-thread callers
   /// of cancel() (streaming callbacks fired with `mutex_` held) must be able
   /// to record a cancel without touching the scheduler lock. Lock order is
@@ -895,6 +933,10 @@ private:
   /// kept alive here. Tags come from the submitter (never reused while live),
   /// so an entry can never be mistaken for a later group.
   std::unordered_map<uint64_t, std::weak_ptr<BatchGroup>> taggedGroups_;
+  /// Strong ownership for no-thread groups between submit and result take.
+  /// Native `processBatch` keeps its group alive on its own stack and never
+  /// enters this map.
+  std::unordered_map<uint64_t, std::shared_ptr<BatchGroup>> cooperativeGroups_;
   /// Source of the strictly-incrementing per-admission ownership tokens.
   /// Guarded by `mutex_` (minted inside submitLocked). Starts past
   /// `K_UNKNOWN_ADMISSION_ID` so the sentinel never matches a live slot.

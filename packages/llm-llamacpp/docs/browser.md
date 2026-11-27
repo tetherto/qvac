@@ -85,10 +85,14 @@ await model.unload()
 Supported:
 
 - Completion and streaming
+- Batch completion and multiple concurrent `run()` calls when `parallel >= 2`
+- Projection-backed multimodal inference from `Uint8Array` media
 - Reasoning models
 - Tool calling
 - Generation parameters
-- Per-job cancel during generation; a queued job can also be cancelled before it starts
+- Per-job cancel during generation; a queued job can also be cancelled before it starts.
+  As on native, `cancel()` resolves once the cancelled work has stopped, so a
+  following `run()` is not refused as busy
 - Runtime stats
 - `saveCache`/`discardCache` (cache files live in memory)
 - `calcTokens` while the engine is idle
@@ -96,19 +100,20 @@ Supported:
 - Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
 
-| Outside the current binding scope                      | Behaviour                                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `parallel` > 1 and batch `run()`                       | Rejected at load/run                                                      |
-| `load_mode` other than `auto`/`none`                   | Rejected at load; weights are read, never memory-mapped                   |
-| Media input and projection-backed multimodal inference | Media is rejected; the projector is loaded but unused until media support |
-| RPC servers and native backend/cache directories       | Rejected at load                                                          |
-| `lora-scaled` and control vectors                      | Rejected at load                                                          |
-| Multiple LoRAs                                         | Not supported; a comma-separated `lora` is read as one path               |
-| `finetune()`                                           | Throws: not exposed by the browser binding                                |
-| `assessFit()`                                          | Rejects                                                                   |
+| Outside the current binding scope                | Behaviour                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `load_mode` other than `auto`/`none`             | Rejected at load; weights are read, never memory-mapped     |
+| RPC servers and native backend/cache directories | Rejected at load                                            |
+| `lora-scaled` and control vectors                | Rejected at load                                            |
+| Multiple LoRAs                                   | Not supported; a comma-separated `lora` is read as one path |
+| `finetune()`                                     | Throws: not exposed by the browser binding                  |
+| `assessFit()`                                    | Rejects                                                     |
 
-Requests run one at a time per Worker. A second `run()` either fails
-fast (`rejectWhenBusy`, the default) or waits its turn.
+With `parallel: 1`, one request runs at a time in the Worker. With
+`parallel >= 2`, Fabric's continuous-batching scheduler advances multiple
+requests cooperatively between browser event-loop turns. `rejectWhenBusy`
+controls whether a request fails fast or waits when every configured slot is
+occupied.
 `calcTokens()` fails with `RUN_BUSY` instead of waiting behind another engine
 operation.
 

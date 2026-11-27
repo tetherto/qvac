@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -16,6 +17,7 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
+#include "BatchEntryGuard.hpp"
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
@@ -167,6 +169,16 @@ public:
   std::vector<std::string>
   processPromptBatch(const std::vector<Prompt>& prompts);
 
+  /// Submit a tagged prompt group to the no-thread scheduler and return
+  /// before inference starts. The caller repeatedly drives one quantum with
+  /// `stepCooperative()` and takes the terminal result by the same job id.
+  void submitCooperative(
+      const std::vector<Prompt>& prompts,
+      qvac_lib_inference_addon_cpp::JobId id);
+  [[nodiscard]] bool stepCooperative();
+  [[nodiscard]] std::optional<std::vector<std::string>>
+  takeCooperative(qvac_lib_inference_addon_cpp::JobId id);
+
   /// @brief True when the model was loaded with continuous batching active
   /// (`n_seq_max > 1`, i.e. `parallel >= 2`).
   [[nodiscard]] bool supportsBatching() const;
@@ -192,6 +204,13 @@ public:
   /// `saveCache`. The file, if any, is left alone. A no-op when nothing is
   /// kept for the key.
   void discardCache(const std::string& cacheKey);
+
+  using CooperativeCacheOutcome = batching::SlotStateCache::SaveOutcome;
+  std::future<CooperativeCacheOutcome>
+  enqueueCooperativeCache(const std::string& cacheKey, bool discard);
+  void completeCooperativeCache(
+      const std::string& cacheKey, bool discard,
+      CooperativeCacheOutcome outcome) const;
 
   /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
   /// shape, tool definitions allowed; `tools` holds tool definitions only. A
@@ -290,6 +309,7 @@ public:
       const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
+  struct ReloadableState;
   /// Writes every non-ephemeral conversation with unsaved turns to its
   /// `cacheKey` file: the active single-prompt session, parked batch
   /// conversations and the RAM tier. Run before a reload and at unload.
@@ -323,6 +343,11 @@ private:
       const std::vector<Prompt>& prompts,
       const SeqAssignedObserver& onSeqAssigned = {},
       const SeqObserver& onSeqDone = {}, uint64_t groupTag = 0);
+  std::unique_ptr<batching::BatchEntryGuard>
+  enterBatchProcessing(ReloadableState& state);
+  std::vector<batching::SubmitRequest> prepareBatchRequests(
+      ReloadableState& state, const std::vector<Prompt>& prompts,
+      const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone);
   void cancelInference() const;
   void cancelImpl() const;
 
@@ -438,6 +463,14 @@ private:
     std::mutex batchEntryMutex_;
   };
 
+  struct CooperativeRunState {
+    std::shared_ptr<ReloadableState> state;
+    std::unique_ptr<batching::BatchEntryGuard> batchGuard;
+    std::mutex slotsMtx;
+    std::unordered_map<uint32_t, uint64_t> slots;
+    bool cancelled = false;
+  };
+
   /// Continuous-batching gate. Active when the user opted into multi-sequence
   /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
   /// `n_seq_max`); applies to text and multimodal models alike.
@@ -520,6 +553,10 @@ private:
   /// single-path job (prefill-only, or no scheduler) arms the single-prompt
   /// context stop on entry, and a finetune job binds requestFinetuneCancel.
   mutable JobCancelRegistry liveJobs_;
+  mutable std::mutex cooperativeJobsMtx_;
+  std::unordered_map<
+      qvac_lib_inference_addon_cpp::JobId, std::shared_ptr<CooperativeRunState>>
+      cooperativeJobs_;
 
   /// Tagged finetune currently in setup or training. This lifecycle marker is
   /// independent of stateMtx_ so cancellation can target setup-time reloads.
