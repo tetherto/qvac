@@ -56,7 +56,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         val loaded = client.models.load(
             source = modelSrc,
             modelType = "parakeet-transcription",
-            modelConfig = buildJsonObject { put("useGPU", true) },
+            modelConfig = buildJsonObject { put("useGpu", true) },
         )
         modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")
 

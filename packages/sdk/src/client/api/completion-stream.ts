@@ -12,8 +12,11 @@ import {
   type Tool,
   type ToolCallEvent,
   type ToolCallWithCall,
-  type RPCOptions
+  type RPCOptions,
+  type CamelCaseCompletionParams,
+  renameLegacyCompletionParams
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import { validateTools, type ToolHandlerMap, type ToolInput } from '@/utils/tool-helpers'
@@ -57,29 +60,29 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
  *   - `{ type: "text" }` — no constraint (default behavior)
  *   - `{ type: "json_object" }` — output must be a JSON object
- *   - `{ type: "json_schema", json_schema: { name, schema, description?, strict? } }` — output must validate against `schema`
+ *   - `{ type: "json_schema", jsonSchema: { name, schema, description?, strict? } }` — output must validate against `schema`
  *
  *   The schema is converted to GBNF natively by llama.cpp and applied for the
- *   duration of the request only. `json_schema.name` and `json_schema.description`
+ *   duration of the request only. `jsonSchema.name` and `jsonSchema.description`
  *   are accepted for OpenAI compatibility but only used at the API boundary —
- *   they do not affect generation. **`json_schema.strict` is currently accepted
+ *   they do not affect generation. **`jsonSchema.strict` is currently accepted
  *   for compatibility but does NOT trigger OpenAI's auto-tightening semantics**
  *   (implicit `additionalProperties: false`, all properties required). The
  *   schema is forwarded to the addon as-is, so callers who want strict
  *   validation must encode it explicitly in `schema`.
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
- * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.system_prompt`); cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.systemPrompt`); cannot force toolChoice. Await final before sending the question with the same prefix.
  * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from, such as a
  *   system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no
  *   cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is
  *   processed; the source is never written. Ignored once the chat has a cache. Requires a string `kvCache`
  *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
- *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
+ *   when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelFolder}/{configHash}.bin`
  *   - `modelFolder` hashes the model and its load config, ignoring settings that do not change the cache contents:
- *     `cache_share_across_keys` and `verbosity` count as their defaults when sent, `openclCacheDir` and `cache_ram_mib` are left out
+ *     `cacheShareAcrossKeys` and `verbosity` count as their defaults when sent, `openclCacheDir` and `cacheRamMib` are left out
  *   - `configHash` hashes the system prompt
  *   - `true`: Auto-generate cache key based on conversation history
  *   - `"custom-key"`: Use provided string as cache key for manual session management
@@ -136,6 +139,10 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * ```
  */
 export function completion(params: CompletionParams): CompletionRun {
+  return runCompletion(renameLegacyCompletionParams(params, warnLegacyKey))
+}
+
+function runCompletion(params: CamelCaseCompletionParams<CompletionParams>): CompletionRun {
   // Stable identity for this run, generated client-side so it's
   // available synchronously the moment we return — before the first
   // network round-trip and therefore before the user could possibly

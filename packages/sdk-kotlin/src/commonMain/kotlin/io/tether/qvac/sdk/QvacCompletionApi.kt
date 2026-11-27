@@ -639,15 +639,15 @@ private fun QvacContentPart.toWire(): CompletionStreamRequestHistoryItemContentV
 }
 
 private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
-    temp = temperature,
-    top_p = topP,
-    top_k = topK,
+    temperature = temperature,
+    topP = topP,
+    topK = topK,
     predict = predict?.toDouble(),
     seed = seed?.toDouble(),
-    frequency_penalty = frequencyPenalty,
-    presence_penalty = presencePenalty,
-    repeat_penalty = repeatPenalty,
-    reasoning_budget = reasoningBudget,
+    frequencyPenalty = frequencyPenalty,
+    presencePenalty = presencePenalty,
+    repeatPenalty = repeatPenalty,
+    reasoningBudget = reasoningBudget,
 )
 
 private fun QvacKvCache.toWire(): CompletionStreamRequestKvCache = when (this) {
@@ -661,7 +661,7 @@ private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponse
         CompletionStreamRequestResponseFormat.JsonObject(CompletionStreamRequestResponseFormatJsonObject())
     is QvacResponseFormat.JsonSchema -> CompletionStreamRequestResponseFormat.JsonSchema(
         CompletionStreamRequestResponseFormatJsonSchema(
-            json_schema = CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(
+            jsonSchema = CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(
                 name = name,
                 description = description,
                 schema = schema,

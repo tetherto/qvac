@@ -33,8 +33,8 @@ try {
     modelType: 'moss-transcribe',
     modelSrc: modelPath ?? MOSS_TRANSCRIBE_DIARIZE_Q8_0,
     modelConfig: {
-      maxThreads: 4,
-      useGPU: false // Set true to opt into Metal on a supported Mac.
+      threads: 4,
+      useGpu: false // Set true to opt into Metal on a supported Mac.
     },
     onProgress: (progress) => {
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)

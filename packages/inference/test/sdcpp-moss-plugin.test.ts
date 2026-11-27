@@ -42,7 +42,7 @@ test('sdcpp plugin resolveConfig: resolves MOSS-Image companions and strips sour
   const resolved = await diffusionPlugin.resolveConfig!(
     {
       mode: 'diffusion',
-      flash_attn: true,
+      flashAttention: true,
       llmModelSrc: MOSS_LLM,
       vaeModelSrc: MOSS_VAE,
       tokenizerSrc: MOSS_TOKENIZER
@@ -59,7 +59,7 @@ test('sdcpp plugin resolveConfig: resolves MOSS-Image companions and strips sour
   t.is('llmModelSrc' in resolved.config, false)
   t.is('vaeModelSrc' in resolved.config, false)
   t.is(resolved.config.mode, 'diffusion')
-  t.is(resolved.config.flash_attn, true)
+  t.is(resolved.config.flashAttention, true)
 })
 
 test('sdcpp plugin resolveConfig: rejects the MOSS-Image tokenizer outside diffusion mode', async (t) => {

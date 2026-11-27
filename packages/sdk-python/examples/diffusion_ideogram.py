@@ -112,8 +112,8 @@ async def main() -> int:
                 model_config={
                     "device": "gpu",
                     "threads": 4,
-                    "diffusion_fa": True,
-                    "offload_to_cpu": True,
+                    "diffusionFlashAttention": True,
+                    "offloadToCpu": True,
                     "llmModelSrc": llm_model_src,
                     "vaeModelSrc": vae_model_src,
                     "uncondModelSrc": uncond_model_src,
@@ -132,7 +132,7 @@ async def main() -> int:
                     "width": 768,
                     "height": 768,
                     "steps": 16,
-                    "cfg_scale": 7,
+                    "cfgScale": 7,
                     "seed": 42,
                 }
             )

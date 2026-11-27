@@ -41,7 +41,7 @@ interface UpscaleResult {
  * ```ts
  * const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
  *   modelType: "diffusion",
- *   modelConfig: { mode: "upscale", upscaler: { tile_size: 128 } },
+ *   modelConfig: { mode: "upscale", upscaler: { tileSize: 128 } },
  * });
  * const pngBytes = fs.readFileSync("input.png");
  * const { outputs, stats } = upscale({ modelId, image: pngBytes, repeats: 2 });

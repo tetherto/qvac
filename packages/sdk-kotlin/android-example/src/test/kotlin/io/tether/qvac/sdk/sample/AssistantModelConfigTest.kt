@@ -13,9 +13,9 @@ class AssistantModelConfigTest {
         val config = AssistantModelConfig.qwen()
 
         assertEquals("gpu", config["device"]?.jsonPrimitive?.content)
-        assertEquals(99, config["gpu_layers"]?.jsonPrimitive?.int)
-        assertEquals(-1, config["reasoning_budget"]?.jsonPrimitive?.int)
-        assertEquals(-1, AssistantModelConfig.qwenCpu()["reasoning_budget"]?.jsonPrimitive?.int)
+        assertEquals(99, config["gpuLayers"]?.jsonPrimitive?.int)
+        assertEquals(-1, config["reasoningBudget"]?.jsonPrimitive?.int)
+        assertEquals(-1, AssistantModelConfig.qwenCpu()["reasoningBudget"]?.jsonPrimitive?.int)
         assertFalse("threads" in config)
     }
 
@@ -24,8 +24,8 @@ class AssistantModelConfigTest {
         val config = AssistantModelConfig.parakeet()
 
         assertEquals(4, config["maxThreads"]?.jsonPrimitive?.int)
-        assertFalse(config["useGPU"]?.jsonPrimitive?.boolean ?: true)
-        assertFalse("n_threads" in config)
+        assertFalse(config["useGpu"]?.jsonPrimitive?.boolean ?: true)
+        assertFalse("threads" in config)
     }
 
     @Test
@@ -33,7 +33,7 @@ class AssistantModelConfigTest {
         val config = AssistantModelConfig.smolVlm()
 
         assertEquals("cpu", config["device"]?.jsonPrimitive?.content)
-        assertEquals(0, config["gpu_layers"]?.jsonPrimitive?.int)
+        assertEquals(0, config["gpuLayers"]?.jsonPrimitive?.int)
         assertEquals(
             AssistantModelConfig.smolVlmProjectionSource,
             config["projectionModelSrc"]?.jsonPrimitive?.content,

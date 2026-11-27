@@ -6,7 +6,7 @@
 // them.
 //
 // MiniMax exposes a smaller input surface than ACE-Step. It rejects the musical
-// controls (bpm, keyscale, timesignature, vocalLanguage), the LM and DCW knobs,
+// controls (bpm, keyScale, timeSignature, vocalLanguage), the LM and DCW knobs,
 // every reference/cover field, and both the edit and understand calls; it
 // ignores simpleMode and normalizeLoudness.
 //
@@ -73,7 +73,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("engine", "minimax")
                 put("lmModelSrc", requiredModelPath("AUDIOGEN_MINIMAX_LM_MODEL"))
                 put("synthModelSrc", requiredModelPath("AUDIOGEN_MINIMAX_SYNTH_MODEL"))
-                put("useGPU", System.getenv("AUDIOGEN_USE_GPU") == "1")
+                put("useGpu", System.getenv("AUDIOGEN_USE_GPU") == "1")
                 threads?.let { put("threads", it.toInt()) }
             },
         )

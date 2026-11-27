@@ -37,7 +37,7 @@ import {
 
 // Min byte divergence vs same-seed/prompt txt2img baseline. Output is
 // bit-exact at fixed seed (see seedReproducibility), so 1% is well above
-// noise and catches a silent fallback when init_image / init_images is
+// noise and catches a silent fallback when initImage / initImages is
 // dropped server-side.
 const MIN_DIVERGENCE_RATIO = 0.01
 
@@ -47,25 +47,25 @@ const MIN_DIVERGENCE_RATIO = 0.01
 // assignable at the framework dispatch boundary.
 export interface DiffusionParams {
   prompt: string
-  negative_prompt?: string
+  negativePrompt?: string
   width?: number
   height?: number
   steps?: number
-  cfg_scale?: number
-  img_cfg_scale?: number
+  cfgScale?: number
+  imgCfgScale?: number
   guidance?: number
-  sampling_method?: DiffusionClientParams['sampling_method']
+  samplingMethod?: DiffusionClientParams['samplingMethod']
   scheduler?: DiffusionClientParams['scheduler']
   seed?: number
-  batch_count?: number
-  vae_tiling?: boolean
-  increase_ref_index?: boolean
-  auto_resize_ref_image?: boolean
+  batchCount?: number
+  vaeTiling?: boolean
+  increaseRefIndex?: boolean
+  autoResizeRefImage?: boolean
   lora?: string
   strength?: number
   upscale?: DiffusionClientParams['upscale']
-  init_image?: string | Uint8Array
-  init_images?: string[] | Uint8Array[]
+  initImage?: string | Uint8Array
+  initImages?: string[] | Uint8Array[]
   image?: string | Uint8Array
   repeats?: number
   [key: string]: unknown
@@ -109,8 +109,8 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     [diffusionStandaloneUpscalerCpu.testId]: this.standaloneUpscalerCpu.bind(this)
   }
 
-  // Subclasses override this to resolve string filenames in init_image /
-  // init_images / image to Uint8Array bytes via their platform's filesystem.
+  // Subclasses override this to resolve string filenames in initImage /
+  // initImages / image to Uint8Array bytes via their platform's filesystem.
   protected async resolveParams(p: DiffusionParams): Promise<DiffusionParams> {
     return p
   }
@@ -259,8 +259,8 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     }
   }
 
-  // Compare img2img vs same-seed/prompt baseline with init_image dropped.
-  // If the server silently drops init_image, byte delta collapses and this fails.
+  // Compare img2img vs same-seed/prompt baseline with initImage dropped.
+  // If the server silently drops initImage, byte delta collapses and this fails.
   async img2imgVsTxt2imgBaseline(params: DiffusionParams): Promise<TestResult> {
     if (params.seed === undefined) {
       return {
@@ -268,14 +268,14 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
         output: 'img2img-vs-txt2img test requires a fixed seed to compare against baseline'
       }
     }
-    if (params.init_image === undefined) {
-      return { passed: false, output: 'img2img-vs-txt2img test requires init_image' }
+    if (params.initImage === undefined) {
+      return { passed: false, output: 'img2img-vs-txt2img test requires initImage' }
     }
-    return this.compareWithBaseline(params, 'init_image', 'img2img')
+    return this.compareWithBaseline(params, 'initImage', 'img2img')
   }
 
-  // Compare fusion vs same-seed/prompt baseline with init_images dropped.
-  // If the addon silently ignores init_images, byte delta collapses and this fails.
+  // Compare fusion vs same-seed/prompt baseline with initImages dropped.
+  // If the addon silently ignores initImages, byte delta collapses and this fails.
   async fusionFlux2Basic(params: DiffusionParams): Promise<TestResult> {
     if (params.seed === undefined) {
       return {
@@ -283,7 +283,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
         output: 'fusion test requires a fixed seed to compare against baseline'
       }
     }
-    return this.compareWithBaseline(params, 'init_images', 'Fusion')
+    return this.compareWithBaseline(params, 'initImages', 'Fusion')
   }
 
   async standaloneUpscalerX4(
@@ -413,49 +413,46 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
   // ----- private helpers -----
 
   // Translate the rolling DiffusionParams shape into the SDK's strict request
-  // type. All SDK fields are passed through verbatim; init_image / init_images
+  // type. All SDK fields are passed through verbatim; initImage / initImages
   // must be Uint8Array by the time we reach here (resolveParams converts them).
   protected buildParams(modelId: string, p: DiffusionParams): DiffusionClientParams {
-    const params: Omit<DiffusionClientParams, 'init_image' | 'init_images'> = {
+    const params: Omit<DiffusionClientParams, 'initImage' | 'initImages'> = {
       modelId,
       prompt: p.prompt
     }
 
-    if (p.negative_prompt !== undefined) params.negative_prompt = p.negative_prompt
+    if (p.negativePrompt !== undefined) params.negativePrompt = p.negativePrompt
     if (p.width !== undefined) params.width = p.width
     if (p.height !== undefined) params.height = p.height
     if (p.steps !== undefined) params.steps = p.steps
-    if (p.cfg_scale !== undefined) params.cfg_scale = p.cfg_scale
-    if (p.img_cfg_scale !== undefined) params.img_cfg_scale = p.img_cfg_scale
+    if (p.cfgScale !== undefined) params.cfgScale = p.cfgScale
+    if (p.imgCfgScale !== undefined) params.imgCfgScale = p.imgCfgScale
     if (p.guidance !== undefined) params.guidance = p.guidance
-    if (p.sampling_method !== undefined) params.sampling_method = p.sampling_method
+    if (p.samplingMethod !== undefined) params.samplingMethod = p.samplingMethod
     if (p.scheduler !== undefined) params.scheduler = p.scheduler
     if (p.seed !== undefined) params.seed = p.seed
-    if (p.batch_count !== undefined) params.batch_count = p.batch_count
-    if (p.vae_tiling !== undefined) params.vae_tiling = p.vae_tiling
-    if (p.increase_ref_index !== undefined) params.increase_ref_index = p.increase_ref_index
-    if (p.auto_resize_ref_image !== undefined)
-      params.auto_resize_ref_image = p.auto_resize_ref_image
+    if (p.batchCount !== undefined) params.batchCount = p.batchCount
+    if (p.vaeTiling !== undefined) params.vaeTiling = p.vaeTiling
+    if (p.increaseRefIndex !== undefined) params.increaseRefIndex = p.increaseRefIndex
+    if (p.autoResizeRefImage !== undefined) params.autoResizeRefImage = p.autoResizeRefImage
     if (p.lora !== undefined) params.lora = p.lora
     if (p.strength !== undefined) params.strength = p.strength
     if (p.upscale !== undefined) params.upscale = p.upscale
 
-    if (p.init_image !== undefined && p.init_images !== undefined) {
-      throw new Error(
-        'Test params cannot set both init_image and init_images (mutually exclusive).'
-      )
+    if (p.initImage !== undefined && p.initImages !== undefined) {
+      throw new Error('Test params cannot set both initImage and initImages (mutually exclusive).')
     }
-    if (p.init_images !== undefined) {
-      if (!isUint8ArrayList(p.init_images)) {
-        throw new Error('init_images must be Uint8Array[] by the time it reaches buildParams')
+    if (p.initImages !== undefined) {
+      if (!isUint8ArrayList(p.initImages)) {
+        throw new Error('initImages must be Uint8Array[] by the time it reaches buildParams')
       }
-      return { ...params, init_images: p.init_images }
+      return { ...params, initImages: p.initImages }
     }
-    if (p.init_image !== undefined) {
-      if (!(p.init_image instanceof Uint8Array)) {
-        throw new Error('init_image must be Uint8Array by the time it reaches buildParams')
+    if (p.initImage !== undefined) {
+      if (!(p.initImage instanceof Uint8Array)) {
+        throw new Error('initImage must be Uint8Array by the time it reaches buildParams')
       }
-      return { ...params, init_image: p.init_image }
+      return { ...params, initImage: p.initImage }
     }
     return params
   }
@@ -465,7 +462,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
   // human-readable name used in the result message.
   private async compareWithBaseline(
     params: DiffusionParams,
-    dropField: 'init_image' | 'init_images',
+    dropField: 'initImage' | 'initImages',
     label: string
   ): Promise<TestResult> {
     const p = await this.resolveParams(params)
@@ -489,7 +486,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
       }
 
       // Guard against silent dimension mismatch (e.g. backend honoring
-      // init_image dims instead of requested width/height). PNG byte length
+      // initImage dims instead of requested width/height). PNG byte length
       // varies by content/compression, so IHDR width/height is the only
       // reliable invariant for cross-output comparison.
       const dimErr = this.assertEqualPngDimensions(variant[0]!, baseline[0]!)

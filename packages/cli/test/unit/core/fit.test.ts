@@ -8,7 +8,7 @@ const serveConfig = parseServeConfig(
   {
     serve: {
       models: {
-        'my-llm': { model: 'QWEN3_600M_INST_Q4', config: { ctx_size: 2048, temp: 0.2 } }
+        'my-llm': { model: 'QWEN3_600M_INST_Q4', config: { ctxSize: 2048, temperature: 0.2 } }
       }
     }
   },
@@ -37,21 +37,21 @@ describe('resolveFitCandidate', () => {
   it('assesses an alias with its own config, the candidate config merged over it', () => {
     const request = resolveFitCandidate(serveConfig, {
       model: 'my-llm',
-      modelConfig: { ctx_size: 8192 }
+      modelConfig: { ctxSize: 8192 }
     })
     assert.equal(request.modelSrc, QWEN3_600M_INST_Q4)
     assert.equal(request.modelType, 'llamacpp-completion')
-    assert.deepEqual(request.modelConfig, { ctx_size: 8192, temp: 0.2 })
+    assert.deepEqual(request.modelConfig, { ctxSize: 8192, temperature: 0.2 })
   })
 
   it('assesses a constant with the candidate config on the engine defaults', () => {
     const request = resolveFitCandidate(serveConfig, {
       model: 'QWEN3_600M_INST_Q4',
-      modelConfig: { ctx_size: 0 }
+      modelConfig: { ctxSize: 0 }
     })
     assert.equal(request.modelSrc, QWEN3_600M_INST_Q4)
     assert.equal(request.modelType, 'llamacpp-completion')
-    assert.deepEqual(request.modelConfig, { ctx_size: 0 })
+    assert.deepEqual(request.modelConfig, { ctxSize: 0 })
   })
 
   it('turns a companion constant name into the constant', () => {

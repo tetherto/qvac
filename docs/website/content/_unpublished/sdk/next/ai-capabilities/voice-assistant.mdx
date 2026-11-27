@@ -193,10 +193,10 @@ The defaults are deliberately conservative to prevent the assistant from hearing
 ```ts
 {
   threshold: 0.6,              // less sensitive than Silero's default
-  min_speech_duration_ms: 300, // drops short clicks / breaths / stray words
-  min_silence_duration_ms: 700,// long quiet tail before committing a segment
-  max_speech_duration_s: 15.0, // caps runaway utterances
-  speech_pad_ms: 200,          // edge padding improves accuracy
+  minSpeechDurationMs: 300,    // drops short clicks / breaths / stray words
+  minSilenceDurationMs: 700,   // long quiet tail before committing a segment
+  maxSpeechDurationS: 15.0,    // caps runaway utterances
+  speechPadMs: 200,            // edge padding improves accuracy
 }
 ```
 
@@ -212,13 +212,13 @@ If you run into common issues, adjust the values above:
 
 | Symptom | Fix |
 | --- | --- |
-| Assistant cuts you off mid-sentence | Raise `min_silence_duration_ms` to `900-1000` |
-| Assistant talks over itself / loops forever | Raise `threshold` to `0.7`; raise `min_silence_duration_ms` to `900`; raise `POST_PLAYBACK_COOLDOWN_MS` to `500` |
-| Slow to respond after you stop talking | Lower `min_silence_duration_ms` to `500` |
-| Picks up background typing / keyboard | Raise `threshold` to `0.7` and `min_speech_duration_ms` to `400` |
+| Assistant cuts you off mid-sentence | Raise `minSilenceDurationMs` to `900-1000` |
+| Assistant talks over itself / loops forever | Raise `threshold` to `0.7`; raise `minSilenceDurationMs` to `900`; raise `POST_PLAYBACK_COOLDOWN_MS` to `500` |
+| Slow to respond after you stop talking | Lower `minSilenceDurationMs` to `500` |
+| Picks up background typing / keyboard | Raise `threshold` to `0.7` and `minSpeechDurationMs` to `400` |
 | Short commands ("yes", "no") are ignored | Lower `MIN_UTTERANCE_CHARS` to `2` |
 
-If you're running with headphones (mic cannot hear the speaker), you can loosen everything: `threshold: 0.5`, `min_silence_duration_ms: 500`, `POST_PLAYBACK_COOLDOWN_MS: 0`.
+If you're running with headphones (mic cannot hear the speaker), you can loosen everything: `threshold: 0.5`, `minSilenceDurationMs: 500`, `POST_PLAYBACK_COOLDOWN_MS: 0`.
 
 ### Customizing
 

@@ -5,6 +5,7 @@ import type {
   ReloadConfigRequest
 } from '@/schemas/index'
 import {
+  modelConfigIdentity,
   normalizeModelType,
   PROFILING_KEY,
   OPERATION_EVENT_KEY,
@@ -148,10 +149,11 @@ export async function handleLoadModel(
     }
     ctx.startLoadDeadline()
 
-    const configStr = canonicalConfigString(request.modelConfig)
+    const identityConfig = modelConfigIdentity(canonicalModelType, request.modelConfig)
+    const configStr = canonicalConfigString(identityConfig)
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
     const modelId = generateShortHash(modelHashInput)
-    const kvCacheIdentityStr = canonicalConfigString(kvCacheIdentityConfig(request.modelConfig))
+    const kvCacheIdentityStr = canonicalConfigString(kvCacheIdentityConfig(identityConfig))
     await recordKvCacheDirId(
       modelId,
       generateShortHash(`${request.modelType}:${modelSrc}:${kvCacheIdentityStr}`)

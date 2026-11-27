@@ -325,8 +325,8 @@ test('audioEdit plugin operation forwards the edit-run controls and the decoded 
     seed: 99,
     vocalLanguage: 'en',
     bpm: 120,
-    keyscale: 'C minor',
-    timesignature: '4/4',
+    keyScale: 'C minor',
+    timeSignature: '4/4',
     augmentCaptionWithMetadata: true,
     dcwEnabled: false,
     dcwScaler: 0.04,
@@ -356,7 +356,11 @@ test('audioEdit plugin operation forwards the edit-run controls and the decoded 
     inferenceSteps: 16,
     shift: 2
   })
-  t.alike(frames.at(-1)?.stats, { totalTimeMs: 5, metadata }, 'the edit reports what it rendered')
+  t.alike(
+    frames.at(-1)?.stats,
+    { totalTimeMs: 5, metadata: { ...metadata, keyScale: metadata.keyscale } },
+    'the edit reports what it rendered'
+  )
   t.is(getRequestRegistry().get(requestId), null)
 })
 

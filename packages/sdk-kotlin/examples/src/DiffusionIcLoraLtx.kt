@@ -1,18 +1,18 @@
 // Kotlin port of packages/sdk/examples/diffusion-ic-lora-ltx.ts.
 //
 // Reference-conditioned text-to-video with LTX-2 and an Ingredients (IC) LoRA.
-// The LoRA is applied at runtime (`lora_apply_mode: "at_runtime"`), and a
-// composite reference sheet is handed to generation in `reference_images` so
+// The LoRA is applied at runtime (`loraApplyMode: "at_runtime"`), and a
+// composite reference sheet is handed to generation in `referenceImages` so
 // the clip inherits the character / style it shows. Reference conditioning
-// needs at least 121 frames, hence `video_frames = 217`.
+// needs at least 121 frames, hence `videoFrames = 217`.
 //
 // This example needs powerful hardware: LTX-2.3 is a ~21B model, budget at
 // least 20+ GB of video / unified memory.
 //
-// TypeScript's `video()` takes `reference_images` as raw bytes and
+// TypeScript's `video()` takes `referenceImages` as raw bytes and
 // base64-encodes them on the way to the worker. The typed `VideoStreamRequest`
 // carries the encoded strings, so the example encodes the file with
-// `java.util.Base64`. `scheduler` is a generated enum and `vae_tile_size` a
+// `java.util.Base64`. `scheduler` is a generated enum and `vaeTileSize` a
 // generated number-or-string union (`Variant1` holds the number). The returned
 // `QvacMediaRun` splits progress (`events` Flow) from the clips and stats
 // (`final` Deferred), as TypeScript does.
@@ -27,7 +27,7 @@ import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestScheduler
-import io.tether.qvac.sdk.generated.schema.VideoStreamRequestVae_tile_size
+import io.tether.qvac.sdk.generated.schema.VideoStreamRequestVaeTileSize
 import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
@@ -75,12 +75,12 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("vaeModelSrc", Models.LTX_2_3_VIDEO_VAE.src)
                 put("audioVaeModelSrc", Models.LTX_2_3_AUDIO_VAE.src)
                 put("embeddingsConnectorsModelSrc", Models.LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS.src)
-                put("diffusion_fa", true)
-                put("offload_to_cpu", true)
-                put("vae_tiling", true)
+                put("diffusionFlashAttention", true)
+                put("offloadToCpu", true)
+                put("vaeTiling", true)
                 // Keep the LoRA out of the loaded weights so it can be swapped
                 // per request.
-                put("lora_apply_mode", "at_runtime")
+                put("loraApplyMode", "at_runtime")
             },
         )
 
@@ -89,25 +89,25 @@ fun main(args: Array<String>): Unit = runBlocking {
                 modelId = modelId,
                 mode = VideoStreamRequestMode.TXT2VID,
                 prompt = prompt,
-                negative_prompt = "blurry, low quality, static, jittery, watermark",
+                negativePrompt = "blurry, low quality, static, jittery, watermark",
                 width = 768,
                 height = 448,
                 // Reference conditioning requires at least 121 frames.
-                video_frames = 217,
+                videoFrames = 217,
                 fps = 24.0,
                 steps = 8,
                 scheduler = VideoStreamRequestScheduler.LTX2,
-                cfg_scale = 1.0,
+                cfgScale = 1.0,
                 seed = 84,
                 lora = loraPath,
-                lora_strength = 1.37,
-                stg_scale = 1.0,
-                stg_block = 29,
-                reference_images = listOf(referenceSheet),
-                reference_attention_strength = 1.0,
-                reference_downscale_factor = 1.0,
-                temporal_tiling = true,
-                vae_tile_size = VideoStreamRequestVae_tile_size.Variant1(4.0),
+                loraStrength = 1.37,
+                stgScale = 1.0,
+                stgBlock = 29,
+                referenceImages = listOf(referenceSheet),
+                referenceAttentionStrength = 1.0,
+                referenceDownscaleFactor = 1.0,
+                temporalTiling = true,
+                vaeTileSize = VideoStreamRequestVaeTileSize.Variant1(4.0),
             ),
         )
         run.events.collect { event ->

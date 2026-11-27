@@ -37,17 +37,17 @@ try {
       llmModelSrc,
       vaeModelSrc,
       device: 'gpu',
-      diffusion_fa: true,
-      offload_to_cpu: process.env['H3_OFFLOAD_TO_CPU'] !== '0',
-      stream_layers: process.env['H3_STREAM_LAYERS'] === '1',
+      diffusionFlashAttention: true,
+      offloadToCpu: process.env['H3_OFFLOAD_TO_CPU'] !== '0',
+      streamLayers: process.env['H3_STREAM_LAYERS'] === '1',
       ...(process.env['H3_BACKEND'] && { backend: process.env['H3_BACKEND'] }),
-      ...(process.env['H3_PARAMS_BACKEND'] && { params_backend: process.env['H3_PARAMS_BACKEND'] }),
-      ...(process.env['H3_MAX_VRAM'] && { max_vram: process.env['H3_MAX_VRAM'] })
+      ...(process.env['H3_PARAMS_BACKEND'] && { paramsBackend: process.env['H3_PARAMS_BACKEND'] }),
+      ...(process.env['H3_MAX_VRAM'] && { maxVram: process.env['H3_MAX_VRAM'] })
     }
   })
   console.log(`▸ Model loaded: ${modelId}`)
 
-  const init_image = new Uint8Array(fs.readFileSync(initImagePath))
+  const initImage = new Uint8Array(fs.readFileSync(initImagePath))
   const prompt =
     process.env['PROMPT'] ||
     'The boat glides forward through the mist while the camera slowly pulls back, cinematic natural motion.'
@@ -57,14 +57,14 @@ try {
     modelId,
     mode: 'img2vid',
     prompt,
-    init_image,
+    initImage,
     width: 864,
     height: 480,
     // H3 uses 17*k+5 frames and requires 24 FPS.
-    video_frames: Number(process.env['FRAMES'] || 124),
+    videoFrames: Number(process.env['FRAMES'] || 124),
     fps: 24,
     steps: 8,
-    cfg_scale: 1,
+    cfgScale: 1,
     seed: 11
   })
 

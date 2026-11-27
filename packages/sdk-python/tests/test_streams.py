@@ -198,8 +198,8 @@ def understood(caption: str) -> dict[str, Any]:
         "caption": caption,
         "bpm": 120,
         "duration": 1,
-        "keyscale": "C major",
-        "timesignature": "4",
+        "keyScale": "C major",
+        "timeSignature": "4",
         "vocalLanguage": "en",
         "audioCodes": [],
         "seed": 7,
@@ -227,7 +227,7 @@ async def test_audio_gen_sends_per_run_sampling_and_reads_the_run_metadata():
         "caption": "rain on a tin roof, slow piano",
         "lyrics": "[Instrumental]",
         "bpm": 70,
-        "keyscale": "A minor",
+        "keyScale": "A minor",
         "beatsPerBar": 4,
         "vocalLanguage": "unknown",
         "seed": 1234567,
@@ -271,7 +271,7 @@ async def test_audio_edit_sends_the_run_controls_and_the_reference():
         source_audio="/tmp/song.wav",
         reference_audio="/tmp/reference.wav",
         bpm=120,
-        keyscale="C minor",
+        key_scale="C minor",
         dcw_enabled=False,
         inference_steps=16,
         shift=2.0,
@@ -280,7 +280,7 @@ async def test_audio_edit_sends_the_run_controls_and_the_reference():
     sent = transport.sent[0]
     assert sent["referenceAudio"] == {"type": "filePath", "value": "/tmp/reference.wav"}
     assert sent["bpm"] == 120
-    assert sent["keyscale"] == "C minor"
+    assert sent["keyScale"] == "C minor"
     assert sent["dcwEnabled"] is False
     assert sent["inferenceSteps"] == 16
     assert sent["shift"] == 2.0

@@ -73,8 +73,8 @@ Both recomputed history and `kvCache: true` work with these controls. Scene
 creation keeps its own encoder configuration — the walk's graph budget does not
 cut taehv or the scene encoders.
 
-These are nested under `world` on purpose. The flat `params_backend`,
-`max_vram`, `stream_layers` and `verbosity` used by `diffusion` and `video` do
+These are nested under `world` on purpose. The flat `paramsBackend`,
+`maxVram`, `streamLayers` and `verbosity` used by `diffusion` and `video` do
 not reach a walk session, so passing one in world mode fails at `loadModel`
 naming its `world.*` equivalent rather than being silently dropped.
 

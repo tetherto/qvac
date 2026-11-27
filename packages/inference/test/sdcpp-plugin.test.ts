@@ -36,21 +36,21 @@ test('sdcppConfigSchema: accepts valid full config', (t) => {
     prediction: 'flow',
     type: 'q8_0',
     rng: 'cpu',
-    sampler_rng: 'std_default',
+    samplerRng: 'std_default',
     backend: 'diffusion=vulkan0,te=cpu',
-    params_backend: 'diffusion=cpu',
-    max_vram: -1,
-    stream_layers: true,
-    vae_tiling: true,
-    flash_attn: true,
-    diffusion_fa: true,
+    paramsBackend: 'diffusion=cpu',
+    maxVram: -1,
+    streamLayers: true,
+    vaeTiling: true,
+    flashAttention: true,
+    diffusionFlashAttention: true,
     upscaler: {
       type: 'esrgan',
-      tile_size: 128,
+      tileSize: 128,
       direct: false,
-      offload_params_to_cpu: true,
+      offloadToCpu: true,
       threads: -1,
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth'
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth'
     },
     verbosity: 2,
     clipLModelSrc: 'clip-l.safetensors',
@@ -67,31 +67,31 @@ test('sdcppConfigSchema: rejects invalid device', (t) => {
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: accepts main-gpu as a device index', (t) => {
-  const result = sdcppConfigSchema.safeParse({ device: 'gpu', 'main-gpu': 1 })
+test('sdcppConfigSchema: accepts mainGpu as a device index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ device: 'gpu', mainGpu: 1 })
   t.is(result.success, true)
   if (result.success) {
-    t.is(result.data['main-gpu'], 1)
+    t.is(result.data.mainGpu, 1)
   }
 })
 
-test("sdcppConfigSchema: accepts main-gpu 'integrated' and 'dedicated'", (t) => {
-  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'integrated' }).success, true)
-  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'dedicated' }).success, true)
+test("sdcppConfigSchema: accepts mainGpu 'integrated' and 'dedicated'", (t) => {
+  t.is(sdcppConfigSchema.safeParse({ mainGpu: 'integrated' }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ mainGpu: 'dedicated' }).success, true)
 })
 
-test('sdcppConfigSchema: rejects negative main-gpu index', (t) => {
-  const result = sdcppConfigSchema.safeParse({ 'main-gpu': -1 })
+test('sdcppConfigSchema: rejects negative mainGpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ mainGpu: -1 })
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: rejects non-integer main-gpu index', (t) => {
-  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 0.5 })
+test('sdcppConfigSchema: rejects non-integer mainGpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ mainGpu: 0.5 })
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: rejects unknown main-gpu string', (t) => {
-  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 'discrete' })
+test('sdcppConfigSchema: rejects unknown mainGpu string', (t) => {
+  const result = sdcppConfigSchema.safeParse({ mainGpu: 'discrete' })
   t.is(result.success, false)
 })
 
@@ -105,15 +105,15 @@ test('sdcppConfigSchema: rejects removed flux_flow prediction value', (t) => {
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: rejects non-boolean diffusion_fa', (t) => {
-  const result = sdcppConfigSchema.safeParse({ diffusion_fa: 'yes' })
+test('sdcppConfigSchema: rejects non-boolean diffusionFlashAttention', (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusionFlashAttention: 'yes' })
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: preserves diffusion_fa: false through parsing', (t) => {
-  const result = sdcppConfigSchema.safeParse({ diffusion_fa: false })
+test('sdcppConfigSchema: preserves diffusionFlashAttention: false through parsing', (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusionFlashAttention: false })
   t.is(result.success, true)
-  t.is(result.data?.diffusion_fa, false)
+  t.is(result.data?.diffusionFlashAttention, false)
 })
 
 test('sdcppConfigSchema: rejects invalid type', (t) => {
@@ -185,42 +185,42 @@ test('diffusionRequestSchema: accepts full txt2img request', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    negative_prompt: 'ugly',
+    negativePrompt: 'ugly',
     width: 512,
     height: 768,
     steps: 20,
-    cfg_scale: 7.0,
+    cfgScale: 7.0,
     guidance: 3.5,
-    sampling_method: 'euler_a',
+    samplingMethod: 'euler_a',
     scheduler: 'karras',
     seed: 42,
-    batch_count: 2,
-    vae_tiling: true,
-    cache_preset: 'fast'
+    batchCount: 2,
+    vaeTiling: true,
+    cachePreset: 'fast'
   })
   t.is(result.success, true)
 })
 
-test('diffusionRequestSchema: applies img_cfg_scale default of -1 when omitted', (t) => {
+test('diffusionRequestSchema: applies imgCfgScale default of -1 when omitted', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat'
   })
   t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.img_cfg_scale, -1)
+    t.is(result.data.imgCfgScale, -1)
   }
 })
 
-test('diffusionRequestSchema: preserves explicit img_cfg_scale value', (t) => {
+test('diffusionRequestSchema: preserves explicit imgCfgScale value', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    img_cfg_scale: 4.5
+    imgCfgScale: 4.5
   })
   t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.img_cfg_scale, 4.5)
+    t.is(result.data.imgCfgScale, 4.5)
   }
 })
 
@@ -256,11 +256,11 @@ test('diffusionRequestSchema: rejects negative steps', (t) => {
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects invalid sampling_method', (t) => {
+test('diffusionRequestSchema: rejects invalid samplingMethod', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    sampling_method: 'ddpm'
+    samplingMethod: 'ddpm'
   })
   t.is(result.success, false)
 })
@@ -274,21 +274,21 @@ test('diffusionRequestSchema: rejects invalid scheduler', (t) => {
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: accepts img2img request with init_image and strength', (t) => {
+test('diffusionRequestSchema: accepts img2img request with initImage and strength', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'oil painting style',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
+    initImage: 'iVBORw0KGgoAAAANSUhEUg==',
     strength: 0.7
   })
   t.is(result.success, true)
 })
 
-test('diffusionRequestSchema: accepts img2img request with init_image only (no strength)', (t) => {
+test('diffusionRequestSchema: accepts img2img request with initImage only (no strength)', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'watercolor',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg=='
+    initImage: 'iVBORw0KGgoAAAANSUhEUg=='
   })
   t.is(result.success, true)
 })
@@ -311,47 +311,47 @@ test('diffusionRequestSchema: rejects strength above 1', (t) => {
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects empty init_image', (t) => {
+test('diffusionRequestSchema: rejects empty initImage', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: ''
+    initImage: ''
   })
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects init_image with invalid base64 characters', (t) => {
+test('diffusionRequestSchema: rejects initImage with invalid base64 characters', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'not valid base64!!!'
+    initImage: 'not valid base64!!!'
   })
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects init_image with base64url characters (-, _)', (t) => {
+test('diffusionRequestSchema: rejects initImage with base64url characters (-, _)', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'iVBORw0KGgoAAAANSUhE-_=='
+    initImage: 'iVBORw0KGgoAAAANSUhE-_=='
   })
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects init_image with embedded whitespace', (t) => {
+test('diffusionRequestSchema: rejects initImage with embedded whitespace', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'iVBORw0KGgo\nAAAANSUhEUg=='
+    initImage: 'iVBORw0KGgo\nAAAANSUhEUg=='
   })
   t.is(result.success, false)
 })
 
-test('diffusionRequestSchema: rejects init_image with length not a multiple of 4', (t) => {
+test('diffusionRequestSchema: rejects initImage with length not a multiple of 4', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg'
+    initImage: 'iVBORw0KGgoAAAANSUhEUg'
   })
   t.is(result.success, false)
 })
@@ -446,44 +446,41 @@ test('diffusionRequestSchema: rejects lora as relative path', (t) => {
   t.is(resultSubdir.success, false)
 })
 
-test('diffusionRequestSchema: accepts ordered init_images and rejects empty or invalid references', (t) => {
+test('diffusionRequestSchema: accepts ordered initImages and rejects empty or invalid references', (t) => {
   const base = { modelId: 'model-1', prompt: 'blend @image1 and @image2' }
   const references = ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
-  t.alike(
-    diffusionRequestSchema.parse({ ...base, init_images: references }).init_images,
-    references
-  )
-  for (const init_images of [[], [''], ['not base64!']]) {
-    t.is(diffusionRequestSchema.safeParse({ ...base, init_images }).success, false)
+  t.alike(diffusionRequestSchema.parse({ ...base, initImages: references }).initImages, references)
+  for (const initImages of [[], [''], ['not base64!']]) {
+    t.is(diffusionRequestSchema.safeParse({ ...base, initImages }).success, false)
   }
 })
 
-test('diffusionRequestSchema: accepts increase_ref_index boolean', (t) => {
+test('diffusionRequestSchema: accepts increaseRefIndex boolean', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_images: ['iVBORw0KGgoAAAANSUhEUg=='],
-    increase_ref_index: true
+    initImages: ['iVBORw0KGgoAAAANSUhEUg=='],
+    increaseRefIndex: true
   })
   t.is(result.success, true)
 })
 
-test('diffusionRequestSchema: accepts auto_resize_ref_image boolean', (t) => {
+test('diffusionRequestSchema: accepts autoResizeRefImage boolean', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
-    auto_resize_ref_image: false
+    initImage: 'iVBORw0KGgoAAAANSUhEUg==',
+    autoResizeRefImage: false
   })
   t.is(result.success, true)
 })
 
-test('diffusionRequestSchema: rejects when init_image and init_images are both set', (t) => {
+test('diffusionRequestSchema: rejects when initImage and initImages are both set', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'blend two refs',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
-    init_images: ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
+    initImage: 'iVBORw0KGgoAAAANSUhEUg==',
+    initImages: ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
   })
   t.is(result.success, false)
   if (!result.success) {
@@ -495,20 +492,20 @@ test('diffusionRequestSchema: rejects when init_image and init_images are both s
   }
 })
 
-test('diffusionRequestSchema: accepts init_image alone (mutual exclusion not triggered)', (t) => {
+test('diffusionRequestSchema: accepts initImage alone (mutual exclusion not triggered)', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'img2img',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg=='
+    initImage: 'iVBORw0KGgoAAAANSUhEUg=='
   })
   t.is(result.success, true)
 })
 
-test('diffusionRequestSchema: accepts init_images alone (mutual exclusion not triggered)', (t) => {
+test('diffusionRequestSchema: accepts initImages alone (mutual exclusion not triggered)', (t) => {
   const result = diffusionRequestSchema.safeParse({
     modelId: 'model-1',
     prompt: 'fusion',
-    init_images: ['iVBORw0KGgoAAAANSUhEUg==']
+    initImages: ['iVBORw0KGgoAAAANSUhEUg==']
   })
   t.is(result.success, true)
 })
@@ -524,13 +521,13 @@ test('diffusionStreamRequestSchema: accepts a valid stream request with type lit
   t.is(result.success, true)
 })
 
-test('diffusionStreamRequestSchema: rejects when init_image and init_images are both set', (t) => {
+test('diffusionStreamRequestSchema: rejects when initImage and initImages are both set', (t) => {
   const result = diffusionStreamRequestSchema.safeParse({
     type: 'diffusionStream',
     modelId: 'model-1',
     prompt: 'a cat',
-    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
-    init_images: ['iVBORw0KGgoAAAANSUhEUg==']
+    initImage: 'iVBORw0KGgoAAAANSUhEUg==',
+    initImages: ['iVBORw0KGgoAAAANSUhEUg==']
   })
   t.is(result.success, false)
   if (!result.success) {
@@ -542,10 +539,10 @@ test('diffusionStreamRequestSchema: rejects when init_image and init_images are 
   }
 })
 
-// ---- sdcppConfigSchema: lora_apply_mode ----
+// ---- sdcppConfigSchema: loraApplyMode ----
 
-test('sdcppConfigSchema: accepts lora_apply_mode', (t) => {
-  const result = sdcppConfigSchema.safeParse({ lora_apply_mode: 'auto' })
+test('sdcppConfigSchema: accepts loraApplyMode', (t) => {
+  const result = sdcppConfigSchema.safeParse({ loraApplyMode: 'auto' })
   t.is(result.success, true)
 })
 
@@ -555,24 +552,24 @@ test('sdcppConfigSchema: accepts upscaler config with all tuning fields', (t) =>
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
       type: 'esrgan',
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
-      tile_size: 128,
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+      tileSize: 128,
       direct: true,
-      offload_params_to_cpu: false,
+      offloadToCpu: false,
       threads: -1
     }
   })
   t.is(result.success, true)
 })
 
-// `upscaler.model_src` is optional at the schema level so the same block
+// `upscaler.modelSrc` is optional at the schema level so the same block
 // shape can be reused for standalone-upscaler mode (modelConfig.mode =
 // "upscale") where the primary modelSrc itself is the ESRGAN file. The
-// diffusion plugin enforces "model_src required in diffusion mode" at
+// diffusion plugin enforces "modelSrc required in diffusion mode" at
 // createModel time — see the corresponding plugin test below.
-test('sdcppConfigSchema: accepts upscaler block without model_src (validated at plugin layer)', (t) => {
+test('sdcppConfigSchema: accepts upscaler block without modelSrc (validated at plugin layer)', (t) => {
   const result = sdcppConfigSchema.safeParse({
-    upscaler: { tile_size: 128 }
+    upscaler: { tileSize: 128 }
   })
   t.is(result.success, true)
 })
@@ -580,7 +577,7 @@ test('sdcppConfigSchema: accepts upscaler block without model_src (validated at 
 test("sdcppConfigSchema: accepts mode: 'upscale' for standalone ESRGAN", (t) => {
   const result = sdcppConfigSchema.safeParse({
     mode: 'upscale',
-    upscaler: { tile_size: 128, threads: -1 }
+    upscaler: { tileSize: 128, threads: -1 }
   })
   t.is(result.success, true)
 })
@@ -594,7 +591,7 @@ test("sdcppConfigSchema: rejects upscaler.type other than 'esrgan'", (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
       type: 'swinir',
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth'
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth'
     }
   })
   t.is(result.success, false)
@@ -603,28 +600,28 @@ test("sdcppConfigSchema: rejects upscaler.type other than 'esrgan'", (t) => {
 test('sdcppConfigSchema: rejects upscaler with unknown keys (strict)', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
-      tileSize: 128
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+      tileWidth: 128
     }
   })
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: rejects non-positive upscaler.tile_size', (t) => {
+test('sdcppConfigSchema: rejects non-positive upscaler.tileSize', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
-      tile_size: 0
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+      tileSize: 0
     }
   })
   t.is(result.success, false)
 })
 
-test('sdcppConfigSchema: rejects non-integer upscaler.tile_size', (t) => {
+test('sdcppConfigSchema: rejects non-integer upscaler.tileSize', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
-      tile_size: 64.5
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+      tileSize: 64.5
     }
   })
   t.is(result.success, false)
@@ -632,20 +629,20 @@ test('sdcppConfigSchema: rejects non-integer upscaler.tile_size', (t) => {
 
 test('sdcppConfigSchema: accepts upscaler.threads = -1 (auto) and positive integers', (t) => {
   const ms = 'RealESRGAN_x4plus_anime_6B.pth'
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -1 } }).success, true)
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 4 } }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { modelSrc: ms, threads: -1 } }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { modelSrc: ms, threads: 4 } }).success, true)
 })
 
 test('sdcppConfigSchema: rejects upscaler.threads = 0 and negative values other than -1', (t) => {
   const ms = 'RealESRGAN_x4plus_anime_6B.pth'
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 0 } }).success, false)
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -2 } }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { modelSrc: ms, threads: 0 } }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { modelSrc: ms, threads: -2 } }).success, false)
 })
 
 test('sdcppConfigSchema: rejects non-integer upscaler.threads', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
+      modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
       threads: 2.5
     }
   })
@@ -842,8 +839,8 @@ test('loadModelSrcRequestSchema: accepts diffusion config with upscaler and upsc
       prediction: 'v',
       upscaler: {
         type: 'esrgan',
-        model_src: 'RealESRGAN_x4plus_anime_6B.pth',
-        tile_size: 128,
+        modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+        tileSize: 128,
         threads: 4
       }
     }
@@ -879,7 +876,7 @@ test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standa
     modelType: 'sdcpp-generation',
     modelConfig: {
       mode: 'upscale',
-      upscaler: { tile_size: 128 }
+      upscaler: { tileSize: 128 }
     }
   })
   t.is(result.success, true)
@@ -989,7 +986,7 @@ test('diffusion plugin: registers and dispatches diffusionStream', async functio
   )
 })
 
-test('diffusion plugin: img2img request reaches handler verbatim after safeParse (init_image, strength, img_cfg_scale default)', async function (t) {
+test('diffusion plugin: img2img request reaches handler verbatim after safeParse (initImage, strength, imgCfgScale default)', async function (t) {
   const initImageBase64 = 'iVBORw0KGgoAAAANSUhEUg=='
   let observedRequest: unknown = undefined
 
@@ -1002,7 +999,7 @@ test('diffusion plugin: img2img request reaches handler verbatim after safeParse
       const requestParams = {
         modelId,
         prompt: 'oil painting',
-        init_image: initImageBase64,
+        initImage: initImageBase64,
         strength: 0.65
       }
 
@@ -1018,7 +1015,7 @@ test('diffusion plugin: img2img request reaches handler verbatim after safeParse
         // no-op
       }
 
-      t.alike(observedRequest, { ...requestParams, img_cfg_scale: -1 })
+      t.alike(observedRequest, { ...requestParams, imgCfgScale: -1 })
     }
   )
 })
@@ -1059,7 +1056,7 @@ test('diffusion plugin: upscale request reaches handler verbatim after safeParse
 
         t.alike(
           observedRequest,
-          { ...requestParams, img_cfg_scale: -1 },
+          { ...requestParams, imgCfgScale: -1 },
           `${name} reaches handler verbatim`
         )
       }
@@ -1315,14 +1312,14 @@ test('sdcppConfigSchema: companion source fields are valid modelSrcInput', (t) =
     { t5XxlModelSrc: 't5xxl.gguf' },
     { llmModelSrc: 'qwen3-8b.gguf' },
     { vaeModelSrc: 'vae.safetensors' },
-    { upscaler: { model_src: 'RealESRGAN_x4plus_anime_6B.pth' } },
+    { upscaler: { modelSrc: 'RealESRGAN_x4plus_anime_6B.pth' } },
     {
       clipLModelSrc: 'clip-l.safetensors',
       clipGModelSrc: 'clip-g.safetensors',
       t5XxlModelSrc: 't5xxl.gguf',
       llmModelSrc: 'qwen3.gguf',
       vaeModelSrc: 'vae.safetensors',
-      upscaler: { model_src: 'RealESRGAN_x4plus_anime_6B.pth' }
+      upscaler: { modelSrc: 'RealESRGAN_x4plus_anime_6B.pth' }
     }
   ]
 
@@ -1432,7 +1429,7 @@ test('diffusion op: upscale: true forwards verbatim to model.run (addon owns mis
       const stream = diffusionOp({
         modelId,
         prompt: 'a fox',
-        img_cfg_scale: -1,
+        imgCfgScale: -1,
         upscale: true
       })
       for await (const _ of stream) {
@@ -1461,7 +1458,7 @@ test('diffusion op: upscale: { repeats } forwards verbatim to model.run', async 
       const stream = diffusionOp({
         modelId,
         prompt: 'a fox',
-        img_cfg_scale: -1,
+        imgCfgScale: -1,
         upscale: { repeats: 2 }
       })
       for await (const _ of stream) {
@@ -1489,7 +1486,7 @@ test('diffusion op: upscale: false is normalized to undefined before reaching th
       const stream = diffusionOp({
         modelId,
         prompt: 'a fox',
-        img_cfg_scale: -1,
+        imgCfgScale: -1,
         upscale: false
       })
       for await (const _ of stream) {
@@ -1518,7 +1515,7 @@ test('diffusion op: upscale omitted forwards undefined to the addon', async func
       const stream = diffusionOp({
         modelId,
         prompt: 'a fox',
-        img_cfg_scale: -1
+        imgCfgScale: -1
       })
       for await (const _ of stream) {
         void _

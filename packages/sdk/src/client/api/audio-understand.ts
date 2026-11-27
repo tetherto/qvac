@@ -22,7 +22,7 @@ import { createAudioUnderstandResult } from '@/client/api/audio-gen-result'
  * ```typescript
  * const run = audioUnderstand({ modelId, sourceAudio: "/path/to/song.wav" });
  * stopButton.onclick = () => cancel({ requestId: run.requestId });
- * const { caption, bpm, keyscale, timesignature, audioCodes } = await run.description;
+ * const { caption, bpm, keyScale, timeSignature, audioCodes } = await run.description;
  *
  * // The recovered codes re-synthesize the same piece without re-running the LM.
  * const remake = audioGen({ modelId, caption: "the same song, brighter mix", audioCodes });

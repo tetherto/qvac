@@ -110,15 +110,18 @@ export const vlaRunStats = createVlaTest(
     fn: (result: unknown) => {
       const r = result as { stats?: Record<string, number> }
       if (!r.stats) return { passed: false, output: 'stats missing' }
-      const keys = ['vision_ms', 'smollm2_compute_ms', 'smollm2_total_ms', 'ode_ms', 'total_ms']
+      const keys = ['visionMs', 'prefillComputeMs', 'prefillTotalMs', 'odeMs', 'totalTime']
       for (const k of keys) {
         const v = r.stats[k]
         if (typeof v !== 'number' || v < 0) {
           return { passed: false, output: `stats.${k} not a non-negative number (got ${v})` }
         }
       }
-      if (!(r.stats['total_ms']! > 0)) {
-        return { passed: false, output: `stats.total_ms must be > 0 (got ${r.stats['total_ms']})` }
+      if (!(r.stats['totalTime']! > 0)) {
+        return {
+          passed: false,
+          output: `stats.totalTime must be > 0 (got ${r.stats['totalTime']})`
+        }
       }
       return { passed: true }
     }
@@ -160,8 +163,7 @@ export const vlaInvalidImgSize = createVlaTest(
 // (3 cameras, discrete state). The shared, hparams-driven executor reads
 // `hparams.numCameras` / `hparams.stateInputMode` to shape inputs, so the
 // only per-arch differences are the model and a couple of extra assertions:
-// the hparams test checks numCameras === 3 / stateInputMode === "discrete",
-// and the stats test checks the architecture-neutral prefill_* timing keys.
+// the hparams test checks numCameras === 3 / stateInputMode === "discrete".
 
 export const vlaPi05HparamsShape = createVlaTest(
   'vla-pi05-hparams-shape',
@@ -259,15 +261,18 @@ export const vlaPi05RunStats = createVlaTest(
     fn: (result: unknown) => {
       const r = result as { stats?: Record<string, number> }
       if (!r.stats) return { passed: false, output: 'stats missing' }
-      const keys = ['vision_ms', 'prefill_compute_ms', 'prefill_total_ms', 'ode_ms', 'total_ms']
+      const keys = ['visionMs', 'prefillComputeMs', 'prefillTotalMs', 'odeMs', 'totalTime']
       for (const k of keys) {
         const v = r.stats[k]
         if (typeof v !== 'number' || v < 0) {
           return { passed: false, output: `stats.${k} not a non-negative number (got ${v})` }
         }
       }
-      if (!(r.stats['total_ms']! > 0)) {
-        return { passed: false, output: `stats.total_ms must be > 0 (got ${r.stats['total_ms']})` }
+      if (!(r.stats['totalTime']! > 0)) {
+        return {
+          passed: false,
+          output: `stats.totalTime must be > 0 (got ${r.stats['totalTime']})`
+        }
       }
       return { passed: true }
     }

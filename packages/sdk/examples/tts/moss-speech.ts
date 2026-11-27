@@ -32,7 +32,7 @@ async function main() {
     modelConfig: {
       ttsEngine: 'moss-speech',
       mossSpeechCodecModelSrc: process.env['QVAC_MOSS_SPEECH_CODEC'] ?? TTS_CODEC_MOSS_SPEECH_F16,
-      useGPU: true,
+      useGpu: true,
       seed: 42
     },
     onProgress: progress

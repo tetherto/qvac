@@ -38,7 +38,7 @@ function minimaxFitRequest(
     synthPath,
     ...(config.device !== undefined
       ? { device: config.device }
-      : { gpuLayers: gpuLayersFromGate(config.useGPU) }),
+      : { gpuLayers: gpuLayersFromGate(config.useGpu) }),
     ...(config.coremlConditionerPath !== undefined && {
       coremlConditionerPath: config.coremlConditionerPath
     }),
@@ -79,7 +79,7 @@ export function audiogenFitRequest(load: FitLoad): FitRequestPlan {
     lmPath,
     ditPath,
     vaePath,
-    gpuLayers: gpuLayersFromGate(config.useGPU, layers),
+    gpuLayers: gpuLayersFromGate(config.useGpu, layers),
     ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.lmBackend !== undefined && { lmBackend: config.lmBackend }),
     ...(config.threads !== undefined && { threads: config.threads })

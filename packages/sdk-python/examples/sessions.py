@@ -47,12 +47,12 @@ async def main() -> int:
             model_id = await load_model(
                 harness.transport,
                 model_src=QWEN3_600M_INST_Q4,
-                model_config={"ctx_size": 4096},
+                model_config={"ctxSize": 4096},
             )
             same_model_id = await load_model(
                 skill_runner.transport,
                 model_src=QWEN3_600M_INST_Q4,
-                model_config={"ctx_size": 4096},
+                model_config={"ctxSize": 4096},
             )
             print(
                 f"▸ same model for both sessions: {model_id == same_model_id}, "

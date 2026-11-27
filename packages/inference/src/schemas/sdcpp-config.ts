@@ -49,7 +49,7 @@ const customSigmasSchema = z
       .min(0)
       .max(3.4028234663852886e38)
       .refine((value) => value === 0 || Math.fround(value) > 0, {
-        message: 'custom_sigmas entries must not underflow to zero in float precision'
+        message: 'customSigmas entries must not underflow to zero in float precision'
       })
   )
   .min(2)
@@ -60,12 +60,12 @@ const customSigmasSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [i],
-          message: 'custom_sigmas must be strictly decreasing in float precision'
+          message: 'customSigmas must be strictly decreasing in float precision'
         })
       }
     }
     if (values.at(-1) !== 0) {
-      ctx.addIssue({ code: 'custom', message: 'custom_sigmas must end with zero' })
+      ctx.addIssue({ code: 'custom', message: 'customSigmas must end with zero' })
     }
   })
 
@@ -138,7 +138,7 @@ export const sdcppConfigSchema = z.object({
     .enum(['gpu', 'cpu'])
     .optional()
     .describe("Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`)."),
-  'main-gpu': z
+  mainGpu: z
     .union([z.number().int().min(0), z.enum(['integrated', 'dedicated'])])
     .optional()
     .describe(
@@ -182,27 +182,27 @@ export const sdcppConfigSchema = z.object({
     .describe(
       "Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`."
     ),
-  sampler_rng: z
+  samplerRng: z
     .enum(['cpu', 'cuda', 'std_default'])
     .optional()
     .describe('Sampler RNG type override. Default: auto (follows `rng`).'),
-  vae_auto_cpu_fallback: z
+  vaeAutoCpuFallback: z
     .boolean()
     .optional()
     .describe('Automatically move the VAE to CPU when GPU memory is insufficient'),
-  vae_auto_cpu_fallback_memory_ratio: z
+  vaeAutoCpuFallbackMemoryRatio: z
     .number()
     .gt(0)
     .max(1)
     .optional()
     .describe('GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]'),
-  vae_tiling: z.boolean().optional().describe('Enable VAE tiling for large images on limited VRAM'),
-  offload_to_cpu: z
+  vaeTiling: z.boolean().optional().describe('Enable VAE tiling for large images on limited VRAM'),
+  offloadToCpu: z
     .boolean()
     .optional()
     .describe(
       'Keep model weights in CPU memory and offload them during GPU compute. ' +
-        "Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
+        "Supplies a '*=cpu' parameter residency default; explicit paramsBackend assignments override it per module."
     ),
   control_net_cpu: removedBackendOption(
     'control_net_cpu',
@@ -210,12 +210,12 @@ export const sdcppConfigSchema = z.object({
   ),
   clip_on_cpu: removedBackendOption(
     'clip_on_cpu',
-    "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, " +
+    "Use modelConfig.paramsBackend: 'te=cpu' to keep text encoder parameters in CPU RAM, " +
       "or modelConfig.backend: 'te=cpu' to run its graph on CPU."
   ),
   vae_on_cpu: removedBackendOption(
     'vae_on_cpu',
-    "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
+    "Use modelConfig.paramsBackend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
       "or modelConfig.backend: 'vae=cpu' to run its graph on CPU."
   ),
   backend: z
@@ -226,7 +226,7 @@ export const sdcppConfigSchema = z.object({
       'Runtime backend for diffusion and video graphs, globally or per module, ' +
         "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
     ),
-  params_backend: z
+  paramsBackend: z
     .string()
     .max(4096)
     .optional()
@@ -234,13 +234,13 @@ export const sdcppConfigSchema = z.object({
       'Parameter residency for diffusion and video, independent of graph execution. ' +
         "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
         'from the local model file on demand and releases them after use. Disk is ' +
-        'never selected automatically. With offload_to_cpu enabled, explicit ' +
+        'never selected automatically. With offloadToCpu enabled, explicit ' +
         'assignments override CPU residency only for the specified modules.'
     ),
-  max_vram: z
+  maxVram: z
     // No .max() on the string arm: a constraint here makes datamodel-codegen
     // wrap it in a `MaxVram(RootModel[str])`, so Python callers read back a
-    // wrapper instead of a str. backend/params_backend keep their cap because
+    // wrapper instead of a str. backend/paramsBackend keep their cap because
     // they are not union members. The addon parses the spec either way.
     .union([z.number().finite(), z.string()])
     .optional()
@@ -248,56 +248,56 @@ export const sdcppConfigSchema = z.object({
       'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
         'values set a budget; negative values use free VRAM minus the absolute ' +
         'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
-        "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+        "such as 'cuda0=6,vulkan0=4'. Works without streamLayers. Default: 0."
     ),
-  stream_layers: z
+  streamLayers: z
     .boolean()
     .optional()
     .describe(
       'Prefetch and evict diffusion layers from CPU RAM in diffusion and video ' +
-        'mode. Only takes effect with graph cutting enabled by max_vram and CPU ' +
+        'mode. Only takes effect with graph cutting enabled by maxVram and CPU ' +
         'diffusion parameter residency. Does not stream from disk; use ' +
-        "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+        "paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false."
     ),
-  flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
-  performance_profile: z
+  flashAttention: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
+  performanceProfile: z
     .enum(['auto', 'off'])
     .optional()
     .describe(
       'Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native ' +
         'options win. off retains baseline settings. Temporal tiling is unchanged.'
     ),
-  performance_max_width: positiveInt32Schema
+  performanceMaxWidth: positiveInt32Schema
     .optional()
     .describe(
-      'Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.'
+      'Maximum video output width. Declare all three performanceMax* limits for bounded memory profiles.'
     ),
-  performance_max_height: positiveInt32Schema
+  performanceMaxHeight: positiveInt32Schema
     .optional()
     .describe(
       'Maximum video output height; requests above this declared bound are rejected by the addon.'
     ),
-  performance_max_frames: positiveInt32Schema
+  performanceMaxFrames: positiveInt32Schema
     .optional()
     .describe(
       'Maximum video output frame count; requests above this declared bound are rejected by the addon.'
     ),
-  vae_conv_direct: z
+  vaeConvDirect: z
     .boolean()
     .optional()
     .describe('Explicit VAE convolution selection, overriding automatic performance profiles.'),
-  tensor_type_rules: z
+  tensorTypeRules: z
     .string()
     .max(4096)
     .optional()
     .describe(
       'Explicit native per-tensor precision rules, overriding automatic matrix precision selection.'
     ),
-  diffusion_fa: z
+  diffusionFlashAttention: z
     .boolean()
     .optional()
     .describe('Enable flash attention for the diffusion transformer only'),
-  lora_apply_mode: z
+  loraApplyMode: z
     .enum(['auto', 'immediately', 'at_runtime'])
     .optional()
     .describe(
@@ -350,7 +350,7 @@ export const sdcppConfigSchema = z.object({
     .describe(
       'High-noise diffusion expert — required for Wan 2.2 A14B ' +
         'mixture-of-experts video models, and the only thing that enables the ' +
-        'high_noise_* / moe_boundary request fields. Omit for single-expert ' +
+        'highNoise* / moeBoundary request fields. Omit for single-expert ' +
         'models such as Wan 2.1 and Wan 2.2 TI2V-5B.'
     ),
   uncondModelSrc: modelSrcInputSchema
@@ -508,7 +508,7 @@ export const sdcppConfigSchema = z.object({
             'override offloadParamsToCpu for those modules.'
         ),
       maxVram: z
-        // No .max() on the string arm, for the same reason as the flat max_vram
+        // No .max() on the string arm, for the same reason as the flat maxVram
         // above: a constraint makes datamodel-codegen wrap it in a RootModel.
         .union([z.number().finite(), z.string()])
         .optional()
@@ -573,7 +573,7 @@ export const sdcppConfigSchema = z.object({
         .describe(
           'Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale }).'
         ),
-      model_src: modelSrcInputSchema
+      modelSrc: modelSrcInputSchema
         .optional()
         .describe(
           'ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). ' +
@@ -582,7 +582,7 @@ export const sdcppConfigSchema = z.object({
             "In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, " +
             'so this field is ignored.'
         ),
-      tile_size: z
+      tileSize: z
         .number()
         .int()
         .positive()
@@ -598,7 +598,7 @@ export const sdcppConfigSchema = z.object({
           'Use direct convolution in the ESRGAN upscaler instead of im2col + ' +
             'GEMM. Faster on some backends, slower on others.'
         ),
-      offload_params_to_cpu: z
+      offloadToCpu: z
         .boolean()
         .optional()
         .describe(
@@ -615,11 +615,11 @@ export const sdcppConfigSchema = z.object({
     .describe(
       'ESRGAN upscaler configuration. In diffusion mode this enables the ' +
         'post-generation upscale path invoked via diffusion({ upscale }) and ' +
-        "requires `model_src`. In `mode: 'upscale'` only the tuning fields " +
-        '(tile_size, direct, offload_params_to_cpu, threads) are honored — ' +
+        "requires `modelSrc`. In `mode: 'upscale'` only the tuning fields " +
+        '(tileSize, direct, offloadToCpu, threads) are honored — ' +
         'the primary modelSrc IS the ESRGAN model in that mode and ' +
-        "`model_src` here is ignored. In `mode: 'video'` the entire `upscaler` " +
-        'object is ignored. Mode-dependent constraints (e.g. `model_src` ' +
+        "`modelSrc` here is ignored. In `mode: 'video'` the entire `upscaler` " +
+        'object is ignored. Mode-dependent constraints (e.g. `modelSrc` ' +
         'required in diffusion mode) are enforced by the sdcpp-generation ' +
         'plugin at load time, not at the schema layer.'
     )
@@ -631,9 +631,9 @@ export type SdcppConfig = Omit<
 >
 
 const PERFORMANCE_LIMIT_KEYS = [
-  'performance_max_width',
-  'performance_max_height',
-  'performance_max_frames'
+  'performanceMaxWidth',
+  'performanceMaxHeight',
+  'performanceMaxFrames'
 ] as const
 
 // The addon rejects a context that declares only some output limits, so the
@@ -648,7 +648,7 @@ export function refineSdcppPerformanceLimits(
     code: 'custom',
     path: [missing[0]!],
     message:
-      'performance_max_width, performance_max_height and performance_max_frames ' +
+      'performanceMaxWidth, performanceMaxHeight and performanceMaxFrames ' +
       'must be supplied together.'
   })
 }
@@ -782,7 +782,7 @@ export const diffusionRequestSchema = z
   .object({
     modelId: z.string().describe('The identifier of the diffusion model to use for generation.'),
     prompt: z.string().describe('Positive prompt describing the image to generate.'),
-    negative_prompt: z
+    negativePrompt: z
       .string()
       .optional()
       .describe('Optional negative prompt describing what to avoid.'),
@@ -805,67 +805,65 @@ export const diffusionRequestSchema = z
       .int()
       .positive()
       .optional()
-      .describe('Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.'),
-    cfg_scale: z
+      .describe('Number of sampling steps. Overridden by customSigmas.length - 1 when supplied.'),
+    cfgScale: z
       .number()
       .optional()
       .describe(
         'Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7'
       ),
-    img_cfg_scale: z
+    imgCfgScale: z
       .number()
       .default(-1)
       .describe(
-        'Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale'
+        'Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfgScale'
       ),
     guidance: z
       .number()
       .optional()
       .describe('Distilled guidance for FLUX models; typical range 1–10, default 3.5'),
-    sampling_method: samplingMethodSchema
+    samplingMethod: samplingMethodSchema
       .optional()
       .describe('Sampling algorithm used by the diffusion scheduler.'),
     scheduler: scheduleTypeSchema
       .optional()
-      .describe(
-        'Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.'
-      ),
-    custom_sigmas: customSigmasSchema
+      .describe('Noise schedule to apply when sampling. Overridden by customSigmas when supplied.'),
+    customSigmas: customSigmasSchema
       .optional()
       .describe(
         'Explicit noise schedule, including terminal zero. At least two finite, non-negative ' +
           'float values, strictly decreasing after conversion to float precision. Overrides ' +
           'scheduler and steps; the effective step count is length minus one. ' +
-          'Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.'
+          'Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfgScale: 1.'
       ),
     seed: z
       .number()
       .int()
       .optional()
       .describe('Random seed; when omitted we pick one and return it in stats.'),
-    batch_count: z
+    batchCount: z
       .number()
       .int()
       .positive()
       .optional()
       .describe('Number of images to generate in this call.'),
-    vae_tiling: z
+    vaeTiling: z
       .boolean()
       .optional()
       .describe('Enable VAE tiling for large images on constrained VRAM, overriding model config.'),
-    vae_tile_size: z
+    vaeTileSize: z
       .union([
         positiveInt32Schema.meta({ title: 'DiffusionVaeTileSize' }),
         z
           .string()
-          .regex(/^[0-9]+x[0-9]+$/, { message: 'vae_tile_size must be a WxH string' })
+          .regex(/^[0-9]+x[0-9]+$/, { message: 'vaeTileSize must be a WxH string' })
           .refine(
             (value) =>
               value.split('x').every((dimension) => {
                 const size = Number(dimension)
                 return size > 0 && size <= 2147483647
               }),
-            { message: 'vae_tile_size dimensions must be integers between 1 and 2147483647' }
+            { message: 'vaeTileSize dimensions must be integers between 1 and 2147483647' }
           )
           .meta({ title: 'DiffusionVaeTileSizeSpec' })
       ])
@@ -874,20 +872,20 @@ export const diffusionRequestSchema = z
         'VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. ' +
           'Each dimension must be between 1 and 2147483647. ' +
           'For Qwen-Image-2.1 outputs at 2048x2048 or larger, ' +
-          'use vae_tiling: true with vae_tile_size: 64 to bound decode memory.'
+          'use vaeTiling: true with vaeTileSize: 64 to bound decode memory.'
       ),
-    cache_preset: z
+    cachePreset: z
       .string()
       .optional()
       .describe('Optional name of a cached sampler preset to reuse.'),
-    init_image: base64StringSchema
+    initImage: base64StringSchema
       .optional()
       .describe(
         'Base64-encoded PNG/JPEG for img2img or reference editing. ' +
           'Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. ' +
-          'Mutually exclusive with init_images.'
+          'Mutually exclusive with initImages.'
       ),
-    init_images: z
+    initImages: z
       .array(base64StringSchema)
       .min(1)
       .optional()
@@ -896,9 +894,9 @@ export const diffusionRequestSchema = z
           'including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. ' +
           'FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; ' +
           'Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. ' +
-          'Mutually exclusive with init_image.'
+          'Mutually exclusive with initImage.'
       ),
-    increase_ref_index: z
+    increaseRefIndex: z
       .boolean()
       .optional()
       .describe(
@@ -907,7 +905,7 @@ export const diffusionRequestSchema = z
           'FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with ' +
           'text encoders that receive per-image vision tokens.'
       ),
-    auto_resize_ref_image: z
+    autoResizeRefImage: z
       .boolean()
       .optional()
       .describe(
@@ -926,7 +924,7 @@ export const diffusionRequestSchema = z
         'Optional local LoRA adapter path to apply for this generation. ' +
           'Must be an absolute filesystem path. ' +
           'Whether the adapter persists across subsequent diffusion() calls is controlled ' +
-          'by sdcppConfigSchema.lora_apply_mode (set at loadModel time).'
+          'by sdcppConfigSchema.loraApplyMode (set at loadModel time).'
       ),
     strength: z
       .number()
@@ -955,13 +953,13 @@ export const diffusionRequestSchema = z
           '`false` is a no-op (same as omitting the field). ' +
           '`{ repeats: N }` runs the upscaler N times sequentially — each pass ' +
           "multiplies the output dimensions by the model's scale factor. When " +
-          '`batch_count > 1`, every output image is upscaled independently. ' +
-          'Requires the model to be loaded with `upscaler.model_src` set in modelConfig. ' +
+          '`batchCount > 1`, every output image is upscaled independently. ' +
+          'Requires the model to be loaded with `upscaler.modelSrc` set in modelConfig. ' +
           'ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling.'
       )
   })
-  .refine((d) => d.init_image === undefined || d.init_images === undefined, {
-    message: 'init_image and init_images are mutually exclusive — pass one or the other, not both.'
+  .refine((d) => d.initImage === undefined || d.initImages === undefined, {
+    message: 'initImage and initImages are mutually exclusive — pass one or the other, not both.'
   })
 
 export type DiffusionRequest = z.input<typeof diffusionRequestSchema>
@@ -974,12 +972,12 @@ export const diffusionStreamRequestSchema = diffusionRequestSchema
 
 export type DiffusionStreamRequest = z.input<typeof diffusionStreamRequestSchema>
 
-type DiffusionClientParamsBase = Omit<DiffusionRequest, 'init_image' | 'init_images'>
+type DiffusionClientParamsBase = Omit<DiffusionRequest, 'initImage' | 'initImages'>
 
 export type DiffusionClientParams = DiffusionClientParamsBase &
   (
-    | { init_image?: Uint8Array; init_images?: never }
-    | { init_image?: never; init_images?: Uint8Array[] }
+    | { initImage?: Uint8Array; initImages?: never }
+    | { initImage?: never; initImages?: Uint8Array[] }
   )
 
 const videoGenerationBaseSchema = z.object({
@@ -998,7 +996,7 @@ const videoGenerationBaseSchema = z.object({
       'Stable identifier for this in-flight video generation. Optional — falls back to a generated id when the field is missing.'
     ),
   prompt: z.string().describe('Positive prompt describing the video to generate.'),
-  negative_prompt: z
+  negativePrompt: z
     .string()
     .optional()
     .describe('Optional negative prompt describing what to avoid.'),
@@ -1010,19 +1008,19 @@ const videoGenerationBaseSchema = z.object({
     })
     .optional()
     .describe('LTX video only. Worker-local absolute path to a LoRA adapter.'),
-  lora_strength: z
+  loraStrength: z
     .number()
     .min(0)
     .max(10)
     .optional()
     .describe('LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.'),
-  stg_scale: z
+  stgScale: z
     .number()
     .min(0)
     .max(10)
     .optional()
     .describe('LTX video only. Spatiotemporal guidance scale in [0, 10].'),
-  stg_block: z
+  stgBlock: z
     .number()
     .int()
     .nonnegative()
@@ -1052,7 +1050,7 @@ const videoGenerationBaseSchema = z.object({
         'against the loaded model before generation; the TI2V requirement is ' +
         'enforced natively, derived from the loaded GGUF rather than its filename.'
     ),
-  video_frames: z
+  videoFrames: z
     .number()
     .int()
     .positive()
@@ -1078,15 +1076,15 @@ const videoGenerationBaseSchema = z.object({
     .positive()
     .optional()
     .describe('Low-noise or single-expert denoising step count.'),
-  sampling_method: samplingMethodSchema
+  samplingMethod: samplingMethodSchema
     .optional()
     .describe('Sampling algorithm used by the low-noise diffusion scheduler.'),
   scheduler: videoScheduleTypeSchema
     .optional()
     .describe('Noise schedule to apply for the low-noise diffusion path.'),
-  cfg_scale: z.number().optional().describe('Classifier-free guidance scale.'),
-  flow_shift: z.number().optional().describe('Per-request flow-matching guidance shift override.'),
-  high_noise_steps: z
+  cfgScale: z.number().optional().describe('Classifier-free guidance scale.'),
+  flowShift: z.number().optional().describe('Per-request flow-matching guidance shift override.'),
+  highNoiseSteps: z
     .number()
     .int()
     .positive()
@@ -1094,35 +1092,35 @@ const videoGenerationBaseSchema = z.object({
     .describe(
       'Wan 2.2 A14B high-noise expert step count. Requires a model loaded ' +
         'with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. ' +
-        'Omit to let native routing derive the split from moe_boundary.'
+        'Omit to let native routing derive the split from moeBoundary.'
     ),
-  high_noise_sampler: samplingMethodSchema
+  highNoiseSampler: samplingMethodSchema
     .optional()
     .describe(
       'Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with ' +
         'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
     ),
-  high_noise_scheduler: scheduleTypeSchema
+  highNoiseScheduler: scheduleTypeSchema
     .optional()
     .describe(
       'Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with ' +
         'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
     ),
-  high_noise_cfg_scale: z
+  highNoiseCfgScale: z
     .number()
     .optional()
     .describe(
       'Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with ' +
         'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
     ),
-  high_noise_flow_shift: z
+  highNoiseFlowShift: z
     .number()
     .optional()
     .describe(
       'Wan 2.2 A14B high-noise expert flow shift override. Requires a model ' +
         'loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
     ),
-  moe_boundary: z
+  moeBoundary: z
     .number()
     .min(0)
     .max(1)
@@ -1131,47 +1129,44 @@ const videoGenerationBaseSchema = z.object({
       'Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model ' +
         'loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
     ),
-  vace_strength: z.number().min(0).max(1).optional().describe('Control-frame guidance strength.'),
-  control_frames: z
+  vaceStrength: z.number().min(0).max(1).optional().describe('Control-frame guidance strength.'),
+  controlFrames: z
     .array(base64StringSchema)
     .min(1)
     .optional()
     .describe('Optional array of base64-encoded control-frame images.'),
-  vae_tiling: z
+  vaeTiling: z
     .boolean()
     .optional()
     .describe('Enable VAE tiling for large videos on constrained VRAM.'),
-  vae_tile_size: z
+  vaeTileSize: z
     .union([z.number().positive(), z.string().min(1)])
     .optional()
     .describe('VAE tile size override.'),
-  vae_tile_overlap: z.number().optional().describe('VAE tile overlap override.'),
-  temporal_tiling: z
+  vaeTileOverlap: z.number().optional().describe('VAE tile overlap override.'),
+  temporalTiling: z
     .boolean()
     .optional()
     .describe(
       'LTX-2 only: tile the video VAE decode along the time axis to cap peak ' +
         'VRAM for HD / long clips. No effect on Wan (spatial-only VAE).'
     ),
-  cache_mode: cacheModeSchema.optional().describe('Step-caching algorithm.'),
-  cache_preset: z
-    .string()
-    .optional()
-    .describe('Optional name of a cached sampler preset to reuse.'),
-  cache_threshold: z.number().optional().describe('Direct cache reuse threshold override.')
+  cacheMode: cacheModeSchema.optional().describe('Step-caching algorithm.'),
+  cachePreset: z.string().optional().describe('Optional name of a cached sampler preset to reuse.'),
+  cacheThreshold: z.number().optional().describe('Direct cache reuse threshold override.')
 })
 
 // Single request object with mode-dependent rules expressed via a shared refine.
 // Keeping the request schema a plain object (instead of a discriminated union)
 // lets the request builder construct the request without an `as` cast that
 // would otherwise disable field-level type-checking. The compile-time
-// "img2vid requires init_image" guarantee lives on the caller-facing
+// "img2vid requires initImage" guarantee lives on the caller-facing
 // discriminated union types below.
 const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
   mode: z
     .enum(['txt2vid', 'img2vid'])
     .describe("Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image)."),
-  init_image: base64StringSchema
+  initImage: base64StringSchema
     .optional()
     .describe(
       'Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.'
@@ -1182,41 +1177,41 @@ const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
     .max(1)
     .optional()
     .describe('img2vid denoise strength in [0, 1]; rejected for txt2vid.'),
-  reference_images: z
+  referenceImages: z
     .array(base64StringSchema)
     .length(1)
     .optional()
     .describe(
       'LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.'
     ),
-  reference_attention_strength: z
+  referenceAttentionStrength: z
     .number()
     .min(0)
     .max(1)
     .optional()
     .describe(
-      'LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.'
+      'LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires referenceImages.'
     ),
-  reference_downscale_factor: z
+  referenceDownscaleFactor: z
     .literal(1)
     .optional()
     .describe('LTX txt2vid only. Reference-image spatial factor; currently exactly 1.')
 })
 
 function refineVideoMode(data: z.infer<typeof videoRequestObjectSchema>, ctx: z.RefinementCtx) {
-  if (data.mode === 'img2vid' && data.init_image === undefined) {
+  if (data.mode === 'img2vid' && data.initImage === undefined) {
     ctx.addIssue({
       code: 'custom',
-      path: ['init_image'],
-      message: "init_image is required when mode is 'img2vid'."
+      path: ['initImage'],
+      message: "initImage is required when mode is 'img2vid'."
     })
   }
   if (data.mode === 'txt2vid') {
-    if (data.init_image !== undefined) {
+    if (data.initImage !== undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['init_image'],
-        message: 'init_image is only valid for img2vid.'
+        path: ['initImage'],
+        message: 'initImage is only valid for img2vid.'
       })
     }
     if (data.strength !== undefined) {
@@ -1229,9 +1224,9 @@ function refineVideoMode(data: z.infer<typeof videoRequestObjectSchema>, ctx: z.
   }
   if (data.mode === 'img2vid') {
     const referenceFields = [
-      'reference_images',
-      'reference_attention_strength',
-      'reference_downscale_factor'
+      'referenceImages',
+      'referenceAttentionStrength',
+      'referenceDownscaleFactor'
     ] as const
     for (const field of referenceFields) {
       if (data[field] === undefined) continue
@@ -1265,45 +1260,45 @@ function refineLtxVideoRequest(
     })
   }
   if (
-    data.video_frames !== undefined &&
-    (data.video_frames < 9 || data.video_frames > 257 || (data.video_frames - 1) % 8 !== 0)
+    data.videoFrames !== undefined &&
+    (data.videoFrames < 9 || data.videoFrames > 257 || (data.videoFrames - 1) % 8 !== 0)
   ) {
     ctx.addIssue({
       code: 'custom',
-      path: ['video_frames'],
-      message: 'LTX-2 video_frames must be at most 257 and satisfy (8*k + 1), where k>=1.'
+      path: ['videoFrames'],
+      message: 'LTX-2 videoFrames must be at most 257 and satisfy (8*k + 1), where k>=1.'
     })
   }
-  if (data.lora_strength !== undefined && data.lora === undefined) {
+  if (data.loraStrength !== undefined && data.lora === undefined) {
     ctx.addIssue({
       code: 'custom',
-      path: ['lora_strength'],
-      message: 'lora_strength requires lora.'
+      path: ['loraStrength'],
+      message: 'loraStrength requires lora.'
     })
   }
-  if (data.reference_images !== undefined) {
+  if (data.referenceImages !== undefined) {
     if (data.lora === undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['reference_images'],
-        message: 'reference_images requires lora.'
+        path: ['referenceImages'],
+        message: 'referenceImages requires lora.'
       })
     }
-    if (data.video_frames === undefined || data.video_frames < 121) {
+    if (data.videoFrames === undefined || data.videoFrames < 121) {
       ctx.addIssue({
         code: 'custom',
-        path: ['video_frames'],
+        path: ['videoFrames'],
         message:
-          'LTX reference conditioning requires video_frames to be explicitly set to at least 121.'
+          'LTX reference conditioning requires videoFrames to be explicitly set to at least 121.'
       })
     }
   } else {
-    for (const field of ['reference_attention_strength', 'reference_downscale_factor'] as const) {
+    for (const field of ['referenceAttentionStrength', 'referenceDownscaleFactor'] as const) {
       if (data[field] === undefined) continue
       ctx.addIssue({
         code: 'custom',
         path: [field],
-        message: `${field} requires reference_images.`
+        message: `${field} requires referenceImages.`
       })
     }
   }
@@ -1313,13 +1308,13 @@ export const ltxVideoRequestSchema = videoRequestSchema.superRefine(refineLtxVid
 
 export const wanVideoRequestSchema = videoRequestSchema.superRefine((data, ctx) => {
   if (
-    data.video_frames !== undefined &&
-    (data.video_frames < 5 || (data.video_frames - 1) % 4 !== 0)
+    data.videoFrames !== undefined &&
+    (data.videoFrames < 5 || (data.videoFrames - 1) % 4 !== 0)
   ) {
     ctx.addIssue({
       code: 'custom',
-      path: ['video_frames'],
-      message: 'Wan video_frames must be an integer >= 5 of the form (4*k + 1).'
+      path: ['videoFrames'],
+      message: 'Wan videoFrames must be an integer >= 5 of the form (4*k + 1).'
     })
   }
 })
@@ -1335,18 +1330,18 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
     }
   }
   if (
-    data.video_frames !== undefined &&
-    (data.video_frames < 5 || (data.video_frames - 5) % 17 !== 0)
+    data.videoFrames !== undefined &&
+    (data.videoFrames < 5 || (data.videoFrames - 5) % 17 !== 0)
   ) {
     ctx.addIssue({
       code: 'custom',
-      path: ['video_frames'],
-      message: 'MiniMax-H3 video_frames must satisfy 17*k+5, where k>=0.'
+      path: ['videoFrames'],
+      message: 'MiniMax-H3 videoFrames must satisfy 17*k+5, where k>=0.'
     })
   }
   for (const [field, value] of [
     ['fps', 24],
-    ['cfg_scale', 1],
+    ['cfgScale', 1],
     ['scheduler', 'discrete']
   ] as const) {
     if (data[field] !== undefined && data[field] !== value) {
@@ -1357,7 +1352,7 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
       })
     }
   }
-  for (const field of ['control_frames', 'vace_strength', 'strength'] as const) {
+  for (const field of ['controlFrames', 'vaceStrength', 'strength'] as const) {
     if (data[field] !== undefined) {
       ctx.addIssue({
         code: 'custom',
@@ -1370,23 +1365,23 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
 
 const nonLtxVideoMask = {
   lora: true,
-  lora_strength: true,
-  stg_scale: true,
-  stg_block: true,
-  reference_images: true,
-  reference_attention_strength: true,
-  reference_downscale_factor: true,
+  loraStrength: true,
+  stgScale: true,
+  stgBlock: true,
+  referenceImages: true,
+  referenceAttentionStrength: true,
+  referenceDownscaleFactor: true,
   scheduler: true
 } as const
 const nonLtxVideoSchema = videoRequestObjectSchema.pick(nonLtxVideoMask)
 const nonLtxVideoFields = [
   'lora',
-  'lora_strength',
-  'stg_scale',
-  'stg_block',
-  'reference_images',
-  'reference_attention_strength',
-  'reference_downscale_factor'
+  'loraStrength',
+  'stgScale',
+  'stgBlock',
+  'referenceImages',
+  'referenceAttentionStrength',
+  'referenceDownscaleFactor'
 ] as const
 
 function refineNonLtxVideoRequest(data: z.infer<typeof nonLtxVideoSchema>, ctx: z.RefinementCtx) {
@@ -1410,12 +1405,12 @@ function refineNonLtxVideoRequest(data: z.infer<typeof nonLtxVideoSchema>, ctx: 
 export const nonLtxVideoRequestSchema = nonLtxVideoSchema.superRefine(refineNonLtxVideoRequest)
 
 const wan22MoeMask = {
-  high_noise_steps: true,
-  high_noise_sampler: true,
-  high_noise_scheduler: true,
-  high_noise_cfg_scale: true,
-  high_noise_flow_shift: true,
-  moe_boundary: true
+  highNoiseSteps: true,
+  highNoiseSampler: true,
+  highNoiseScheduler: true,
+  highNoiseCfgScale: true,
+  highNoiseFlowShift: true,
+  moeBoundary: true
 } as const
 const wan22MoeSchema = videoGenerationBaseSchema.pick(wan22MoeMask)
 const wan22MoeFields = Object.keys(wan22MoeMask) as (keyof typeof wan22MoeMask)[]
@@ -1455,51 +1450,51 @@ type VideoClientParamsCommon = Omit<
   VideoRequest,
   | 'requestId'
   | 'mode'
-  | 'init_image'
+  | 'initImage'
   | 'strength'
-  | 'control_frames'
+  | 'controlFrames'
   | 'lora'
-  | 'lora_strength'
-  | 'reference_images'
-  | 'reference_attention_strength'
-  | 'reference_downscale_factor'
+  | 'loraStrength'
+  | 'referenceImages'
+  | 'referenceAttentionStrength'
+  | 'referenceDownscaleFactor'
 > & {
-  control_frames?: Uint8Array[]
+  controlFrames?: Uint8Array[]
 }
 
 type VideoClientLoraParams =
-  { lora?: never; lora_strength?: never } | { lora: string; lora_strength?: number }
+  { lora?: never; loraStrength?: never } | { lora: string; loraStrength?: number }
 
 export type VideoTxt2vidClientParams =
   | (VideoClientParamsCommon &
       VideoClientLoraParams & {
         mode: 'txt2vid'
-        init_image?: never
+        initImage?: never
         strength?: never
-        reference_images?: never
-        reference_attention_strength?: never
-        reference_downscale_factor?: never
+        referenceImages?: never
+        referenceAttentionStrength?: never
+        referenceDownscaleFactor?: never
       })
   | (VideoClientParamsCommon & {
       mode: 'txt2vid'
-      init_image?: never
+      initImage?: never
       strength?: never
       lora: string
-      lora_strength?: number
-      reference_images: readonly [Uint8Array]
-      video_frames: number
-      reference_attention_strength?: number
-      reference_downscale_factor?: 1
+      loraStrength?: number
+      referenceImages: readonly [Uint8Array]
+      videoFrames: number
+      referenceAttentionStrength?: number
+      referenceDownscaleFactor?: 1
     })
 
 export type VideoImg2vidClientParams = VideoClientParamsCommon &
   VideoClientLoraParams & {
     mode: 'img2vid'
-    init_image: Uint8Array
+    initImage: Uint8Array
     strength?: number
-    reference_images?: never
-    reference_attention_strength?: never
-    reference_downscale_factor?: never
+    referenceImages?: never
+    referenceAttentionStrength?: never
+    referenceDownscaleFactor?: never
   }
 
 export type VideoClientParams = VideoTxt2vidClientParams | VideoImg2vidClientParams

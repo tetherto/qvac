@@ -45,7 +45,7 @@ try {
     models: CANDIDATES.map((model) => ({
       modelSrc: model,
       modelType: 'llamacpp-completion' as const,
-      modelConfig: { ctx_size: CONTEXT_TOKENS }
+      modelConfig: { ctxSize: CONTEXT_TOKENS }
     }))
   })
 

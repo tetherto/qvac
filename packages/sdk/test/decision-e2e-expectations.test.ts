@@ -112,8 +112,8 @@ test('CPU parity uses the same inputs and model with a fixed forward-pass size',
   assert.deepEqual(RESOURCE_TABLE['decision-parity'].constant, RESOURCE_TABLE.decision.constant)
   assert.deepEqual(RESOURCE_TABLE['decision-parity'].config, {
     device: 'cpu',
-    flash_attn: 'off',
-    batch_size: 64
+    flashAttention: 'off',
+    batchSize: 64
   })
   assert.equal(RESOURCE_TABLE.decision.config, undefined)
 })

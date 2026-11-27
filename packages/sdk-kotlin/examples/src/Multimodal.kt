@@ -47,7 +47,7 @@ fun main(args: Array<String>): Unit = runBlocking {
             modelConfig = buildJsonObject {
                 // Each image takes hundreds of context tokens, and the
                 // comparison below sends two at once.
-                put("ctx_size", 8192)
+                put("ctxSize", 8192)
                 put("projectionModelSrc", Models.MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0.src)
             },
         )

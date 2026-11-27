@@ -5,7 +5,8 @@ import {
   AUDIOGEN_TRACKS,
   type AudioEditClientParams,
   type AudioGenClientParams,
-  type AudioUnderstandClientParams
+  type AudioUnderstandClientParams,
+  type LegacyKeyWarn
 } from '@qvac/sdk'
 import { binaryInput } from '@/serve/lib/binary-input'
 import { formBoolean, formJson, formNumber } from '@/serve/lib/form-fields'
@@ -32,8 +33,8 @@ const lmSampling = {
 const promptMetadata = {
   vocalLanguage: z.string().min(1).optional(),
   bpm: int().optional().describe('Beats per minute; 0 or unset lets the LM infer it.'),
-  keyscale: z.string().min(1).optional().describe('Key and scale, e.g. "C minor".'),
-  timesignature: z.string().min(1).optional().describe('Time signature, e.g. "4/4".'),
+  keyScale: z.string().min(1).optional().describe('Key and scale, e.g. "C minor".'),
+  timeSignature: z.string().min(1).optional().describe('Time signature, e.g. "4/4".'),
   augmentCaptionWithMetadata: bool()
     .optional()
     .describe('Append BPM, time signature and key to the conditioning caption.')
@@ -147,6 +148,29 @@ export const audioUnderstandingBody = z.strictObject({
   ...lmSampling
 })
 
+const LEGACY_PROMPT_METADATA_KEYS = {
+  keyscale: 'keyScale',
+  timesignature: 'timeSignature'
+} as const
+
+/**
+ * The generation or edit body with each deprecated prompt-metadata key moved to
+ * its camelCase name, so a client still sending the previous spelling gets a
+ * deprecation warning for one release instead of an unrecognized-key error.
+ */
+export function renameLegacyMusicKeys(body: unknown, warn: LegacyKeyWarn): unknown {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return body
+  let result = body as Record<string, unknown>
+  for (const [legacyKey, key] of Object.entries(LEGACY_PROMPT_METADATA_KEYS)) {
+    if (!(legacyKey in result)) continue
+    const { [legacyKey]: value, ...rest } = result
+    const ignored = key in rest
+    result = ignored ? rest : { ...rest, [key]: value }
+    warn(legacyKey, key, ignored)
+  }
+  return result
+}
+
 export type AudioGenerationBody = z.infer<typeof audioGenerationBody>
 export type AudioEditBody = z.infer<typeof audioEditBody>
 export type AudioUnderstandingBody = z.infer<typeof audioUnderstandingBody>
@@ -258,8 +282,16 @@ export const audioUnderstandingResult = z.object({
     caption: z.string(),
     bpm: z.number(),
     duration: z.number().describe('LM estimate in seconds.'),
-    keyscale: z.string(),
-    timesignature: z.string(),
+    keyScale: z.string(),
+    timeSignature: z.string(),
+    keyscale: z.string().optional().meta({
+      deprecated: true,
+      description: 'Deprecated, removed in the next release. Use `keyScale`.'
+    }),
+    timesignature: z.string().optional().meta({
+      deprecated: true,
+      description: 'Deprecated, removed in the next release. Use `timeSignature`.'
+    }),
     vocalLanguage: z.string(),
     audioCodes: z
       .array(z.number())

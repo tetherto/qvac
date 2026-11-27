@@ -44,7 +44,7 @@ export const MODEL_CONFIG = {
       'test-llm': {
         model: 'QWEN3_600M_INST_Q4',
         preload: true,
-        config: { ctx_size: 2048, tools: true }
+        config: { ctxSize: 2048, tools: true }
       },
       // default:true so the vector-stores default-embedding pick stays
       // unambiguous now that a second embedding alias exists.
@@ -55,7 +55,7 @@ export const MODEL_CONFIG = {
         model: 'LAYA_MULTILINGUAL_322M_Q8_0',
         type: 'llamacpp-decision',
         preload: true,
-        config: { device: 'cpu', threads: 2, 'threads-batch': 2 }
+        config: { device: 'cpu', threads: 2, threadsBatch: 2 }
       },
       'test-whisper': { model: 'WHISPER_EN_TINY_Q8_0', preload: true },
       'test-whisper-translate': {
@@ -73,7 +73,7 @@ export const MODEL_CONFIG = {
 export const LLM_ONLY_CONFIG = {
   serve: {
     models: {
-      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } }
+      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctxSize: 2048 } }
     }
   }
 } as const

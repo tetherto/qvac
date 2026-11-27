@@ -41,10 +41,10 @@ class QwenQualityInstrumentationTest {
                 for (device in devices) {
                     val loaded = client.models.load(Models.QWEN3_600M_INST_Q4.src,
                         Models.QWEN3_600M_INST_Q4.engine, modelConfig = buildJsonObject {
-                            put("ctx_size", 2048)
+                            put("ctxSize", 2048)
                             put("device", device)
-                            put("gpu_layers", if (device == "gpu") 99 else 0)
-                            put("reasoning_budget", 0)
+                            put("gpuLayers", if (device == "gpu") 99 else 0)
+                            put("reasoningBudget", 0)
                         })
                     assertTrue(loaded.error, loaded.success)
                     val id = requireNotNull(loaded.modelId)

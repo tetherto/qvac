@@ -88,7 +88,7 @@ prompts one by one.
 
 `model` names a `serve.models` alias whose endpoint category is `chat` and whose
 `config.parallel` is 2 or more. Up to `parallel` prompts decode at once and the rest queue. The
-slots share the alias's `ctx_size`.
+slots share the alias's `ctxSize`.
 
 | Field     | Type       | Required | Meaning                                              |
 | --------- | ---------- | -------- | ---------------------------------------------------- |
@@ -170,7 +170,7 @@ curl -sS http://localhost:11435/qvac/v1/chat/batch \
     "models": {
       "my-llm": {
         "model": "QWEN3_600M_INST_Q4",
-        "config": { "ctx_size": 8192, "parallel": 4 }
+        "config": { "ctxSize": 8192, "parallel": 4 }
       }
     }
   }
@@ -353,7 +353,7 @@ memory each load takes is summed per device and compared against what is free.
 | `models[].modelConfig` | `object`   | No       | Config to assess with, merged over an alias's own config |
 
 An alias is assessed with the config it would load with. `modelConfig` is merged over it key
-by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
+by key, nested objects included, so `{"ctxSize": 32768}` asks about a longer context and an
 override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
 companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`,
 and every entry of a `*Srcs` list) must name SDK model constants, so a request
@@ -384,7 +384,7 @@ is the PCI bus ID where the backend reports one, so the same GPU matches across 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \
-  -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
+  -d '{"models":[{"model":"my-llm","modelConfig":{"ctxSize":8192}}]}'
 ```
 
 ```json
@@ -783,7 +783,7 @@ Ranges and combinations (a `cover-nofsq` task needs `sourceAudio`, `duration` ex
 | `simpleMode`, `rewriteQuery`         | `boolean`          | No       | Let the LM write or rewrite the request                     |
 | `generateLrc`, `computeQualityScore` | `boolean`          | No       | Add `stats.lrc` / `stats.lyricsScore`, `stats.qualityScore` |
 
-The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `track`,
+The other `audioGen()` fields (`bpm`, `keyScale`, `timeSignature`, `vocalLanguage`, `track`,
 `maxFrames`, `inferenceSteps`, `shift`, `cfgScale`, the `lm*` and `dcw*` controls, ...) are
 accepted under the same names.
 
@@ -820,7 +820,7 @@ Runs an ordered pipeline of `flow-edit` and `repaint` operations over `sourceAud
 | `referenceAudio` | file, data URL, id | No       | Timbre reference for every operation                                                |
 | `seed`           | `integer`          | No       | Seeds the first operation; each next one uses `seed + index`                        |
 
-`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `inferenceSteps`, `shift` and the `dcw*`
+`bpm`, `keyScale`, `timeSignature`, `vocalLanguage`, `inferenceSteps`, `shift` and the `dcw*`
 controls apply to every operation.
 
 Known limitation: the SDK decodes an encoded source to mono, and a loud stereo source can mix
@@ -880,8 +880,8 @@ codes, which a generation takes back as `audioCodes`. A client disconnect cancel
     "caption": "A calm lo-fi piano piece with soft keys.",
     "bpm": 72,
     "duration": 30,
-    "keyscale": "A minor",
-    "timesignature": "4/4",
+    "keyScale": "A minor",
+    "timeSignature": "4/4",
     "vocalLanguage": "unknown",
     "audioCodes": [8123, 1022, 517],
     "seed": 1
@@ -930,7 +930,7 @@ ACE-Step takes four weights. The alias's `model` is its DiT; `config` names all 
           "lmModelSrc": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
           "ditModelSrc": "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
           "vaeModelSrc": "AUDIOGEN_VAE_BF16",
-          "useGPU": true
+          "useGpu": true
         }
       }
     }
@@ -1000,7 +1000,7 @@ curl -sS http://localhost:11435/qvac/v1/images/upscale \
     "models": {
       "upscaler": {
         "model": "REALESRGAN_X4PLUS",
-        "config": { "mode": "upscale", "upscaler": { "tile_size": 128 } }
+        "config": { "mode": "upscale", "upscaler": { "tileSize": 128 } }
       }
     }
   }

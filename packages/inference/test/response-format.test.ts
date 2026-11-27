@@ -13,7 +13,7 @@ test('responseFormatSchema: accepts json_object', (t) => {
 test('responseFormatSchema: accepts json_schema with required fields', (t) => {
   const result = responseFormatSchema.safeParse({
     type: 'json_schema',
-    json_schema: {
+    jsonSchema: {
       name: 'Person',
       schema: {
         type: 'object',
@@ -33,7 +33,7 @@ test('responseFormatSchema: rejects unknown type', (t) => {
 test('responseFormatSchema: rejects json_schema without name', (t) => {
   const result = responseFormatSchema.safeParse({
     type: 'json_schema',
-    json_schema: { schema: { type: 'object' } }
+    jsonSchema: { schema: { type: 'object' } }
   })
   t.is(result.success, false)
 })
@@ -41,7 +41,7 @@ test('responseFormatSchema: rejects json_schema without name', (t) => {
 test('responseFormatSchema: rejects json_schema with empty name', (t) => {
   const result = responseFormatSchema.safeParse({
     type: 'json_schema',
-    json_schema: { name: '', schema: { type: 'object' } }
+    jsonSchema: { name: '', schema: { type: 'object' } }
   })
   t.is(result.success, false)
 })
@@ -61,7 +61,7 @@ test('completionClientParamsSchema: rejects responseFormat together with tools',
     ],
     responseFormat: {
       type: 'json_schema',
-      json_schema: { name: 'P', schema: { type: 'object' } }
+      jsonSchema: { name: 'P', schema: { type: 'object' } }
     }
   })
   t.is(result.success, false)
@@ -74,7 +74,7 @@ test('completionClientParamsSchema: allows responseFormat without tools', (t) =>
     stream: false,
     responseFormat: {
       type: 'json_schema',
-      json_schema: { name: 'P', schema: { type: 'object' } }
+      jsonSchema: { name: 'P', schema: { type: 'object' } }
     }
   })
   t.is(result.success, true)
@@ -133,7 +133,7 @@ test('getResponseFormatJsonSchema: json_schema returns the schema verbatim', (t)
   }
   const result = getResponseFormatJsonSchema({
     type: 'json_schema',
-    json_schema: { name: 'P', schema }
+    jsonSchema: { name: 'P', schema }
   })
   t.is(typeof result, 'string')
   t.alike(JSON.parse(result as string), schema)

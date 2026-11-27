@@ -38,7 +38,7 @@ history in the decoder response. The decoder still buffers the encoded input,
 and downstream stream queues can retain decoded PCM.
 
 MOSS transcription uses the `moss-transcribe` model type and plugin. It supports
-batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
+batch transcription, with optional `threads`, `useGpu` (Metal), and
 `backendsDir` model configuration. Per-request `hotwords` or `prompt` and
 `maxNewTokens` belong to `transcribe`, not model configuration. Metadata results
 include timestamps and optional `speakerId` / `speaker` labels. Streaming,
@@ -57,7 +57,7 @@ Omitted controls preserve native model defaults. Registry constants and model-ou
 validation are pending registry weights.
 
 Parakeet loads take an explicit native `backend` selector (`auto`, `cpu`, `cuda`,
-`vulkan`, `opencl`, `metal`, or an exact ggml device name), which overrides `useGPU`
+`vulkan`, `opencl`, `metal`, or an exact ggml device name), which overrides `useGpu`
 and reaches the fit request. `speakerAttribution` adds a separate diarization
 model, given as a `modelSrc` the plugin resolves into the
 `speakerAttributionModelPath` artifact, for batch text-per-speaker transcription;

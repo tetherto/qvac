@@ -36,21 +36,21 @@ const SYSTEM_PROMPT =
 // on its own echo. These defaults are deliberately conservative:
 //   - threshold 0.6: less sensitive than Silero's default; avoids triggering
 //     on TTS reverb bleeding into the mic or low-level background noise.
-//   - min_speech_duration_ms 300: drops short clicks/breaths and stray words.
-//   - min_silence_duration_ms 700: requires a longer quiet tail before
+//   - minSpeechDurationMs 300: drops short clicks/breaths and stray words.
+//   - minSilenceDurationMs 700: requires a longer quiet tail before
 //     committing a segment. Crucial for preventing self-hearing feedback loops
 //     where Whisper hallucinates content from near-silent audio.
-//   - max_speech_duration_s 15: caps runaway utterances.
-//   - speech_pad_ms 200: padding improves accuracy on utterance edges.
-// If the assistant cuts you off mid-sentence, raise min_silence_duration_ms.
+//   - maxSpeechDurationS 15: caps runaway utterances.
+//   - speechPadMs 200: padding improves accuracy on utterance edges.
+// If the assistant cuts you off mid-sentence, raise minSilenceDurationMs.
 // If it keeps hallucinating / talking to itself, raise threshold to 0.7 and/or
-// min_silence_duration_ms to 900.
+// minSilenceDurationMs to 900.
 const VAD_PARAMS = {
   threshold: 0.6,
-  min_speech_duration_ms: 300,
-  min_silence_duration_ms: 700,
-  max_speech_duration_s: 15.0,
-  speech_pad_ms: 200
+  minSpeechDurationMs: 300,
+  minSilenceDurationMs: 700,
+  maxSpeechDurationS: 15.0,
+  speechPadMs: 200
 }
 
 // Short grace period after TTS playback before we start listening again.
@@ -95,15 +95,15 @@ const asrModelId = await loadModel({
   modelSrc: WHISPER_TINY,
   modelConfig: {
     vadModelSrc: VAD_SILERO_5_1_2,
-    audio_format: 'f32le',
+    audioFormat: 'f32le',
     strategy: 'greedy',
-    n_threads: 4,
+    threads: 4,
     language: 'en',
-    no_timestamps: true,
-    suppress_blank: true,
-    suppress_nst: true,
+    noTimestamps: true,
+    suppressBlank: true,
+    suppressNst: true,
     temperature: 0.0,
-    vad_params: VAD_PARAMS
+    vadParams: VAD_PARAMS
   }
 })
 
@@ -111,7 +111,7 @@ console.log('▸ Loading Llama 3.2 1B...')
 const llmModelId = await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
   modelConfig: {
-    ctx_size: 4096
+    ctxSize: 4096
   }
 })
 

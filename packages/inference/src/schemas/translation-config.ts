@@ -143,23 +143,23 @@ const nmtGenerationParamsSchema = z.object({
     .enum(['full'])
     .optional()
     .describe("Generation mode; currently only `'full'` is supported. Default `'full'`."),
-  beamsize: z
+  beamSize: z
     .number()
     .optional()
     .describe('Beam search width (≥1); 1 disables beam search. Default 4.'),
-  lengthpenalty: z.number().optional().describe('Length-normalization strength (≥0). Default 1.0.'),
-  maxlength: z.number().optional().describe('Maximum generated tokens (>0). Default 512.'),
-  repetitionpenalty: z
+  lengthPenalty: z.number().optional().describe('Length-normalization strength (≥0). Default 1.0.'),
+  maxLength: z.number().optional().describe('Maximum generated tokens (>0). Default 512.'),
+  repeatPenalty: z
     .number()
     .optional()
     .describe('Penalty on previously generated tokens (0–2). Default 1.0.'),
-  norepeatngramsize: z
+  noRepeatNgramSize: z
     .number()
     .optional()
     .describe('Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.'),
   temperature: z.number().optional().describe('Sampling temperature (0–2). Default 0.3.'),
-  topk: z.number().optional().describe('Keep top-K logits (0–vocab_size); 0 disables. Default 0.'),
-  topp: z.number().optional().describe('Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.')
+  topK: z.number().optional().describe('Keep top-K logits (0–vocab_size); 0 disables. Default 0.'),
+  topP: z.number().optional().describe('Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.')
 })
 
 // Pivot model configuration for Bergamot (for translation via intermediate language)
@@ -229,14 +229,14 @@ export const nmtConfigBaseSchema = z.discriminatedUnion('engine', [
 export const nmtConfigSchema = nmtConfigBaseSchema.transform((data) => ({
   ...data,
   mode: data.mode ?? 'full',
-  beamsize: data.beamsize ?? 4,
-  lengthpenalty: data.lengthpenalty ?? 1.0,
-  maxlength: data.maxlength ?? 512,
-  repetitionpenalty: data.repetitionpenalty ?? 1.0,
-  norepeatngramsize: data.norepeatngramsize ?? 0,
+  beamSize: data.beamSize ?? 4,
+  lengthPenalty: data.lengthPenalty ?? 1.0,
+  maxLength: data.maxLength ?? 512,
+  repeatPenalty: data.repeatPenalty ?? 1.0,
+  noRepeatNgramSize: data.noRepeatNgramSize ?? 0,
   temperature: data.temperature ?? 0.3,
-  topk: data.topk ?? 0,
-  topp: data.topp ?? 1.0
+  topK: data.topK ?? 0,
+  topP: data.topP ?? 1.0
 }))
 
 export type BergamotLanguage = (typeof BERGAMOT_LANGUAGES)[number]

@@ -43,9 +43,9 @@ export interface AsrAddonSegment {
   language?: string
   /** Whisper: probability that the segment's window holds no speech. */
   noSpeechProb?: number
-  /** Whisper with `tdrz_enable`: a speaker turn follows this segment. */
+  /** Whisper with `tdrzEnable`: a speaker turn follows this segment. */
   speakerTurnNext?: boolean
-  /** Whisper with `token_timestamps`: per-token text, timing and probability. */
+  /** Whisper with `tokenTimestamps`: per-token text, timing and probability. */
   tokens?: AsrAddonToken[]
   /** BCI delta streaming: absolute timestep at which the owning window began. */
   windowStartTimestep?: number

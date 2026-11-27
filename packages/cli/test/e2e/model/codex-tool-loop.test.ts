@@ -13,7 +13,7 @@ const server = useModelServer({
       [CODEX_LLM]: {
         model: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M',
         preload: true,
-        config: { ctx_size: 4096, tools: true }
+        config: { ctxSize: 4096, tools: true }
       }
     }
   }

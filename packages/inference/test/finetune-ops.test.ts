@@ -453,12 +453,18 @@ test('startFinetune: detaches progress listeners after completion', async (t) =>
         }
       },
       (update) => {
-        seenSteps.push(update.global_steps)
+        seenSteps.push(update.globalSteps)
       }
     )
 
     t.alike(seenSteps, [2])
     t.is(result.status, 'COMPLETED')
+    t.alike(result.stats, {
+      globalSteps: 2,
+      epochsCompleted: 1,
+      global_steps: 2,
+      epochs_completed: 1
+    })
     t.is(removeListenerCalls, 1)
   } finally {
     unregisterModel(modelId)

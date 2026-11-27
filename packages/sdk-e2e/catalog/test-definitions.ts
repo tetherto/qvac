@@ -104,7 +104,7 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   testId: 'model-load-llm-load-mode-none',
   params: { loadMode: 'none' },
   expectation: { validation: 'type', expectedType: 'string' },
-  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, load_mode: '$params.loadMode' }),
+  steps: loadsWithConfig('llm', { verbosity: 0, ctxSize: 2048, loadMode: '$params.loadMode' }),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -118,7 +118,7 @@ export const modelLoadLlmNpuDevice: TestDefinition = {
   testId: 'model-load-llm-npu-device',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
-  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, device: 'npu' }),
+  steps: loadsWithConfig('llm', { verbosity: 0, ctxSize: 2048, device: 'npu' }),
   finally: [{ call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }],
   metadata: {
     category: 'model',
@@ -176,12 +176,12 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   steps: loadsWithConfig('llm', {
     verbosity: 0,
-    ctx_size: 2048,
-    cache_checkpoints: '$params.cacheCheckpoints',
-    cache_checkpoints_max_bytes: '$params.cacheCheckpointsMaxBytes',
-    cache_checkpoint_storage: '$params.cacheCheckpointStorage',
-    cache_ram_mib: '$params.cacheRamMib',
-    cache_share_across_keys: '$params.cacheShareAcrossKeys'
+    ctxSize: 2048,
+    cacheCheckpoints: '$params.cacheCheckpoints',
+    cacheCheckpointsMaxBytes: '$params.cacheCheckpointsMaxBytes',
+    cacheCheckpointStorage: '$params.cacheCheckpointStorage',
+    cacheRamMib: '$params.cacheRamMib',
+    cacheShareAcrossKeys: '$params.cacheShareAcrossKeys'
   }),
   metadata: {
     category: 'model',
@@ -202,7 +202,7 @@ export const modelLoadLlmCacheCheckpointsOutOfRangeRejected: TestDefinition = {
         params: {
           modelSrc: '$src.modelSrc',
           modelType: '$src.modelType',
-          modelConfig: { cache_checkpoints: '$params.cacheCheckpoints' }
+          modelConfig: { cacheCheckpoints: '$params.cacheCheckpoints' }
         },
         as: 'err'
       }
@@ -403,7 +403,7 @@ export const modelSwitchLlm: TestDefinition = {
         params: {
           modelSrc: '$src.modelSrc',
           modelType: '$src.modelType',
-          modelConfig: { verbosity: 0, ctx_size: 2048 }
+          modelConfig: { verbosity: 0, ctxSize: 2048 }
         },
         as: 'loaded'
       }
@@ -432,7 +432,7 @@ export const modelReloadAfterError: TestDefinition = {
         params: {
           modelSrc: '$src.modelSrc',
           modelType: '$src.modelType',
-          modelConfig: { verbosity: 0, ctx_size: 2048 }
+          modelConfig: { verbosity: 0, ctxSize: 2048 }
         },
         as: 'loaded'
       }
@@ -458,7 +458,7 @@ export const modelLoadInferredType: TestDefinition = {
     {
       call: {
         method: 'loadModel',
-        params: { modelSrc: '$src.modelSrc', modelConfig: { verbosity: 0, ctx_size: 2048 } },
+        params: { modelSrc: '$src.modelSrc', modelConfig: { verbosity: 0, ctxSize: 2048 } },
         as: 'loaded'
       }
     },

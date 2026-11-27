@@ -105,7 +105,7 @@ async def main() -> int:
                     # every variant.
                     "ditModelSrc": AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M.src,
                     "vaeModelSrc": AUDIOGEN_VAE_BF16.src,
-                    "useGPU": True,
+                    "useGpu": True,
                 },
                 on_progress=print_progress,
             )

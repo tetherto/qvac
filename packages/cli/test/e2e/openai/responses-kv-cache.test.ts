@@ -21,7 +21,7 @@ function server(t: Parameters<typeof createServer>[0]) {
           'test-llm': {
             model: 'QWEN3_600M_INST_Q4',
             preload: false,
-            config: { ctx_size: 2048, tools: true }
+            config: { ctxSize: 2048, tools: true }
           }
         }
       }

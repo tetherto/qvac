@@ -145,7 +145,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
 
       const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
       return ValidationHelpers.validate(
-        `described "${description.caption}" as ${description.bpm} BPM ${description.keyscale} ` +
+        `described "${description.caption}" as ${description.bpm} BPM ${description.keyScale} ` +
           `with ${description.audioCodes.length} codes, ${progress.length} progress ticks and ` +
           `stats [${backend} stages: ${progressReport.summary}]`,
         expectation

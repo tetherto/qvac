@@ -6,6 +6,7 @@ import {
 } from './image-embedding'
 import { trackedRequestSchema } from '@/schemas/request-base'
 import { base64String } from '@/schemas/base64'
+import { LEGACY_EMBED_STATS_KEYS, legacyResponseFields } from '@/schemas/legacy-response-keys'
 
 const mediaSourceSchema = z
   .discriminatedUnion('type', [
@@ -161,7 +162,7 @@ export const embedBatchRequestSchema = embedBatchParamsSchema
 
 // embed() is model-agnostic, so its stats cover both engines. Each model fills only its own fields.
 const imageStats = imageEmbeddingStatsSchema.shape
-export const embedStatsSchema = z.object({
+const embedStatsShape = {
   totalTime: z
     .number()
     .optional()
@@ -180,7 +181,7 @@ export const embedStatsSchema = z.object({
     .enum(['cpu', 'gpu'])
     .optional()
     .describe('Compute backend used for inference. llama.cpp embedding models only.'),
-  contextSize: z
+  ctxSize: z
     .number()
     .optional()
     .describe('Context size in tokens. llama.cpp embedding models only.'),
@@ -191,6 +192,10 @@ export const embedStatsSchema = z.object({
     'Number of graph nodes scheduled on CPU fallback. MegaLoc only.'
   ),
   weightBytes: imageStats.weightBytes.describe('Allocated model weight bytes. MegaLoc only.')
+}
+export const embedStatsSchema = z.object({
+  ...embedStatsShape,
+  ...legacyResponseFields(embedStatsShape, LEGACY_EMBED_STATS_KEYS)
 })
 
 export const embedResponseSchema = z.object({

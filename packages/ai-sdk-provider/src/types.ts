@@ -19,9 +19,9 @@ export interface QvacExternalOptions extends QvacCommonOptions {
 }
 
 // A model to load in managed mode. A bare string is shorthand for `{ name }`.
-// Use the object form to attach per-model serve config — notably `ctx_size`
-// and `reasoning_budget`, which coding-agent harnesses like OpenCode need (the
-// serve default `ctx_size` of 1024 is too small for an agent's system prompt +
+// Use the object form to attach per-model serve config — notably `ctxSize`
+// and `reasoningBudget`, which coding-agent harnesses like OpenCode need (the
+// serve default `ctxSize` of 1024 is too small for an agent's system prompt +
 // tool definitions). See the package README's "Using with coding agents".
 export interface QvacManagedModel {
   // SDK model-constant name (`'GPT_OSS_20B_INST_Q4_K_M'`) or a public catalog id
@@ -31,7 +31,7 @@ export interface QvacManagedModel {
   readonly name: string
   // Per-model serve config, merged verbatim into the synthesized
   // `qvac.config.json` entry under `config` (e.g.
-  // `{ ctx_size: 32768, reasoning_budget: 0 }`).
+  // `{ ctxSize: 32768, reasoningBudget: 0 }`).
   readonly config?: Record<string, unknown>
   // Preload the model when the serve starts. Defaults to `true`.
   readonly preload?: boolean

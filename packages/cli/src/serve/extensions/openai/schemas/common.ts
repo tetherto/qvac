@@ -156,18 +156,18 @@ export function nameToolResults<T extends { role: string } & ToolTurnFields>(his
 // ─── SDK-side types ───────────────────────────────────────────────────
 
 export interface GenerationParams {
-  temp?: number
-  top_p?: number
-  top_k?: number
+  temperature?: number
+  topP?: number
+  topK?: number
   predict?: number
   seed?: number
-  frequency_penalty?: number
-  presence_penalty?: number
-  repeat_penalty?: number
-  reasoning_budget?: -1 | 0
+  frequencyPenalty?: number
+  presencePenalty?: number
+  repeatPenalty?: number
+  reasoningBudget?: -1 | 0
   /** `auto` | `none` | `required` | a declared tool's name. */
-  tool_choice?: string
-  parallel_tool_calls?: boolean
+  toolChoice?: string
+  parallelToolCalls?: boolean
 }
 
 export type ResponseFormat =
@@ -175,7 +175,7 @@ export type ResponseFormat =
   | { type: 'json_object' }
   | {
       type: 'json_schema'
-      json_schema: {
+      jsonSchema: {
         name: string
         description?: string
         schema: Record<string, unknown>
@@ -340,7 +340,7 @@ export function withToolChoice(
   choice: string | undefined
 ): GenerationParams | undefined {
   if (choice === undefined) return params
-  return { ...(params ?? {}), tool_choice: choice }
+  return { ...(params ?? {}), toolChoice: choice }
 }
 
 /**
@@ -353,7 +353,7 @@ export function withParallelToolCalls(
   parallel: boolean | undefined
 ): GenerationParams | undefined {
   if (parallel === undefined) return params
-  return { ...(params ?? {}), parallel_tool_calls: parallel }
+  return { ...(params ?? {}), parallelToolCalls: parallel }
 }
 
 function toolChoiceToSdk(raw: unknown): string {
@@ -440,16 +440,16 @@ export function extractResponseFormat(body: Record<string, unknown>): ResponseFo
     }
     const result: ResponseFormat = {
       type: 'json_schema',
-      json_schema: {
+      jsonSchema: {
         name,
         schema: schema as Record<string, unknown>
       }
     }
     if (typeof wrapper['description'] === 'string') {
-      result.json_schema.description = wrapper['description']
+      result.jsonSchema.description = wrapper['description']
     }
     if (typeof wrapper['strict'] === 'boolean') {
-      result.json_schema.strict = wrapper['strict']
+      result.jsonSchema.strict = wrapper['strict']
     }
     return result
   }
@@ -465,14 +465,14 @@ export function extractGenerationParams(
 ): GenerationParams | undefined {
   const params: GenerationParams = {}
 
-  if (typeof body['temperature'] === 'number') params.temp = body['temperature']
-  if (typeof body['top_p'] === 'number') params.top_p = body['top_p']
+  if (typeof body['temperature'] === 'number') params.temperature = body['temperature']
+  if (typeof body['top_p'] === 'number') params.topP = body['top_p']
   if (typeof body['seed'] === 'number') params.seed = body['seed']
   if (typeof body['frequency_penalty'] === 'number') {
-    params.frequency_penalty = body['frequency_penalty']
+    params.frequencyPenalty = body['frequency_penalty']
   }
   if (typeof body['presence_penalty'] === 'number') {
-    params.presence_penalty = body['presence_penalty']
+    params.presencePenalty = body['presence_penalty']
   }
 
   if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
@@ -481,9 +481,9 @@ export function extractGenerationParams(
   }
 
   if (typeof body['reasoning_budget'] === 'boolean') {
-    params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
+    params.reasoningBudget = body['reasoning_budget'] ? -1 : 0
   } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
-    params.reasoning_budget = body['reasoning_budget']
+    params.reasoningBudget = body['reasoning_budget']
   }
 
   return Object.keys(params).length > 0 ? params : undefined

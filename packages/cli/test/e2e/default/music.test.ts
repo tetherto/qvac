@@ -186,7 +186,7 @@ const STATS: AudioGenStats = {
     caption: 'lofi',
     lyrics: '',
     bpm: 90,
-    keyscale: 'C minor',
+    keyScale: 'C minor',
     beatsPerBar: 4,
     vocalLanguage: 'en',
     seed: 7,
@@ -288,6 +288,25 @@ describe('qvac music: jobs against a stubbed SDK', () => {
 
     const list = await server().inject({ method: 'GET', url: GENERATIONS })
     assert.ok((list.json() as { data: JobBody[] }).data.some((j) => j.id === created.id))
+  })
+
+  it('accepts the deprecated keyscale and timesignature and passes them on renamed', async () => {
+    const calls: AudioGenClientParams[] = []
+    state().audioGenOverride = (params) => {
+      calls.push(params)
+      return fakeRun(Promise.resolve(AUDIO))
+    }
+
+    const res = await server().inject({
+      method: 'POST',
+      url: GENERATIONS,
+      payload: { model: 'music', caption: 'lofi', keyscale: 'C minor', timesignature: '3/4' }
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.deepEqual(calls, [
+      { modelId: 'sdk-music', caption: 'lofi', keyScale: 'C minor', timeSignature: '3/4' }
+    ])
+    await waitForJob(server(), GENERATIONS, (res.json() as JobBody).id)
   })
 
   it('answers 409 with Retry-After while a job runs, and DELETE cancels it', async () => {
@@ -444,8 +463,8 @@ describe('qvac music: jobs against a stubbed SDK', () => {
       caption: 'calm piano',
       bpm: 72,
       duration: 12,
-      keyscale: 'A minor',
-      timesignature: '4/4',
+      keyScale: 'A minor',
+      timeSignature: '4/4',
       vocalLanguage: 'unknown',
       audioCodes: [5, 6, 7],
       seed: 11

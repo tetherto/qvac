@@ -41,13 +41,13 @@ def main() -> int:
 
         print("\n▸ Completion, streaming live into the cell/stdout")
         llm = client.load_model(
-            model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
+            model_src=QWEN3_600M_INST_Q4, model_config={"ctxSize": 2048}
         )
         text = client.completion(
             llm,
             "Explain what an embedding is in one sentence.",
             predict=256,
-            temp=0,
+            temperature=0,
             seed=42,
         )
         print(f"\n  returned {len(text)} chars")

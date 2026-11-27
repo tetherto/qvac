@@ -2,7 +2,8 @@ import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import ImgStableDiffusion, {
   EsrganUpscaler,
   VideoStableDiffusion,
-  assessFit as diffusionAssessFit
+  assessFit as diffusionAssessFit,
+  type SdConfig
 } from '@qvac/diffusion-cpp'
 import {
   definePlugin,
@@ -204,13 +205,13 @@ export const diffusionPlugin = definePlugin({
       // Where world has a nested equivalent, name it — the rest just say so.
       const worldEquivalent: Record<string, string> = {
         device: 'world.backend',
-        'main-gpu': 'world.backend',
+        mainGpu: 'world.backend',
         backend: 'world.backend',
         threads: 'world.threads',
-        offload_to_cpu: 'world.offloadParamsToCpu',
-        params_backend: 'world.paramsBackend',
-        max_vram: 'world.maxVram',
-        stream_layers: 'world.streamLayers',
+        offloadToCpu: 'world.offloadParamsToCpu',
+        paramsBackend: 'world.paramsBackend',
+        maxVram: 'world.maxVram',
+        streamLayers: 'world.streamLayers',
         verbosity: 'world.verbosity'
       }
       const unsupported = Object.keys(cfg).filter(
@@ -314,7 +315,7 @@ export const diffusionPlugin = definePlugin({
     // World does not either, but it REJECTS the field above rather than dropping
     // it silently, so it cannot reach here.
     const effectiveUpscaler = cfg.mode === 'video' ? undefined : upscaler
-    const { model_src: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
+    const { modelSrc: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
     const runtimeConfig = {
       ...rest,
       ...(effectiveUpscaler && { upscaler: upscalerRuntime })
@@ -417,13 +418,15 @@ export const diffusionPlugin = definePlugin({
     const config = (modelConfig ?? {}) as SdcppConfig
 
     // no multi-gpu on mobile
-    if (isMobile()) {
-      const stripped = stripMultiGpuKeys(config)
+    const forHost = (nativeConfig: SdConfig) => {
+      if (!isMobile()) return nativeConfig
+      const stripped = stripMultiGpuKeys(nativeConfig)
       if (stripped.length > 0) {
         getEngineLogger().warn(
           `[${ModelType.sdcppGeneration}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
         )
       }
+      return nativeConfig
     }
 
     // Reject early with a clear error instead of letting the native addon fail
@@ -478,7 +481,7 @@ export const diffusionPlugin = definePlugin({
       const files = videoFilesFor(modelPath, artifacts)
       const model = new VideoStableDiffusion({
         files,
-        config: videoConfigFor(config),
+        config: forHost(videoConfigFor(config)),
         logger,
         opts: { stats: true }
       })
@@ -491,7 +494,7 @@ export const diffusionPlugin = definePlugin({
     const files = imageFilesFor(modelPath, artifacts)
     const model = new ImgStableDiffusion({
       files,
-      config: imageConfigFor(config),
+      config: forHost(imageConfigFor(config)),
       logger,
       opts: { stats: true }
     })

@@ -12,11 +12,11 @@ try {
       engine: 'Bergamot',
       from: 'en',
       to: 'fr',
-      beamsize: 1,
+      beamSize: 1,
       normalize: 1,
       temperature: 0.2,
-      norepeatngramsize: 3,
-      lengthpenalty: 1.2
+      noRepeatNgramSize: 3,
+      lengthPenalty: 1.2
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)

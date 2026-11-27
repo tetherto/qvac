@@ -5,33 +5,33 @@ export const RESOURCE_TABLE: ResourceTable = {
   llm: {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   'llm-shared-cache': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: true }
+    config: { verbosity: 0, ctxSize: 2048, cacheShareAcrossKeys: true }
   },
 
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 512 }
+    config: { verbosity: 0, ctxSize: 512 }
   },
 
   // Keeps its multi-token-prediction layers, for speculative decoding.
   'llm-mtp': {
     constant: { $const: 'QWEN3_5_0_8B_MTP_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   // The same model without its MTP layers, drafted for by `llm-mtp`'s head.
   'llm-no-mtp': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   // The DSpark pair the addon's own tests use, pinned until the pair is in the registry.
@@ -39,7 +39,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     modelSrc:
       'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   // The DSpark drafter for `llm-dspark`. Only ever loaded as its `draftModelSrc`.
@@ -52,27 +52,27 @@ export const RESOURCE_TABLE: ResourceTable = {
   'llm-batch': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llm',
-    config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
+    config: { verbosity: 0, ctxSize: 4096, parallel: 4 }
   },
 
   'tools-batch': {
     constant: { $const: 'QWEN3_1_7B_INST_Q4' },
     type: 'llm',
-    config: { ctx_size: 4096, tools: true, parallel: 2 }
+    config: { ctxSize: 4096, tools: true, parallel: 2 }
   },
 
   'finetune-llm': {
     on: ['desktop'],
     constant: { $const: 'QWEN3_1_7B_INST_Q4' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   'finetune-llm-qwen35': {
     on: ['desktop'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q8_0' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 }
+    config: { verbosity: 0, ctxSize: 2048 }
   },
 
   decision: {
@@ -84,7 +84,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'LAYA_MULTILINGUAL_322M_Q8_0' },
     type: 'llamacpp-decision',
     // Keep these short question/state sequences in separate forward passes for numerical parity.
-    config: { device: 'cpu', flash_attn: 'off', batch_size: 64 }
+    config: { device: 'cpu', flashAttention: 'off', batchSize: 64 }
   },
 
   embeddings: {
@@ -122,22 +122,22 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'whispercpp-transcription',
     config: {
       vadModelSrc: { $const: 'VAD_SILERO_5_1_2' },
-      audio_format: 'f32le',
+      audioFormat: 'f32le',
       strategy: 'greedy',
       language: 'en',
       translate: false,
-      no_timestamps: false,
-      single_segment: false,
+      noTimestamps: false,
+      singleSegment: false,
       temperature: 0.0,
-      suppress_blank: true,
-      suppress_nst: true,
-      vad_params: {
+      suppressBlank: true,
+      suppressNst: true,
+      vadParams: {
         threshold: 0.35,
-        min_speech_duration_ms: 200,
-        min_silence_duration_ms: 150,
-        max_speech_duration_s: 30.0,
-        speech_pad_ms: 600,
-        samples_overlap: 0.3
+        minSpeechDurationMs: 200,
+        minSilenceDurationMs: 150,
+        maxSpeechDurationS: 30.0,
+        speechPadMs: 600,
+        samplesOverlap: 0.3
       }
     }
   },
@@ -145,30 +145,30 @@ export const RESOURCE_TABLE: ResourceTable = {
   tools: {
     constant: { $const: 'QWEN3_1_7B_INST_Q4' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true }
+    config: { ctxSize: 4096, tools: true }
   },
 
   'prefill-llm': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true, parallel: 1 }
+    config: { ctxSize: 4096, tools: true, parallel: 1 }
   },
 
   'prefill-llm-parallel': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true, parallel: 2 }
+    config: { ctxSize: 4096, tools: true, parallel: 2 }
   },
 
-  // A prefill needs a message; this one comes from `system_prompt`.
+  // A prefill needs a message; this one comes from `systemPrompt`.
   'prefill-llm-system-prompt': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: {
-      ctx_size: 4096,
+      ctxSize: 4096,
       tools: true,
       parallel: 1,
-      system_prompt: 'Follow the user instructions. Be brief.'
+      systemPrompt: 'Follow the user instructions. Be brief.'
     }
   },
 
@@ -176,14 +176,14 @@ export const RESOURCE_TABLE: ResourceTable = {
     on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true }
+    config: { ctxSize: 4096, tools: true }
   },
 
   'tools-gemma4': {
     on: ['desktop-linux', 'desktop-python', 'desktop-kotlin'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true }
+    config: { ctxSize: 4096, tools: true }
   },
 
   ocr: {
@@ -272,7 +272,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   'sharded-llm': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0_SHARD' },
     type: 'llamacpp-completion',
-    config: { verbosity: 0, ctx_size: 2048 },
+    config: { verbosity: 0, ctxSize: 2048 },
     skipPreDownload: true
   },
 
@@ -333,7 +333,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       to: 'it',
       pivotModel: {
         modelSrc: { $const: 'BERGAMOT_EN_IT' },
-        beamsize: 4,
+        beamSize: 4,
         temperature: 0.3
       }
     }
@@ -345,7 +345,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {
       ttsEngine: 'chatterbox',
       language: 'en',
-      useGPU: true,
+      useGpu: true,
       s3genModelSrc: { $const: 'TTS_S3GEN_EN_CHATTERBOX_Q4_0' },
       streamChunkTokens: 25,
       streamFirstChunkTokens: 10,
@@ -361,7 +361,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'tts-ggml',
     config: {
       ttsEngine: 'parler',
-      useGPU: true,
+      useGpu: true,
       seed: 42,
       topK: 1,
       maxFrames: 430,
@@ -375,7 +375,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'tts-ggml',
     config: {
       ttsEngine: 'parler',
-      useGPU: true,
+      useGpu: true,
       seed: 42,
       topK: 1,
       maxFrames: 430,
@@ -388,7 +388,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
-      useGPU: true,
+      useGpu: true,
       seed: 42
     }
   },
@@ -398,7 +398,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
-      useGPU: true,
+      useGpu: true,
       seed: 42,
       streamChunkTokens: 25,
       streamFirstChunkTokens: 10
@@ -410,7 +410,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
     constantSourceOnly: true,
     type: 'tts-ggml',
-    config: { ttsEngine: 'moss-sfx', useGPU: true, seed: 42 }
+    config: { ttsEngine: 'moss-sfx', useGpu: true, seed: 42 }
   },
 
   'tts-moss-speech': {
@@ -419,7 +419,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'tts-ggml',
     config: {
       ttsEngine: 'moss-speech',
-      useGPU: true,
+      useGpu: true,
       mossSpeechCodecModelSrc: { $const: 'TTS_CODEC_MOSS_SPEECH_F16' }
     }
   },
@@ -443,7 +443,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       ttsEngine: 'supertonic',
       language: 'en',
       voice: 'F1',
-      useGPU: true
+      useGpu: true
     }
   },
 
@@ -454,7 +454,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       ttsEngine: 'supertonic',
       language: 'es',
       voice: 'F1',
-      useGPU: true
+      useGpu: true
     }
   },
 
@@ -466,7 +466,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       ttsEngine: 'supertonic',
       language: 'en',
       voice: 'F1',
-      useGPU: true,
+      useGpu: true,
       outputSampleRate: 8000
     }
   },
@@ -478,7 +478,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       ttsEngine: 'supertonic',
       language: 'en',
       voice: 'F1',
-      useGPU: true,
+      useGpu: true,
       lavasrDenoiserModelSrc: { $const: 'TTS_DENOISER_LAVASR_FP16' },
       lavasrEnhancerModelSrc: { $const: 'TTS_ENHANCER_LAVASR_FP16' }
     }
@@ -517,12 +517,12 @@ export const RESOURCE_TABLE: ResourceTable = {
   'moss-transcribe': {
     constant: { $const: 'MOSS_TRANSCRIBE_DIARIZE_Q8_0' },
     type: 'moss-transcribe',
-    config: { useGPU: false, maxThreads: 4 }
+    config: { useGpu: false, threads: 4 }
   },
   'nemotron-diarization': {
     constant: { $const: 'PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0' },
     type: 'parakeet-transcription',
-    config: { useGPU: false, maxThreads: 4 }
+    config: { useGpu: false, threads: 4 }
   },
 
   'parakeet-eou': {
@@ -582,9 +582,9 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'bci-whispercpp-transcription',
     config: {
       whisperConfig: { language: 'en', temperature: 0.0 },
-      miscConfig: { caption_enabled: false },
+      miscConfig: { captionEnabled: false },
 
-      bciConfig: { day_idx: 1 }
+      bciConfig: { dayIdx: 1 }
     }
   },
 
@@ -592,8 +592,8 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: {
-      ctx_size: 4096,
-      image_no_upscale: 'on',
+      ctxSize: 4096,
+      imageNoUpscale: 'on',
       projectionModelSrc: { $const: 'MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0' }
     }
   },
@@ -602,9 +602,9 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: {
-      ctx_size: 2048,
+      ctxSize: 2048,
       parallel: 2,
-      image_no_upscale: 'on',
+      imageNoUpscale: 'on',
       projectionModelSrc: { $const: 'MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0' }
     }
   },
@@ -613,8 +613,8 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: {
-      ctx_size: 4096,
-      image_no_upscale: 'off',
+      ctxSize: 4096,
+      imageNoUpscale: 'off',
       projectionModelSrc: { $const: 'MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0' }
     }
   },
@@ -641,7 +641,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {
       device: 'gpu',
       threads: 4,
-      flash_attn: true,
+      flashAttention: true,
       llmModelSrc: { $const: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M' },
       vaeModelSrc: { $const: 'MOSS_IMAGE_VAE' },
       tokenizerSrc: { $const: 'MOSS_IMAGE_SFT_TOKENIZER' }
@@ -670,7 +670,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       lmModelSrc: { $const: 'AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0' },
       ditModelSrc: { $const: 'AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M' },
       vaeModelSrc: { $const: 'AUDIOGEN_VAE_BF16' },
-      useGPU: true,
+      useGpu: true,
       inferenceSteps: 8
     }
   },
@@ -685,7 +685,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       prediction: 'flux2_flow',
       llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
       vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
-      diffusion_fa: true
+      diffusionFlashAttention: true
     }
   },
 
@@ -699,7 +699,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       prediction: 'flux2_flow',
       llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
       vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
-      diffusion_fa: false
+      diffusionFlashAttention: false
     }
   },
 
@@ -715,8 +715,8 @@ export const RESOURCE_TABLE: ResourceTable = {
       vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
-        model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
-        tile_size: 128
+        modelSrc: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
+        tileSize: 128
       }
     }
   },
@@ -733,8 +733,8 @@ export const RESOURCE_TABLE: ResourceTable = {
       vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
-        model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
-        tile_size: 128
+        modelSrc: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
+        tileSize: 128
       }
     }
   },
@@ -746,7 +746,7 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {
       mode: 'upscale',
       upscaler: {
-        tile_size: 128
+        tileSize: 128
       }
     }
   },
@@ -759,7 +759,7 @@ export const RESOURCE_TABLE: ResourceTable = {
       mode: 'upscale',
       device: 'cpu',
       upscaler: {
-        tile_size: 64
+        tileSize: 64
       }
     }
   }

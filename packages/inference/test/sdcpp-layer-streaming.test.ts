@@ -4,15 +4,15 @@ import { loadModelOptionsBaseSchema, loadModelSrcRequestSchema } from '@/schemas
 
 const controls = {
   backend: 'diffusion=vulkan0,te=cpu,vae=cpu',
-  params_backend: 'diffusion=cpu',
-  max_vram: -1,
-  stream_layers: true
+  paramsBackend: 'diffusion=cpu',
+  maxVram: -1,
+  streamLayers: true
 }
 
 test('diffusion memory controls survive load options and wire validation', (t) => {
-  for (const max_vram of [0, -1, -0.5, 2.5, '6', '0', '-1', 'cuda0=6,vulkan0=4']) {
-    for (const stream_layers of [undefined, false, true]) {
-      const modelConfig = { ...controls, max_vram, stream_layers }
+  for (const maxVram of [0, -1, -0.5, 2.5, '6', '0', '-1', 'cuda0=6,vulkan0=4']) {
+    for (const streamLayers of [undefined, false, true]) {
+      const modelConfig = { ...controls, maxVram, streamLayers }
       const input = {
         modelSrc: '/models/diffusion.gguf',
         modelType: 'sdcpp-generation',
@@ -27,20 +27,17 @@ test('diffusion memory controls survive load options and wire validation', (t) =
     }
   }
   t.alike(sdcppConfigSchema.parse({}), { mode: 'diffusion' }, 'leave defaults to the addon')
-  t.is(
-    sdcppConfigSchema.parse({ params_backend: 'diffusion=disk' }).params_backend,
-    'diffusion=disk'
-  )
+  t.is(sdcppConfigSchema.parse({ paramsBackend: 'diffusion=disk' }).paramsBackend, 'diffusion=disk')
 })
 
 test('diffusion memory controls reject incorrect types', (t) => {
   for (const modelConfig of [
     { backend: 1 },
-    { params_backend: false },
-    { max_vram: true },
-    { max_vram: Infinity },
-    { max_vram: NaN },
-    { stream_layers: 'true' }
+    { paramsBackend: false },
+    { maxVram: true },
+    { maxVram: Infinity },
+    { maxVram: NaN },
+    { streamLayers: 'true' }
   ]) {
     t.is(sdcppConfigSchema.safeParse(modelConfig).success, false)
   }
@@ -49,11 +46,11 @@ test('diffusion memory controls reject incorrect types', (t) => {
 test('diffusion memory controls preserve addon-owned string parsing', (t) => {
   for (const [key, value] of [
     ['backend', ''],
-    ['params_backend', 'diffusion=cpu,'],
-    ['params_backend', ' '],
-    ['params_backend', 'a=b=c'],
-    ['max_vram', '1e3'],
-    ['max_vram', 'six']
+    ['paramsBackend', 'diffusion=cpu,'],
+    ['paramsBackend', ' '],
+    ['paramsBackend', 'a=b=c'],
+    ['maxVram', '1e3'],
+    ['maxVram', 'six']
   ] as const) {
     t.is(
       sdcppConfigSchema.safeParse({ [key]: value }).success,
@@ -66,8 +63,8 @@ test('diffusion memory controls preserve addon-owned string parsing', (t) => {
 test('removed diffusion CPU options fail with migration guidance', (t) => {
   for (const [key, replacement] of Object.entries({
     control_net_cpu: "modelConfig.backend: 'controlnet=cpu'",
-    clip_on_cpu: "modelConfig.params_backend: 'te=cpu'",
-    vae_on_cpu: "modelConfig.params_backend: 'vae=cpu'"
+    clip_on_cpu: "modelConfig.paramsBackend: 'te=cpu'",
+    vae_on_cpu: "modelConfig.paramsBackend: 'vae=cpu'"
   })) {
     for (const value of [true, false, 0, 'false', '0']) {
       const modelConfig = { [key]: value }
@@ -102,8 +99,8 @@ test('removed diffusion CPU options fail with migration guidance', (t) => {
 for (const mode of ['diffusion', 'video'] as const) {
   test(`diffusion memory controls reach the ${mode} addon after companion resolution`, async (t) => {
     const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
-    for (const params_backend of ['diffusion=cpu', 'diffusion=disk']) {
-      const memory = { ...controls, params_backend }
+    for (const paramsBackend of ['diffusion=cpu', 'diffusion=disk']) {
+      const memory = { ...controls, paramsBackend }
       const resolved = await diffusionPlugin.resolveConfig!(
         sdcppConfigSchema.parse({
           mode,
@@ -118,14 +115,19 @@ for (const mode of ['diffusion', 'video'] as const) {
         }
       )
       const result = diffusionPlugin.createModel({
-        modelId: `streaming-${mode}-${params_backend}`,
+        modelId: `streaming-${mode}-${paramsBackend}`,
         modelPath: '/models/diffusion.gguf',
         modelConfig: resolved.config,
         artifacts: resolved.artifacts!
       })
       const config = (result.model as unknown as { _config: Record<string, unknown> })._config
-      for (const [key, value] of Object.entries(memory)) {
-        t.is(config[key], value, `${key} reaches the addon`)
+      for (const [key, nativeKey] of [
+        ['backend', 'backend'],
+        ['paramsBackend', 'params_backend'],
+        ['maxVram', 'max_vram'],
+        ['streamLayers', 'stream_layers']
+      ] as const) {
+        t.is(config[nativeKey], memory[key], `${nativeKey} reaches the addon`)
       }
     }
   })

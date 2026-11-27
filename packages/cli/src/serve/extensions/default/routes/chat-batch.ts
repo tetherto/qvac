@@ -39,7 +39,7 @@ batching), which is faster than the same prompts sent one by one.
 
 \`model\` names a \`serve.models\` alias whose endpoint category is \`chat\`.
 The alias needs \`config.parallel\` of 2 or more: up to \`parallel\` prompts
-decode at once and the rest queue. The context window (\`ctx_size\`) is shared
+decode at once and the rest queue. The context window (\`ctxSize\`) is shared
 between those slots.
 
 \`prompts\` holds 1 to ${MAX_BATCH_PROMPTS} entries. Each takes the

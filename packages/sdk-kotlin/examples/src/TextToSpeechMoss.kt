@@ -53,7 +53,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         put("language", "en")
         put("mossCodecDecoderModelSrc", Models.TTS_CODEC_DECODER_MOSS_TTS_F16.src)
         put("streamChunkTokens", 25)
-        put("useGPU", true)
+        put("useGpu", true)
         put("seed", 7)
         if (referenceAudioSrc != null) {
             put("mossCodecEncoderModelSrc", Models.TTS_CODEC_ENCODER_MOSS_TTS_F16.src)

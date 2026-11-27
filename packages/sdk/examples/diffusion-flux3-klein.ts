@@ -46,7 +46,7 @@ function modelSource(source: string) {
 let modelId: string | undefined
 
 try {
-  const init_images = referencePaths.map((file) => new Uint8Array(fs.readFileSync(file)))
+  const initImages = referencePaths.map((file) => new Uint8Array(fs.readFileSync(file)))
 
   console.log('▸ Loading FLUX.3 Image Klein split-layout model...')
   modelId = await loadModel({
@@ -55,7 +55,7 @@ try {
     modelConfig: {
       llmModelSrc: modelSource(llmModelSrc),
       vaeModelSrc: modelSource(vaeModelSrc),
-      flash_attn: true
+      flashAttention: true
     },
     onProgress: (progress) => {
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)
@@ -71,12 +71,12 @@ try {
   const { progressStream, outputs, stats } = diffusion({
     modelId,
     prompt,
-    ...(init_images.length > 0 && { init_images }),
+    ...(initImages.length > 0 && { initImages }),
     width: 512,
     height: 512,
     steps: 16,
-    cfg_scale: 1,
-    sampling_method: 'euler',
+    cfgScale: 1,
+    samplingMethod: 'euler',
     seed: 42
   })
 

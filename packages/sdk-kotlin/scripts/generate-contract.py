@@ -256,7 +256,8 @@ def render_exception_types(codes: dict) -> str:
 
 
 def generated_files() -> dict[str, str]:
-    graph = TypeGraph(read_json("schema.json"), json.loads(TYPE_NAMES.read_text(encoding="utf-8")))
+    graph = TypeGraph(read_json("schema.json"), json.loads(TYPE_NAMES.read_text(encoding="utf-8")),
+                      read_json("legacy-keys.json"))
     return {
         "schema/SchemaTypes.kt": graph.render(),
         "schema/SchemaMethods.kt": render_schema_methods(graph, read_json("manifest.json")),

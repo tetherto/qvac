@@ -11,7 +11,7 @@ const BATCH_CONFIG = {
       [ALIAS]: {
         model: 'QWEN3_600M_INST_Q4',
         preload: true,
-        config: { ctx_size: 4096, parallel: 2, tools: true }
+        config: { ctxSize: 4096, parallel: 2, tools: true }
       }
     }
   }

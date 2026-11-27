@@ -8,6 +8,7 @@ import { buildModelsRegistry } from './build-models-registry'
 import { buildModelTypeMaps } from './build-model-type-maps'
 import { buildErrorCodes } from './build-error-codes'
 import { buildNumericConstants } from './build-numeric-constants'
+import { buildLegacyKeys } from './build-legacy-keys'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
 export const registryEngineManifestFile = new URL(
@@ -755,7 +756,8 @@ export async function renderContractFiles() {
     'models.json': await formatJson(modelsRegistry, 'models.json'),
     'model-type-maps.json': await formatJson(modelTypeMaps, 'model-type-maps.json'),
     'error-codes.json': await formatJson(errorCodes, 'error-codes.json'),
-    'numeric-constants.json': await formatJson(numericConstants, 'numeric-constants.json')
+    'numeric-constants.json': await formatJson(numericConstants, 'numeric-constants.json'),
+    'legacy-keys.json': await formatJson(buildLegacyKeys(schemaDocument.$defs), 'legacy-keys.json')
   }
 }
 

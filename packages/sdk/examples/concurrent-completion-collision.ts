@@ -78,7 +78,7 @@ function report(title: string, outcomes: Outcome[]): void {
 try {
   const modelA = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelConfig: { ctx_size: 4096 }
+    modelConfig: { ctxSize: 4096 }
   })
 
   // Part 1 — same model, two concurrent completions.
@@ -105,7 +105,7 @@ try {
   // Part 2 — different models, two concurrent completions (the "parallel that works").
   const modelB = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelConfig: { ctx_size: 4096 }
+    modelConfig: { ctxSize: 4096 }
   })
   const differentModels = await Promise.all([
     runCompletion('req-A', modelA, 'Name one use of Bitcoin. One sentence.'),

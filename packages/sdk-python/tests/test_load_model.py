@@ -154,6 +154,124 @@ async def test_load_model_alias_warns_and_normalizes():
     assert transport.sent["modelType"] == "llamacpp-completion"
 
 
+async def test_load_model_renames_legacy_config_keys_with_a_warning():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning) as record:
+        await api.load_model(
+            transport,
+            model_src="/models/ggml-base.bin",
+            model_type="whispercpp-transcription",
+            model_config={"n_threads": 4, "context_params": {"flash_attn": True}},
+        )
+    assert sorted(str(warning.message) for warning in record) == [
+        '"flash_attn" is deprecated and will be removed in the next release. Use "flashAttention" instead.',
+        '"n_threads" is deprecated and will be removed in the next release. Use "threads" instead.',
+    ]
+    config = transport.sent["modelConfig"]
+    assert config["threads"] == 4
+    assert config["contextParams"]["flashAttention"] is True
+    assert "n_threads" not in config
+
+
+async def test_load_model_renames_a_legacy_camel_case_config_key():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning, match='"useGPU".*Use "useGpu" instead'):
+        await api.load_model(
+            transport,
+            model_src="/models/parakeet.onnx",
+            model_type="parakeet-transcription",
+            model_config={"useGPU": False},
+        )
+    assert transport.sent["modelConfig"]["useGpu"] is False
+
+
+async def test_load_model_says_when_a_legacy_value_was_ignored():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning) as record:
+        await api.load_model(
+            transport,
+            model_src="/models/parakeet.onnx",
+            model_type="parakeet-transcription",
+            model_config={"maxThreads": 2, "threads": 8},
+        )
+    assert [str(warning.message) for warning in record] == [
+        '"maxThreads" is deprecated and will be removed in the next release. '
+        'Use "threads" instead. Its value was ignored because "threads" is also set.'
+    ]
+    assert transport.sent["modelConfig"]["threads"] == 8
+
+
+async def test_load_model_keeps_a_current_key_sent_by_its_python_name():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning) as record:
+        await api.load_model(
+            transport,
+            model_src="/models/parakeet.onnx",
+            model_type="parakeet-transcription",
+            model_config={"useGPU": True, "use_gpu": False},
+        )
+    assert [str(warning.message) for warning in record] == [
+        '"useGPU" is deprecated and will be removed in the next release. '
+        'Use "useGpu" instead. Its value was ignored because "useGpu" is also set.'
+    ]
+    assert transport.sent["modelConfig"]["useGpu"] is False
+
+
+@pytest.mark.parametrize(
+    ("model_type", "model_src", "legacy", "replacement", "value"),
+    [
+        (
+            "parakeet-transcription",
+            "/models/parakeet.onnx",
+            "max_threads",
+            "threads",
+            4,
+        ),
+        ("moss-transcribe", "/models/moss.gguf", "max_threads", "threads", 4),
+        ("ggml-ocr", "/models/ocr-latin.gguf", "n_threads", "threads", 4),
+        ("llamacpp-completion", "/models/x.gguf", "flash_attn", "flashAttention", "on"),
+    ],
+)
+async def test_load_model_renames_the_python_name_of_a_legacy_config_key(
+    model_type: str, model_src: str, legacy: str, replacement: str, value: object
+):
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning, match=f'"{legacy}".*Use "{replacement}" instead'):
+        await api.load_model(
+            transport,
+            model_src=model_src,
+            model_type=model_type,
+            model_config={legacy: value},
+        )
+    config = transport.sent["modelConfig"]
+    assert config[replacement] == value
+    assert legacy not in config
+
+
+async def test_reload_config_renames_legacy_config_keys_with_a_warning():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(FutureWarning, match='"n_threads".*Use "threads" instead'):
+        await api.load_model(
+            transport,
+            model_id="0123456789abcdef",
+            model_type="whispercpp-transcription",
+            model_config={"n_threads": 4},
+        )
+    assert transport.sent["modelConfig"] == {"threads": 4}
+
+
+async def test_load_model_python_names_of_current_keys_do_not_warn(recwarn):
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport,
+        model_src="/models/x.gguf",
+        model_type="llamacpp-completion",
+        model_config={"ctx_size": 2048},
+    )
+    assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
+    assert transport.sent["modelConfig"]["ctxSize"] == 2048
+
+
 async def test_load_model_explicit_type_mismatch_raises():
     transport = FakeTransport(response=OK)
     with pytest.raises(ModelSrcTypeMismatchError) as excinfo:

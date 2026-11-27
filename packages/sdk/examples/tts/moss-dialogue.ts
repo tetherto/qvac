@@ -41,7 +41,7 @@ try {
       // One recording per speaker, in the order the text tags them.
       dialogueReferenceSrcs: [s1Audio, s2Audio],
       streamChunkTokens: 25,
-      useGPU: true
+      useGpu: true
     }
   })
 

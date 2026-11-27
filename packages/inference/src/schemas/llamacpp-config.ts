@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
 /**
- * Upper bound for `reasoning_budget`. Mirrors the llm-llamacpp addon, which
+ * Upper bound for `reasoningBudget`. Mirrors the llm-llamacpp addon, which
  * stores the budget as a 32-bit `int` and rejects values above
  * `std::numeric_limits<int>::max()`.
  */
@@ -29,22 +29,27 @@ export const llmConfigBaseSchema = z.object({
         'If unset, uses the native default order. ' +
         'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
         "Use device: 'cpu' for CPU. " +
-        "A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+        "A GPU override cannot be combined with a splitMode other than 'none' or with devices."
     ),
-  ctx_size: z
+  ctxSize: z
     .number()
     .optional()
     .describe(
       "Context window size in tokens; `0` uses the model's trained context length, which auto-fit can lower to fit memory. With `parallel >= 2` the slots share this context, so each slot gets a `parallel`-th of it. Default 1024."
     ),
-  temp: z.number().min(0).max(2).optional().describe('Sampling temperature (0–2). Default 0.8.'),
-  top_p: z
+  temperature: z
+    .number()
+    .min(0)
+    .max(2)
+    .optional()
+    .describe('Sampling temperature (0–2). Default 0.8.'),
+  topP: z
     .number()
     .min(0)
     .max(1)
     .optional()
     .describe('Top-p (nucleus) sampling cutoff (0–1). Default 0.9.'),
-  top_k: z
+  topK: z
     .number()
     .int()
     .min(0)
@@ -52,7 +57,7 @@ export const llmConfigBaseSchema = z.object({
     .optional()
     .describe('Top-k sampling — keep only the top K tokens (0–128). Default 40.'),
   seed: z.number().optional().describe('Sampling RNG seed; `-1` (default) picks a random seed.'),
-  gpu_layers: z
+  gpuLayers: z
     .number()
     .optional()
     .describe(
@@ -66,7 +71,7 @@ export const llmConfigBaseSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
+      "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, splitMode (beyond their defaults), mainGpu, rpcServers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
     ),
   predict: z
     .union([
@@ -76,13 +81,13 @@ export const llmConfigBaseSchema = z.object({
     ])
     .optional()
     .describe('Max tokens to predict. `-1` = until stop token, `-2` = until context filled.'),
-  system_prompt: z
+  systemPrompt: z
     .string()
     .optional()
     .describe(
       "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
     ),
-  load_mode: z
+  loadMode: z
     .enum(['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'])
     .optional()
     .describe(
@@ -91,19 +96,19 @@ export const llmConfigBaseSchema = z.object({
   verbosity: verbositySchema
     .optional()
     .describe('Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.'),
-  presence_penalty: z
+  presencePenalty: z
     .number()
     .optional()
     .describe('Presence penalty applied to tokens that have already appeared. Default 0.'),
-  frequency_penalty: z
+  frequencyPenalty: z
     .number()
     .optional()
     .describe('Frequency penalty applied to tokens by their frequency so far. Default 0.'),
-  repeat_penalty: z
+  repeatPenalty: z
     .number()
     .optional()
     .describe('Repetition penalty applied to repeated tokens. Default 1.1.'),
-  stop_sequences: z
+  stopSequences: z
     .array(z.string())
     .optional()
     .describe(
@@ -121,43 +126,43 @@ export const llmConfigBaseSchema = z.object({
     .boolean()
     .optional()
     .describe("Enable tool calling via the model's jinja chat template. Default false."),
-  cache_checkpoints: z
+  cacheCheckpoints: z
     .number()
     .int()
     .min(0)
     .max(1024)
     .optional()
     .describe(
-      "Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cache_checkpoint_storage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cache_checkpoints_max_bytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models."
+      "Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cacheCheckpointStorage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cacheCheckpointsMaxBytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models."
     ),
-  cache_checkpoints_max_bytes: z
+  cacheCheckpointsMaxBytes: z
     .number()
     .int()
     .min(0)
     .optional()
     .describe(
-      'Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).'
+      'Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cacheCheckpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).'
     ),
-  cache_checkpoint_storage: z
+  cacheCheckpointStorage: z
     .enum(['memory', 'disk'])
     .optional()
     .describe(
-      "Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cache_checkpoint_dir`, which it requires."
+      "Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cacheCheckpointDir`, which it requires."
     ),
-  cache_checkpoint_dir: z
+  cacheCheckpointDir: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory."
+      "Writable directory for checkpoint files, required with `cacheCheckpointStorage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory."
     ),
-  cache_share_across_keys: z
+  cacheShareAcrossKeys: z
     .boolean()
     .optional()
     .describe(
       'Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.'
     ),
-  cache_ram_mib: z
+  cacheRamMib: z
     .number()
     .int()
     .min(0)
@@ -166,25 +171,25 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.'
     ),
-  'cache-type-k': z
+  cacheTypeK: z
     .string()
     .optional()
     .describe(
       'KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.'
     ),
-  'cache-type-v': z
+  cacheTypeV: z
     .string()
     .optional()
     .describe(
       'KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.'
     ),
-  'main-gpu': z
+  mainGpu: z
     .union([z.number().int().min(0), z.enum(['integrated', 'dedicated'])])
     .optional()
     .describe(
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
-  'rpc-servers': z
+  rpcServers: z
     .string()
     .min(1)
     .refine((value) => {
@@ -200,59 +205,59 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpcServers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensorSplit weights follow the selected devices order."
     ),
-  'split-mode': z
+  splitMode: z
     .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctxSize` explicitly). `'tensor'` is rejected with the XDNA0 NPU."
     ),
-  'flash-attn': z
+  flashAttention: z
     .enum(['on', 'off', 'auto'])
     .optional()
     .describe(
-      "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`."
+      "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `splitMode: 'tensor'`."
     ),
-  'tensor-split': z
+  tensorSplit: z
     .string()
     .optional()
     .describe(
       "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25)."
     ),
-  'batch-size': z
+  batchSize: z
     .number()
     .int()
     .min(1)
     .optional()
     .describe('Logical maximum batch size, the tokens submitted per decode call. Default 2048.'),
-  'ubatch-size': z
+  ubatchSize: z
     .number()
     .int()
     .min(1)
     .optional()
     .describe('Physical maximum batch size, the tokens computed in one pass. Default 512.'),
-  'cpu-moe': z
+  cpuMoe: z
     .boolean()
     .optional()
     .describe(
       'Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.'
     ),
-  'n-cpu-moe': z
+  nCpuMoe: z
     .number()
     .int()
     .min(0)
     .optional()
     .describe(
-      'Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.'
+      'Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpuMoe`.'
     ),
-  'kv-offload': z
+  kvOffload: z
     .boolean()
     .optional()
     .describe(
       'Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.'
     ),
-  'image-max-tokens': z
+  imageMaxTokens: z
     .number()
     .int()
     .min(1)
@@ -260,7 +265,7 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
     ),
-  'image-min-tokens': z
+  imageMinTokens: z
     .number()
     .int()
     .min(1)
@@ -268,7 +273,7 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
     ),
-  'image-max-megapixels': z
+  imageMaxMegapixels: z
     .number()
     .int()
     .min(1)
@@ -302,88 +307,88 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.'
     ),
-  'threads-batch': z
+  threadsBatch: z
     .number()
     .int()
     .optional()
     .describe(
       'CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.'
     ),
-  'cpu-mask': z
+  cpuMask: z
     .string()
     .optional()
     .describe(
       "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity."
     ),
-  'cpu-mask-batch': z
+  cpuMaskBatch: z
     .string()
     .optional()
     .describe(
-      'CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.'
+      'CPU affinity mask for batch and prompt processing, in the same form as `cpuMask`. Unset inherits `cpuMask` when the batch thread count is also unset.'
     ),
-  'override-tensor': z
+  overrideTensor: z
     .string()
     .optional()
     .describe(
       "Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory."
     ),
-  'n-cpu-ffn': z
+  nCpuFfn: z
     .number()
     .int()
     .min(0)
     .optional()
     .describe('Keep the dense FFN weights of the first N layers on the CPU.'),
-  'moe-cache-mib': z
+  moeCacheMib: z
     .union([z.number().int().min(0), z.literal('auto')])
     .optional()
     .describe(
       "Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`."
     ),
-  'prefetch-weights': z
+  prefetchWeights: z
     .union([z.boolean(), z.literal('auto')])
     .optional()
     .describe(
       "Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models."
     ),
-  'tensor-read-lazy': z
+  tensorReadLazy: z
     .enum(['on', 'auto', 'off'])
     .optional()
     .describe(
       "On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB."
     ),
-  'coreml-ffn': z
+  coremlFfn: z
     .boolean()
     .optional()
     .describe(
-      'Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.'
+      'Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatchSize` at 256 or above. The first load exports and compiles the sidecar into `coremlFfnCache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.'
     ),
-  'coreml-ffn-split': z
+  coremlFfnSplit: z
     .string()
     .regex(/^[1-9]\d*x[12]$/, 'Expected METALxN, such as 2048x1 or 8192x2')
     .optional()
     .describe(
-      "Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`."
+      'Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `coremlFfn: true`.'
     ),
-  'coreml-ffn-cache': z
+  coremlFfnCache: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults."
+      'Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `coremlFfn` is true, so it can be set once in device defaults.'
     ),
   fit: z
     .boolean()
     .optional()
     .describe(
-      'Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.'
+      'Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctxSize` is 0. Setting `gpuLayers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `splitMode: tensor`, which disables it.'
     ),
-  'fit-target': z
+  fitTarget: z
     .union([z.number().int().min(0), z.string().regex(/^\d+(,\d+)*$/)])
     .optional()
     .describe(
       "Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024."
     ),
-  'fit-ctx': z
+  fitCtx: z
     .number()
     .int()
     .min(0)
@@ -395,7 +400,7 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.'
     ),
-  reasoning_budget: z
+  reasoningBudget: z
     .number()
     .int()
     .min(-1)
@@ -404,37 +409,37 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).'
     ),
-  spec_type: z
+  specType: z
     .enum(['none', 'draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'])
     .optional()
     .describe(
       "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, and `'draft-dspark'` with the DSpark model given as `draftModelSrc`; both require it. `'auto'` reads which of the three from the `draftModelSrc` header, as llama-server does for `-md` without `--spec-type`, and requires it too; the load fails when the header shows none, and a Gemma 4 assistant isn't detected, so give it `'draft-mtp'`. A DFlash or DSpark model made for another model fails the load. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`."
     ),
-  spec_draft_n_max: z
+  specDraftNMax: z
     .number()
     .int()
     .min(1)
     .max(64)
     .optional()
     .describe(
-      "Longest draft per step (1–64, default 5 with `'draft-dflash'`, or `'auto'` when it detects a DFlash model, and 3 otherwise). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. A DSpark model drafts at most its block size per step. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
+      "Longest draft per step (1–64, default 5 with `'draft-dflash'`, or `'auto'` when it detects a DFlash model, and 3 otherwise). Lowered at load, with a warning, to fit one `ubatchSize` and each sequence’s share of `batchSize`. A DSpark model drafts at most its block size per step. Requires `specType` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
-  spec_draft_n_min: z
+  specDraftNMin: z
     .number()
     .int()
     .min(0)
     .max(64)
     .optional()
     .describe(
-      "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
+      "Shortest draft worth verifying (0–64, default 0, at most `specDraftNMax`); shorter drafts are dropped. Requires `specType` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
-  spec_draft_p_min: z
+  specDraftPMin: z
     .number()
     .min(0)
     .max(1)
     .optional()
     .describe(
-      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). With a DSpark model it is the confidence head's threshold: the draft stops at the first token below it, and a DSpark model without a confidence head doesn't draft at all when it is above 0. Requires `spec_type` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
+      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). With a DSpark model it is the confidence head's threshold: the draft stops at the first token below it, and a DSpark model without a confidence head doesn't draft at all when it is above 0. Requires `specType` `'draft-mtp'`, `'draft-dflash'`, `'draft-dspark'` or `'auto'`."
     ),
   projectionModelSrc: modelSrcInputSchema
     .optional()
@@ -444,21 +449,21 @@ export const llmConfigBaseSchema = z.object({
   draftModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash or DSpark model, required by `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. `spec_type: 'auto'` requires it and reads its type from it. Placed like the model (`device`, `gpu_layers`), and model fit checks count its memory. A draft model made for another model fails the load and the fit check. Fit checks answer `unknown` for a split model or a load with `projectionModelSrc`, so they don't read the draft model there."
+      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash or DSpark model, required by `specType: 'draft-dflash'` and `'draft-dspark'`, or an external MTP head for `specType: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. `specType: 'auto'` requires it and reads its type from it. Placed like the model (`device`, `gpuLayers`), and model fit checks count its memory. A draft model made for another model fails the load and the fit check. Fit checks answer `unknown` for a split model or a load with `projectionModelSrc`, so they don't read the draft model there."
     ),
-  image_tile_mode: z
+  imageTileMode: z
     .enum(['disabled', 'batched', 'sequential'])
     .optional()
     .describe(
       "Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models."
     ),
-  image_no_upscale: z
+  imageNoUpscale: z
     .enum(['on', 'off'])
     .optional()
     .describe(
       "idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly."
     ),
-  'mmproj-use-gpu': z
+  mmprojUseGpu: z
     .boolean()
     .optional()
     .describe(
@@ -470,51 +475,51 @@ export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 
 // Default values - typed as partial of the config
 //
-// gpu_layers carries no default: any value reads as user intent to qvac-fabric,
+// gpuLayers carries no default: any value reads as user intent to qvac-fabric,
 // which then aborts its fit instead of placing layers to free device memory.
 // Absent emits no `--gpu-layers`, so the addon keeps fabric's own -1 — already
 // "every layer" whenever the fit does not run.
 //
-// system_prompt carries no default either: a caller that sends no system
+// systemPrompt carries no default either: a caller that sends no system
 // message gets the model's chat template as written, the same prompt any other
 // llama.cpp host renders for that history.
 export const LLM_CONFIG_DEFAULTS = {
-  ctx_size: 1024,
+  ctxSize: 1024,
   device: 'gpu',
-  image_tile_mode: 'sequential',
-  cache_share_across_keys: false
+  imageTileMode: 'sequential',
+  cacheShareAcrossKeys: false
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
 // Checked on the config merged with device defaults, before the draft model is downloaded.
 export const llmConfigSchema = llmConfigBaseSchema
   .superRefine((data, ctx) => {
-    if (data.draftModelSrc && (data.spec_type ?? 'none') === 'none') {
+    if (data.draftModelSrc && (data.specType ?? 'none') === 'none') {
       ctx.addIssue({
         code: 'custom',
         path: ['draftModelSrc'],
         message:
-          "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
+          "draftModelSrc requires specType 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
       })
     }
     // The addon rejects these without a drafter too, but only after the target is downloaded.
     if (
       !data.draftModelSrc &&
-      (data.spec_type === 'draft-dflash' ||
-        data.spec_type === 'draft-dspark' ||
-        data.spec_type === 'auto')
+      (data.specType === 'draft-dflash' ||
+        data.specType === 'draft-dspark' ||
+        data.specType === 'auto')
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['draftModelSrc'],
-        message: `spec_type '${data.spec_type}' requires draftModelSrc.`
+        message: `specType '${data.specType}' requires draftModelSrc.`
       })
     }
-    if (data['coreml-ffn'] !== true && data['coreml-ffn-split'] !== undefined) {
+    if (data.coremlFfn !== true && data.coremlFfnSplit !== undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['coreml-ffn-split'],
-        message: "coreml-ffn-split requires 'coreml-ffn': true."
+        path: ['coremlFfnSplit'],
+        message: 'coremlFfnSplit requires coremlFfn: true.'
       })
     }
   })

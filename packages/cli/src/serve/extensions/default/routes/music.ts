@@ -1,4 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  HookHandlerDoneFunction
+} from 'fastify'
 import type { FastifyPluginAsyncZod, ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
 import {
@@ -46,8 +51,10 @@ import {
   audioUnderstandingResult,
   audioUnderstandParams,
   deletedJobResource,
-  jobListResource
+  jobListResource,
+  renameLegacyMusicKeys
 } from '@/serve/extensions/default/schemas/music'
+import { warnLegacyKey } from '@/serve/core/config/models'
 
 type AudioField = 'sourceAudio' | 'referenceAudio'
 type AudioInputs = Partial<Record<AudioField, BinaryInput>>
@@ -65,6 +72,15 @@ const CONTENT_TYPES: Record<'wav' | EncodedSpeechFormat, string> = {
 
 // Filled before the model is required, so a bad upload is refused without loading it.
 const audioInputs = new WeakMap<FastifyRequest, AudioInputs>()
+
+function renameLegacyMusicBody(
+  req: FastifyRequest,
+  _reply: FastifyReply,
+  done: HookHandlerDoneFunction
+) {
+  req.body = renameLegacyMusicKeys(req.body, warnLegacyKey)
+  done()
+}
 
 const INPUT_ERRORS: ErrorCodes = {
   invalid_json: 'Body is not valid JSON',
@@ -186,7 +202,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         description: descriptions.generations,
         consumes: ['application/json', 'multipart/form-data']
       },
-      preValidation: multipartToBodyOptional,
+      preValidation: [multipartToBodyOptional, renameLegacyMusicBody],
       preHandler
     },
     async (req) => {
@@ -223,7 +239,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         description: descriptions.edits,
         consumes: ['application/json', 'multipart/form-data']
       },
-      preValidation: multipartToBodyOptional,
+      preValidation: [multipartToBodyOptional, renameLegacyMusicBody],
       preHandler
     },
     async (req) => {

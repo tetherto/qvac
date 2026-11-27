@@ -325,7 +325,7 @@ function normalizeContextOverflowArgs(
 /**
  * Thrown when a request no longer fits the model's effective context
  * capacity — distinct from a generic `CompletionFailedError` so consumers
- * can drive UX (truncate, summarize, or surface a "increase ctx_size /
+ * can drive UX (truncate, summarize, or surface a "increase ctxSize /
  * start a new thread" CTA) instead of treating it as an opaque failure.
  *
  * All size fields are optional: they carry whatever the addon guard
@@ -344,7 +344,7 @@ export class ContextOverflowError extends QvacErrorBase {
   readonly cachedTokens?: number
   /** Total the failing guard reported, in `ctxSize` units; can equal the window (`>=` triggers). */
   readonly requiredTokens?: number
-  /** Effective per-request ceiling: `ctx_size` split across slots at `parallel > 1`. */
+  /** Effective per-request ceiling: `ctxSize` split across slots at `parallel > 1`. */
   readonly ctxSize?: number
   readonly modelId?: string
 

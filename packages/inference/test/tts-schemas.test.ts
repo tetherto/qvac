@@ -253,7 +253,7 @@ test('ttsConfigSchema: accepts the full Parler load-time config surface', (t) =>
     noise: 'clear',
     reverb: 'close',
     quality: 'very high',
-    useGPU: true,
+    useGpu: true,
     outputSampleRate: 44100,
     streamChunkTokens: 43,
     streamFirstChunkTokens: 20,
@@ -668,7 +668,7 @@ test('ttsConfigSchema: accepts the full CosyVoice3 load surface', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'cosyvoice3',
     emotion: 'happy',
-    useGPU: true,
+    useGpu: true,
     outputSampleRate: 24000,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
@@ -683,7 +683,7 @@ test('ttsConfigSchema: accepts the full CosyVoice3 load surface', (t) => {
   const withoutDenoiser = ttsConfigSchema.safeParse({
     ttsEngine: 'cosyvoice3',
     emotion: 'happy',
-    useGPU: true,
+    useGpu: true,
     outputSampleRate: 24000,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
@@ -844,7 +844,7 @@ test('ttsConfigSchema: accepts the full Audio8 load surface', (t) => {
     topK: 50,
     topP: 0.9,
     maxFrames: 430,
-    useGPU: true,
+    useGpu: true,
     outputSampleRate: 44100,
     threads: 4,
     nGpuLayers: 99,
@@ -959,7 +959,7 @@ test('ttsConfigSchema: accepts the full MOSS load surface', (t) => {
     language: 'en',
     durationTokens: 38,
     streamChunkTokens: 25,
-    useGPU: true,
+    useGpu: true,
     threads: 8,
     nGpuLayers: 99,
     seed: 7,
@@ -1052,10 +1052,10 @@ test('ttsConfigSchema: rejects options the MOSS engine does not take', (t) => {
   t.is(moss({ language: '  ' }).success, false, 'a blank language hint must not reach the prompt')
 })
 
-test('ttsConfigSchema: rejects a MOSS useGPU that contradicts nGpuLayers', (t) => {
-  t.is(moss({ useGPU: false, nGpuLayers: 99 }).success, false)
-  t.is(moss({ useGPU: true, nGpuLayers: 0 }).success, false)
-  t.is(moss({ useGPU: true, nGpuLayers: 1 }).success, true)
+test('ttsConfigSchema: rejects a MOSS useGpu that contradicts nGpuLayers', (t) => {
+  t.is(moss({ useGpu: false, nGpuLayers: 99 }).success, false)
+  t.is(moss({ useGpu: true, nGpuLayers: 0 }).success, false)
+  t.is(moss({ useGpu: true, nGpuLayers: 1 }).success, true)
 })
 
 // === Chatterbox parity with @qvac/tts-ggml ===
@@ -1347,21 +1347,21 @@ test('ttsConfigSchema: exposes openclCacheDir only where the native config reads
 
 // === GPU intent ===
 
-test('ttsConfigSchema: rejects a useGPU that contradicts nGpuLayers', (t) => {
+test('ttsConfigSchema: rejects a useGpu that contradicts nGpuLayers', (t) => {
   // Mirrors the addon's assertGpuIntentConsistent, which throws at construction.
-  t.is(chatterbox({ useGPU: false, nGpuLayers: 99 }).success, false)
-  t.is(chatterbox({ useGPU: true, nGpuLayers: 0 }).success, false)
-  t.is(supertonic({ useGPU: false, nGpuLayers: 99 }).success, false)
-  t.is(cosyvoice3({ useGPU: true, nGpuLayers: 0 }).success, false)
+  t.is(chatterbox({ useGpu: false, nGpuLayers: 99 }).success, false)
+  t.is(chatterbox({ useGpu: true, nGpuLayers: 0 }).success, false)
+  t.is(supertonic({ useGpu: false, nGpuLayers: 99 }).success, false)
+  t.is(cosyvoice3({ useGpu: true, nGpuLayers: 0 }).success, false)
   t.is(
-    ttsConfigSchema.safeParse({ ttsEngine: 'parler', useGPU: false, nGpuLayers: 1 }).success,
+    ttsConfigSchema.safeParse({ ttsEngine: 'parler', useGpu: false, nGpuLayers: 1 }).success,
     false
   )
   t.is(
     ttsConfigSchema.safeParse({
       ttsEngine: 'audio8',
       audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
-      useGPU: false,
+      useGpu: false,
       nGpuLayers: 99
     }).success,
     false
@@ -1369,10 +1369,10 @@ test('ttsConfigSchema: rejects a useGPU that contradicts nGpuLayers', (t) => {
 })
 
 test('ttsConfigSchema: accepts agreeing or partial GPU intent', (t) => {
-  t.is(chatterbox({ useGPU: true, nGpuLayers: 99 }).success, true)
-  t.is(chatterbox({ useGPU: false, nGpuLayers: 0 }).success, true)
+  t.is(chatterbox({ useGpu: true, nGpuLayers: 99 }).success, true)
+  t.is(chatterbox({ useGpu: false, nGpuLayers: 0 }).success, true)
   t.is(chatterbox({ nGpuLayers: 99 }).success, true, 'nGpuLayers alone states the intent')
-  t.is(chatterbox({ useGPU: true }).success, true, 'useGPU alone states the intent')
+  t.is(chatterbox({ useGpu: true }).success, true, 'useGpu alone states the intent')
 })
 
 // === Response surface ===

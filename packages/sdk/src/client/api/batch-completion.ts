@@ -13,8 +13,10 @@ import {
   type CompletionStats,
   type McpClientInput,
   type RPCOptions,
-  type Tool
+  type Tool,
+  renameLegacyCompletionParams
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import { buildFinalFromEvents } from '@/utils/aggregate-events'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
@@ -89,7 +91,8 @@ async function resolveBatchPrompts(prompts: BatchPromptParams[]): Promise<Resolv
   const resolvedPrompts: BatchCompletionStreamRequest['prompts'] = []
   const resolvedHandlers: ToolHandlerMap[] = []
 
-  for (const prompt of prompts) {
+  for (const legacyPrompt of prompts) {
+    const prompt = renameLegacyCompletionParams(legacyPrompt, warnLegacyKey)
     let allTools: Tool[] = []
     const handlers: ToolHandlerMap = new Map()
 

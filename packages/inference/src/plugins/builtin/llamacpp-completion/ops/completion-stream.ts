@@ -32,7 +32,10 @@ import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
 import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
-import { getResponseFormatJsonSchema } from '@/utils/response-format'
+import {
+  toNativeGenerationParams,
+  type NativeGenerationParams
+} from '@/plugins/builtin/llamacpp-completion/generation-params'
 import { buildAutoCacheSaveHistory, normalizeCacheMessage, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
@@ -95,28 +98,8 @@ interface ChatHistory {
   tool_call_id?: string
 }
 
-// Internal generation-params shape forwarded to the addon. Extends the
-// public `GenerationParams` with `json_schema` (a JSON-Schema string the
-// addon will convert to GBNF) so structured-output requests can constrain
-// sampling per request without mutating the shared `modelConfig`. The
-// addon types in `@qvac/llm-llamacpp@0.17.1`+ already include this field;
-// the explicit `&` here keeps typing correct against `^0.16.0` until the
-// dep bump propagates and is harmless once it has.
-export type CompletionGenerationParams = GenerationParams & {
-  json_schema?: string
-}
-
-export function withParallelToolCalls(
-  generationParams: CompletionGenerationParams | undefined
-): CompletionGenerationParams {
-  return {
-    ...generationParams,
-    parallel_tool_calls: generationParams?.parallel_tool_calls ?? true
-  }
-}
-
 type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill' | 'baseCacheKey'> & {
-  generationParams?: CompletionGenerationParams
+  generationParams?: NativeGenerationParams
 }
 
 function transformMessage(message: HistoryMsg | Tool): ChatHistory[] {
@@ -221,14 +204,14 @@ function toCacheMessage(msg: HistoryMsg): CacheMessage {
 
 /**
  * Put the model's configured system prompt in front of a history that carries
- * none. `transform.ts` strips `system_prompt` from the config handed to the
+ * none. `transform.ts` strips `systemPrompt` from the config handed to the
  * addon, so the conversation is the only way it reaches the model.
  */
 export function seedConfiguredSystemPrompt<T extends { role: string; content: HistoryContent }>(
   history: T[],
   modelConfig: unknown
 ): T[] {
-  const configured = (modelConfig as { system_prompt?: string }).system_prompt
+  const configured = (modelConfig as { systemPrompt?: string }).systemPrompt
   if (!configured || extractSystemPrompt(history) !== null) return history
   // Every caller's message type makes everything past role and content optional.
   return [{ role: 'system', content: configured } as T, ...history]
@@ -307,13 +290,13 @@ async function* processModelResponse(
   model: AnyModel,
   messagesToSend: ChatHistory[],
   tools?: Tool[],
-  generationParams?: CompletionGenerationParams,
+  generationParams?: NativeGenerationParams,
   cacheOptions?: CacheRunOptions,
   dialect?: ToolDialect,
   onResponse?: (response: { cancel(): Promise<void> }) => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
-    generationParams?: CompletionGenerationParams
+    generationParams?: NativeGenerationParams
   } = {
     ...(generationParams && { generationParams }),
     ...(cacheOptions?.cacheKey !== undefined && {
@@ -413,7 +396,7 @@ export async function* completion(
   // The addon cannot render a prompt without messages; tools alone are not enough.
   if (prefill && history.length === 0) {
     throw new RequestValidationFailedError(
-      'prefill needs at least one message: add a system message to history or set modelConfig.system_prompt'
+      'prefill needs at least one message: add a system message to history or set modelConfig.systemPrompt'
     )
   }
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
@@ -433,17 +416,10 @@ export async function* completion(
   // completions on the same model. `tools` still constrain output through
   // their parameter schema and the dialect-specific parser chain (mutually
   // exclusive with a non-text `responseFormat` at the schema layer).
-  let mergedGenerationParams: CompletionGenerationParams | undefined = generationParams
-  if (responseFormat && !(tools && tools.length > 0)) {
-    const jsonSchema = getResponseFormatJsonSchema(responseFormat)
-    if (jsonSchema !== undefined) {
-      mergedGenerationParams = {
-        ...(generationParams ?? {}),
-        json_schema: jsonSchema
-      }
-    }
-  }
-  mergedGenerationParams = withParallelToolCalls(mergedGenerationParams)
+  const mergedGenerationParams = toNativeGenerationParams(
+    generationParams,
+    tools && tools.length > 0 ? undefined : responseFormat
+  )
 
   const model = getModel(modelId)
 
@@ -545,7 +521,7 @@ export async function* completion(
   // skips a missing source silently, so both are checked here first.
   let baseCacheKey: string | undefined
   if (seedFrom !== undefined && turn.createdCache) {
-    if ((modelConfig as { cache_share_across_keys?: boolean }).cache_share_across_keys !== true) {
+    if ((modelConfig as { cacheShareAcrossKeys?: boolean }).cacheShareAcrossKeys !== true) {
       throw new KvCacheSeedSharingDisabledError(modelId)
     }
     const sourcePath = resolveCacheFilePath(modelId, configHash, seedFrom)

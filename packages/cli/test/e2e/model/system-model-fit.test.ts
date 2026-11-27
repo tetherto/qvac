@@ -12,7 +12,7 @@ const VERDICTS = ['fits', 'does-not-fit', 'unknown']
 const FIT_CONFIG = {
   serve: {
     models: {
-      [ALIAS]: { model: 'QWEN3_600M_INST_Q4', preload: false, config: { ctx_size: 2048 } }
+      [ALIAS]: { model: 'QWEN3_600M_INST_Q4', preload: false, config: { ctxSize: 2048 } }
     }
   }
 }
@@ -111,14 +111,14 @@ describe('qvac system and models/fit: real host', () => {
   })
 
   it('answers a config value the engine refuses with a 400', async () => {
-    const res = await fit({ models: [{ model: ALIAS, modelConfig: { ctx_size: 'bad' } }] })
+    const res = await fit({ models: [{ model: ALIAS, modelConfig: { ctxSize: 'bad' } }] })
     assertStatusAndError(res, 400, 'invalid_model_config')
   })
 
   it('assesses an alias and a constant together, in request order', async () => {
     const res = await fit({
       models: [
-        { model: ALIAS, modelConfig: { ctx_size: 4096 } },
+        { model: ALIAS, modelConfig: { ctxSize: 4096 } },
         { model: 'EMBEDDINGGEMMA_300M_Q4_0' }
       ]
     })

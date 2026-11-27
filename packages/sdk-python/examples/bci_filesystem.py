@@ -60,13 +60,13 @@ async def main() -> int:
                 model_config={
                     "whisperConfig": {
                         "language": "en",
-                        "n_threads": 4,
+                        "threads": 4,
                         "temperature": 0.0,
                     },
                     # Session day index selects the day-specific projection
                     # matrices. Set this to match the recording session your
                     # neural file came from.
-                    "bciConfig": {"day_idx": 1},
+                    "bciConfig": {"dayIdx": 1},
                 },
                 on_progress=print_progress,
             )

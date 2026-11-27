@@ -3,9 +3,9 @@
 img2img with FLUX.2 [klein] split-layout -- uses in-context conditioning
 ("flux2_flow").
 
-TypeScript's `diffusion()` takes `init_image` as raw bytes and base64-encodes
+TypeScript's `diffusion()` takes `initImage` as raw bytes and base64-encodes
 them on the way to the worker. Python calls the worker directly through
-`diffusion_stream`, where `init_image` is already the encoded string, so the
+`diffusion_stream`, where `initImage` is already the encoded string, so the
 example encodes the file itself. The same iterator then carries progress, the
 finished images and the closing stats, which TypeScript receives as three
 separate channels.
@@ -93,10 +93,10 @@ async def main() -> int:
                     "type": "diffusionStream",
                     "modelId": model_id,
                     "prompt": prompt,
-                    "init_image": init_image,
+                    "initImage": init_image,
                     "steps": 20,
                     "guidance": 3.5,
-                    "cfg_scale": 1,
+                    "cfgScale": 1,
                     "seed": -1,
                 }
             )

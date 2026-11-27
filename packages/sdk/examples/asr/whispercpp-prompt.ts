@@ -25,38 +25,38 @@ try {
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
-      audio_format: 'f32le',
+      audioFormat: 'f32le',
       // Sampling strategy
       strategy: 'greedy',
-      n_threads: 4,
+      threads: 4,
       // Transcription options
       language: 'en',
       translate: false,
-      no_timestamps: false,
-      single_segment: false,
-      print_timestamps: true,
-      token_timestamps: true,
+      noTimestamps: false,
+      singleSegment: false,
+      printTimestamps: true,
+      tokenTimestamps: true,
       // Quality settings
       temperature: 0.0,
-      suppress_blank: true,
-      suppress_nst: true,
+      suppressBlank: true,
+      suppressNst: true,
       // Advanced tuning
-      entropy_thold: 2.4,
-      logprob_thold: -1.0,
+      entropyThold: 2.4,
+      logprobThold: -1.0,
       // VAD configuration
-      vad_params: {
+      vadParams: {
         threshold: 0.35,
-        min_speech_duration_ms: 200,
-        min_silence_duration_ms: 150,
-        max_speech_duration_s: 30.0,
-        speech_pad_ms: 600,
-        samples_overlap: 0.3
+        minSpeechDurationMs: 200,
+        minSilenceDurationMs: 150,
+        maxSpeechDurationS: 30.0,
+        speechPadMs: 600,
+        samplesOverlap: 0.3
       },
       // Context parameters for GPU
       contextParams: {
-        use_gpu: true,
-        flash_attn: true,
-        gpu_device: 0
+        useGpu: true,
+        flashAttention: true,
+        gpuDevice: 0
       }
     },
     onProgress: (p) => {

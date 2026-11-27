@@ -58,10 +58,10 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("threads", 4)
                 put("t5XxlModelSrc", t5XxlModelSrc)
                 put("vaeModelSrc", vaeModelSrc)
-                put("diffusion_fa", true)
-                put("offload_to_cpu", true)
-                put("params_backend", "vae=cpu")
-                put("vae_tiling", true)
+                put("diffusionFlashAttention", true)
+                put("offloadToCpu", true)
+                put("paramsBackend", "vae=cpu")
+                put("vaeTiling", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -73,7 +73,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 modelId = modelId,
                 mode = VideoStreamRequestMode.TXT2VID,
                 prompt = prompt,
-                negative_prompt = "blurry, low quality, static, jittery, watermark",
+                negativePrompt = "blurry, low quality, static, jittery, watermark",
                 width = 480,
                 height = 832,
                 // Frame count must satisfy (4*k + 1), k >= 1. Common values at
@@ -86,16 +86,16 @@ fun main(args: Array<String>): Unit = runBlocking {
                 // motion quality, ~28 min)
                 // Going beyond 81 can degrade quality because it exceeds the
                 // model's positional embeddings.
-                video_frames = 33,
+                videoFrames = 33,
                 fps = 16.0,
                 steps = 30,
-                cfg_scale = 6.0,
-                // Wan 2.1 T2V needs flow_shift=3.0 for visible motion. Higher
+                cfgScale = 6.0,
+                // Wan 2.1 T2V needs flowShift=3.0 for visible motion. Higher
                 // values can make consecutive frames near-identical, which
                 // looks like a frozen video.
-                flow_shift = 3.0,
+                flowShift = 3.0,
                 seed = 42,
-                vae_tiling = true,
+                vaeTiling = true,
             ),
         )
         run.events.collect { event ->

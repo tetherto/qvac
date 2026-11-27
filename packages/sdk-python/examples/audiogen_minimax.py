@@ -6,7 +6,7 @@ bring: point AUDIOGEN_MINIMAX_LM_MODEL and AUDIOGEN_MINIMAX_SYNTH_MODEL at
 them.
 
 MiniMax exposes a smaller input surface than ACE-Step. It rejects the musical
-controls (bpm, keyscale, timesignature, vocalLanguage), the LM and DCW knobs,
+controls (bpm, keyScale, timeSignature, vocalLanguage), the LM and DCW knobs,
 every reference/cover field, and both the edit and understand calls; it
 ignores simpleMode and normalizeLoudness.
 
@@ -120,7 +120,7 @@ async def main() -> int:
                     "synthModelSrc": required_model_path(
                         "AUDIOGEN_MINIMAX_SYNTH_MODEL"
                     ),
-                    "useGPU": os.environ.get("AUDIOGEN_USE_GPU") == "1",
+                    "useGpu": os.environ.get("AUDIOGEN_USE_GPU") == "1",
                     **({"threads": int(threads)} if threads is not None else {}),
                 },
                 on_progress=print_progress,

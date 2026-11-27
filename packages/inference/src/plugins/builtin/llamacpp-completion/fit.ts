@@ -19,13 +19,13 @@ export function llmFitRequest(load: FitLoad): FitRequestPlan {
   // projects: the prompt-cache keys size host-RAM and disk state the fitter
   // does not model or choose which conversations share it.
   const {
-    'rpc-servers': rpcServers,
-    cache_checkpoints: _cacheCheckpoints,
-    cache_checkpoints_max_bytes: _cacheCheckpointsMaxBytes,
-    cache_checkpoint_storage: _cacheCheckpointStorage,
-    cache_checkpoint_dir: _cacheCheckpointDir,
-    cache_ram_mib: _cacheRamMib,
-    cache_share_across_keys: _cacheShareAcrossKeys,
+    rpcServers,
+    cacheCheckpoints: _cacheCheckpoints,
+    cacheCheckpointsMaxBytes: _cacheCheckpointsMaxBytes,
+    cacheCheckpointStorage: _cacheCheckpointStorage,
+    cacheCheckpointDir: _cacheCheckpointDir,
+    cacheRamMib: _cacheRamMib,
+    cacheShareAcrossKeys: _cacheShareAcrossKeys,
     ...fitConfig
   } = (load.modelConfig ?? {}) as Record<string, unknown>
 

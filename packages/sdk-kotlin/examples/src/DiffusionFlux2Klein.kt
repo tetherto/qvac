@@ -8,7 +8,7 @@
 // gets: `events` is a `Flow` of typed `DiffusionStreamResponse` frames (per-step
 // progress), and `final` is a `Deferred` with every base64 image plus the
 // closing stats. The typed `DiffusionStreamRequest` overload carries the fields
-// the convenience overload lacks (`guidance`, `cfg_scale`).
+// the convenience overload lacks (`guidance`, `cfgScale`).
 //
 // RUN: ./gradlew -p examples run -Pexample=DiffusionFlux2Klein --args="[diffusion-src] [llm-src] [vae-src] [prompt] [output-dir]"
 
@@ -64,7 +64,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 height = 512,
                 steps = 20,
                 guidance = 3.5,
-                cfg_scale = 1.0,
+                cfgScale = 1.0,
                 seed = -1,
             ),
         )

@@ -94,7 +94,7 @@ try {
     width: size,
     height: size,
     steps: Number(values.steps),
-    cfg_scale: Number(values.cfg),
+    cfgScale: Number(values.cfg),
     seed: 42
   })
 

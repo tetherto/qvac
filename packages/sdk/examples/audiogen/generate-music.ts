@@ -29,7 +29,7 @@ try {
       lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
       ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
       vaeModelSrc: AUDIOGEN_VAE_BF16,
-      useGPU: true,
+      useGpu: true,
       inferenceSteps: 8
     },
     onProgress: (progress: ModelProgressUpdate) => {

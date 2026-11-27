@@ -70,8 +70,8 @@ class QwenDemo(
             modelType = "llamacpp-completion",
             modelName = QwenModel.NAME,
             modelConfig = buildJsonObject {
-                put("ctx_size", 2048)
-                put("reasoning_budget", -1)
+                put("ctxSize", 2048)
+                put("reasoningBudget", -1)
             },
         ).collect { event ->
             when (event) {
@@ -103,8 +103,8 @@ class QwenDemo(
                 captureThinking = true,
                 generationParams = CompletionStreamRequestGenerationParams(
                     predict = -1.0,
-                    reasoning_budget = -1,
-                    temp = 0.7,
+                    reasoningBudget = -1,
+                    temperature = 0.7,
                 ),
                 history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = CompletionStreamRequestHistoryItemContent.Variant1(prompt))),
                 modelId = modelId,

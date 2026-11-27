@@ -23,7 +23,7 @@ interface SearchEnvelope {
   tool_search: { loaded: string[]; already_loaded: string[] }
 }
 
-const DETERMINISTIC = { temp: 0, seed: 42 }
+const DETERMINISTIC = { temperature: 0, seed: 42 }
 
 // The assistant turn that issued the search, in the model's own call syntax,
 // so the history reads the way a real search round leaves it.

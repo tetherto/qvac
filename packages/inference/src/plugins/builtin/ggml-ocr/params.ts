@@ -27,7 +27,7 @@ export function ocrParamsFor(detectorPath: string, recognizerPath: string, ocrCo
     ...(ocrConfig.recognizerBatchSize !== undefined && {
       recognizerBatchSize: ocrConfig.recognizerBatchSize
     }),
-    ...(ocrConfig.nThreads !== undefined && { nThreads: ocrConfig.nThreads }),
+    ...(ocrConfig.threads !== undefined && { nThreads: ocrConfig.threads }),
     ...(ocrConfig.backendDevice !== undefined && {
       backendDevice: ocrConfig.backendDevice
     }),

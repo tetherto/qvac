@@ -11,6 +11,11 @@ adapts it to client/worker environments.
   introduce independent cancellation flags or ad-hoc resource ownership.
 - Keep model sources, generated constants, configuration, cache paths, and runtime
   state in their existing owning modules rather than duplicating them in the SDK.
+- Name every public schema key in camelCase: requests, responses, model configs,
+  and plugin handler inputs and outputs. `test/camel-case-key-guard.test.ts`
+  enforces it. Map keys to an addon's native names inside the plugin. When a
+  public key is renamed, keep its old spelling working for one release through
+  `src/schemas/legacy-keys.ts`.
 - Use structured errors, preserve causes, and keep cancellation outcomes consistent
   between event streams and aggregate promises.
 - Update the relevant file under `docs/` in place when these contracts change:

@@ -38,14 +38,14 @@ const bergamotConfig: NmtConfig = {
   mode: 'src-to-dst',
   from: 'fr',
   to: 'en',
-  beamsize: 1,
-  lengthpenalty: 1,
-  maxlength: 256,
-  repetitionpenalty: 1,
-  norepeatngramsize: 0,
+  beamSize: 1,
+  lengthPenalty: 1,
+  maxLength: 256,
+  repeatPenalty: 1,
+  noRepeatNgramSize: 0,
   temperature: 0,
-  topk: 0,
-  topp: 0
+  topK: 0,
+  topP: 0
 } as unknown as NmtConfig
 
 const FREN_REGISTRY =

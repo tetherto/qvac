@@ -26,16 +26,16 @@ function fitPlan(modelConfig: Record<string, unknown>) {
 }
 
 test('diffusion profiles survive model options and wire validation with explicit overrides', (t) => {
-  for (const performance_profile of ['auto', 'off'] as const) {
+  for (const performanceProfile of ['auto', 'off'] as const) {
     const modelConfig = {
       mode: 'video' as const,
-      performance_profile,
-      performance_max_width: 512,
-      performance_max_height: 320,
-      performance_max_frames: 97,
-      flash_attn: false,
-      vae_conv_direct: performance_profile === 'auto',
-      tensor_type_rules: ''
+      performanceProfile,
+      performanceMaxWidth: 512,
+      performanceMaxHeight: 320,
+      performanceMaxFrames: 97,
+      flashAttention: false,
+      vaeConvDirect: performanceProfile === 'auto',
+      tensorTypeRules: ''
     }
     const input = { modelType: 'sdcpp-generation', modelSrc: '/models/ltx.gguf', modelConfig }
     t.alike(loadModelOptionsBaseSchema.parse(input).modelConfig, modelConfig)
@@ -50,16 +50,16 @@ test('diffusion profiles survive model options and wire validation with explicit
 
 test('diffusion profiles reject unsupported modes and invalid output limits', (t) => {
   for (const config of [
-    { performance_profile: 'fast' },
-    { performance_profile: 'allow-small-changes' },
-    { performance_profile: true },
-    { performance_max_width: 0 },
-    { performance_max_height: -1 },
-    { performance_max_frames: 1.5 },
-    { performance_max_frames: 2147483648 },
-    { performance_max_frames: '97' },
-    { vae_conv_direct: 'false' },
-    { tensor_type_rules: false }
+    { performanceProfile: 'fast' },
+    { performanceProfile: 'allow-small-changes' },
+    { performanceProfile: true },
+    { performanceMaxWidth: 0 },
+    { performanceMaxHeight: -1 },
+    { performanceMaxFrames: 1.5 },
+    { performanceMaxFrames: 2147483648 },
+    { performanceMaxFrames: '97' },
+    { vaeConvDirect: 'false' },
+    { tensorTypeRules: false }
   ]) {
     t.is(sdcppConfigSchema.safeParse(config).success, false)
   }
@@ -67,9 +67,9 @@ test('diffusion profiles reject unsupported modes and invalid output limits', (t
 
 test('partial output limits are rejected wherever a diffusion load is validated', (t) => {
   const limits = {
-    performance_max_width: 512,
-    performance_max_height: 320,
-    performance_max_frames: 97
+    performanceMaxWidth: 512,
+    performanceMaxHeight: 320,
+    performanceMaxFrames: 97
   }
   for (const missing of Object.keys(limits)) {
     const modelConfig = {
@@ -96,9 +96,9 @@ test('partial output limits are rejected wherever a diffusion load is validated'
   }
   t.alike(
     sdcppLoadConfigSchema
-      .safeParse({ mode: 'video', performance_max_frames: 97 })
+      .safeParse({ mode: 'video', performanceMaxFrames: 97 })
       .error?.issues.map((issue) => issue.path),
-    [['performance_max_width']],
+    [['performanceMaxWidth']],
     'one issue names the first missing limit'
   )
   t.ok(sdcppLoadConfigSchema.safeParse({ mode: 'video', ...limits }).success, 'all three')
@@ -107,29 +107,31 @@ test('partial output limits are rejected wherever a diffusion load is validated'
 
 test('bounded video fit requests assess the maximum declared output', (t) => {
   const bounds = {
-    performance_max_width: 512,
-    performance_max_height: 320,
-    performance_max_frames: 97
+    performanceMaxWidth: 512,
+    performanceMaxHeight: 320,
+    performanceMaxFrames: 97
   }
-  for (const performance_profile of ['auto', 'off'] as const) {
+  for (const performanceProfile of ['auto', 'off'] as const) {
     const plan = fitPlan(
-      sdcppConfigSchema.parse({ mode: 'video', performance_profile, vae_tiling: true, ...bounds })
+      sdcppConfigSchema.parse({ mode: 'video', performanceProfile, vaeTiling: true, ...bounds })
     )
     const request = requestOf(plan)
     t.alike(request?.workload, { vaeTiling: true, width: 512, height: 320, videoFrames: 97 })
     t.alike(request?.config, {
-      performance_profile,
+      performance_profile: performanceProfile,
       vae_tiling: true,
-      ...bounds
+      performance_max_width: 512,
+      performance_max_height: 320,
+      performance_max_frames: 97
     })
   }
 })
 
 test('video fit is unknown when declared limits exceed what the fitter sizes', (t) => {
   for (const bounds of [
-    { performance_max_width: 512, performance_max_height: 320, performance_max_frames: 4097 },
-    { performance_max_width: 65537, performance_max_height: 320, performance_max_frames: 97 },
-    { performance_max_width: 512, performance_max_height: 65537, performance_max_frames: 97 }
+    { performanceMaxWidth: 512, performanceMaxHeight: 320, performanceMaxFrames: 4097 },
+    { performanceMaxWidth: 65537, performanceMaxHeight: 320, performanceMaxFrames: 97 },
+    { performanceMaxWidth: 512, performanceMaxHeight: 65537, performanceMaxFrames: 97 }
   ]) {
     const modelConfig = sdcppLoadConfigSchema.parse({ mode: 'video', ...bounds })
     t.ok('unknown' in fitPlan(modelConfig), JSON.stringify(bounds))
@@ -138,9 +140,9 @@ test('video fit is unknown when declared limits exceed what the fitter sizes', (
     requestOf(
       fitPlan({
         mode: 'video',
-        performance_max_width: 65536,
-        performance_max_height: 65536,
-        performance_max_frames: 4096
+        performanceMaxWidth: 65536,
+        performanceMaxHeight: 65536,
+        performanceMaxFrames: 4096
       })
     )?.workload,
     { width: 65536, height: 65536, videoFrames: 4096 },
@@ -154,9 +156,9 @@ test('unbounded video and image fit requests retain their defaults', (t) => {
     requestOf(
       fitPlan({
         mode: 'diffusion',
-        performance_max_width: 512,
-        performance_max_height: 320,
-        performance_max_frames: 97
+        performanceMaxWidth: 512,
+        performanceMaxHeight: 320,
+        performanceMaxFrames: 97
       })
     )?.workload,
     {}

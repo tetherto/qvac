@@ -115,15 +115,15 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
       const modelId = await loadModel({
         modelSrc: QWEN3_5_0_8B_MTP_Q4_K_M,
         modelType: 'llamacpp-completion',
-        modelConfig: { spec_type: 'draft-mtp', spec_draft_n_max: p.draftNMax }
+        modelConfig: { specType: 'draft-mtp', specDraftNMax: p.draftNMax }
       })
       await unloadModel({ modelId })
-      return { passed: false, output: 'spec_draft_n_max above 64 should have been rejected' }
+      return { passed: false, output: 'specDraftNMax above 64 should have been rejected' }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
       // The addon's own range error means the value skipped SDK validation.
       if (/must be an integer between/.test(errorMsg)) {
-        return { passed: false, output: `spec_draft_n_max reached the addon: ${errorMsg}` }
+        return { passed: false, output: `specDraftNMax reached the addon: ${errorMsg}` }
       }
       return ValidationHelpers.validate(errorMsg, expectation as Expectation)
     }
@@ -136,8 +136,8 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
         modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
         modelType: 'llamacpp-completion',
         modelConfig: {
-          ctx_size: 2048,
-          spec_type: 'auto',
+          ctxSize: 2048,
+          specType: 'auto',
           draftModelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
         }
       })
@@ -163,9 +163,9 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
       modelSrc,
       modelType: 'llamacpp-completion',
       modelConfig: {
-        ctx_size: 2048,
-        spec_type: specType,
-        ...(draftNMax !== undefined ? { spec_draft_n_max: draftNMax } : {}),
+        ctxSize: 2048,
+        specType,
+        ...(draftNMax !== undefined ? { specDraftNMax: draftNMax } : {}),
         ...(draftModelSrc ? { draftModelSrc } : {})
       }
     })
@@ -174,7 +174,7 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
         modelId,
         history: [{ role: 'user', content: p.prompt }],
         stream: false,
-        generationParams: { temp: 0, seed: 42, predict: 96, reasoning_budget: 0 }
+        generationParams: { temperature: 0, seed: 42, predict: 96, reasoningBudget: 0 }
       }).final
       const stats: CompletionStats | undefined = final.stats
       return {

@@ -28,7 +28,7 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 
 An SDK `ContextOverflowError` returns HTTP `400` with
 `error.type: "invalid_request_error"` and `error.code: "context_length_exceeded"`.
-Shorten the input, start a new conversation, or increase the model's `ctx_size`
+Shorten the input, start a new conversation, or increase the model's `ctxSize`
 before retrying. If SSE headers have already been sent, the status stays `200`;
 the server emits the same error envelope as an SSE frame and closes the stream,
 using the extension's usual termination sentinel.
@@ -83,6 +83,10 @@ at startup, pass `--model <alias>` on the command line.
 `log`, `refuse`, or `off`. It overrides the engine-level `modelFitPolicy` for
 that alias only. Under `refuse`, a load the fitter projects will not fit fails
 with `MODEL_FIT_REFUSED`.
+
+`config` takes the SDK's `loadModel` config keys (`ctxSize`, `gpuLayers`,
+`upscaler.modelSrc`). A deprecated spelling such as `ctx_size` loads under its
+current name, and the server prints a warning naming the replacement.
 
 Loading is transparent: a request may name any configured alias whether or not it is
 currently loaded. Unloading an alias frees its resources but keeps it configured, so the
@@ -162,8 +166,8 @@ default) is `image`, and `video`, `upscale` and `world` are categories of the sa
 field ending in `Src` (such as `llmModelSrc`, `tokenizerSrc` or
 `referenceAudioSrc`), each entry of a list field ending in `Srcs`, and fields
 inside nested objects. The CLI resolves those names to
-the same `ModelConstant` objects accepted by the SDK. The snake-case
-`upscaler.model_src` field follows the same rules except in video mode, where
+the same `ModelConstant` objects accepted by the SDK. The
+`upscaler.modelSrc` field follows the same rules except in video mode, where
 the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:
 
 ```json

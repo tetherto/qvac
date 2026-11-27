@@ -17,7 +17,7 @@ const INPUT: LoadCheckInput = {
   modelId: 'llm-1',
   modelType: ModelType.llamacppCompletion,
   modelPath: '/models/model.gguf',
-  modelConfig: { ctx_size: 4096 },
+  modelConfig: { ctxSize: 4096 },
   isShardedModel: false
 }
 

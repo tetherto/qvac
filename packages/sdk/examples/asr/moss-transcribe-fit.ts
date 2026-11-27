@@ -21,7 +21,7 @@ try {
       {
         modelType: 'moss-transcribe',
         modelSrc: modelPath ?? MOSS_TRANSCRIBE_DIARIZE_Q8_0,
-        modelConfig: { useGPU: false, maxThreads: 4 },
+        modelConfig: { useGpu: false, threads: 4 },
         transcriptionWorkload: { audioSeconds, hotwords, maxNewTokens: 0 }
       }
     ]

@@ -22,7 +22,7 @@ const result = await assessModelFit({
     {
       modelSrc: QWEN3_8B_INST_Q4_K_M,
       modelType: 'llamacpp-completion',
-      modelConfig: { ctx_size: 8192 }
+      modelConfig: { ctxSize: 8192 }
     },
     { modelSrc: WHISPER_EN_SMALL_Q8_0, modelType: 'whispercpp-transcription' }
   ]
@@ -154,7 +154,7 @@ addon is built for.
 What each engine's rows cover:
 
 - **llama.cpp completion and embedding**: model, context and compute memory on
-  each device the model is assigned to, then the host. With `load_mode: 'mmap'`
+  each device the model is assigned to, then the host. With `loadMode: 'mmap'`
   the host row leaves out the mapped weights, which the OS can evict. A CPU
   load, a LoRA adapter, a multimodal projector, or `fit` turned off is
   `unknown`.

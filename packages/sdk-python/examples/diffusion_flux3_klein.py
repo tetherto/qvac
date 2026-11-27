@@ -3,7 +3,7 @@
 FLUX.3 Image Klein in split layout: a diffusion model, a Qwen3-VL 4B LLM text
 encoder and the FLUX.2 VAE, all handed to one `load_model` call. Without
 reference images it generates from text; up to 10 reference images passed
-after the model arguments go in order through `init_images` for editing.
+after the model arguments go in order through `initImages` for editing.
 
 The defaults download pinned Hugging Face weights. Model overrides accept local
 paths or URLs.
@@ -11,7 +11,7 @@ FLUX.3 model terms: https://huggingface.co/black-forest-labs/flux-3-image-klein/
 
 TypeScript's `diffusion()` takes each reference as raw bytes and base64-encodes
 them on the way to the worker. Python calls the worker directly through
-`diffusion_stream`, where `init_images` is already a list of encoded strings,
+`diffusion_stream`, where `initImages` is already a list of encoded strings,
 so the example encodes the files itself.
 
 RUN: python examples/diffusion_flux3_klein.py [prompt] [output-dir] [model] [llm] [vae] [...references]
@@ -114,7 +114,7 @@ async def main() -> int:
                 model_config={
                     "llmModelSrc": model_source(llm_model_src),
                     "vaeModelSrc": model_source(vae_model_src),
-                    "flash_attn": True,
+                    "flashAttention": True,
                 },
                 on_progress=print_progress,
             )
@@ -127,12 +127,12 @@ async def main() -> int:
                     "type": "diffusionStream",
                     "modelId": model_id,
                     "prompt": prompt,
-                    **({"init_images": init_images} if init_images else {}),
+                    **({"initImages": init_images} if init_images else {}),
                     "width": 512,
                     "height": 512,
                     "steps": 16,
-                    "cfg_scale": 1,
-                    "sampling_method": "euler",
+                    "cfgScale": 1,
+                    "samplingMethod": "euler",
                     "seed": 42,
                 }
             )

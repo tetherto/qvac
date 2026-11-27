@@ -62,7 +62,7 @@ async def main() -> int:
                 model_type="llamacpp-completion",
                 model_config={
                     "device": "gpu",
-                    "ctx_size": 2048,
+                    "ctxSize": 2048,
                     "verbosity": 0,  # 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG
                 },
                 on_progress=print_progress,

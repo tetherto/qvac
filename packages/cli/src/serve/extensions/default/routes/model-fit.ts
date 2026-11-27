@@ -22,7 +22,7 @@ device and compared against what is free.
 
 Each entry in \`models\` names a \`serve.models\` alias or an SDK model constant.
 An alias is assessed with the config it would load with; \`modelConfig\` is
-merged over it key by key, nested objects included, so \`{"ctx_size": 32768}\`
+merged over it key by key, nested objects included, so \`{"ctxSize": 32768}\`
 asks about a longer context and leaves the rest of the alias's config as is. Model
 sources cannot be given here: companion sources in \`modelConfig\` must name
 constants, so a request never makes the server read a path or URL of its

@@ -5,7 +5,7 @@ split layout: a diffusion model, a Qwen3-VL text encoder, a video VAE and an
 audio VAE. The four files are read from a local directory you pass as argv, so
 nothing is downloaded.
 
-This example needs powerful hardware. `offload_to_cpu` stays on so the run
+This example needs powerful hardware. `offloadToCpu` stays on so the run
 fits on a single GPU; tune placement through the H3_* environment variables.
 
 TypeScript's `video()` hands back three channels -- `progressStream`, `outputs`
@@ -74,14 +74,14 @@ async def main() -> int:
         "vaeModelSrc": str(vae_model_src),
         "audioVaeModelSrc": str(audio_vae_model_src),
         "device": "gpu",
-        "diffusion_fa": True,
-        "offload_to_cpu": os.environ.get("H3_OFFLOAD_TO_CPU") != "0",
-        "stream_layers": os.environ.get("H3_STREAM_LAYERS") == "1",
+        "diffusionFlashAttention": True,
+        "offloadToCpu": os.environ.get("H3_OFFLOAD_TO_CPU") != "0",
+        "streamLayers": os.environ.get("H3_STREAM_LAYERS") == "1",
     }
     for key, variable in (
         ("backend", "H3_BACKEND"),
-        ("params_backend", "H3_PARAMS_BACKEND"),
-        ("max_vram", "H3_MAX_VRAM"),
+        ("paramsBackend", "H3_PARAMS_BACKEND"),
+        ("maxVram", "H3_MAX_VRAM"),
     ):
         value = os.environ.get(variable)
         if value:
@@ -105,7 +105,7 @@ async def main() -> int:
                         "modelId": model_id,
                         "mode": "txt2vid",
                         "prompt": os.environ.get("PROMPT") or DEFAULT_PROMPT,
-                        "negative_prompt": (
+                        "negativePrompt": (
                             "extra people, duplicate cup, malformed hands, cup "
                             "fused to hand, text, subtitles, watermark, cartoon, "
                             "CGI, blur, flicker, jitter, camera shake"
@@ -114,10 +114,10 @@ async def main() -> int:
                         "height": 544,
                         # H3 uses 17*k+5 frames; 124 frames at 24 FPS is
                         # approximately 5.17 seconds.
-                        "video_frames": int(os.environ.get("FRAMES") or 124),
+                        "videoFrames": int(os.environ.get("FRAMES") or 124),
                         "fps": 24,
                         "steps": 8,
-                        "cfg_scale": 1,
+                        "cfgScale": 1,
                         "seed": 11,
                     }
                 )

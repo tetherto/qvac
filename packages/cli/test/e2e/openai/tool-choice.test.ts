@@ -34,7 +34,7 @@ const CONFIG = {
       'test-llm': {
         model: 'QWEN3_600M_INST_Q4',
         preload: false,
-        config: { ctx_size: 2048, tools: true }
+        config: { ctxSize: 2048, tools: true }
       }
     }
   }
@@ -176,7 +176,7 @@ function stubRun(opts: { text?: string; toolCalls?: ToolCall[]; toolErrors?: Too
 // narrowest form. These are the fields the assertions read.
 interface SeenRequest {
   tools?: { name: string }[]
-  generationParams?: { tool_choice?: string }
+  generationParams?: { toolChoice?: string }
 }
 
 interface ChatChunk {
@@ -218,7 +218,7 @@ describe('serve: tool_choice success path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'required')
       assert.equal(seen[0]?.tools?.length, 1)
 
       const body = res.json()
@@ -252,7 +252,7 @@ describe('serve: tool_choice success path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'get_weather')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'get_weather')
     }
   )
 
@@ -277,7 +277,7 @@ describe('serve: tool_choice success path', () => {
     })
 
     assert.equal(res.statusCode, 200, res.payload)
-    assert.equal(seen[0]?.generationParams?.tool_choice, 'none')
+    assert.equal(seen[0]?.generationParams?.toolChoice, 'none')
     assert.equal(res.json().choices[0].finish_reason, 'stop')
   })
 
@@ -302,7 +302,7 @@ describe('serve: tool_choice success path', () => {
     })
 
     assert.equal(res.statusCode, 200, res.payload)
-    assert.equal(seen[0]?.generationParams?.tool_choice, undefined)
+    assert.equal(seen[0]?.generationParams?.toolChoice, undefined)
   })
 
   // The documented shape for a forced call the addon could not parse: still a
@@ -362,7 +362,7 @@ describe('serve: tool_choice success path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'get_weather')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'get_weather')
     }
   )
 
@@ -393,7 +393,7 @@ describe('serve: tool_choice success path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'required')
 
       const body = res.json<{ output: { type: string; name?: string }[] }>()
       const call = body.output.find((item) => item.type === 'function_call')
@@ -433,7 +433,7 @@ describe('serve: tool_choice on the streaming path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'required')
 
       const events = collectSSE(res.payload)
       const chunks = events
@@ -475,7 +475,7 @@ describe('serve: tool_choice on the streaming path', () => {
       })
 
       assert.equal(res.statusCode, 200, res.payload)
-      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+      assert.equal(seen[0]?.generationParams?.toolChoice, 'required')
 
       // Responses names its events in the JSON payload, not an SSE `event:` line.
       const types = collectSSE(res.payload)

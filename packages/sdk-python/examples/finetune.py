@@ -73,7 +73,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=QWEN3_600M_INST_Q4,
-                model_config={"device": "gpu", "ctx_size": 512},
+                model_config={"device": "gpu", "ctxSize": 512},
             )
             print(f"▸ Model loaded with ID: {model_id}")
 

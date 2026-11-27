@@ -480,3 +480,38 @@ export type {
 export { RpcServerOperationError } from './utils/errors-server'
 
 export { getRpcDeviceMap, type RpcDeviceMapping, type RpcDevice } from '@qvac/inference/surface'
+
+import {
+  createLegacyKeyWarner as inferenceCreateLegacyKeyWarner,
+  renameLegacyModelConfigKeys as inferenceRenameLegacyModelConfigKeys,
+  type LegacyKeyWarn as InferenceLegacyKeyWarn
+} from '@qvac/inference/surface'
+
+/**
+ * Receives each deprecated key's path, its replacement's path, and whether the
+ * deprecated value was ignored because the replacement was also set.
+ *
+ * @deprecated Removed in the next release, together with the deprecated keys.
+ */
+export type LegacyKeyWarn = InferenceLegacyKeyWarn
+
+/**
+ * Creates a warn callback for {@link renameLegacyModelConfigKeys} that reports each
+ * deprecated key once per process.
+ *
+ * @deprecated Removed in the next release, together with the deprecated keys.
+ */
+export const createLegacyKeyWarner: (log: (message: string) => void) => LegacyKeyWarn =
+  inferenceCreateLegacyKeyWarner
+
+/**
+ * Moves each deprecated key of a `modelConfig` to its camelCase name.
+ *
+ * @deprecated Removed in the next release, together with the deprecated keys.
+ */
+export const renameLegacyModelConfigKeys: <T>(
+  modelType: unknown,
+  modelConfig: T,
+  warn: LegacyKeyWarn,
+  path?: string
+) => T = inferenceRenameLegacyModelConfigKeys

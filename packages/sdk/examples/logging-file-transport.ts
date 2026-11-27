@@ -35,8 +35,8 @@ try {
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 2048,
-      temp: 0.7,
+      ctxSize: 2048,
+      temperature: 0.7,
       verbosity: VERBOSITY.DEBUG
     },
     logger // All model logs will be captured

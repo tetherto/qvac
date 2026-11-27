@@ -23,7 +23,7 @@ export type DiffusionTestDef<
 > = TestDefinition & { testId: TId; params: P }
 
 /** Param names that are file names before the run and bytes during it. */
-const DIFFUSION_ASSET_KEYS = new Set(['init_image', 'init_images'])
+const DIFFUSION_ASSET_KEYS = new Set(['initImage', 'initImages'])
 
 /** One diffusion run, checked against its outputs. */
 const diffusionSteps = (
@@ -41,11 +41,11 @@ const diffusionSteps = (
 
   // A single reference image resolves through `asset`, which is what makes the same definition
   // runnable where a file path is not a thing.
-  if (typeof params.init_image === 'string') {
+  if (typeof params.initImage === 'string') {
     steps.push({
-      asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' }
+      asset: { kind: 'image', file: '$params.initImage', form: 'bytes', as: 'initImage' }
     })
-    call.init_image = '$initImage'
+    call.initImage = '$initImage'
   }
 
   steps.push({ call: { method: 'diffusion', collect: fold, params: call, as: 'run' } })
@@ -199,7 +199,7 @@ export const diffusionNegativePrompt = createDiffusionTest(
   'diffusion-negative-prompt',
   {
     prompt: 'a landscape painting',
-    negative_prompt: 'blurry, low quality',
+    negativePrompt: 'blurry, low quality',
     width: 256,
     height: 256,
     steps: 4,
@@ -215,7 +215,7 @@ export const diffusionCfgScale = createDiffusionTest(
     width: 256,
     height: 256,
     steps: 4,
-    cfg_scale: 12.0,
+    cfgScale: 12.0,
     seed: 42
   },
   { validation: 'type', expectedType: 'array' }
@@ -228,7 +228,7 @@ export const diffusionSamplerEulerA = createDiffusionTest(
     width: 256,
     height: 256,
     steps: 4,
-    sampling_method: 'euler_a',
+    samplingMethod: 'euler_a',
     seed: 42
   },
   { validation: 'type', expectedType: 'array' }
@@ -241,7 +241,7 @@ export const diffusionSamplerHeun = createDiffusionTest(
     width: 256,
     height: 256,
     steps: 4,
-    sampling_method: 'heun',
+    samplingMethod: 'heun',
     seed: 42
   },
   { validation: 'type', expectedType: 'array' }
@@ -295,7 +295,7 @@ export const diffusionBatchCount = createDiffusionTest(
     width: 256,
     height: 256,
     steps: 4,
-    batch_count: 2,
+    batchCount: 2,
     seed: 42
   },
   { validation: 'type', expectedType: 'array' },
@@ -311,7 +311,7 @@ export const diffusionBasicImg2img = createDiffusionTest(
   'diffusion-basic-img2img',
   {
     prompt: 'oil painting style, vibrant colors',
-    init_image: 'elephant.jpg',
+    initImage: 'elephant.jpg',
     strength: 0.5,
     width: 256,
     height: 256,
@@ -321,16 +321,16 @@ export const diffusionBasicImg2img = createDiffusionTest(
   { validation: 'type', expectedType: 'array' }
 )
 
-// FLUX.2 ignores img_cfg_scale (in-context conditioning); SD 2.1 honors it via
+// FLUX.2 ignores imgCfgScale (in-context conditioning); SD 2.1 honors it via
 // SDEdit. Schema accept + PNG size check is the strongest cross-platform
 // assertion without per-engine branching.
 export const diffusionImg2imgImgCfgScale = createDiffusionTest(
   'diffusion-img2img-img-cfg-scale',
   {
     prompt: 'oil painting style',
-    init_image: 'diffusion-img2img-source-256.png',
+    initImage: 'diffusion-img2img-source-256.png',
     strength: 0.5,
-    img_cfg_scale: 5.0,
+    imgCfgScale: 5.0,
     width: 256,
     height: 256,
     steps: 4,
@@ -340,7 +340,7 @@ export const diffusionImg2imgImgCfgScale = createDiffusionTest(
   {
     steps: [
       { useModel: { deps: ['diffusion'], as: 'model' } },
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
+      { asset: { kind: 'image', file: '$params.initImage', form: 'bytes', as: 'initImage' } },
       {
         call: {
           method: 'diffusion',
@@ -348,9 +348,9 @@ export const diffusionImg2imgImgCfgScale = createDiffusionTest(
           params: {
             modelId: '$model',
             prompt: '$params.prompt',
-            init_image: '$initImage',
+            initImage: '$initImage',
             strength: '$params.strength',
-            img_cfg_scale: '$params.img_cfg_scale',
+            imgCfgScale: '$params.imgCfgScale',
             width: '$params.width',
             height: '$params.height',
             steps: '$params.steps',
@@ -375,7 +375,7 @@ export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
   'diffusion-img2img-vs-txt2img-baseline',
   {
     prompt: 'watercolor style',
-    init_image: 'diffusion-img2img-source-256.png',
+    initImage: 'diffusion-img2img-source-256.png',
     strength: 0.5,
     width: 256,
     height: 256,
@@ -385,14 +385,14 @@ export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
   { validation: 'type', expectedType: 'array' },
   {
     estimatedDurationMs: 600000,
-    // The second run drops `init_image`. If the backend ignored the reference the two outputs would
+    // The second run drops `initImage`. If the backend ignored the reference the two outputs would
     // collapse onto each other, which the floor catches.
     steps: [
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
+      { asset: { kind: 'image', file: '$params.initImage', form: 'bytes', as: 'initImage' } },
       ...twoRunSteps(
         {
           prompt: '$params.prompt',
-          init_image: '$initImage',
+          initImage: '$initImage',
           strength: '$params.strength',
           width: '$params.width',
           height: '$params.height',
@@ -402,7 +402,7 @@ export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
         // `null` rather than an omitted key: the second call has to be the same call with the
         // reference taken out, and an optional reference that resolves to nothing is dropped from
         // the params entirely.
-        { init_image: '$missing?' },
+        { initImage: '$missing?' },
         {
           compare: {
             left: '$first',
@@ -420,7 +420,7 @@ export const diffusionImg2imgInvalidStrength = createDiffusionTest(
   'diffusion-img2img-invalid-strength',
   {
     prompt: 'test',
-    init_image: 'diffusion-img2img-source-256.png',
+    initImage: 'diffusion-img2img-source-256.png',
     strength: 1.5,
     width: 256,
     height: 256,
@@ -436,7 +436,7 @@ export const diffusionImg2imgInvalidStrength = createDiffusionTest(
     estimatedDurationMs: 60000,
     steps: [
       { useModel: { deps: ['diffusion'], as: 'model' } },
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
+      { asset: { kind: 'image', file: '$params.initImage', form: 'bytes', as: 'initImage' } },
       {
         callError: {
           method: 'diffusion',
@@ -444,7 +444,7 @@ export const diffusionImg2imgInvalidStrength = createDiffusionTest(
           params: {
             modelId: '$model',
             prompt: '$params.prompt',
-            init_image: '$initImage',
+            initImage: '$initImage',
             strength: '$params.strength',
             width: '$params.width',
             height: '$params.height',
@@ -613,7 +613,7 @@ export const diffusionStatsValid = createDiffusionTest(
   }
 )
 
-// ---- diffusion_fa config flag ----
+// ---- diffusionFlashAttention config flag ----
 
 export const diffusionFaAccepted = createDiffusionTest(
   'diffusion-fa-loads-and-runs',
@@ -647,7 +647,7 @@ export const diffusionFusionFlux2Basic = createDiffusionTest(
   'diffusion-fusion-flux2-basic',
   {
     prompt: 'a portrait using most visual traits from @image1 and the eyes from @image2',
-    init_images: ['cat.jpg', 'elephant.jpg'],
+    initImages: ['cat.jpg', 'elephant.jpg'],
     width: 256,
     height: 256,
     steps: 4,
@@ -664,13 +664,13 @@ export const diffusionFusionFlux2Basic = createDiffusionTest(
       ...twoRunSteps(
         {
           prompt: '$params.prompt',
-          init_images: ['$firstImage', '$secondImage'],
+          initImages: ['$firstImage', '$secondImage'],
           width: '$params.width',
           height: '$params.height',
           steps: '$params.steps',
           seed: '$params.seed'
         },
-        { init_images: '$missing?' },
+        { initImages: '$missing?' },
         {
           compare: {
             left: '$first',
@@ -850,8 +850,8 @@ export const diffusionMossImageLayout = createDiffusionTest(
     width: MOSS_SIZE,
     height: MOSS_SIZE,
     steps: 8,
-    cfg_scale: 3,
-    sampling_method: 'euler',
+    cfgScale: 3,
+    samplingMethod: 'euler',
     scheduler: 'discrete',
     seed: 42
   },
@@ -871,8 +871,8 @@ export const diffusionMossImageLayout = createDiffusionTest(
             width: '$params.width',
             height: '$params.height',
             steps: '$params.steps',
-            cfg_scale: '$params.cfg_scale',
-            sampling_method: '$params.sampling_method',
+            cfgScale: '$params.cfgScale',
+            samplingMethod: '$params.samplingMethod',
             scheduler: '$params.scheduler',
             seed: '$params.seed'
           },
@@ -927,6 +927,6 @@ for (const test of diffusionTests) {
   if (test.steps || DIFFUSION_MULTI_RUN.has(test.testId)) continue
   if (test.expectation.validation !== 'type') continue
   const params = test.params as Record<string, unknown>
-  if (Array.isArray(params.init_images)) continue
+  if (Array.isArray(params.initImages)) continue
   test.steps = diffusionSteps(String(test.metadata?.dependency ?? 'diffusion'), params)
 }

@@ -30,22 +30,22 @@ test('completionStatsSchema: backendDevice is optional', (t) => {
   t.is(result.success, true)
 })
 
-test('generationParamsSchema: accepts reasoning_budget -1 and 0', (t) => {
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: -1 }).success, true)
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: 0 }).success, true)
+test('generationParamsSchema: accepts reasoningBudget -1 and 0', (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: -1 }).success, true)
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: 0 }).success, true)
 })
 
-test('generationParamsSchema: accepts positive reasoning_budget (token cap)', (t) => {
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: 1 }).success, true)
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: 128 }).success, true)
+test('generationParamsSchema: accepts positive reasoningBudget (token cap)', (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: 1 }).success, true)
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: 128 }).success, true)
 })
 
-test('generationParamsSchema: rejects reasoning_budget other values', (t) => {
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: -2 }).success, false)
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: 0.5 }).success, false)
+test('generationParamsSchema: rejects reasoningBudget other values', (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: -2 }).success, false)
+  t.is(generationParamsSchema.safeParse({ reasoningBudget: 0.5 }).success, false)
   t.is(
     generationParamsSchema.safeParse({
-      reasoning_budget: REASONING_BUDGET_MAX + 1
+      reasoningBudget: REASONING_BUDGET_MAX + 1
     }).success,
     false
   )
@@ -118,22 +118,22 @@ test('completionStreamResponseSchema: round-trips backendDevice through completi
   }
 })
 
-test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects other shapes', (t) => {
-  for (const tool_choice of ['auto', 'none', 'required', 'get_weather']) {
-    t.is(generationParamsSchema.safeParse({ tool_choice }).success, true, tool_choice)
+test('generationParamsSchema: accepts toolChoice modes and a tool name, rejects other shapes', (t) => {
+  for (const toolChoice of ['auto', 'none', 'required', 'get_weather']) {
+    t.is(generationParamsSchema.safeParse({ toolChoice }).success, true, toolChoice)
   }
-  t.is(generationParamsSchema.safeParse({ tool_choice: '' }).success, false, 'empty string')
+  t.is(generationParamsSchema.safeParse({ toolChoice: '' }).success, false, 'empty string')
   t.is(
-    generationParamsSchema.safeParse({ tool_choice: { type: 'function' } }).success,
+    generationParamsSchema.safeParse({ toolChoice: { type: 'function' } }).success,
     false,
     'OpenAI object form is mapped by the caller, not accepted here'
   )
 })
 
-test('generationParamsSchema: accepts a boolean parallel_tool_calls only', (t) => {
-  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: true }).success, true)
-  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: false }).success, true)
-  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: 'true' }).success, false)
+test('generationParamsSchema: accepts a boolean parallelToolCalls only', (t) => {
+  t.is(generationParamsSchema.safeParse({ parallelToolCalls: true }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallelToolCalls: false }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallelToolCalls: 'true' }).success, false)
 })
 
 const weatherTool = {
@@ -163,12 +163,12 @@ test('completion schemas: prefill requires a cache and cannot force tool output'
     for (const kvCache of [true, 'chat']) {
       const prime = { ...base, prefill: true, kvCache }
       t.ok(schema.safeParse(prime).success)
-      for (const tool_choice of ['auto', 'none']) {
-        t.ok(schema.safeParse({ ...prime, generationParams: { tool_choice } }).success)
+      for (const toolChoice of ['auto', 'none']) {
+        t.ok(schema.safeParse({ ...prime, generationParams: { toolChoice } }).success)
       }
-      for (const tool_choice of ['required', 'get_weather', 'tool_search']) {
+      for (const toolChoice of ['required', 'get_weather', 'tool_search']) {
         const tools = [weatherTool, { ...weatherTool, name: 'later', deferLoading: true }]
-        const result = schema.safeParse({ ...prime, tools, generationParams: { tool_choice } })
+        const result = schema.safeParse({ ...prime, tools, generationParams: { toolChoice } })
         t.is(result.success, false)
         t.ok(
           !result.success && result.error.issues.some((issue) => issue.message.includes('prefill'))
@@ -191,47 +191,47 @@ function acceptsCompletion(params: Record<string, unknown>): boolean {
   return completionClientParamsSchema.safeParse({ ...baseCompletion, ...params }).success
 }
 
-test('completionClientParamsSchema: a demanding tool_choice needs matching tools', (t) => {
+test('completionClientParamsSchema: a demanding toolChoice needs matching tools', (t) => {
   t.is(
-    acceptsCompletion({ generationParams: { tool_choice: 'required' } }),
+    acceptsCompletion({ generationParams: { toolChoice: 'required' } }),
     false,
     'required, no tools'
   )
   t.is(
-    acceptsCompletion({ generationParams: { tool_choice: 'get_weather' } }),
+    acceptsCompletion({ generationParams: { toolChoice: 'get_weather' } }),
     false,
     'name, no tools'
   )
   t.is(
-    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }),
+    acceptsCompletion({ tools: [weatherTool], generationParams: { toolChoice: 'get_time' } }),
     false,
     'name not among the declared tools'
   )
   t.is(
-    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'required' } }),
+    acceptsCompletion({ tools: [weatherTool], generationParams: { toolChoice: 'required' } }),
     true
   )
   t.is(
-    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }),
+    acceptsCompletion({ tools: [weatherTool], generationParams: { toolChoice: 'get_weather' } }),
     true
   )
 })
 
 test('completionClientParamsSchema: auto and none need no tools', (t) => {
-  t.is(acceptsCompletion({ generationParams: { tool_choice: 'auto' } }), true)
-  t.is(acceptsCompletion({ generationParams: { tool_choice: 'none' } }), true)
+  t.is(acceptsCompletion({ generationParams: { toolChoice: 'auto' } }), true)
+  t.is(acceptsCompletion({ generationParams: { toolChoice: 'none' } }), true)
 })
 
 // The orchestrate request is the entry point for the worker's tool loop, and
 // the inner turn it dispatches is never re-parsed -- so an unmatched
-// tool_choice has to be rejected here or it reaches the addon.
-test('request schemas: every completion entry point rejects an unmatched tool_choice', (t) => {
+// toolChoice has to be rejected here or it reaches the addon.
+test('request schemas: every completion entry point rejects an unmatched toolChoice', (t) => {
   const cases = [
-    { generationParams: { tool_choice: 'required' } },
-    { generationParams: { tool_choice: 'get_weather' } },
-    { tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }
+    { generationParams: { toolChoice: 'required' } },
+    { generationParams: { toolChoice: 'get_weather' } },
+    { tools: [weatherTool], generationParams: { toolChoice: 'get_time' } }
   ]
-  const accepted = { tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }
+  const accepted = { tools: [weatherTool], generationParams: { toolChoice: 'get_weather' } }
 
   for (const params of cases) {
     t.is(
@@ -318,7 +318,7 @@ test('completionClientParamsSchema: "tool_search" is reserved only when somethin
   )
 })
 
-test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t) => {
+test('completionClientParamsSchema: toolChoice cannot name a deferred tool', (t) => {
   const deferred = {
     type: 'function',
     name: 'create_issue',
@@ -332,7 +332,7 @@ test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t
     history: [{ role: 'user', content: 'hi' }],
     stream: true,
     tools: [deferred],
-    generationParams: { tool_choice: 'create_issue' }
+    generationParams: { toolChoice: 'create_issue' }
   })
   t.is(named.success, false, 'its schema is not in the prompt, so it cannot be forced')
 
@@ -341,7 +341,7 @@ test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t
     history: [{ role: 'user', content: 'hi' }],
     stream: true,
     tools: [deferred],
-    generationParams: { tool_choice: 'tool_search' }
+    generationParams: { toolChoice: 'tool_search' }
   })
   t.is(search.success, true, 'forcing a search is allowed when something defers')
 
@@ -350,7 +350,7 @@ test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t
     history: [{ role: 'user', content: 'hi' }],
     stream: true,
     tools: [{ ...deferred, deferLoading: false }],
-    generationParams: { tool_choice: 'tool_search' }
+    generationParams: { toolChoice: 'tool_search' }
   })
   t.is(noDefer.success, false, 'there is no search tool when nothing defers')
 })

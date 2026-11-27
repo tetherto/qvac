@@ -103,14 +103,14 @@ test('no patterns match = schema defaults only', (t) => {
   )
 
   t.is(result.device, LLM_CONFIG_DEFAULTS.device)
-  t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
+  t.is(result.ctxSize, LLM_CONFIG_DEFAULTS.ctxSize)
 })
 
 // A resolved config carries a system prompt only when the caller configures one.
-test('no system_prompt default is injected', (t) => {
+test('no systemPrompt default is injected', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
 
-  t.absent('system_prompt' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
+  t.absent('systemPrompt' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
 
   const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
@@ -119,23 +119,23 @@ test('no system_prompt default is injected', (t) => {
     [],
     []
   )
-  t.absent('system_prompt' in resolved, 'absent when the caller sets none')
+  t.absent('systemPrompt' in resolved, 'absent when the caller sets none')
 
   const configured = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
-    { system_prompt: 'Answer in French.' },
+    { systemPrompt: 'Answer in French.' },
     ctx,
     [],
     []
   )
-  t.is(configured.system_prompt, 'Answer in French.', 'a configured prompt is kept')
+  t.is(configured.systemPrompt, 'Answer in French.', 'a configured prompt is kept')
 })
 
-// gpu_layers stays absent from a resolved config unless the caller sets it.
-test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
+// gpuLayers stays absent from a resolved config unless the caller sets it.
+test('no gpuLayers default is injected, so the runtime fit can run', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
 
-  t.absent('gpu_layers' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
+  t.absent('gpuLayers' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
 
   const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
@@ -144,18 +144,18 @@ test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
     [],
     []
   )
-  t.absent('gpu_layers' in resolved, 'not in a resolved config either')
+  t.absent('gpuLayers' in resolved, 'not in a resolved config either')
 
   // The escape hatch still works: an explicit value is passed through, and
   // pinning the layer count is what turns the fit off.
   const pinned = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
-    { gpu_layers: 12 },
+    { gpuLayers: 12 },
     ctx,
     [],
     []
   )
-  t.is(pinned.gpu_layers, 12, 'an explicit gpu_layers still pins the count')
+  t.is(pinned.gpuLayers, 12, 'an explicit gpuLayers still pins the count')
 })
 
 // Resolution parses through the permissive base schema, so the retired key
@@ -164,13 +164,13 @@ test('config resolution strips retired n_discarded instead of rejecting it', (t)
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
   const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
-    { ctx_size: 2048, n_discarded: 256 },
+    { ctxSize: 2048, n_discarded: 256 },
     ctx,
     [],
     []
   )
   t.absent('n_discarded' in resolved, 'the retired key is dropped')
-  t.is(resolved['ctx_size'], 2048, 'the rest of the config survives')
+  t.is(resolved.ctxSize, 2048, 'the rest of the config survives')
 })
 
 test('multiple patterns merge (general → specific)', (t) => {
@@ -180,7 +180,7 @@ test('multiple patterns merge (general → specific)', (t) => {
       name: 'General Android',
       match: { platform: 'android' },
       defaults: {
-        [ModelType.llamacppCompletion]: { device: 'vulkan', gpu_layers: 10 }
+        [ModelType.llamacppCompletion]: { device: 'vulkan', gpuLayers: 10 }
       }
     },
     {
@@ -199,7 +199,7 @@ test('multiple patterns merge (general → specific)', (t) => {
   )
 
   t.is(result.device, 'cpu')
-  t.is(result.gpu_layers, 10)
+  t.is(result.gpuLayers, 10)
 })
 
 test('user input overrides all patterns', (t) => {
@@ -209,22 +209,22 @@ test('user input overrides all patterns', (t) => {
       name: 'Android',
       match: { platform: 'android' },
       defaults: {
-        [ModelType.llamacppCompletion]: { device: 'cpu', gpu_layers: 0 }
+        [ModelType.llamacppCompletion]: { device: 'cpu', gpuLayers: 0 }
       }
     }
   ]
 
   const result = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
-    { device: 'gpu', ctx_size: 2048 },
+    { device: 'gpu', ctxSize: 2048 },
     ctx,
     [],
     builtinPatterns
   )
 
   t.is(result.device, 'gpu')
-  t.is(result.ctx_size, 2048)
-  t.is(result.gpu_layers, 0)
+  t.is(result.ctxSize, 2048)
+  t.is(result.gpuLayers, 0)
 })
 
 test('user patterns override builtin patterns', (t) => {
@@ -234,7 +234,7 @@ test('user patterns override builtin patterns', (t) => {
       name: 'Builtin',
       match: { platform: 'android' },
       defaults: {
-        [ModelType.llamacppCompletion]: { device: 'cpu', gpu_layers: 0 }
+        [ModelType.llamacppCompletion]: { device: 'cpu', gpuLayers: 0 }
       }
     }
   ]
@@ -255,7 +255,7 @@ test('user patterns override builtin patterns', (t) => {
   )
 
   t.is(result.device, 'vulkan')
-  t.is(result.gpu_layers, 0)
+  t.is(result.gpuLayers, 0)
 })
 
 test('onLog callback reports applied patterns', (t) => {
@@ -269,7 +269,7 @@ test('onLog callback reports applied patterns', (t) => {
     {
       name: 'Pattern B',
       match: { platform: 'android', deviceBrand: 'google' },
-      defaults: { [ModelType.llamacppCompletion]: { gpu_layers: 5 } }
+      defaults: { [ModelType.llamacppCompletion]: { gpuLayers: 5 } }
     }
   ]
 
@@ -281,7 +281,7 @@ test('onLog callback reports applied patterns', (t) => {
   t.ok(log)
   t.alike(log?.appliedPatterns, ['Pattern A', 'Pattern B'])
   t.is(log?.mergedDefaults.device, 'cpu')
-  t.is(log?.mergedDefaults.gpu_layers, 5)
+  t.is(log?.mergedDefaults.gpuLayers, 5)
 })
 
 // ============================================
@@ -311,7 +311,7 @@ test('BUILTIN: Pixel device gets cpu + flashAttention off', (t) => {
 
   t.alike(log?.appliedPatterns, ['Pixel devices (default)'])
   t.is(llmResult.device, 'cpu')
-  t.is(llmResult.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
+  t.is(llmResult.ctxSize, LLM_CONFIG_DEFAULTS.ctxSize)
 
   const embedResult = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppEmbedding,
@@ -428,13 +428,13 @@ test('BUILTIN: User can override device defaults', (t) => {
   t.is(result.device, 'vulkan')
 })
 
-test('draftModelSrc pairs with a spec_type from device defaults', (t) => {
+test('draftModelSrc pairs with a specType from device defaults', (t) => {
   const ctx: RuntimeContext = { platform: 'darwin' }
   const patterns: DevicePattern[] = [
     {
       name: 'Speculative',
       match: { platform: 'darwin' },
-      defaults: { [ModelType.llamacppCompletion]: { spec_type: 'draft-mtp' } }
+      defaults: { [ModelType.llamacppCompletion]: { specType: 'draft-mtp' } }
     }
   ]
 
@@ -445,7 +445,7 @@ test('draftModelSrc pairs with a spec_type from device defaults', (t) => {
     patterns,
     []
   )
-  t.is(result.spec_type, 'draft-mtp')
+  t.is(result.specType, 'draft-mtp')
 
   t.exception(
     () =>
@@ -466,7 +466,7 @@ test('a Core ML FFN cache in device defaults does not block loads that leave it 
     {
       name: 'Core ML cache',
       match: { platform: 'ios' },
-      defaults: { [ModelType.llamacppCompletion]: { 'coreml-ffn-cache': '/app/cache/coreml-ffn' } }
+      defaults: { [ModelType.llamacppCompletion]: { coremlFfnCache: '/app/cache/coreml-ffn' } }
     }
   ]
 
@@ -477,15 +477,15 @@ test('a Core ML FFN cache in device defaults does not block loads that leave it 
     patterns,
     []
   )
-  t.is(plain['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+  t.is(plain['coremlFfnCache'], '/app/cache/coreml-ffn')
 
   const enabled = resolveModelConfigWithContext<Record<string, unknown>>(
     ModelType.llamacppCompletion,
-    { 'coreml-ffn': true },
+    { coremlFfn: true },
     ctx,
     patterns,
     []
   )
-  t.is(enabled['coreml-ffn'], true)
-  t.is(enabled['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+  t.is(enabled['coremlFfn'], true)
+  t.is(enabled['coremlFfnCache'], '/app/cache/coreml-ffn')
 })

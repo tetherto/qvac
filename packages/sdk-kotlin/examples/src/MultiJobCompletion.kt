@@ -66,7 +66,7 @@ fun main(): Unit = runBlocking {
         val modelId = client.loadWithProgress(
             Models.LLAMA_3_2_1B_INST_Q4_0,
             modelConfig = buildJsonObject {
-                put("ctx_size", 4096)
+                put("ctxSize", 4096)
                 put("parallel", 4)
             },
         )

@@ -1,14 +1,14 @@
 """Python port of packages/sdk/examples/diffusion-img2vid.ts.
 
-Image-to-video with Wan 2.1 I2V: a first-frame `init_image` animated by a
+Image-to-video with Wan 2.1 I2V: a first-frame `initImage` animated by a
 motion prompt. The model uses a split layout of four files -- the I2V diffusion
 checkpoint plus UMT5-XXL, the Wan VAE and CLIP vision weights -- all handed to
 one `load_model` call. The sources default to the registry constants, so the
 common case is just an init image path.
 
-TypeScript's `video()` takes `init_image` as raw bytes and base64-encodes them
+TypeScript's `video()` takes `initImage` as raw bytes and base64-encodes them
 on the way to the worker. Python calls the worker directly through
-`video_stream`, where `init_image` is already the encoded string, so the
+`video_stream`, where `initImage` is already the encoded string, so the
 example encodes the file itself. The same iterator then carries progress, the
 finished clips and the closing stats, which TypeScript receives as three
 separate channels.
@@ -89,10 +89,10 @@ async def main() -> int:
                     "t5XxlModelSrc": t5_xxl_model_src,
                     "vaeModelSrc": vae_model_src,
                     "clipVisionModelSrc": clip_vision_model_src,
-                    "diffusion_fa": True,
-                    "offload_to_cpu": True,
-                    "params_backend": "vae=cpu",
-                    "vae_tiling": True,
+                    "diffusionFlashAttention": True,
+                    "offloadToCpu": True,
+                    "paramsBackend": "vae=cpu",
+                    "vaeTiling": True,
                 },
                 on_progress=print_progress,
             )
@@ -109,18 +109,18 @@ async def main() -> int:
                     "modelId": model_id,
                     "mode": "img2vid",
                     "prompt": prompt,
-                    "init_image": init_image,
-                    "negative_prompt": (
+                    "initImage": init_image,
+                    "negativePrompt": (
                         "blurry, distorted, low quality, jittery, static, frozen"
                     ),
                     "strength": 0.85,
-                    "flow_shift": 3.0,
-                    "video_frames": 33,
+                    "flowShift": 3.0,
+                    "videoFrames": 33,
                     "fps": 16,
                     "steps": 30,
-                    "cfg_scale": 6.0,
+                    "cfgScale": 6.0,
                     "seed": 42,
-                    "vae_tiling": True,
+                    "vaeTiling": True,
                 }
             )
 

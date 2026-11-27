@@ -1,43 +1,74 @@
 import { type LlmConfig } from '@/schemas/index'
 
-/**
- * Converts an LlmConfig into the flat string-keyed map the C++ addon expects.
- *
- * JS-only fields excluded from the output (must NOT be forwarded to the addon):
- *   - modelType   (schema discriminant, meaningless at C++ level)
- *   - system_prompt  (JS-side history seeding only; C++ removed --system-prompt in 8189)
- */
+const NATIVE_KEYS: Partial<Record<keyof LlmConfig, string>> = {
+  ctxSize: 'ctx_size',
+  temperature: 'temp',
+  topP: 'top_p',
+  topK: 'top_k',
+  gpuLayers: 'gpu_layers',
+  loadMode: 'load_mode',
+  presencePenalty: 'presence_penalty',
+  frequencyPenalty: 'frequency_penalty',
+  repeatPenalty: 'repeat_penalty',
+  stopSequences: 'reverse_prompt',
+  cacheCheckpoints: 'cache_checkpoints',
+  cacheCheckpointsMaxBytes: 'cache_checkpoints_max_bytes',
+  cacheCheckpointStorage: 'cache_checkpoint_storage',
+  cacheCheckpointDir: 'cache_checkpoint_dir',
+  cacheShareAcrossKeys: 'cache_share_across_keys',
+  cacheRamMib: 'cache_ram_mib',
+  cacheTypeK: 'cache-type-k',
+  cacheTypeV: 'cache-type-v',
+  mainGpu: 'main-gpu',
+  rpcServers: 'rpc-servers',
+  splitMode: 'split-mode',
+  flashAttention: 'flash-attn',
+  tensorSplit: 'tensor-split',
+  batchSize: 'batch-size',
+  ubatchSize: 'ubatch-size',
+  cpuMoe: 'cpu-moe',
+  nCpuMoe: 'n-cpu-moe',
+  kvOffload: 'kv-offload',
+  imageMaxTokens: 'image-max-tokens',
+  imageMinTokens: 'image-min-tokens',
+  imageMaxMegapixels: 'image-max-megapixels',
+  pollBatch: 'poll-batch',
+  threadsBatch: 'threads-batch',
+  cpuMask: 'cpu-mask',
+  cpuMaskBatch: 'cpu-mask-batch',
+  overrideTensor: 'override-tensor',
+  nCpuFfn: 'n-cpu-ffn',
+  moeCacheMib: 'moe-cache-mib',
+  prefetchWeights: 'prefetch-weights',
+  tensorReadLazy: 'tensor-read-lazy',
+  coremlFfn: 'coreml-ffn',
+  coremlFfnSplit: 'coreml-ffn-split',
+  coremlFfnCache: 'coreml-ffn-cache',
+  fitTarget: 'fit-target',
+  fitCtx: 'fit-ctx',
+  reasoningBudget: 'reasoning_budget',
+  specType: 'spec_type',
+  specDraftNMax: 'spec_draft_n_max',
+  specDraftNMin: 'spec_draft_n_min',
+  specDraftPMin: 'spec_draft_p_min',
+  imageTileMode: 'image_tile_mode',
+  imageNoUpscale: 'image_no_upscale',
+  mmprojUseGpu: 'mmproj-use-gpu'
+}
+
+const JS_ONLY_KEYS = new Set(['modelType', 'systemPrompt'])
+
+function toNativeValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(', ')
+  return String(value)
+}
+
+/** Converts an LlmConfig into the flat string-keyed map the C++ addon expects. */
 export function transformLlmConfig(llmConfig: LlmConfig) {
-  const transformed = JSON.parse(
-    JSON.stringify(llmConfig, (key: string, v: unknown) =>
-      key === 'modelType' || key === 'system_prompt'
-        ? undefined
-        : key === 'stop_sequences' || key === 'backend'
-          ? Array.isArray(v)
-            ? v.join(', ')
-            : v
-          : typeof v === 'number' || typeof v === 'boolean'
-            ? String(v)
-            : v
-    ).replace(
-      /"([a-z][A-Za-z]*)":/g,
-      (_, key: string) => `"${key.replace(/[A-Z]/g, (l: string) => `_${l.toLowerCase()}`)}":`
-    )
-  ) as Record<string, string>
-
-  if ('poll_batch' in transformed) {
-    transformed['poll-batch'] = transformed['poll_batch']
-    delete transformed['poll_batch']
-  }
-
-  if ('stop_sequences' in transformed) {
-    transformed['reverse_prompt'] = transformed['stop_sequences']
-    delete transformed['stop_sequences']
-  }
-
-  if ('opencl_cache_dir' in transformed) {
-    transformed['openclCacheDir'] = transformed['opencl_cache_dir']
-    delete transformed['opencl_cache_dir']
+  const transformed: Record<string, string> = {}
+  for (const [key, value] of Object.entries(llmConfig)) {
+    if (value === undefined || JS_ONLY_KEYS.has(key)) continue
+    transformed[NATIVE_KEYS[key as keyof LlmConfig] ?? key] = toNativeValue(value)
   }
 
   if ('cpu-moe' in transformed) {

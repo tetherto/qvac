@@ -15,8 +15,8 @@ const LLM_BASE = {
 
 test('llmConfigSchema: preserves ordered RPC endpoints and device selection', (t) => {
   for (const servers of ['10.0.0.2:50052', '10.0.0.3:50052,10.0.0.2:50052']) {
-    const config = llmConfigSchema.parse({ 'rpc-servers': servers, devices: 'RPC0' })
-    t.is(config['rpc-servers'], servers)
+    const config = llmConfigSchema.parse({ rpcServers: servers, devices: 'RPC0' })
+    t.is(config.rpcServers, servers)
     t.is(config.devices, 'RPC0')
   }
 })
@@ -27,51 +27,51 @@ test('llmConfigSchema: rejects duplicate RPC endpoints before native registratio
     '10.0.0.2:50052,10.0.0.3:50052,10.0.0.2:50052',
     '10.0.0.2:50052, 10.0.0.2:50052'
   ]) {
-    const result = llmConfigSchema.safeParse({ 'rpc-servers': servers })
+    const result = llmConfigSchema.safeParse({ rpcServers: servers })
     t.is(result.success, false)
     if (!result.success) {
-      t.alike(result.error.issues[0]?.path, ['rpc-servers'])
+      t.alike(result.error.issues[0]?.path, ['rpcServers'])
       t.is(result.error.issues[0]?.message, 'RPC server endpoints must be unique')
     }
   }
 })
 
-test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'tensor' }).success, true)
+test('llmConfigBaseSchema: accepts supported splitMode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ splitMode: 'none' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ splitMode: 'layer' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ splitMode: 'tensor' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid split-mode values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'column' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, false)
+test('llmConfigBaseSchema: rejects invalid splitMode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ splitMode: 'column' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ splitMode: 'row' }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts valid flash-attn values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'on' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'off' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'auto' }).success, true)
+test('llmConfigBaseSchema: accepts valid flashAttention values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ flashAttention: 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ flashAttention: 'off' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ flashAttention: 'auto' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid flash-attn values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'enabled' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': true }).success, false)
+test('llmConfigBaseSchema: rejects invalid flashAttention values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ flashAttention: 'enabled' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ flashAttention: true }).success, false)
 })
 
-test('llmConfigBaseSchema: split-mode is optional', (t) => {
+test('llmConfigBaseSchema: splitMode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
-test('llmConfigBaseSchema: accepts every load_mode value', (t) => {
-  for (const load_mode of ['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'] as const) {
-    const result = llmConfigBaseSchema.safeParse({ load_mode })
-    t.is(result.success, true, `${load_mode} must be accepted`)
-    if (result.success) t.is(result.data.load_mode, load_mode)
+test('llmConfigBaseSchema: accepts every loadMode value', (t) => {
+  for (const loadMode of ['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'] as const) {
+    const result = llmConfigBaseSchema.safeParse({ loadMode })
+    t.is(result.success, true, `${loadMode} must be accepted`)
+    if (result.success) t.is(result.data.loadMode, loadMode)
   }
 })
 
-test('llmConfigBaseSchema: rejects invalid load_mode values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ load_mode: 'buffered' }).success, false)
+test('llmConfigBaseSchema: rejects invalid loadMode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ loadMode: 'buffered' }).success, false)
 })
 
 test('llmConfigBaseSchema: rejects legacy no_mmap under strict validation', (t) => {
@@ -99,15 +99,15 @@ test('retired n_discarded strips, not rejects, on the wire and in deviceDefaults
     type: 'loadModel',
     modelType: ModelType.llamacppCompletion,
     modelSrc: 'model.gguf',
-    modelConfig: { ctx_size: 2048, n_discarded: 256 }
+    modelConfig: { ctxSize: 2048, n_discarded: 256 }
   })
   t.is(wire.success, true, 'the wire request still validates')
   const wireConfig = (wire.success ? wire.data : {}) as { modelConfig?: Record<string, unknown> }
   t.absent('n_discarded' in (wireConfig.modelConfig ?? {}), 'the key is dropped from the wire')
-  t.is(wireConfig.modelConfig?.['ctx_size'], 2048, 'the rest of the config survives')
+  t.is(wireConfig.modelConfig?.['ctxSize'], 2048, 'the rest of the config survives')
 
   const defaults = deviceConfigDefaultsSchema.safeParse({
-    llm: { ctx_size: 2048, n_discarded: 256 }
+    llm: { ctxSize: 2048, n_discarded: 256 }
   })
   t.is(defaults.success, true, 'deviceDefaults still validate')
   const llmDefaults = (defaults.success ? defaults.data : {}) as {
@@ -116,10 +116,10 @@ test('retired n_discarded strips, not rejects, on the wire and in deviceDefaults
   t.absent('n_discarded' in (llmDefaults.llm ?? {}), 'the key is dropped from deviceDefaults')
 })
 
-test('llmConfigSchema: leaves load_mode unset by default', (t) => {
+test('llmConfigSchema: leaves loadMode unset by default', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.is(result.data.load_mode, undefined)
+  if (result.success) t.is(result.data.loadMode, undefined)
 })
 
 test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
@@ -133,188 +133,188 @@ test('llmConfigBaseSchema: rejects invalid parallel values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ parallel: 1.5 }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts tensor-split string', (t) => {
-  const result = llmConfigBaseSchema.safeParse({ 'tensor-split': '1,1' })
+test('llmConfigBaseSchema: accepts tensorSplit string', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ tensorSplit: '1,1' })
   t.is(result.success, true)
-  if (result.success) t.is(result.data['tensor-split'], '1,1')
+  if (result.success) t.is(result.data.tensorSplit, '1,1')
 })
 
-test('llmConfigBaseSchema: accepts main-gpu as integer device index', (t) => {
-  const result = llmConfigBaseSchema.safeParse({ 'main-gpu': 0 })
+test('llmConfigBaseSchema: accepts mainGpu as integer device index', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ mainGpu: 0 })
   t.is(result.success, true)
-  if (result.success) t.is(result.data['main-gpu'], 0)
+  if (result.success) t.is(result.data.mainGpu, 0)
 })
 
-test("llmConfigBaseSchema: accepts main-gpu as 'integrated' or 'dedicated'", (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'main-gpu': 'integrated' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'main-gpu': 'dedicated' }).success, true)
+test("llmConfigBaseSchema: accepts mainGpu as 'integrated' or 'dedicated'", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ mainGpu: 'integrated' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ mainGpu: 'dedicated' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects main-gpu invalid string', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'main-gpu': 'hello' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'main-gpu': '0' }).success, false)
+test('llmConfigBaseSchema: rejects mainGpu invalid string', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ mainGpu: 'hello' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ mainGpu: '0' }).success, false)
 })
 
-test('loadModelOptionsToRequestSchema: accepts split-mode for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: accepts splitMode for LLM', (t) => {
   const result = loadModelOptionsToRequestSchema.safeParse({
     ...LLM_BASE,
-    modelConfig: { 'split-mode': 'layer' }
+    modelConfig: { splitMode: 'layer' }
   })
   t.is(result.success, true)
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'split-mode': 'tensor', 'flash-attn': 'on', ctx_size: 8192 }
+      modelConfig: { splitMode: 'tensor', flashAttention: 'on', ctxSize: 8192 }
     }).success,
     true
   )
 })
 
-test('loadModelOptionsToRequestSchema: accepts main-gpu integer and named GPUs for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: accepts mainGpu integer and named GPUs for LLM', (t) => {
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': 0 }
+      modelConfig: { splitMode: 'layer', tensorSplit: '1,1', mainGpu: 0 }
     }).success,
     true
   )
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'main-gpu': 'integrated' }
+      modelConfig: { mainGpu: 'integrated' }
     }).success,
     true
   )
 })
 
-test('loadModelOptionsToRequestSchema: rejects main-gpu invalid string for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: rejects mainGpu invalid string for LLM', (t) => {
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'main-gpu': 'hello' }
+      modelConfig: { mainGpu: 'hello' }
     }).success,
     false
   )
 })
 
-test('loadModelSrcRequestSchema: accepts split-mode for LLM', (t) => {
+test('loadModelSrcRequestSchema: accepts splitMode for LLM', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
     type: 'loadModel',
     modelType: ModelType.llamacppCompletion,
     modelSrc: 'model.gguf',
-    modelConfig: { 'split-mode': 'layer', 'tensor-split': '3,1', 'main-gpu': 0 }
+    modelConfig: { splitMode: 'layer', tensorSplit: '3,1', mainGpu: 0 }
   })
   t.is(result.success, true)
 })
 
-test('llmConfigBaseSchema: accepts reasoning_budget -1 (unrestricted)', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: -1 }).success, true)
+test('llmConfigBaseSchema: accepts reasoningBudget -1 (unrestricted)', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: -1 }).success, true)
 })
 
-test('llmConfigBaseSchema: accepts reasoning_budget 0 (disabled)', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0 }).success, true)
+test('llmConfigBaseSchema: accepts reasoningBudget 0 (disabled)', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: 0 }).success, true)
 })
 
-test('llmConfigBaseSchema: accepts positive reasoning_budget (token cap)', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 1 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 128 }).success, true)
+test('llmConfigBaseSchema: accepts positive reasoningBudget (token cap)', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: 1 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: 128 }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects reasoning_budget other values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: -2 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: REASONING_BUDGET_MAX + 1 }).success, false)
+test('llmConfigBaseSchema: rejects reasoningBudget other values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: -2 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: 0.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ reasoningBudget: REASONING_BUDGET_MAX + 1 }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts cache_checkpoints from 0 to 1024', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 0 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 2 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1024 }).success, true)
+test('llmConfigBaseSchema: accepts cacheCheckpoints from 0 to 1024', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: 2 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: 1024 }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects cache_checkpoints the addon refuses', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1025 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: '2' }).success, false)
+test('llmConfigBaseSchema: rejects cacheCheckpoints the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: 1025 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpoints: '2' }).success, false)
 })
 
-test('llmConfigSchema: does not inject a default for cache_checkpoints', (t) => {
+test('llmConfigSchema: does not inject a default for cacheCheckpoints', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.absent('cache_checkpoints' in result.data)
+  if (result.success) t.absent('cacheCheckpoints' in result.data)
 })
 
-test('loadModelOptionsToRequestSchema: accepts cache_checkpoints for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: accepts cacheCheckpoints for LLM', (t) => {
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { cache_checkpoints: 2 }
+      modelConfig: { cacheCheckpoints: 2 }
     }).success,
     true
   )
 })
 
 test('llmConfigBaseSchema: accepts the checkpoint budget and storage keys', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 8589934592 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'memory' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointsMaxBytes: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointsMaxBytes: 8589934592 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointStorage: 'memory' }).success, true)
   t.is(
     llmConfigBaseSchema.safeParse({
-      cache_checkpoint_storage: 'disk',
-      cache_checkpoint_dir: '/data/cache'
+      cacheCheckpointStorage: 'disk',
+      cacheCheckpointDir: '/data/cache'
     }).success,
     true
   )
 })
 
 test('llmConfigBaseSchema: rejects checkpoint budget and storage values the addon refuses', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: '1024' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'ram' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointsMaxBytes: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointsMaxBytes: 0.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointsMaxBytes: '1024' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointStorage: 'ram' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointDir: '' }).success, false)
 })
 
 test('llmConfigBaseSchema: leaves the disk storage and directory pairing to the addon', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'disk' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '/data/cache' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointStorage: 'disk' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheCheckpointDir: '/data/cache' }).success, true)
 })
 
-test('llmConfigBaseSchema: accepts cache_ram_mib from 0 to 1048576', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 0 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 2048 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048576 }).success, true)
+test('llmConfigBaseSchema: accepts cacheRamMib from 0 to 1048576', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: 1048576 }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects cache_ram_mib the addon refuses', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048577 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: '2048' }).success, false)
+test('llmConfigBaseSchema: rejects cacheRamMib the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: 1048577 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cacheRamMib: '2048' }).success, false)
 })
 
 test('llmConfigSchema: does not inject a default for the other prompt-cache keys', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
   if (result.success) {
-    t.absent('cache_checkpoints_max_bytes' in result.data)
-    t.absent('cache_checkpoint_storage' in result.data)
-    t.absent('cache_checkpoint_dir' in result.data)
-    t.absent('cache_ram_mib' in result.data)
+    t.absent('cacheCheckpointsMaxBytes' in result.data)
+    t.absent('cacheCheckpointStorage' in result.data)
+    t.absent('cacheCheckpointDir' in result.data)
+    t.absent('cacheRamMib' in result.data)
   }
 })
 
 test('llmConfigSchema: keeps each conversation to its own cache unless sharing is asked for', (t) => {
-  t.is(llmConfigSchema.parse({}).cache_share_across_keys, false)
-  t.is(llmConfigSchema.parse({ cache_share_across_keys: true }).cache_share_across_keys, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: 'false' }).success, false)
+  t.is(llmConfigSchema.parse({}).cacheShareAcrossKeys, false)
+  t.is(llmConfigSchema.parse({ cacheShareAcrossKeys: true }).cacheShareAcrossKeys, true)
+  t.is(llmConfigBaseSchema.safeParse({ cacheShareAcrossKeys: 'false' }).success, false)
 })
 
 test('transformLlmConfig: passes the cache sharing choice to the addon as a string', (t) => {
   t.is(transformLlmConfig(llmConfigSchema.parse({}))['cache_share_across_keys'], 'false')
   t.is(
-    transformLlmConfig(llmConfigSchema.parse({ cache_share_across_keys: true }))[
+    transformLlmConfig(llmConfigSchema.parse({ cacheShareAcrossKeys: true }))[
       'cache_share_across_keys'
     ],
     'true'
@@ -323,275 +323,272 @@ test('transformLlmConfig: passes the cache sharing choice to the addon as a stri
 
 test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM', (t) => {
   const modelConfig = {
-    cache_checkpoints_max_bytes: 1073741824,
-    cache_checkpoint_storage: 'disk',
-    cache_checkpoint_dir: '/data/cache',
-    cache_ram_mib: 512
+    cacheCheckpointsMaxBytes: 1073741824,
+    cacheCheckpointStorage: 'disk',
+    cacheCheckpointDir: '/data/cache',
+    cacheRamMib: 512
   }
   const result = loadModelOptionsToRequestSchema.safeParse({ ...LLM_BASE, modelConfig })
   t.is(result.success, true)
   if (result.success) t.alike(result.data.modelConfig, modelConfig)
 })
 
-test('llmConfigBaseSchema: accepts valid image_tile_mode values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'disabled' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'batched' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'sequential' }).success, true)
+test('llmConfigBaseSchema: accepts valid imageTileMode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageTileMode: 'disabled' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ imageTileMode: 'batched' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ imageTileMode: 'sequential' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid image_tile_mode values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'tiled' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 0 }).success, false)
+test('llmConfigBaseSchema: rejects invalid imageTileMode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageTileMode: 'tiled' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageTileMode: 0 }).success, false)
 })
 
-test('llmConfigBaseSchema: image_tile_mode is optional', (t) => {
+test('llmConfigBaseSchema: imageTileMode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
-test('llmConfigSchema: defaults image_tile_mode to sequential', (t) => {
+test('llmConfigSchema: defaults imageTileMode to sequential', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.is(result.data.image_tile_mode, 'sequential')
+  if (result.success) t.is(result.data.imageTileMode, 'sequential')
 })
 
-test('llmConfigSchema: explicit image_tile_mode overrides the default', (t) => {
-  const result = llmConfigSchema.safeParse({ image_tile_mode: 'batched' })
+test('llmConfigSchema: explicit imageTileMode overrides the default', (t) => {
+  const result = llmConfigSchema.safeParse({ imageTileMode: 'batched' })
   t.is(result.success, true)
-  if (result.success) t.is(result.data.image_tile_mode, 'batched')
+  if (result.success) t.is(result.data.imageTileMode, 'batched')
 })
 
-test('llmConfigBaseSchema: accepts valid image_no_upscale values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'on' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'off' }).success, true)
+test('llmConfigBaseSchema: accepts valid imageNoUpscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageNoUpscale: 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ imageNoUpscale: 'off' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid image_no_upscale values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: true }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'yes' }).success, false)
+test('llmConfigBaseSchema: rejects invalid imageNoUpscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageNoUpscale: true }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageNoUpscale: 1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageNoUpscale: 'yes' }).success, false)
 })
 
 // Unset must stay unset. The addon reads absence as fabric's -1 sentinel, meaning
 // "use the model's own GGUF value"; a default here would force one rule on every
 // model and silently change preprocessing for existing callers.
-test('llmConfigBaseSchema: image_no_upscale is optional and has no default', (t) => {
+test('llmConfigBaseSchema: imageNoUpscale is optional and has no default', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.is(result.data.image_no_upscale, undefined)
+  if (result.success) t.is(result.data.imageNoUpscale, undefined)
 })
 
 // The regression this guards: load-model.ts validates modelConfig with
 // llmConfigBaseSchema.strict(), so a field present in the SDK copy of this schema but
 // missing here is rejected before it ever reaches the addon.
-test('loadBuiltinModelOptions: strict validation admits image_no_upscale', (t) => {
-  t.is(llmConfigBaseSchema.strict().safeParse({ image_no_upscale: 'on' }).success, true)
+test('loadBuiltinModelOptions: strict validation admits imageNoUpscale', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ imageNoUpscale: 'on' }).success, true)
 })
 
-test('llmConfigBaseSchema: accepts mmproj-use-gpu boolean', (t) => {
-  const enabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': true })
+test('llmConfigBaseSchema: accepts mmprojUseGpu boolean', (t) => {
+  const enabled = llmConfigBaseSchema.safeParse({ mmprojUseGpu: true })
   t.is(enabled.success, true)
-  if (enabled.success) t.is(enabled.data['mmproj-use-gpu'], true)
-  const disabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': false })
+  if (enabled.success) t.is(enabled.data.mmprojUseGpu, true)
+  const disabled = llmConfigBaseSchema.safeParse({ mmprojUseGpu: false })
   t.is(disabled.success, true)
-  if (disabled.success) t.is(disabled.data['mmproj-use-gpu'], false)
+  if (disabled.success) t.is(disabled.data.mmprojUseGpu, false)
 })
 
-test('llmConfigBaseSchema: rejects non-boolean mmproj-use-gpu', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': 'true' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': 1 }).success, false)
+test('llmConfigBaseSchema: rejects non-boolean mmprojUseGpu', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ mmprojUseGpu: 'true' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ mmprojUseGpu: 1 }).success, false)
 })
 
-test('llmConfigBaseSchema: mmproj-use-gpu is optional (auto-default when unset)', (t) => {
+test('llmConfigBaseSchema: mmprojUseGpu is optional (auto-default when unset)', (t) => {
   const result = llmConfigBaseSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.absent('mmproj-use-gpu' in result.data)
+  if (result.success) t.absent('mmprojUseGpu' in result.data)
 })
 
-test('llmConfigSchema: does not inject a default for mmproj-use-gpu', (t) => {
+test('llmConfigSchema: does not inject a default for mmprojUseGpu', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.absent('mmproj-use-gpu' in result.data)
+  if (result.success) t.absent('mmprojUseGpu' in result.data)
 })
 
-test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: accepts mmprojUseGpu for LLM', (t) => {
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'mmproj-use-gpu': true }
+      modelConfig: { mmprojUseGpu: true }
     }).success,
     true
   )
 })
 
-test('llmConfigBaseSchema: accepts a positive integer image-max-megapixels', (t) => {
-  const result = llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 20 })
+test('llmConfigBaseSchema: accepts a positive integer imageMaxMegapixels', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ imageMaxMegapixels: 20 })
   t.is(result.success, true)
-  if (result.success) t.is(result.data['image-max-megapixels'], 20)
+  if (result.success) t.is(result.data.imageMaxMegapixels, 20)
 })
 
-test('llmConfigBaseSchema: rejects invalid image-max-megapixels', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 0 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 1.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': '20' }).success, false)
+test('llmConfigBaseSchema: rejects invalid imageMaxMegapixels', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxMegapixels: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxMegapixels: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxMegapixels: '20' }).success, false)
 })
 
-test('llmConfigBaseSchema: bounds image-max-megapixels at the addon maximum', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_709 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_710 }).success, false)
+test('llmConfigBaseSchema: bounds imageMaxMegapixels at the addon maximum', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxMegapixels: 18_446_744_073_709 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxMegapixels: 18_446_744_073_710 }).success, false)
 })
 
-test('llmConfigSchema: does not inject a default for image-max-megapixels', (t) => {
+test('llmConfigSchema: does not inject a default for imageMaxMegapixels', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
-  if (result.success) t.absent('image-max-megapixels' in result.data)
+  if (result.success) t.absent('imageMaxMegapixels' in result.data)
 })
 
-test('loadModelOptionsToRequestSchema: accepts image-max-megapixels for LLM', (t) => {
+test('loadModelOptionsToRequestSchema: accepts imageMaxMegapixels for LLM', (t) => {
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { 'image-max-megapixels': 100 }
+      modelConfig: { imageMaxMegapixels: 100 }
     }).success,
     true
   )
 })
 
-test('llmConfigBaseSchema: accepts valid tensor-read-lazy values', (t) => {
+test('llmConfigBaseSchema: accepts valid tensorReadLazy values', (t) => {
   for (const value of ['on', 'auto', 'off']) {
-    t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': value }).success, true)
+    t.is(llmConfigBaseSchema.safeParse({ tensorReadLazy: value }).success, true)
   }
 })
 
-test('llmConfigBaseSchema: rejects invalid tensor-read-lazy values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': 'yes' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': true }).success, false)
+test('llmConfigBaseSchema: rejects invalid tensorReadLazy values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ tensorReadLazy: 'yes' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ tensorReadLazy: true }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts both forms of moe-cache-mib', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'auto' }).success, true)
+test('llmConfigBaseSchema: accepts both forms of moeCacheMib', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ moeCacheMib: 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ moeCacheMib: 'auto' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid moe-cache-mib values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048.5 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'default' }).success, false)
+test('llmConfigBaseSchema: rejects invalid moeCacheMib values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ moeCacheMib: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ moeCacheMib: 2048.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ moeCacheMib: 'default' }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts both forms of prefetch-weights', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': true }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'auto' }).success, true)
+test('llmConfigBaseSchema: accepts both forms of prefetchWeights', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ prefetchWeights: true }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ prefetchWeights: 'auto' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects invalid prefetch-weights values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'on' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 1 }).success, false)
+test('llmConfigBaseSchema: rejects invalid prefetchWeights values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ prefetchWeights: 'on' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ prefetchWeights: 1 }).success, false)
 })
 
 test('llmConfigBaseSchema: accepts Core ML FFN splits in METALxN form', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '8192x2' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '2048x1' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '8192x2' }).success, true)
 })
 
 test('llmConfigBaseSchema: rejects Core ML FFN splits fabric refuses', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x3' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '0x1' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-split': '2048x1 ' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn-cache': '' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'coreml-ffn': 'true' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '2048' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '2048x3' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '0x1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnSplit: '2048x1 ' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfnCache: '' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ coremlFfn: 'true' }).success, false)
 })
 
-test('llmConfigSchema: Core ML FFN split requires coreml-ffn, the cache does not', (t) => {
-  const split = llmConfigSchema.safeParse({ 'coreml-ffn-split': '3072x1' })
+test('llmConfigSchema: Core ML FFN split requires coremlFfn, the cache does not', (t) => {
+  const split = llmConfigSchema.safeParse({ coremlFfnSplit: '3072x1' })
   t.is(split.success, false)
-  t.is(split.error?.issues[0]?.path[0], 'coreml-ffn-split')
-  t.is(
-    llmConfigSchema.safeParse({ 'coreml-ffn': false, 'coreml-ffn-cache': '/tmp/c' }).success,
-    true
-  )
-  t.is(llmConfigSchema.safeParse({ 'coreml-ffn-cache': '/tmp/c' }).success, true)
+  t.is(split.error?.issues[0]?.path[0], 'coremlFfnSplit')
+  t.is(llmConfigSchema.safeParse({ coremlFfn: false, coremlFfnCache: '/tmp/c' }).success, true)
+  t.is(llmConfigSchema.safeParse({ coremlFfnCache: '/tmp/c' }).success, true)
   t.is(
     llmConfigSchema.safeParse({
-      'coreml-ffn': true,
-      'coreml-ffn-split': '3072x1',
-      'coreml-ffn-cache': '/tmp/c'
+      coremlFfn: true,
+      coremlFfnSplit: '3072x1',
+      coremlFfnCache: '/tmp/c'
     }).success,
     true
   )
 })
 
-test('llmConfigBaseSchema: accepts both forms of fit-target', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 512 }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '1024,512' }).success, true)
+test('llmConfigBaseSchema: accepts both forms of fitTarget', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: 512 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: '1024,512' }).success, true)
 })
 
-test('llmConfigBaseSchema: rejects fit-target values fabric would misparse', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 'nonsense' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '512abc' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '-1' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': -1 }).success, false)
+test('llmConfigBaseSchema: rejects fitTarget values fabric would misparse', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: 'nonsense' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: '512abc' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: '-1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ fitTarget: -1 }).success, false)
 })
 
 test('llmConfigBaseSchema: rejects non-positive batch and ubatch sizes', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'batch-size': 0 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'ubatch-size': 0 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'image-max-tokens': 0 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'image-min-tokens': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ batchSize: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ ubatchSize: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageMaxTokens: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ imageMinTokens: 0 }).success, false)
 })
 
 test('llmConfigBaseSchema: rejects negative layer counts', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-moe': -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-ffn': -1 }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ 'fit-ctx': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ nCpuMoe: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ nCpuFfn: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ fitCtx: -1 }).success, false)
 })
 
-test('llmConfigSchema: gpu_layers stays unset', (t) => {
-  t.absent('gpu_layers' in llmConfigSchema.parse({}))
-  t.absent('gpu_layers' in llmConfigSchema.parse({ fit: true }))
-  t.absent('gpu_layers' in llmConfigSchema.parse({ fit: false }))
+test('llmConfigSchema: gpuLayers stays unset', (t) => {
+  t.absent('gpuLayers' in llmConfigSchema.parse({}))
+  t.absent('gpuLayers' in llmConfigSchema.parse({ fit: true }))
+  t.absent('gpuLayers' in llmConfigSchema.parse({ fit: false }))
 })
 
-test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
-  t.is(llmConfigSchema.parse({ gpu_layers: 20 }).gpu_layers, 20)
-  t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
+test('llmConfigSchema: an explicit gpuLayers is kept', (t) => {
+  t.is(llmConfigSchema.parse({ gpuLayers: 20 }).gpuLayers, 20)
+  t.is(llmConfigSchema.parse({ fit: true, gpuLayers: 20 }).gpuLayers, 20)
 })
 
-test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
+test('llmConfigBaseSchema: accepts every specType value', (t) => {
   for (const value of ['none', 'draft-mtp', 'draft-dflash', 'draft-dspark', 'auto']) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
+    t.is(llmConfigBaseSchema.safeParse({ specType: value }).success, true)
   }
-  t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ specType: 'draft-eagle' }).success, false)
 })
 
 test('llmConfigBaseSchema: bounds the speculative draft limits at the addon ranges', (t) => {
   for (const value of [1, 64]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, true)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftNMax: value }).success, true)
   }
   for (const value of [0, 65, 2.5]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, false)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftNMax: value }).success, false)
   }
   for (const value of [0, 64]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, true)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftNMin: value }).success, true)
   }
   for (const value of [-1, 65, 1.5]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, false)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftNMin: value }).success, false)
   }
   for (const value of [0, 0.75, 1]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, true)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftPMin: value }).success, true)
   }
   for (const value of [-0.1, 1.1]) {
-    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, false)
+    t.is(llmConfigBaseSchema.safeParse({ specDraftPMin: value }).success, false)
   }
 })
 
 test('llmConfigBaseSchema: leaves the n_min / n_max relation to the addon', (t) => {
   t.is(
     llmConfigBaseSchema.safeParse({
-      spec_type: 'draft-mtp',
-      spec_draft_n_max: 2,
-      spec_draft_n_min: 5
+      specType: 'draft-mtp',
+      specDraftNMax: 2,
+      specDraftNMin: 5
     }).success,
     true
   )
@@ -599,8 +596,8 @@ test('llmConfigBaseSchema: leaves the n_min / n_max relation to the addon', (t) 
 
 test('llmConfigSchema: injects no speculative defaults', (t) => {
   const result = llmConfigSchema.parse({})
-  t.absent('spec_type' in result)
-  t.absent('spec_draft_n_max' in result)
+  t.absent('specType' in result)
+  t.absent('specDraftNMax' in result)
 })
 
 test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc for LLM', (t) => {
@@ -608,8 +605,8 @@ test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
       modelConfig: {
-        spec_type: 'draft-dflash',
-        spec_draft_n_max: 7,
+        specType: 'draft-dflash',
+        specDraftNMax: 7,
         draftModelSrc: 'https://example.com/dflash.gguf'
       }
     }).success,
@@ -621,7 +618,7 @@ test('loadModelOptionsToRequestSchema: accepts draft-mtp with a draftModelSrc fo
   t.is(
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
-      modelConfig: { spec_type: 'draft-mtp', draftModelSrc: 'https://example.com/mtp.gguf' }
+      modelConfig: { specType: 'draft-mtp', draftModelSrc: 'https://example.com/mtp.gguf' }
     }).success,
     true
   )
@@ -630,44 +627,44 @@ test('loadModelOptionsToRequestSchema: accepts draft-mtp with a draftModelSrc fo
 test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t) => {
   for (const config of [
     { draftModelSrc: 'https://example.com/dflash.gguf' },
-    { spec_type: 'none', draftModelSrc: 'https://example.com/dflash.gguf' }
+    { specType: 'none', draftModelSrc: 'https://example.com/dflash.gguf' }
   ]) {
     const result = llmConfigSchema.safeParse(config)
     t.is(result.success, false)
     t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
     t.is(
       result.error?.issues[0]?.message,
-      "draftModelSrc requires spec_type 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
+      "draftModelSrc requires specType 'draft-mtp', 'draft-dflash', 'draft-dspark' or 'auto'."
     )
   }
 })
 
-test('llmConfigSchema: rejects a drafter spec_type without a draftModelSrc', (t) => {
-  for (const spec_type of ['draft-dflash', 'draft-dspark', 'auto'] as const) {
-    for (const config of [{ spec_type }, { spec_type, draftModelSrc: '' }]) {
+test('llmConfigSchema: rejects a drafter specType without a draftModelSrc', (t) => {
+  for (const specType of ['draft-dflash', 'draft-dspark', 'auto'] as const) {
+    for (const config of [{ specType }, { specType, draftModelSrc: '' }]) {
       const result = llmConfigSchema.safeParse(config)
       t.is(result.success, false)
       t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
-      t.is(result.error?.issues[0]?.message, `spec_type '${spec_type}' requires draftModelSrc.`)
+      t.is(result.error?.issues[0]?.message, `specType '${specType}' requires draftModelSrc.`)
     }
   }
 })
 
 test('llmConfigSchema: accepts draft-mtp without a draftModelSrc', (t) => {
-  t.is(llmConfigSchema.safeParse({ spec_type: 'draft-mtp' }).success, true)
+  t.is(llmConfigSchema.safeParse({ specType: 'draft-mtp' }).success, true)
 })
 
 test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
-  for (const spec_type of ['draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'] as const) {
+  for (const specType of ['draft-mtp', 'draft-dflash', 'draft-dspark', 'auto'] as const) {
     t.is(
-      llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
+      llmConfigSchema.safeParse({ specType, draftModelSrc: 'https://example.com/draft.gguf' })
         .success,
       true
     )
   }
 })
 
-test('llmConfigBaseSchema: leaves the draftModelSrc / spec_type pairing to the merged config', (t) => {
+test('llmConfigBaseSchema: leaves the draftModelSrc / specType pairing to the merged config', (t) => {
   t.is(
     llmConfigBaseSchema.safeParse({ draftModelSrc: 'https://example.com/draft.gguf' }).success,
     true
