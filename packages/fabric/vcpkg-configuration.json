@@ -17,5 +17,8 @@
         "vcpkg-get-python-packages"
       ]
     }
+  ],
+  "overlay-ports": [
+    "../../vcpkg-overlays/ports"
   ]
 }

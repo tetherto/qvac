@@ -305,6 +305,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 |-----------|---------|---------|
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
 | `embed-llamacpp` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
+| `decision-ggml` | `@qvac/decision-ggml` | Upstream llama.cpp decision models (laya, openjev, lev, ...) |
 | `asr-ggml` | `@qvac/asr-ggml` | Whisper and Parakeet speech-to-text (GGML) |
 | `bci-whispercpp` | `@qvac/bci-whispercpp` | BCI neural-signal transcription |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |

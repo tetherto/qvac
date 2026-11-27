@@ -1,0 +1,390 @@
+#include "DecisionEngineModel.hpp"
+
+#include <chrono>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <unordered_set>
+#include <utility>
+
+#include <gguf.h>
+#include <inference-addon-cpp/Errors.hpp>
+#include <nlohmann/json.hpp>
+
+#include "addon/DecisionErrors.hpp"
+#include "logging.hpp"
+#include "utils.hpp"
+
+using namespace qvac_lib_inference_addon_decision::errors;
+using qvac_lib_inference_addon_decision::DecisionContext;
+using qvac_lib_inference_addon_decision::MediaLimits;
+
+namespace {
+
+const std::unordered_set<std::string>& allowedConfigKeys() {
+  static const std::unordered_set<std::string> keys = {
+      "device",
+      "gpu_layers",
+      "gpu-layers",
+      "ctx_size",
+      "ctx-size",
+      "batch_size",
+      "batch-size",
+      "ubatch_size",
+      "ubatch-size",
+      "threads",
+      "parallel",
+      "mmproj",
+      "image-max-megapixels",
+      "image_max_megapixels",
+      "audio-max-seconds",
+      "audio_max_seconds",
+      "verbosity",
+      "openclCacheDir"};
+  return keys;
+}
+
+std::string firstOf(
+    const std::unordered_map<std::string, std::string>& config,
+    std::initializer_list<const char*> names) {
+  for (const char* name : names) {
+    if (auto it = config.find(name); it != config.end()) {
+      return it->second;
+    }
+  }
+  return {};
+}
+
+[[noreturn]] void invalidConfig(const std::string& message) {
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(InvalidConfiguration), message);
+}
+
+/// The integer value of option @p key, at least @p min.
+int toInt(const std::string& key, const std::string& value, int min) {
+  int n = 0;
+  try {
+    size_t used = 0;
+    n = std::stoi(value, &used);
+    if (used != value.size()) {
+      throw std::invalid_argument(value);
+    }
+  } catch (const std::exception&) {
+    invalidConfig(string_format(
+        "%s must be an integer, got '%s'", key.c_str(), value.c_str()));
+  }
+  if (n < min) {
+    invalidConfig(string_format("%s must be at least %d", key.c_str(), min));
+  }
+  return n;
+}
+
+// Whether the GGUF names a non-causal (encoder) architecture:
+// <arch>.attention.causal is false. Read from the header only; a file that
+// cannot be read counts as causal, and the load reports it.
+bool isEncoderModel(const std::string& path) {
+  gguf_init_params init{};
+  init.no_alloc = true;
+  init.ctx = nullptr;
+  gguf_context* gguf = gguf_init_from_file(path.c_str(), init);
+  if (gguf == nullptr) {
+    return false;
+  }
+  bool encoder = false;
+  const int64_t archKey = gguf_find_key(gguf, "general.architecture");
+  if (archKey >= 0 && gguf_get_kv_type(gguf, archKey) == GGUF_TYPE_STRING) {
+    const std::string key =
+        std::string(gguf_get_val_str(gguf, archKey)) + ".attention.causal";
+    const int64_t causalKey = gguf_find_key(gguf, key.c_str());
+    encoder = causalKey >= 0 &&
+              gguf_get_kv_type(gguf, causalKey) == GGUF_TYPE_BOOL &&
+              !gguf_get_val_bool(gguf, causalKey);
+  }
+  gguf_free(gguf);
+  return encoder;
+}
+
+/// The positive integer value of option @p key, at most @p max.
+uint64_t
+toPositive(const std::string& key, const std::string& value, uint64_t max) {
+  uint64_t n = 0;
+  try {
+    size_t used = 0;
+    if (value.empty() || value[0] == '-' || value[0] == '+') {
+      throw std::invalid_argument(value);
+    }
+    n = std::stoull(value, &used);
+    if (used != value.size()) {
+      throw std::invalid_argument(value);
+    }
+  } catch (const std::exception&) {
+    invalidConfig(string_format(
+        "%s must be a positive integer, got '%s'", key.c_str(), value.c_str()));
+  }
+  if (n == 0 || n > max) {
+    invalidConfig(string_format(
+        "%s must be between 1 and %llu",
+        key.c_str(),
+        static_cast<unsigned long long>(max)));
+  }
+  return n;
+}
+
+const std::string& requestOf(const std::any& input) {
+  if (input.type() != typeid(std::string)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "DecisionEngineModel::process: the input must be the request JSON "
+        "string");
+  }
+  return std::any_cast<const std::string&>(input);
+}
+
+} // namespace
+
+common_params DecisionEngineModel::loadParams(
+    const std::string& modelGgufPath,
+    const std::unordered_map<std::string, std::string>& config) {
+  checkLoadOptions(
+      config,
+      allowedConfigKeys(),
+      __func__,
+      "DecisionEngine",
+      "device, gpu_layers, ctx_size, batch_size, ubatch_size, threads, "
+      "parallel, mmproj, image_max_megapixels, audio_max_seconds, verbosity, "
+      "openclCacheDir");
+
+  common_params params;
+  params.model.path = modelGgufPath;
+  // Idle sleep stays off: the addon's load/unload lifecycle owns the model.
+  params.sleep_idle_seconds = -1;
+
+  const std::string device = firstOf(config, {"device"});
+  if (device.empty()) {
+    invalidConfig("device is required ('gpu' or 'cpu')");
+  }
+  if (device != "gpu" && device != "cpu") {
+    invalidConfig(string_format(
+        "device must be 'gpu' or 'cpu', got '%s'", device.c_str()));
+  }
+  if (device == "cpu") {
+    // CPU means CPU for the projector too: upstream defaults mmproj_use_gpu
+    // to true, which would run media encoding on the GPU.
+    params.n_gpu_layers = 0;
+    params.mmproj_use_gpu = false;
+  } else if (
+      const std::string v = firstOf(config, {"gpu_layers", "gpu-layers"});
+      !v.empty()) {
+    params.n_gpu_layers = toInt("gpu_layers", v, -1);
+  }
+  // 0 is the model's own context size.
+  if (const std::string v = firstOf(config, {"ctx_size", "ctx-size"});
+      !v.empty()) {
+    params.n_ctx = toInt("ctx_size", v, 0);
+  }
+  // A batch of 0 cannot hold a token.
+  if (const std::string v = firstOf(config, {"batch_size", "batch-size"});
+      !v.empty()) {
+    params.n_batch = toInt("batch_size", v, 1);
+  }
+  if (const std::string v = firstOf(config, {"ubatch_size", "ubatch-size"});
+      !v.empty()) {
+    params.n_ubatch = toInt("ubatch_size", v, 1);
+  } else if (isEncoderModel(modelGgufPath)) {
+    // A non-causal (encoder) decision model, Laya for one, reads each
+    // question's whole input in one pass, and upstream caps the batch at the
+    // micro-batch for it: an unset micro-batch (512) would reject longer
+    // states than the checkpoints were trained on (1024 for laya-multilingual).
+    // batch_size is then the longest input, 2048 by default, as embed's
+    // LayaDecisions.
+    params.n_ubatch = params.n_batch;
+  }
+  // 0 or below leaves upstream's default, every CPU (checkLoadOptions has
+  // already checked the value).
+  if (const std::string v = firstOf(config, {"threads"}); !v.empty()) {
+    if (const int n = toInt("threads", v, std::numeric_limits<int>::min());
+        n > 0) {
+      params.cpuparams.n_threads = n;
+    }
+  }
+  // Upstream creates one execution slot per n_parallel and does not check it:
+  // with 0 slots every request would stay deferred forever. Unset, it is
+  // llama-server's own automatic default: 4 slots sharing one unified KV cache,
+  // so a request's questions and a batch's states run together without the
+  // KV memory growing with the slots. An explicit value keeps upstream's
+  // explicit meaning (one KV cache per slot), as llama-server's -np does.
+  if (const std::string v = firstOf(config, {"parallel"}); !v.empty()) {
+    params.n_parallel = toInt("parallel", v, 1);
+  } else {
+    params.n_parallel = 4;
+    params.kv_unified = true;
+  }
+  if (const std::string v = firstOf(config, {"mmproj"}); !v.empty()) {
+    params.mmproj.path = v;
+  }
+  return params;
+}
+
+MediaLimits DecisionEngineModel::mediaLimits(
+    const std::unordered_map<std::string, std::string>& config) {
+  constexpr uint64_t kPixelsPerMegapixel = 1'000'000;
+  MediaLimits limits;
+  const std::string pixels =
+      firstOf(config, {"image-max-megapixels", "image_max_megapixels"});
+  const std::string seconds =
+      firstOf(config, {"audio-max-seconds", "audio_max_seconds"});
+  // Without a projector no media is decoded, so the limits would do nothing.
+  if ((!pixels.empty() || !seconds.empty()) &&
+      firstOf(config, {"mmproj"}).empty()) {
+    invalidConfig("image_max_megapixels and audio_max_seconds need mmproj");
+  }
+  if (!pixels.empty()) {
+    limits.maxImagePixels =
+        toPositive(
+            "image_max_megapixels",
+            pixels,
+            std::numeric_limits<uint64_t>::max() / kPixelsPerMegapixel) *
+        kPixelsPerMegapixel;
+  }
+  if (!seconds.empty()) {
+    limits.maxAudioSeconds = toPositive(
+        "audio_max_seconds", seconds, std::numeric_limits<uint64_t>::max());
+  }
+  return limits;
+}
+
+DecisionEngineModel::DecisionEngineModel(
+    const std::string& modelGgufPath,
+    const std::unordered_map<std::string, std::string>& config,
+    const std::string& backendsDir)
+    : backendsDir_(backendsDir),
+      openclCacheDir_(firstOf(config, {"openclCacheDir"})),
+      mediaLimits_(mediaLimits(config)) {
+  // Validate the options now, so a bad key fails at creation; the model
+  // itself loads on activate().
+  common_params params = loadParams(modelGgufPath, config);
+  // Before the backends register the log callback that reads it.
+  std::unordered_map<std::string, std::string> logConfig = config;
+  qvac_lib_inference_addon_decision::logging::setVerbosityLevel(logConfig);
+  initLoader_.init(
+      InitLoader::LOADER_TYPE::DELAYED,
+      [this](const common_params& loaded) { load(loaded); },
+      std::move(params));
+}
+
+DecisionEngineModel::~DecisionEngineModel() {
+  // Stops a run still in flight and joins the context's loop thread; the
+  // backends handle is released afterwards, with the members.
+  context_.reset();
+}
+
+void DecisionEngineModel::load(const common_params& params) {
+  // The addon's shared backend initializer: loads the backends once, routes
+  // llama logs to the addon logger and, on Android, points the OpenCL kernel
+  // cache at openclCacheDir. It must run before the context is created.
+  backends_.emplace(backendsDir_, openclCacheDir_);
+  context_ = std::make_unique<DecisionContext>(params, mediaLimits_);
+  info_ = context_->info();
+}
+
+std::string DecisionEngineModel::info() {
+  initLoader_.waitForLoadInitialization();
+  return info_;
+}
+
+std::any DecisionEngineModel::process(const std::any& input) {
+  return process(input, qvac_lib_inference_addon_cpp::kNoJobId);
+}
+
+std::any DecisionEngineModel::process(const std::any& input, JobId id) {
+  // The job leaves the registry on every path; a later cancel(id) is a no-op.
+  struct Finish {
+    JobCancelRegistry& jobs;
+    JobId id;
+    Finish(JobCancelRegistry& jobs, JobId id) : jobs(jobs), id(id) {}
+    Finish(const Finish&) = delete;
+    Finish& operator=(const Finish&) = delete;
+    ~Finish() { jobs.remove(id); }
+  } finish(liveJobs_, id);
+  return run(requestOf(input), id);
+}
+
+void DecisionEngineModel::jobStarting(JobId id) { liveJobs_.add(id); }
+
+void DecisionEngineModel::cancelById(JobId id) const { liveJobs_.cancel(id); }
+
+void DecisionEngineModel::cancel() const {
+  // Unarmed jobs are parked and cancel when they arm; armed runs see the new
+  // epoch at their next stop check.
+  liveJobs_.parkAll();
+  cancelEpoch_.fetch_add(1, std::memory_order_acq_rel);
+}
+
+DecisionEngineResult
+DecisionEngineModel::run(const std::string& requestJson, JobId id) {
+  // The epoch is read before the job arms: a whole-model cancel either parks
+  // the job before it arms or bumps the epoch after this read.
+  const std::uint64_t epoch = cancelEpoch_.load(std::memory_order_acquire);
+  auto stopped = std::make_shared<std::atomic<bool>>(false);
+  if (liveJobs_.add(id, [stopped]() {
+        stopped->store(true, std::memory_order_release);
+      })) {
+    // Cancelled between jobStarting() and now: end without loading or running.
+    throw std::runtime_error("Job cancelled");
+  }
+  const auto shouldStop = [this, stopped, epoch]() {
+    return stopped->load(std::memory_order_acquire) ||
+           cancelEpoch_.load(std::memory_order_acquire) != epoch;
+  };
+  if (shouldStop()) {
+    throw std::runtime_error("Job cancelled");
+  }
+  initLoader_.waitForLoadInitialization();
+
+  const auto start = std::chrono::steady_clock::now();
+  std::string body = context_->run(requestJson, shouldStop);
+  lastMs_ = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start)
+                .count();
+
+  // A batch answers with one result per state, each with its own usage.
+  lastInputTokens_ = 0;
+  try {
+    const auto result = nlohmann::json::parse(body);
+    const auto tokensOf = [](const nlohmann::json& r) {
+      return r.is_object() ? r.value("/usage/input_tokens"_json_pointer, 0LL)
+                           : 0LL;
+    };
+    if (result.is_array()) {
+      for (const auto& r : result) {
+        lastInputTokens_ += tokensOf(r);
+      }
+    } else {
+      lastInputTokens_ = tokensOf(result);
+    }
+  } catch (const std::exception&) {
+  }
+  return DecisionEngineResult{std::move(body)};
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats
+DecisionEngineModel::runtimeStats() const {
+  qvac_lib_inference_addon_cpp::RuntimeStats stats;
+  if (!context_) {
+    return stats;
+  }
+  // decision_input_tokens also lets the JS side recognize these stats.
+  stats.emplace_back("decision_input_tokens", lastInputTokens_);
+  stats.emplace_back("total_time_ms", lastMs_);
+  return stats;
+}
+
+void DecisionEngineModel::setWeightsForFile(
+    const std::string& /*filename*/,
+    std::unique_ptr<std::basic_streambuf<char>>&& /*shard*/) {
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(InvalidConfiguration),
+      "DecisionEngine loads from a file path; weight streaming is not "
+      "supported");
+}

@@ -1,0 +1,14 @@
+{
+  "ios": {
+    "core": [
+      "runDecisionEngineTest"
+    ],
+    "multi": []
+  },
+  "android": {
+    "core": [
+      "runDecisionEngineTest"
+    ],
+    "multi": []
+  }
+}
