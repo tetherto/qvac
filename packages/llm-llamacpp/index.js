@@ -749,7 +749,8 @@ const LlmLlamacpp = class LlmLlamacpp {
         if (this.addon?.cancel) {
             await this.addon.cancel(0);
         }
-        this._clearPauseCheckpoints();
+        if (!this.addon?.clearsPauseCheckpoints)
+            this._clearPauseCheckpoints();
     }
     _clearPauseCheckpoints() {
         const checkpointDir = this._checkpointSaveDir;

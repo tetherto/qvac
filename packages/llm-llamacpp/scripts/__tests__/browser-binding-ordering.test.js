@@ -19,14 +19,23 @@ async function withMockedEngine(config, createModule, testBinding) {
   const bindingPath = require.resolve('../../binding.browser.js')
   const enginePath = require.resolve('../../browser/create-engine.js')
   const loadConfigPath = require.resolve('../../browser/load-config.js')
+  const persistentFilesPath = require.resolve('../../browser/persistent-files.js')
   const bindingModule = require.cache[bindingPath]
   const createEngine = require(enginePath)
   const loadConfig = require(loadConfigPath)
+  const persistentFiles = require(persistentFilesPath)
 
   require.cache[enginePath].exports = createModule
   require.cache[loadConfigPath].exports = {
     ...loadConfig,
     mountLoadFiles: () => Promise.resolve({ modelPath: '/model.gguf', projectionPath: '', config })
+  }
+  require.cache[persistentFilesPath].exports = {
+    ...persistentFiles,
+    hasOpfs: () => true,
+    hydrateFile: () => Promise.resolve(false),
+    persistFile: () => Promise.resolve(true),
+    persistTree: () => Promise.resolve(true)
   }
   delete require.cache[bindingPath]
   const isolated = require(bindingPath)
@@ -38,6 +47,7 @@ async function withMockedEngine(config, createModule, testBinding) {
     else delete require.cache[bindingPath]
     require.cache[enginePath].exports = createEngine
     require.cache[loadConfigPath].exports = loadConfig
+    require.cache[persistentFilesPath].exports = persistentFiles
   }
 }
 
@@ -86,6 +96,7 @@ test('browser binding orders legacy inference, cache and unload operations', asy
         assert.deepEqual(calls, [
           'qvac_web_validate',
           'qvac_web_run',
+          'qvac_web_save_cache',
           'qvac_web_save_cache',
           'qvac_web_destroy'
         ])

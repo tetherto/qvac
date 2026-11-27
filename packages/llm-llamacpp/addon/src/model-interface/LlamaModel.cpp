@@ -749,7 +749,11 @@ std::any LlamaModel::process(const std::any& input) {
     // holds stateMtx_ while this one runs.
     lock.unlock();
     std::string status = finetuner_.finetune(
-        *prompt.finetuningParams, &stats, prompt.progressCallback);
+        *prompt.finetuningParams,
+        &stats,
+        prompt.progressCallback,
+        prompt.controlCallback,
+        prompt.checkpointCallback);
     FinetuneTerminalResult result{"finetune", std::move(status)};
     if (stats.globalSteps > 0 || stats.epochsCompleted > 0) {
       result.stats = stats;

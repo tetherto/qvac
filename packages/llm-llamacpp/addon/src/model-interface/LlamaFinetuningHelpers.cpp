@@ -19,6 +19,9 @@
 #include <common/common.h>
 #include <common/log.h>
 #include <ggml-opt.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "../utils/LoggingMacros.hpp"
 
@@ -181,7 +184,7 @@ float schedulerLrForStep(const LoraLrSchedulerState& state, int64_t step) {
 
   if (warmupSteps > 0 && clampedStep < warmupSteps) {
     const float warmupProgress =
-        static_cast<float>(clampedStep) / static_cast<float>(warmupSteps);
+        static_cast<float>(clampedStep + 1) / static_cast<float>(warmupSteps);
     return std::max(state.lrInit * warmupProgress, 0.0f);
   }
 
@@ -213,7 +216,10 @@ float schedulerLrForStep(const LoraLrSchedulerState& state, int64_t step) {
 ggml_opt_optimizer_params schedulerOptimizerParams(void* userdata) {
   auto* state = static_cast<LoraLrSchedulerState*>(userdata);
   auto params = ggml_opt_get_default_optimizer_params(nullptr);
-  const float lr = schedulerLrForStep(*state, state->currentStep + 1);
+  const int64_t step = state->totalSteps > 0
+                           ? std::min(state->currentStep, state->totalSteps - 1)
+                           : state->currentStep;
+  const float lr = schedulerLrForStep(*state, step);
   state->lastLr = lr;
   params.adamw.alpha = lr;
   params.adamw.wd = state->weightDecay;
@@ -443,6 +449,10 @@ void savePauseCheckpoint(
   }
   writeCheckpointMetadata(pauseDir / "metadata.txt", meta);
 
+  if (state.checkpointCallback) {
+    state.checkpointCallback(pauseDir);
+  }
+
   state.pauseCheckpointPath = pauseDir;
   std::ostringstream msg;
   msg << "Pause checkpoint saved -> " << pauseDirStr;
@@ -521,6 +531,12 @@ void optEpochCallback(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
+#ifdef __EMSCRIPTEN__
+  emscripten_sleep(0);
+#endif
+  if (checkpointState != nullptr && checkpointState->controlCallback) {
+    checkpointState->controlCallback();
+  }
   const bool isFinalBatch = (ibatch == ibatchMax);
   const int64_t displayBatch = ibatch;
   const bool isReplayBatch = train && checkpointState != nullptr &&
@@ -625,6 +641,10 @@ void optEpochCallback(
   }
 
   saveCheckpoint(optCtx, *state);
+  if (state->checkpointCallback) {
+    state->checkpointCallback(
+        checkpointStepDirectory(*state, state->globalStep));
+  }
 }
 
 void optEpochCallbackWrapper(

@@ -80,6 +80,31 @@ await response.await()
 await model.unload()
 ```
 
+## Finetuning files
+
+Browser finetuning dataset, chat-template, output, and checkpoint paths may be
+safe relative or absolute OPFS paths. Path segments must not be `.` or `..`;
+for example, use `checkpoints/run-1` or `/checkpoints/run-1`, not
+`./checkpoints/run-1`.
+NUL characters are rejected. Outputs and completed checkpoints are persisted
+in OPFS, so finetuning requires OPFS support. A dataset or chat template
+removed from OPFS is missing for the next run, as on native.
+
+Without `checkpointSaveDir`, checkpoints go to `checkpoints` in the OPFS root,
+the browser equivalent of the native `./checkpoints`. Every page of the origin
+shares that directory, so a run can resume or remove another run's pause
+checkpoint. Give each independent run its own `checkpointSaveDir`. When pages
+share a checkpoint directory, a pause checkpoint already in a worker can still
+be resumed there after another page removed it.
+
+Non-ephemeral `cacheKey` runs and `saveCache()` also require OPFS because their
+contract promises durable files. Inference without a cache key, an ephemeral
+cache, and a read-only `baseCacheKey` write no cache files, so they do not
+need OPFS for them. Exact cache and checkpoint file commits use the browser's
+cross-context Web Locks API when available. Writable cache, output, and
+checkpoint paths must not be shared by simultaneous model workers; without Web
+Locks, even file-commit serialization is limited to one worker.
+
 ## Current browser binding scope
 
 Supported:
@@ -94,8 +119,16 @@ Supported:
   As on native, `cancel()` resolves once the cancelled work has stopped, so a
   following `run()` is not refused as busy
 - Runtime stats
-- `saveCache`/`discardCache` (cache files live in memory)
+- `saveCache`/`discardCache`; saved cache files are persisted in OPFS and restored after reload
 - `calcTokens` while the engine is idle
+- `finetune()`, including progress events, pause/resume checkpoints, cancellation,
+  and final adapter output persisted in OPFS. Browser training may use CPU
+  fallback for operations the WebGPU backend does not implement; GPU training
+  acceleration is not guaranteed.
+- `assessFit()` validates the request, complete GGUF metadata, and normalized
+  load configuration, then returns `unknown`.
+  WebGPU does not expose current free or total device memory, so the browser
+  cannot produce an honest native-style fit verdict.
 - Single-file and sharded GGUF models
 - Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
@@ -106,8 +139,6 @@ Supported:
 | RPC servers and native backend/cache directories | Rejected at load                                            |
 | `lora-scaled` and control vectors                | Rejected at load                                            |
 | Multiple LoRAs                                   | Not supported; a comma-separated `lora` is read as one path |
-| `finetune()`                                     | Throws: not exposed by the browser binding                  |
-| `assessFit()`                                    | Rejects                                                     |
 
 With `parallel: 1`, one request runs at a time in the Worker. With
 `parallel >= 2`, Fabric's continuous-batching scheduler advances multiple

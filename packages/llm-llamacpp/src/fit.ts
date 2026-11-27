@@ -1,4 +1,3 @@
-
 export interface LlamaFitRequest {
   /** Absolute path to the GGUF, or to the registry's weightless copy. */
   modelPath: string
@@ -56,6 +55,10 @@ interface FitBinding {
  * vocabulary it finds inconsistent. An assert aborts rather than throwing, so
  * a corrupt file ends the process instead of returning a status: take the
  * model from a source you trust, or call this behind a process boundary.
+ *
+ * In the browser, the request, complete GGUF metadata, and normalized load
+ * configuration are validated, then the result is `unknown`: WebGPU does not
+ * expose current free or total device memory.
  */
 export async function assessFit(request: LlamaFitRequest): Promise<LlamaFitResult> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.

@@ -41,7 +41,12 @@ function cooperativeEngine(options) {
   let nextHandle = 1
   const handles = new Map()
   return {
-    FS: { mkdirTree() {} },
+    FS: {
+      mkdirTree() {},
+      stat() {
+        throw Object.assign(new Error('missing'), { errno: 44 })
+      }
+    },
     ccall(name, _returnType, _types, args) {
       if (name === 'qvac_web_create') {
         const handle = nextHandle++
@@ -677,7 +682,7 @@ test('cooperative cache operation does not wait for an unrelated live job', asyn
     const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
     await isolated.activate(handle)
     await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
-    await isolated.saveCache(handle, `/cache/unrelated-${iteration}.bin`)
+    await isolated.discardCache(handle, `/cache/unrelated-${iteration}.bin`)
     t.is(isolated.activeJobs(handle), 1, `job still live, iteration ${iteration + 1}`)
     while (isolated.activeJobs(handle) !== 0) await delay()
     await isolated.destroyInstance(handle)
@@ -780,13 +785,17 @@ test('invalid browser load config does not load an engine', async (t) => {
 })
 
 test('browser engine creation receives the mounted load asset paths', async (t) => {
+  const previous = globalThis[MOUNTED_FILES_KEY]
   globalThis[MOUNTED_FILES_KEY] = new Map([
     ['/m/model.gguf', { name: 'model.gguf' }],
     ['/m/mmproj.gguf', { name: 'mmproj.gguf' }],
     ['/m/a,b.gguf', { name: 'a,b.gguf' }],
     ['/m/draft.gguf', { name: 'draft.gguf' }]
   ])
-  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  t.teardown(() => {
+    if (previous === undefined) delete globalThis[MOUNTED_FILES_KEY]
+    else globalThis[MOUNTED_FILES_KEY] = previous
+  })
   const created = []
   const isolated = isolatedBinding(() => ({
     FS: {
@@ -815,15 +824,21 @@ test('browser engine creation receives the mounted load asset paths', async (t) 
       },
       () => {}
     )
-    await isolated.activate(handle)
-    const [modelPath, projectionPath, configJson] = created.pop()
-    const config = JSON.parse(configJson)
-    t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
-    t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
-    t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
-    t.ok(/^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model), config.spec_draft_model)
-    t.is(config.parallel, '2')
-    await isolated.destroyInstance(handle)
+    try {
+      await isolated.activate(handle)
+      const [modelPath, projectionPath, configJson] = created.pop()
+      const config = JSON.parse(configJson)
+      t.ok(/^\/qvac-files\/\d+\/model\.gguf$/.test(modelPath), modelPath)
+      t.ok(/^\/qvac-files\/\d+\/mmproj\.gguf$/.test(projectionPath), projectionPath)
+      t.ok(/^"\/qvac-files\/\d+\/a,b\.gguf"$/.test(config.lora), config.lora)
+      t.ok(
+        /^\/qvac-files\/\d+\/draft\.gguf$/.test(config.spec_draft_model),
+        config.spec_draft_model
+      )
+      t.is(config.parallel, '2')
+    } finally {
+      await isolated.destroyInstance(handle)
+    }
   }
 })
 
@@ -1065,7 +1080,14 @@ test('browser calcTokens fails fast while the engine queue is busy', async (t) =
 // suspend on every call to the named export.
 function suspendingEngine(suspending, log) {
   return () => ({
-    FS: { mkdirTree() {}, unmount: () => log.push('unmount'), rmdir() {} },
+    FS: {
+      mkdirTree() {},
+      unmount: () => log.push('unmount'),
+      rmdir() {},
+      stat() {
+        throw Object.assign(new Error('missing'), { errno: 44 })
+      }
+    },
     ccall(name) {
       if (name === 'qvac_web_create') return 1
       if (name === 'qvac_web_result') return '{}'
@@ -1098,13 +1120,13 @@ test('browser unload waits for a destroy that suspends 20x', async (t) => {
   }
 })
 
-test('cooperative saveCache waits for a cache request that suspends 20x', async (t) => {
+test('cooperative cache operations wait for a cache request that suspends 20x', async (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     const log = []
     const isolated = isolatedBinding(suspendingEngine('qvac_web_cache_request', log))
     const handle = isolated.createInstance({}, { config: { parallel: 2 } }, () => {})
     await isolated.activate(handle)
-    await isolated.saveCache(handle, `/cache/suspend-${iteration}.bin`)
+    await isolated.discardCache(handle, `/cache/suspend-${iteration}.bin`)
     t.alike(
       log,
       ['qvac_web_cache_request started', 'qvac_web_cache_request finished', 'poll'],

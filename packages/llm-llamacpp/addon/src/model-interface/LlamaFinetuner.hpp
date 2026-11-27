@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -49,6 +50,8 @@ class LlamaFinetuner {
 public:
   using ProgressCallback = std::function<void(
       const llama_finetuning_helpers::FinetuneProgressStats&)>;
+  using ControlCallback = std::function<void()>;
+  using CheckpointCallback = std::function<void(const std::filesystem::path&)>;
 
   explicit LlamaFinetuner(LlamaModel& model) : model_(model) {}
   ~LlamaFinetuner() = default;
@@ -61,7 +64,9 @@ public:
   std::string finetune(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       FinetuneTerminalResult::Stats* outStats = nullptr,
-      ProgressCallback progressCallback = nullptr);
+      ProgressCallback progressCallback = nullptr,
+      ControlCallback controlCallback = nullptr,
+      CheckpointCallback checkpointCallback = nullptr);
 
   bool isFinetuneRunning() const;
   bool requestPause(bool savePauseCheckpoint = true);
