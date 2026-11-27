@@ -14,7 +14,7 @@ The optional `@qvac/turbovec-ggml` peer range moves from `^0.4.0 || ^0.5.0` to `
 
 ### Stricter Input
 
-Input that 0.11.0 accepted now fails with `INVALID_INPUT` before anything is written: strings that aren't well-formed UTF-16 (for example half an emoji left by cutting a string), stored rows over 8 MiB, a `__proto__` key in `metadata`, a `signal` that isn't an `AbortSignal`, and generations above 2^32. A cut string used to be stored as U+FFFD, which broke its export, and two names that differed only in such characters became the same name.
+Input that 0.11.0 accepted is now rejected before anything is written, with `INVALID_INPUT` on calls such as `ingest` and `IMPORT_INVALID` for records in an import stream: strings that aren't well-formed UTF-16 (for example half an emoji left by cutting a string), stored rows over 8 MiB, a `__proto__` key in `metadata`, a `signal` that isn't an `AbortSignal`, and generations above 2^32. A cut string used to be stored as U+FFFD, which broke its export, and two names that differed only in such characters became the same name.
 
 ```typescript
 // 0.12.0: repair text cut mid-character before ingesting

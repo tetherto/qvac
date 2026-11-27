@@ -22,12 +22,12 @@ Hosts that install the optional TurboVec addon need 0.8. Releases before 0.7 are
 
 PR: [#5979](https://github.com/tetherto/qvac/pull/5979)
 
-Input that 0.11.0 accepted now fails with `INVALID_INPUT` before anything is written:
+Input that 0.11.0 accepted is now rejected before anything is written: with `INVALID_INPUT` when it is passed to a call such as `ingest`, and with `IMPORT_INVALID` when it is a record in an import stream. It covers:
 
 - strings that aren't well-formed UTF-16 (a lone surrogate, such as half an emoji left by cutting a string) in names, IDs, text, chunk content, metadata and space fields;
 - a stored row over 8 MiB (a chunk with its content, metadata and vector, or a document with its metadata);
 - a `__proto__` key in `metadata`;
-- a `signal` that isn't an `AbortSignal` (it needs `addEventListener` and `removeEventListener`);
+- a `signal` that isn't an `AbortSignal` (it needs `addEventListener` and `removeEventListener`; always `INVALID_INPUT`);
 - a generation above 2^32, on ingest and import.
 
 **BEFORE:**
