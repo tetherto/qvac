@@ -19,8 +19,5 @@
         "libuuid"
       ]
     }
-  ],
-  "overlay-ports": [
-    "../../vcpkg-overlays/ports/ggml"
   ]
 }
