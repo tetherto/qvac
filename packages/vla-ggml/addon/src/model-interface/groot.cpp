@@ -1959,7 +1959,7 @@ static struct ggml_tensor* grootBuildVlfusionBlock(
       1.0f / std::sqrt(static_cast<float>(headDim)),
       /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
-  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
+  ggml_prec_set_acc(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, dim, nTokens);
 
   struct ggml_tensor* proj =

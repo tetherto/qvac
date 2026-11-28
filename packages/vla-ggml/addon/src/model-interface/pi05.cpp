@@ -194,7 +194,7 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
       ctx, q, kf16, vf16, /*mask=*/nullptr,
       1.0f / std::sqrt(static_cast<float>(headDim)), /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
-  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
+  ggml_prec_set_acc(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_3d(ctx, attnOut, hidden, nPatches, batch);
 
   // Output projection + residual.
@@ -404,7 +404,7 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
       ctx, q, kf16, vf16, attnMask, scale, /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
-  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
+  ggml_prec_set_acc(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, hidden, seqLen);
 
   // O proj + residual.
@@ -707,7 +707,7 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
       ctx, q, kBuf, vBuf, /*mask=*/nullptr, scale, /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
-  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
+  ggml_prec_set_acc(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, nHeads * headDim, nAct);
 
   // O-proj + gated residual.

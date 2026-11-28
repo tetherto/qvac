@@ -857,7 +857,7 @@ inline FitResult runFit(FitRequest request) {
   common_params_fit_status status{};
   try {
     status = common_fit_params(
-        modelPath.c_str(),
+        std::vector<std::string>{modelPath},
         &mparams,
         &cparams,
         tensorSplit.data(),
@@ -888,16 +888,18 @@ inline FitResult runFit(FitRequest request) {
   // what the fit cost and only runs once a projection exists.
   std::vector<ggml_backend_dev_t> devices;
   uint32_t resolvedLayers = 0;
+  uint32_t skippedLayers = 0;
   uint32_t trainCtx = 0;
   uint32_t expertCount = 0;
   common_device_memory_data_vec breakdown;
   try {
     breakdown = common_get_device_memory_data(
-        modelPath.c_str(),
+        std::vector<std::string>{modelPath},
         &mparams,
         &cparams,
         devices,
         resolvedLayers,
+        skippedLayers,
         trainCtx,
         expertCount,
         GGML_LOG_LEVEL_INFO);
