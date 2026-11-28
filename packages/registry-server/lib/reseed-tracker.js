@@ -1,5 +1,7 @@
 'use strict'
 
+const IdEnc = require('hypercore-id-encoding')
+
 class ReseedTracker {
   constructor(blindPeerKeys, logger = console) {
     if (!Array.isArray(blindPeerKeys) || blindPeerKeys.length === 0) {
@@ -8,6 +10,12 @@ class ReseedTracker {
 
     this.logger = logger
     this.expectedPeerCount = blindPeerKeys.length
+    // Only the configured blind peers may confirm a core is replicated.
+    // Any swarm peer can open a public blob core and announce a range it
+    // does not hold, so counting every peer lets one trigger an early clear.
+    this._blindPeerKeys = new Set(
+      blindPeerKeys.map((key) => IdEnc.decode(key).toString('hex'))
+    )
     this._cores = []
     this._pollInterval = null
   }
@@ -52,6 +60,7 @@ class ReseedTracker {
           let maxRemoteContiguous = 0
 
           for (const peer of peers) {
+            if (!this._isBlindPeer(peer)) continue
             const remoteContig = peer.remoteContiguousLength || 0
             maxRemoteContiguous = Math.max(maxRemoteContiguous, remoteContig)
             if (remoteContig >= localLength) fullyDownloadedCount++
@@ -135,6 +144,11 @@ class ReseedTracker {
       if (this._pollInterval) return
       this._pollInterval = setInterval(check, pollInterval)
     })
+  }
+
+  _isBlindPeer(peer) {
+    const key = peer?.remotePublicKey
+    return !!key && this._blindPeerKeys.has(key.toString('hex'))
   }
 
   destroy() {
