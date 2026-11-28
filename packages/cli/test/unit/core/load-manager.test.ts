@@ -110,6 +110,35 @@ describe('load-manager', () => {
     assert.equal(seen[1] !== undefined && 'modelFitPolicy' in seen[1], false)
   })
 
+  it('forwards an alias fallbackSrc to the SDK load, and omits it when unset', async () => {
+    const reg = createModelRegistry()
+    const base = {
+      sdkType: 'llamacpp',
+      endpointCategory: 'chat',
+      config: {}
+    }
+    reg.register('mirrored', {
+      ...base,
+      modelSrc: 'hyper://example.invalid/mirrored',
+      fallbackSrc: 'https://mirror.example.invalid/model.gguf'
+    })
+    reg.register('plain', { ...base, modelSrc: 'hyper://example.invalid/plain' })
+
+    const seen: Parameters<LoadModelFn>[0][] = []
+    const load: LoadModelFn = (opts) => {
+      seen.push(opts)
+      return Promise.resolve(`sdk-${seen.length}`)
+    }
+    const mgr = createLoadManager(reg, logger, OPTS, () => load)
+
+    await mgr.load('mirrored')
+    await mgr.load('plain')
+
+    assert.equal(seen[0]?.fallbackSrc, 'https://mirror.example.invalid/model.gguf')
+    assert.equal(seen[0] !== undefined && 'fallbackSrc' in seen[0].modelConfig, false)
+    assert.equal(seen[1] !== undefined && 'fallbackSrc' in seen[1], false)
+  })
+
   it('dedups concurrent loads of the same alias into one SDK load', async () => {
     const reg = registry('m')
     let calls = 0

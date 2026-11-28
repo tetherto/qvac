@@ -12,6 +12,7 @@ export interface ConstantModelEntry {
   default?: boolean
   preload?: boolean
   modelFitPolicy?: string
+  fallbackSrc?: string
   config?: Record<string, unknown>
 }
 
@@ -21,6 +22,7 @@ export interface ExplicitModelEntry {
   default?: boolean
   preload?: boolean
   modelFitPolicy?: string
+  fallbackSrc?: string
   config?: Record<string, unknown>
 }
 
@@ -127,6 +129,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 
   const rawConfig = entry.config ?? {}
+  rejectFallbackSrcInConfig(alias, rawConfig)
   const resolved = resolveForAlias(alias, entry.type || model.engine || model.addon, rawConfig)
 
   return {
@@ -137,6 +140,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
     isDefault: entry.default === true,
     preload: entry.preload !== false,
     ...modelFitPolicyOf(alias, entry.modelFitPolicy),
+    ...fallbackSrcOf(alias, entry.fallbackSrc),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
@@ -147,6 +151,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   }
 
   const rawConfig = entry.config ?? {}
+  rejectFallbackSrcInConfig(alias, rawConfig)
   const resolved = resolveForAlias(alias, entry.type, rawConfig)
 
   if (!entry.src) {
@@ -160,6 +165,15 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   // ModelConstant object so the P2P registry resolves it.
   const modelSrc: string | ModelConstant = loadModelConstants().get(src) ?? src
 
+  // fallbackSrc is an alternate source for a catalog model when the registry is
+  // unreachable; a path or URL src has no registry download to fall back from.
+  if (entry.fallbackSrc !== undefined && typeof modelSrc === 'string') {
+    throw new Error(
+      `serve.models.${alias}.fallbackSrc: only applies to a catalog model. ` +
+        '"src" must be an SDK model constant name to use it.'
+    )
+  }
+
   return {
     alias,
     modelSrc,
@@ -168,6 +182,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
     isDefault: entry.default === true,
     preload: entry.preload === true,
     ...modelFitPolicyOf(alias, entry.modelFitPolicy),
+    ...fallbackSrcOf(alias, entry.fallbackSrc),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
@@ -186,6 +201,25 @@ function modelFitPolicyOf(
     )
   }
   return { modelFitPolicy: parsed.data }
+}
+
+function fallbackSrcOf(alias: string, value: unknown): { fallbackSrc?: string } {
+  if (value === undefined) return {}
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`serve.models.${alias}.fallbackSrc: expected an HTTP URL or a local file path`)
+  }
+  return { fallbackSrc: value }
+}
+
+// `config` is forwarded to the SDK as modelConfig, which rejects fallbackSrc as
+// an unknown key. Point users at the entry-level field instead.
+function rejectFallbackSrcInConfig(alias: string, config: Record<string, unknown>): void {
+  if ('fallbackSrc' in config) {
+    throw new Error(
+      `serve.models.${alias}.config.fallbackSrc: fallbackSrc is a load option, not a model ` +
+        `config field. Set serve.models.${alias}.fallbackSrc instead.`
+    )
+  }
 }
 
 export function resolveDefaults(models: Map<string, ResolvedModelEntry>): Map<string, string> {

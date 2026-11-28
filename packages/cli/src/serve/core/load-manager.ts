@@ -18,6 +18,7 @@ export type LoadModelFn = (opts: {
   modelType: string
   modelConfig: Record<string, unknown>
   modelFitPolicy?: ModelFitPolicy
+  fallbackSrc?: string
 }) => Promise<string>
 
 export const defaultLoadFn: LoadModelFn = (opts) => sdkLoadModel(opts)
@@ -156,7 +157,8 @@ export function createLoadManager(
         modelSrc: entry.modelSrc,
         modelType: entry.sdkType,
         modelConfig: entry.config,
-        ...(entry.modelFitPolicy !== undefined && { modelFitPolicy: entry.modelFitPolicy })
+        ...(entry.modelFitPolicy !== undefined && { modelFitPolicy: entry.modelFitPolicy }),
+        ...(entry.fallbackSrc !== undefined && { fallbackSrc: entry.fallbackSrc })
       }) as Promise<string> & { requestId?: string }
       rec.requestId = loaded.requestId ?? null
       // A cancel that raced ahead of the requestId: apply it now.

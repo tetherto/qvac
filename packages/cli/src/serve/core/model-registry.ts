@@ -17,6 +17,7 @@ export interface ModelEntry {
   sdkType: string
   endpointCategory: string
   modelFitPolicy?: ModelFitPolicy
+  fallbackSrc?: string
   config: Record<string, unknown>
   state: ModelState
   createdAt: number
@@ -37,6 +38,7 @@ export interface ModelRegistry {
       sdkType: string
       endpointCategory: string
       modelFitPolicy?: ModelFitPolicy
+      fallbackSrc?: string
       config: Record<string, unknown>
     }
   ) => ModelEntry
@@ -64,6 +66,7 @@ export function createModelRegistry(): ModelRegistry {
       sdkType: string
       endpointCategory: string
       modelFitPolicy?: ModelFitPolicy
+      fallbackSrc?: string
       config: Record<string, unknown>
     }
   ): ModelEntry {
@@ -76,6 +79,7 @@ export function createModelRegistry(): ModelRegistry {
       sdkType: opts.sdkType,
       endpointCategory: opts.endpointCategory,
       ...(opts.modelFitPolicy !== undefined && { modelFitPolicy: opts.modelFitPolicy }),
+      ...(opts.fallbackSrc !== undefined && { fallbackSrc: opts.fallbackSrc }),
       config: opts.config,
       state: STATES.IDLE,
       createdAt: Date.now(),
