@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixes
+
+- Complete Linux CUDA backend runtime isolation by including
+  `__cxa_pure_virtual` in its private static C++ runtime. Require `ggml`
+  `2026-11-01#2`, which rejects installed Linux backend modules with
+  unresolved C++ runtime symbols or shared C++ runtime dependencies
+  ([registry #516](https://github.com/tetherto/qvac-registry-vcpkg/pull/516)).
+
 ## [0.38.1] - 2026-11-24
 
 ### Features
