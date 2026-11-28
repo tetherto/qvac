@@ -3,8 +3,8 @@
 SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orchestration framework
 that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, or the Kotlin
-client on Android and on desktop.
+(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, the Kotlin
+client on Android and on desktop, or the Swift client on macOS and iOS.
 
 ## Layout
 
@@ -17,6 +17,7 @@ The package keeps what every SDK client must do apart from how each client does 
 | [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                                         |
 | `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest                       |
 | `runners/kotlin/`             | The Kotlin client: an Android app and a desktop JVM program that interpret the declarative bodies through the Kotlin SDK |
+| `runners/swift/`              | The Swift client: a macOS command and an iOS app that interpret the declarative bodies through the Swift SDK             |
 | `assets/`, `fixtures/`        | Data the tests read                                                                                                      |
 | `scripts/`                    | Build helpers and the catalog gates                                                                                      |
 
@@ -42,6 +43,8 @@ npx qvac-test run:local:ios
 npx qvac-test run:local:python
 npx qvac-test run:local:kotlin-android
 npx qvac-test run:local:kotlin-desktop
+npx qvac-test run:local:swift-macos
+npx qvac-test run:local:swift-ios
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
@@ -263,11 +266,10 @@ other's bundle.
 
 ## Running in CI
 
-The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the sdk's
-`test:integration` configurations on desktop with sdk-python's and sdk-kotlin's, and its `test:mobile` and
-sdk-kotlin's on Device Farm. The
-steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile consumer
-app and drives it.
+The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the
+`test:integration` configurations of the sdk, sdk-python, sdk-kotlin and sdk-swift on desktop, and the `test:mobile`
+of the sdk, sdk-kotlin and sdk-swift on Device Farm. The steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop
+leg, `mobile.mjs` builds a mobile consumer app and drives it.
 
 ### Desktop legs, by label
 
@@ -278,16 +280,17 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
 | `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Python (see below)                                                                      |
 | `sdk-kotlin`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Kotlin (see below)                                                                      |
+| `sdk-swift`'s `darwin-arm64`                                   | the macOS GPU host                               | the same labels as the desktop rows, when the run takes Swift (see below)                                                                       |
 | `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` naming `electron` in `platforms`                                                                                    |
 | `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` naming `snap` in `platforms`                                                                                        |
 
 ### A run by hand
 
 Each e2e configuration is one language on one platform: the language is its package (`sdk` is JS, `sdk-python` is
-Python, `sdk-kotlin` is Kotlin) and the platform is the configuration (Linux, Mac, Windows, Android, iOS, Electron,
-Snap). A dispatch of `sdk-e2e.yml` takes:
+Python, `sdk-kotlin` is Kotlin, `sdk-swift` is Swift) and the platform is the configuration (Linux, Mac, Windows,
+Android, iOS, Electron, Snap). A dispatch of `sdk-e2e.yml` takes:
 
-- `languages`: comma-separated `js`, `python`, `kotlin`. Default all three.
+- `languages`: comma-separated `js`, `python`, `kotlin`, `swift`. Default all four.
 - `platforms`: comma-separated `linux`, `mac`, `windows`, `android`, `ios`, `electron`, `snap`. Default the first
   five.
 - `suite`: `full` or `smoke`, plus `exclude-suite`, `include`, `filter` and `inference-version`, for every leg.
@@ -298,7 +301,8 @@ It runs every configuration whose language and platform it names. Every leg buil
 cache, and uploads its reports as `<package>-results-<configuration>`. The job summary compares them with the newest
 dispatch run's on the base branch; a failed test fails the leg. The Python leg installs the client from the wheel it
 builds, the same wheel PyPI gets, and runs on the worker bundled in it. The Kotlin desktop leg builds the client and
-its experimental JVM worker host from the checkout, as users get them.
+its experimental JVM worker host from the checkout, as users get them. The Swift leg runs on Mac only: it generates
+the client, bundles the worker and builds the `swift-macos` bridge from the checkout.
 
 ```bash
 gh workflow run sdk-e2e.yml --ref <branch> -f languages=python -f platforms=mac -f suite=smoke
@@ -341,7 +345,8 @@ closes it:
 
 ### Mobile
 
-A dispatch naming `android` or `ios` in `platforms` runs the JS app on both and the Kotlin app on Android. The run builds
+A dispatch naming `android` or `ios` in `platforms` runs the JS app on both, the Kotlin app on Android and the Swift
+app on iOS. The run builds
 the consumer APK or IPA with the run id and broker baked in, starts it on a Device Farm pool from
 `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS` (the dispatch's `pool` names one pool; empty prefers an
 available private pool), drives the catalog over MQTT once the device runs, and fails on any failed test. `filter`

@@ -60,7 +60,7 @@ jobs:
             families: desktop,python,kotlin,electron,snap
           - os: macos
             runner: macos_arm64_gpu
-            families: desktop,python,kotlin,electron
+            families: desktop,python,kotlin,swift,electron
           - os: windows
             runner: win_2025_x64_gpu
             families: desktop,python,kotlin,electron

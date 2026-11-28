@@ -1,0 +1,10 @@
+.build/
+/build/
+.swiftpm/
+scripts/__pycache__/
+Sources/QvacSDK/Generated/
+Smoke/QvacWorker/
+Smoke/Package.resolved
+ios-example/QvacWorker/
+ios-example/build/
+xcuserdata/

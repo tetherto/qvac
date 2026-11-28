@@ -6,7 +6,7 @@
       "project": "@qvac/sdk",
       "name": "QVAC SDK"
     },
-    "checks": ["shared-runtime-libs", "sdk-python", "sdk-kotlin", "package-checks", "pear-e2e"]
+    "checks": ["shared-runtime-libs", "sdk-python", "sdk-kotlin", "sdk-swift", "package-checks", "pear-e2e"]
   },
   "engine": {
     "groups": ["engine"],

@@ -15,6 +15,8 @@ expensive: it has to mean the same thing on every client.
 | `desktop-python`                                       | the Python client on desktop |
 | `kotlin-android`                                       | the Kotlin client on Android |
 | `desktop-kotlin`                                       | the Kotlin client on desktop |
+| `swift-macos`                                          | the Swift client on macOS    |
+| `swift-ios`                                            | the Swift client on iOS      |
 
 `desktop-python` and `desktop-kotlin` carry no OS: each is one label on Linux,
 macOS and Windows alike. A coarse `desktop` entry does not cover them (see
@@ -53,11 +55,14 @@ inherit its skips.
 
 ## Shared devices
 
-`kotlin-android` runs on the same phones as `mobile-android`, so
-`SAME_DEVICE` in `platform-skips.ts` adds it to every skip that applies there:
-a model too large for the device is too large whichever client loads it. A skip
-that belongs to one client rather than to the device goes under that client's
-label.
+`kotlin-android` runs on the same phones as `mobile-android`, `swift-ios` on
+the same phones as `mobile-ios`, and `swift-macos` on the same Macs as
+`desktop-macos`, so `SAME_DEVICE` in `platform-skips.ts` adds each to every
+skip that applies to its device: a model too large for the device is too large
+whichever client loads it. A skip that belongs to one client rather than to the
+device goes under that client's label. The device legs' labels also name the JS
+clients there, so a rule for the JS client alone on one of them is marked
+`client`, and the legs that share the device do not inherit it.
 
 ## Equivalence
 

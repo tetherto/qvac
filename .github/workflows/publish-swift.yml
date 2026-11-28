@@ -1,0 +1,158 @@
+name: Publish SDK Swift
+
+# Publishes the Swift worker profiles of an SDK release as a Swift package.
+# Each profile and native addon is an xcframework zip on the sdk-v<version>
+# release. The package itself goes to tetherto/qvac-sdk-swift: one commit on its
+# main per release, with this repository's sources and a Package.swift listing
+# the zips, tagged with the plain <version>. The commit's Source trailer names
+# the sdk-v<version> commit it was built from. A Swift package version never
+# changes: a re-run finds the <version> tag with this release's Source and
+# skips every step after the check, and a <version> tag with another Source
+# fails.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published SDK version; the release tag sdk-v<version> must exist"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Published SDK version; the release tag is sdk-v<version>"
+        required: true
+        type: string
+
+permissions:
+  contents: write # gh release upload
+
+concurrency:
+  group: publish-swift-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  SWIFT_REPOSITORY: tetherto/qvac-sdk-swift
+
+jobs:
+  publish:
+    name: Build and publish the worker profiles
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: release
+    steps:
+      - name: Verify the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release view "sdk-v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: refs/tags/sdk-v${{ inputs.version }}
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ env.SWIFT_REPOSITORY }}
+          ref: main
+          path: qvac-sdk-swift
+          ssh-key: ${{ secrets.QVAC_SDK_SWIFT_DEPLOY_KEY }}
+          fetch-depth: 0
+
+      - name: Check the Swift tag
+        id: tag
+        shell: bash
+        working-directory: qvac-sdk-swift
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          release=$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)
+          if ! git rev-parse --verify --quiet "refs/tags/$VERSION^{commit}" > /dev/null; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          source=$(git log -1 --format='%(trailers:key=Source,valueonly)' "refs/tags/$VERSION" | tr -d '[:space:]')
+          if [ "$source" != "$GITHUB_REPOSITORY@$release" ]; then
+            echo "::error::Tag $VERSION of $SWIFT_REPOSITORY has Source '$source', not $GITHUB_REPOSITORY@$release (sdk-v$VERSION)"
+            exit 1
+          fi
+          echo "::notice::Tag $VERSION already publishes sdk-v$VERSION; nothing to do"
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+
+      - if: steps.tag.outputs.publish == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - if: steps.tag.outputs.publish == 'true'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Build the SDK
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run sdk-source:workspace
+          node_modules/.bin/tsc --project tsconfig.json
+          npm run postcompile:aliases
+          git checkout -- package.json
+
+      # The package carries the client generated from this commit's SDK.
+      - name: Generate the Swift client
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        run: python3 scripts/generate.py
+
+      - name: Build the worker profiles
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        run: node scripts/build-profiles.mjs --install-missing-prebuilds
+
+      - name: Attach the profile zips to the GitHub release
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release upload "sdk-v$VERSION" build/profiles/*.zip --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Commit and tag the Swift package
+        if: steps.tag.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          release=$(git rev-parse HEAD)
+          node packages/sdk-swift/scripts/assemble-release.mjs \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/sdk-v$VERSION" \
+            --out qvac-sdk-swift
+          cd qvac-sdk-swift
+          git add --all
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --message "Release $VERSION" --trailer "Source: $GITHUB_REPOSITORY@$release"
+          git tag "$VERSION"
+
+      # Resolves the local tag with the archives downloaded from the release.
+      - name: Build an app-side consumer of the tagged version
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/check-release-consumer.mjs --package "file://$GITHUB_WORKSPACE/qvac-sdk-swift" --version "$VERSION"
+
+      - name: Push the Swift package
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: qvac-sdk-swift
+        env:
+          VERSION: ${{ inputs.version }}
+        run: git push --atomic origin HEAD:main "refs/tags/$VERSION"

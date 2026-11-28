@@ -96,6 +96,10 @@ test('a train inside another, versioned by one project', () => {
     () => loadTrain('cli', { cli: { ...CATALOG.cli, checks: ['sdk-kotlin'] } }, NX_JSON),
     /sdk-kotlin needs the @qvac\/sdk GitHub release/,
   )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, checks: ['sdk-swift'] } }, NX_JSON),
+    /sdk-swift needs the @qvac\/sdk GitHub release/,
+  )
 })
 
 test('reads the train and anchor version from the branch name', () => {

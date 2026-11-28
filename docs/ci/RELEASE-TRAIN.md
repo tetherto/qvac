@@ -76,9 +76,9 @@ native addon's copy has no prebuilds, so the train never links one (see
    ```
 
 5. Write a changelog section for each package (`qv-sdk-changelog`). The
-   `@qvac/sdk` section also carries the Python and Kotlin clients, which have
-   no changelog of their own. Both clients are generated from the SDK at build
-   time and the Python package takes the SDK's version. When the train moves
+   `@qvac/sdk` section also carries the Python, Kotlin and Swift clients, which
+   have no changelog of their own. The clients are generated from the SDK at
+   build time, and the Python and Swift packages take the SDK's version. When the train moves
    `@qvac/sdk`, bring `packages/sdk-kotlin/package.json`'s version and
    `@qvac/sdk` pin to its new version (the `sdk-kotlin` sync of
    `qv-sdk-inference-version`). The `sdk-kotlin` check fails on a Kotlin version
@@ -147,6 +147,10 @@ native addon's copy has no prebuilds, so the train never links one (see
    6. tags each package, then creates the `githubRelease` package's GitHub
       release on its tag and, with `sdk-python`, attaches the fat wheels and,
       with `sdk-kotlin`, the Kotlin SDK's Maven zips (`publish-kotlin.yml`)
+      and, with `sdk-swift`, the Swift worker profiles
+      (`publish-swift.yml`), then pushes the Swift package, with the client
+      generated from this commit's SDK and a `Package.swift` that lists the
+      profiles, to `tetherto/qvac-sdk-swift` under the plain `<version>` tag
 8. Merge the backmerge PR once the push run has published to npm. Before that,
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
@@ -198,6 +202,11 @@ Before npm publish:
   compiled for the JVM, and the generator, wire-vocabulary and JVM unit tests.
   `publish-kotlin.yml` builds every runtime profile's Maven zip and attaches
   them to the `@qvac/sdk` GitHub release, with no tests of its own.
+- **`sdk-swift`**: `sdk-checks.yml`'s sdk-swift checks on macOS against the
+  workspace `@qvac/sdk` and `@qvac/inference`: the generated client built, the
+  iOS example built for the simulator, and the client's unit tests.
+  `publish-swift.yml` builds the worker profiles and publishes the Swift
+  package after the `@qvac/sdk` GitHub release, with no tests of its own.
 - **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
   `@qvac/inference` tarball, as `publish-npm.yml` runs it for an inference release. Pin upstream
   with the `PEAR_E2E_*_VERSION` repository variables.
@@ -205,8 +214,8 @@ Before npm publish:
   workspace.
 
 After npm publish, `package-checks` runs again with every package installed
-from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
-for it.
+from npm. Tags, the GitHub release, PyPI, the wheels, the Maven zips and the
+Swift package wait for it.
 
 On the release PR, outside `release-train.yml`: when the PR touches the SDK or a
 client, `sdk-e2e.yml` runs the full e2e suite in every language on Linux, Mac,

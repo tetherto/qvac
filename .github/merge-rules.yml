@@ -44,6 +44,7 @@
     - "packages/sdk-e2e/**"
     - "packages/sdk-kotlin/**"
     - "packages/sdk-python/**"
+    - "packages/sdk-swift/**"
     - "packages/test-suite/**"
   checks:
     - { workflow: sdk-checks.yml, job: "select / *" }

@@ -28,7 +28,7 @@ import {
 } from '@/utils/errors-client'
 import { loadTargetPackage } from '@/commands/bundle/targets'
 import { parseBareKitPins } from '@/commands/verify/bare-kit-runtime'
-import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
+import { bundleLanguageOf, bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { linkDependency } from './fixtures/link-dependency'
 
 const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -331,6 +331,7 @@ describe('bundleSdk', () => {
     assert.match(fs.readFileSync(path.join(result.outputDir, 'index.js'), 'utf8'), /bare-sidecar/)
     const { main } = await readBundle(result.bundlePath)
     assert.equal(bundleRoot(main, projectRoot), path.parse(projectRoot).root)
+    assert.equal(bundleLanguageOf(result.bundlePath), undefined)
   })
 
   it("writes bare-stow's Kotlin module for bare-kit to the given folder", async (t) => {
@@ -358,6 +359,53 @@ describe('bundleSdk', () => {
     assert.match(fs.readFileSync(path.join(harness, 'Harness.kt'), 'utf8'), /suspend fun start/)
     assert.match(fs.readFileSync(path.join(outputDir, 'build.gradle'), 'utf8'), /bare-kit-kotlin/)
     assert.equal(bundleTargetOf(result.bundlePath), 'bare-kit')
+    assert.equal(bundleLanguageOf(result.bundlePath), 'kotlin')
+  })
+
+  it("writes bare-stow's Swift package for bare-kit, with Bare Kit pinned exactly", async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'apple', 'worker')
+
+    const result = await bundleSdk({
+      projectRoot,
+      configPath,
+      target: 'bare-kit',
+      language: 'swift',
+      outputDir,
+      quiet: true
+    })
+
+    assert.equal(result.language, 'swift')
+    assert.deepEqual(result.hosts, ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'])
+    const harness = fs.readFileSync(
+      path.join(outputDir, 'Sources', 'Worker', 'Harness.swift'),
+      'utf8'
+    )
+    assert.match(harness, /public func start\(/)
+    const manifest = fs.readFileSync(path.join(outputDir, 'Package.swift'), 'utf8')
+    assert.match(manifest, /holepunchto\/bare-kit-swift", exact: "\d+\.\d+\.\d+"/)
+    assert.equal(bundleTargetOf(result.bundlePath), 'bare-kit')
+    assert.equal(bundleLanguageOf(result.bundlePath), 'swift')
+  })
+
+  it('refuses a Swift bundle that mixes iOS and macOS hosts', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        configPath,
+        target: 'bare-kit',
+        language: 'swift',
+        hosts: ['ios-arm64', 'darwin-arm64'],
+        outputDir: path.join(projectRoot, 'apple', 'worker'),
+        quiet: true
+      }),
+      (error: unknown) =>
+        error instanceof BundleFailedError &&
+        error.code === SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED &&
+        error.message.includes('macOS hosts on their own')
+    )
   })
 
   it('bundles for pear-runtime with the target package the SDK installs', async (t) => {

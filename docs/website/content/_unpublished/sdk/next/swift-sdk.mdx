@@ -1,0 +1,165 @@
+---
+title: Swift SDK
+icon: SiSwift
+description: Build local AI apps for iOS and macOS with Swift concurrency.
+schemaType: TechArticle
+---
+
+## Overview
+
+The Swift SDK is the Swift client for QVAC. It drives the same worker contract
+as the JS/TS, Python, and Kotlin clients, and provides `async` calls,
+`AsyncThrowingStream` responses, structured completion runs, and generated
+request and response types.
+
+The worker runs inside the app as a [Bare Kit](https://github.com/holepunchto/bare-kit)
+worklet, so nothing runs outside the app's process.
+
+## Requirements
+
+- iOS or macOS on Apple silicon, at the versions in
+  [Platform support](/sdk/platform-support).
+- Swift tools 5.10 or newer.
+
+## Install
+
+The Swift SDK is a Swift package published from the QVAC repository. Each SDK
+release tags the repository with its version without the `sdk-v` prefix of the
+GitHub release, and that tag carries the ready-made workers as prebuilt
+frameworks attached to the release. Swift Package Manager resolves the whole repository, so the first
+resolve takes a while.
+
+An app adds three products: the client, `QvacSDK`; the worker host,
+`QvacBareKit`; and one worker profile, which bundles the worker and the native
+addons for one set of plugins:
+
+| Product | Plugins |
+| --- | --- |
+| `QvacWorkerAll` | every plugin |
+| `QvacWorkerAssistant` | completion, Parakeet transcription |
+| `QvacWorkerLLM` | completion, embeddings |
+| `QvacWorkerSpeech` | Whisper, BCI, and Parakeet transcription, translation, text-to-speech |
+| `QvacWorkerVision` | completion, OCR, image classification |
+| `QvacWorkerMedia` | audio generation, image generation |
+| `QvacWorkerRobotics` | vision-language-action |
+
+In Xcode, choose **File > Add Package Dependencies**, enter
+`https://github.com/tetherto/qvac-sdk-swift`, set the dependency rule to the exact SDK
+version, and add the three products to the app target. In a `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/tetherto/qvac-sdk-swift", exact: "<version>"),
+],
+targets: [
+    .target(
+        name: "MyApp",
+        dependencies: [
+            .product(name: "QvacSDK", package: "qvac-sdk-swift"),
+            .product(name: "QvacBareKit", package: "qvac-sdk-swift"),
+            .product(name: "QvacWorkerLLM", package: "qvac-sdk-swift"),
+        ]
+    ),
+]
+```
+
+For a set of plugins no profile covers, bundle the worker yourself with
+`bundleSdk` from `@qvac/sdk/commands`, as the
+[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-swift/README.md#add-the-worker-to-an-app)
+describes.
+
+## Quickstart
+
+Start the worker of the profile the app links, load a model, and stream a
+completion:
+
+```swift
+import QvacBareKit
+import QvacSDK
+
+let client = try await QvacClient.start(profile: .llm)
+
+var modelId: String?
+for try await event in client.models.loadWithProgress(Models.QWEN3_600M_INST_Q4) {
+    switch event {
+    case .progress(let progress): print("Downloading: \(Int(progress.percentage))%")
+    case .result(let loaded): modelId = loaded.modelId
+    }
+}
+
+let run = try client.completion.run(
+    modelId: modelId!,
+    history: [.user("Name three colors of the rainbow in one sentence.")]
+)
+for try await token in run.tokens { print(token, terminator: "") }
+
+_ = try await client.models.unload(modelId!)
+await client.close()
+```
+
+`start(profile:)` throws `QvacWorkerError` with code `WORKER_PROFILE_MISSING`
+when the app does not link that profile. The worker keeps models and caches in
+`Application Support/qvac` on iOS, and on macOS in `QVAC_HOME_DIR` when set,
+else the user's home directory; pass `homeDirectory:` to choose another.
+
+The [iOS example app](https://github.com/tetherto/qvac/tree/main/packages/sdk-swift/ios-example)
+is a SwiftUI app that does the same.
+
+## Completion and tools
+
+A run streams `tokens` and all `events`, and `final` gives the full result.
+`cancel()` stops it, and `final` then throws `QvacCompletionCancelledError` with
+what was generated. Options cover generation parameters, the KV cache, thinking
+capture, and a JSON response format.
+
+Tools need the model loaded with `"tools": true` in its config:
+
+```swift
+let weather = QvacTool(
+    name: "get_weather",
+    description: "Get the current weather for a city",
+    parameters: ["city": QvacToolParameter(.string)],
+    required: ["city"]
+) { arguments in .object(["condition": .string("sunny")]) }
+
+let modelId = try await client.models.load(model, modelConfig: ["tools": .bool(true)]).modelId!
+let reply = try client.completion.orchestrate(modelId: modelId, history: history, tools: [weather])
+```
+
+`orchestrate` has the worker call each tool's handler and continue until the
+model answers. `run(..., tools:)` returns the model's tool calls for the app to
+`invoke()`.
+
+## API surface
+
+| Swift entry point | Purpose |
+| --- | --- |
+| `client.models` | load, unload, download, model info, and fit assessment, with progress |
+| `client.completion` | completion runs and tool orchestration |
+| `client.embeddings` | single and batch embeddings |
+| `client.translation` | translation runs and cancellation |
+| `client.speech` | transcription and text-to-speech, buffered and streaming |
+| `client.bci` | buffered and streaming BCI transcription |
+| `client.vision` | OCR and classification |
+| `client.media` | audio, diffusion, video, upscale, and world runs |
+| `client.system` | pause, resume, state, and system resources |
+| generated client methods | typed operation for every contract method |
+| `client.raw` | JSON call, stream, and duplex escape hatch |
+
+Every contract method is also a method on `QvacClient` that takes and returns
+the generated types. A single reply is `async throws`, a stream returns an
+`AsyncThrowingStream`, and a two-way call such as `transcribeStream` also takes
+its input as an `AsyncStream<Data>`. `Models` holds the model constants.
+
+## Errors
+
+- `QvacError` is an error the worker reported for a request; `kind` is the
+  matching `QvacErrorKind` from the contract, when there is one.
+- `QvacWorkerError` means the worker could not start, rejected its
+  configuration, or went away; `code` names the reason, such as
+  `WORKER_PROFILE_MISSING` or `WORKER_CLOSED`.
+- `QvacCompletionError` and `QvacFeatureError` are failures the high-level API
+  reports, such as invalid options or a generation that ended in an error.
+
+The [package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-swift/README.md#errors)
+lists the rest.

@@ -36,9 +36,10 @@ on:
 permissions:
   contents: read
 
-# An edit only reruns the PR rules, so it gets its own group and never cancels a check run.
+# An edit only reruns the PR rules, so it gets its own group and never cancels a check run. A call names its packages,
+# so a release train's calls for different packages never cancel each other.
 concurrency:
-  group: sdk-checks-${{ inputs.source || (github.event.action == 'edited' && 'edited') || 'pr' }}-${{ github.event.pull_request.number || github.ref }}
+  group: sdk-checks-${{ inputs.source || (github.event.action == 'edited' && 'edited') || 'pr' }}-${{ inputs.packages || 'all' }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -195,7 +196,8 @@ jobs:
     needs: [train, select]
     if: needs.select.outputs.any == 'true'
     name: checks (${{ matrix.project.name }})
-    runs-on: ubuntu-latest
+    # A package's metadata.runner, such as sdk-swift's macOS; Ubuntu otherwise.
+    runs-on: ${{ matrix.project.checkRunner || 'ubuntu-latest' }}
     timeout-minutes: ${{ needs.train.outputs.train != '' && 100 || 45 }}
     permissions:
       contents: read
